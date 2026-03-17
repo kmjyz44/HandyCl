@@ -13,7 +13,6 @@ from datetime import datetime, timezone, timedelta
 import bcrypt
 from enum import Enum
 import httpx
-from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 from telegram import Bot
 from telegram.constants import ParseMode
 import asyncio
@@ -668,7 +667,7 @@ class Settings(BaseModel):
     stripe_webhook_secret: Optional[str] = None
     telegram_bot_token: Optional[str] = None
     ai_enabled: bool = False
-    emergent_llm_key: Optional[str] = None
+    
     
     # ===== CLIENT SETTINGS =====
     allow_client_executor_selection: bool = True  # Client can choose tasker
@@ -1434,7 +1433,7 @@ async def google_auth_redirect(request: Request):
     """Redirect to Emergent Google OAuth"""
     # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     redirect_url = f"{str(request.base_url)}auth-callback"
-    auth_url = f"https://auth.emergentagent.com/?redirect={redirect_url}"
+    
     return {"auth_url": auth_url}
 
 @api_router.post("/auth/session")
@@ -1442,7 +1441,7 @@ async def create_session_from_oauth(session_id: str = Header(..., alias="X-Sessi
     """Exchange OAuth session_id for user session"""
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+            
             headers={"X-Session-ID": session_id}
         )
         
