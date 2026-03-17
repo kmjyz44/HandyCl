@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "HandyHub",
+    "slug": "handyhub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "handyhub",
+    "userInterfaceStyle": "automatic",
+    "extra": {
+      "router": {},
+      "backendUrl": "https://handyhub-preview-1.preview.emergentagent.com",
+      "eas": {
+        "projectId": "9f1fe59e-2f9e-4833-b938-df04fcf7c431"
+      }
+    },
+    "owner": "kmgyz84",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.handyhub.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#2563eb"
+      },
+      "package": "com.handyhub.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-image.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#2563eb"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "HandyHub",
+    "slug": "handyhub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "handyhub",
+    "userInterfaceStyle": "automatic",
+    "extra": {
+      "router": {},
+      "backendUrl": "https://handyhub-preview-1.preview.emergentagent.com"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.handyhub.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#2563eb"
+      },
+      "package": "com.handyhub.app",
+      "usesCleartextTraffic": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-image.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#2563eb"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Дозволити доступ до фотографій",
+          "cameraPermission": "Дозволити доступ до камери"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

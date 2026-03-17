@@ -1,0 +1,53 @@
+import { create } from 'zustand';
+import * as SecureStore from 'expo-secure-store';
+
+interface User {
+  user_id: string;
+  email: string;
+  name: string;
+  role: 'client' | 'provider' | 'admin';
+  phone?: string;
+  picture?: string;
+  telegram_chat_id?: string;
+}
+
+interface AuthStore {
+  user: User | null;
+  token: string | null;
+  isLoading: boolean;
+  setUser: (user: User | null) => void;
+  setToken: (token: string | null) => Promise<void>;
+  logout: () => Promise<void>;
+  loadToken: () => Promise<void>;
+}
+
+export const useAuthStore = create<AuthStore>((set) => ({
+  user: null,
+  token: null,
+  isLoading: true,
+  
+  setUser: (user) => set({ user }),
+  
+  setToken: async (token) => {
+    if (token) {
+      await SecureStore.setItemAsync('session_token', token);
+    } else {
+      await SecureStore.deleteItemAsync('session_token');
+    }
+    set({ token });
+  },
+  
+  logout: async () => {
+    await SecureStore.deleteItemAsync('session_token');
+    set({ user: null, token: null });
+  },
+  
+  loadToken: async () => {
+    try {
+      const token = await SecureStore.getItemAsync('session_token');
+      set({ token, isLoading: false });
+    } catch (error) {
+      set({ isLoading: false });
+    }
+  },
+}));
