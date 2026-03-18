@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://handyhub-nbvo.onrender.com";
 
 const apiClient = axios.create({
   baseURL: `${API_URL}/api`,
