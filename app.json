@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "extra": {
       "router": {},
-      "https://handyhub-nbvo.onrender.com"
+     "backendUrl": "https://handyhub-nbvo.onrender.com"
     },
     "ios": {
       "supportsTablet": true,
