@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "extra": {
       "router": {},
-      "backendUrl": "https://handyhub-preview-1.preview.emergentagent.com"
+      "https://handyhub-nbvo.onrender.com"
     },
     "ios": {
       "supportsTablet": true,
