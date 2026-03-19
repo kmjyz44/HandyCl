@@ -10,8 +10,8 @@ const getBackendUrl = (): string => {
     return expoUrl;
   }
   
-  // Try environment variable
-  const envUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+  // Try environment 
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl) {
     console.log('Using env URL:', envUrl);
     return envUrl;
