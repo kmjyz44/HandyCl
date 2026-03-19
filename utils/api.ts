@@ -18,7 +18,7 @@ const getBackendUrl = (): string => {
   }
   
   // Fallback to hardcoded URL
-  const fallbackUrl = 'https://handyhub-preview-1.preview.emergentagent.com';
+  const fallbackUrl = 'https://handyhub-nbvo.onrender.com';
   console.log('Using fallback URL:', fallbackUrl);
   return fallbackUrl;
 };
