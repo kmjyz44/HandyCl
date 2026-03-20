@@ -1,14 +1,15 @@
-import { useAuthStore } from '../store/authStore';
-
 const API_URL = 'https://handyhub-nbvo.onrender.com';
 
 class API {
-  private getHeaders() {
+  private getHeaders(): Record<string, string> {
     const token = useAuthStore.getState().token;
-    return {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
     };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
   }
 
   async request(endpoint: string, options: RequestInit = {}) {
@@ -16,10 +17,12 @@ class API {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+    const headers = this.getHeaders();
+
     try {
       const response = await fetch(url, {
         ...options,
-        headers: { ...this.getHeaders(), ...options.headers },
+        headers: headers,
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -43,21 +46,21 @@ class API {
       throw error;
     }
   }
-register(data: any) { 
-  return this.request('/api/auth/register', { 
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data) 
-  }); 
-}
 
-  login(data: any) { 
-  return this.request('/api/auth/login', { 
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data) 
-  }); 
+  register(data: any) {
+    return this.request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
+
+  login(data: any) {
+    return this.request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   getMe() { return this.request('/api/auth/me'); }
   logout() { return this.request('/api/auth/logout', { method: 'POST' }); }
   getServices(category?: string) { return this.request(`/api/services${category ? `?category=${category}` : ''}`); }
