@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+
+let SecureStore: any = null;
+if (Platform.OS !== 'web') {
+  SecureStore = require('expo-secure-store');
+}
 
 interface User {
   user_id: string;
@@ -23,7 +27,7 @@ interface AuthStore {
 
 const saveToken = async (token: string) => {
   if (Platform.OS === 'web') {
-    localStorage.setItem('session_token', token);
+    try { localStorage.setItem('session_token', token); } catch {}
   } else {
     await SecureStore.setItemAsync('session_token', token);
   }
@@ -31,14 +35,14 @@ const saveToken = async (token: string) => {
 
 const getToken = async (): Promise<string | null> => {
   if (Platform.OS === 'web') {
-    return localStorage.getItem('session_token');
+    try { return localStorage.getItem('session_token'); } catch { return null; }
   }
   return await SecureStore.getItemAsync('session_token');
 };
 
 const deleteToken = async () => {
   if (Platform.OS === 'web') {
-    localStorage.removeItem('session_token');
+    try { localStorage.removeItem('session_token'); } catch {}
   } else {
     await SecureStore.deleteItemAsync('session_token');
   }
@@ -48,7 +52,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
   token: null,
   isLoading: true,
+
   setUser: (user) => set({ user }),
+
   setToken: async (token) => {
     if (token) {
       await saveToken(token);
@@ -57,10 +63,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
     }
     set({ token });
   },
+
   logout: async () => {
     await deleteToken();
     set({ user: null, token: null });
   },
+
   loadToken: async () => {
     try {
       const token = await getToken();
