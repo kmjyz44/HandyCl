@@ -2,7 +2,10 @@ const API_URL = 'https://handyhub-nbvo.onrender.com';
 
 class API {
   private getHeaders(): Record<string, string> {
-    const token = useAuthStore.getState().token;
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem('session_token');
+    } catch {}
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
