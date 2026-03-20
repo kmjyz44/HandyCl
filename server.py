@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends, Body
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -1373,10 +1373,10 @@ async def get_conversation_messages(
     
     return messages
 
-# Authentication Routes
-@api_router.post("/auth/register")
-async def register(user_data: UserRegister):
-    # Check if user exists
+# Aut@api_router.post("/auth/register")
+  @api_router.post("/auth/register")
+async def register(user_data: UserRegister = Body(...)):
+  if user exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -1414,8 +1414,8 @@ async def register(user_data: UserRegister):
     }
 
 @api_router.post("/auth/login")
-async def login(credentials: UserLogin):
-    # Find user
+async def login(credentials: UserLogin = Body(...)):
+# Find user
     user_doc = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     if not user_doc:
         raise HTTPException(status_code=401, detail="Invalid credentials")
