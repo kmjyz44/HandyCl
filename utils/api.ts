@@ -43,9 +43,21 @@ class API {
       throw error;
     }
   }
+register(data: any) { 
+  return this.request('/api/auth/register', { 
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data) 
+  }); 
+}
 
-  register(data: any) { return this.request('/api/auth/register', { method: 'POST', body: JSON.stringify(data) }); }
-  login(data: any) { return this.request('/api/auth/login', { method: 'POST', body: JSON.stringify(data) }); }
+  login(data: any) { 
+  return this.request('/api/auth/login', { 
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data) 
+  }); 
+  }
   getMe() { return this.request('/api/auth/me'); }
   logout() { return this.request('/api/auth/logout', { method: 'POST' }); }
   getServices(category?: string) { return this.request(`/api/services${category ? `?category=${category}` : ''}`); }
