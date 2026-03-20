@@ -1,114 +1,89 @@
 const API_URL = 'https://handyhub-nbvo.onrender.com';
 
-class API {
-  private getHeaders(): Record<string, string> {
+function makeRequest(method: string, url: string, body?: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
     let token: string | null = null;
-    try {
-      token = localStorage.getItem('session_token');
-    } catch {}
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    return headers;
-  }
+    try { token = localStorage.getItem('session_token'); } catch {}
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
-  async request(endpoint: string, options: RequestInit = {}) {
-    const url = `${API_URL}${endpoint}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    xhr.timeout = 30000;
 
-    const headers = this.getHeaders();
+    xhr.ontimeout = () => reject(new Error('Timeout. Перевірте інтернет.'));
+    xhr.onerror = () => reject(new Error('Не вдалося підключитися до сервера.'));
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: headers,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorDetail = 'Request failed';
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch { resolve(xhr.responseText); }
+      } else {
         try {
-          const errorJson = JSON.parse(errorText);
-          errorDetail = errorJson.detail || errorDetail;
+          const err = JSON.parse(xhr.responseText);
+          reject(new Error(err.detail || 'Request failed'));
         } catch {
-          errorDetail = errorText || errorDetail;
+          reject(new Error(xhr.responseText || 'Request failed'));
         }
-        throw new Error(errorDetail);
       }
+    };
 
-      return await response.json();
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') throw new Error('Timeout. Перевірте інтернет.');
-      throw error;
-    }
-  }
-
-  register(data: any) {
-    return this.request('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  login(data: any) {
-    return this.request('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  getMe() { return this.request('/api/auth/me'); }
-  logout() { return this.request('/api/auth/logout', { method: 'POST' }); }
-  getServices(category?: string) { return this.request(`/api/services${category ? `?category=${category}` : ''}`); }
-  getService(id: string) { return this.request(`/api/services/${id}`); }
-  createService(data: any) { return this.request('/api/services', { method: 'POST', body: JSON.stringify(data) }); }
-  updateService(id: string, data: any) { return this.request(`/api/services/${id}`, { method: 'PUT', body: JSON.stringify(data) }); }
-  deleteService(id: string) { return this.request(`/api/services/${id}`, { method: 'DELETE' }); }
-  getBookings() { return this.request('/api/bookings'); }
-  getBooking(id: string) { return this.request(`/api/bookings/${id}`); }
-  createBooking(data: any) { return this.request('/api/bookings', { method: 'POST', body: JSON.stringify(data) }); }
-  updateBooking(id: string, status: string, providerId?: string) { return this.request(`/api/bookings/${id}`, { method: 'PUT', body: JSON.stringify({ status, provider_id: providerId }) }); }
-  getTasks() { return this.request('/api/tasks'); }
-  getTask(id: string) { return this.request(`/api/tasks/${id}`); }
-  createTask(data: any) { return this.request('/api/tasks', { method: 'POST', body: JSON.stringify(data) }); }
-  updateTask(id: string, status: string, notes?: string) { return this.request(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify({ status, notes }) }); }
-  getMessages(withUserId?: string) { return this.request(`/api/messages${withUserId ? `?with_user_id=${withUserId}` : ''}`); }
-  sendMessage(data: any) { return this.request('/api/messages', { method: 'POST', body: JSON.stringify(data) }); }
-  createReview(data: any) { return this.request('/api/reviews', { method: 'POST', body: JSON.stringify(data) }); }
-  getProviderReviews(id: string) { return this.request(`/api/reviews/provider/${id}`); }
-  getDashboard() { return this.request('/api/admin/dashboard'); }
-  getUsers(role?: string) { return this.request(`/api/admin/users${role ? `?role=${role}` : ''}`); }
-  updateUserRole(userId: string, role: string) { return this.request(`/api/admin/users/${userId}`, { method: 'PUT', body: JSON.stringify({ role }) }); }
-  blockUser(userId: string, reason: string, durationHours?: number) { return this.request(`/api/admin/users/${userId}/block`, { method: 'POST', body: JSON.stringify({ reason, duration_hours: durationHours }) }); }
-  unblockUser(userId: string) { return this.request(`/api/admin/users/${userId}/unblock`, { method: 'POST' }); }
-  deleteUser(userId: string) { return this.request(`/api/admin/users/${userId}`, { method: 'DELETE' }); }
-  getSettings() { return this.request('/api/settings'); }
-  updateSettings(data: any) { return this.request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }); }
-  updateProfile(data: any) { return this.request('/api/users/profile', { method: 'PUT', body: JSON.stringify(data) }); }
-  getAllExecutors() { return this.request('/api/executors'); }
-  getAvailableExecutors(params?: any) { return this.request('/api/executors/available'); }
-  getExecutorProfile(userId: string) { return this.request(`/api/profile/executor/${userId}`); }
-  getMyExecutorProfile() { return this.request('/api/profile/executor'); }
-  createExecutorProfile(data: any) { return this.request('/api/profile/executor', { method: 'POST', body: JSON.stringify(data) }); }
-  updateExecutorProfile(data: any) { return this.request('/api/profile/executor', { method: 'PUT', body: JSON.stringify(data) }); }
-  getMyAvailability() { return this.request('/api/availability'); }
-  createAvailabilitySlot(data: any) { return this.request('/api/availability', { method: 'POST', body: JSON.stringify(data) }); }
-  getClientTasks() { return this.request('/api/client/tasks'); }
-  getAvailableTasks(category?: string) { return this.request(`/api/tasker/available-tasks${category ? `?category=${category}` : ''}`); }
-  acceptTask(taskId: string) { return this.request(`/api/tasker/tasks/${taskId}/accept`, { method: 'POST' }); }
-  startTask(taskId: string) { return this.request(`/api/tasker/tasks/${taskId}/start`, { method: 'POST' }); }
-  createOffer(data: any) { return this.request('/api/offers', { method: 'POST', body: JSON.stringify(data) }); }
-  getBookingOffers(bookingId: string) { return this.request(`/api/offers/booking/${bookingId}`); }
-  getMyOffers() { return this.request('/api/offers/my'); }
-  acceptOffer(offerId: string) { return this.request(`/api/offers/${offerId}/accept`, { method: 'POST' }); }
-  declineOffer(offerId: string) { return this.request(`/api/offers/${offerId}/decline`, { method: 'POST' }); }
+    xhr.send(body || null);
+  });
 }
 
-export const api = new API();
+const get = (path: string) => makeRequest('GET', `${API_URL}${path}`);
+const post = (path: string, data?: any) => makeRequest('POST', `${API_URL}${path}`, data ? JSON.stringify(data) : undefined);
+const put = (path: string, data?: any) => makeRequest('PUT', `${API_URL}${path}`, data ? JSON.stringify(data) : undefined);
+const del = (path: string) => makeRequest('DELETE', `${API_URL}${path}`);
+
+export const api = {
+  register: (data: any) => post('/api/auth/register', data),
+  login: (data: any) => post('/api/auth/login', data),
+  getMe: () => get('/api/auth/me'),
+  logout: () => post('/api/auth/logout'),
+  getServices: (category?: string) => get(`/api/services${category ? `?category=${category}` : ''}`),
+  getService: (id: string) => get(`/api/services/${id}`),
+  createService: (data: any) => post('/api/services', data),
+  updateService: (id: string, data: any) => put(`/api/services/${id}`, data),
+  deleteService: (id: string) => del(`/api/services/${id}`),
+  getBookings: () => get('/api/bookings'),
+  getBooking: (id: string) => get(`/api/bookings/${id}`),
+  createBooking: (data: any) => post('/api/bookings', data),
+  updateBooking: (id: string, status: string, providerId?: string) => put(`/api/bookings/${id}`, { status, provider_id: providerId }),
+  getTasks: () => get('/api/tasks'),
+  getTask: (id: string) => get(`/api/tasks/${id}`),
+  createTask: (data: any) => post('/api/tasks', data),
+  updateTask: (id: string, status: string, notes?: string) => put(`/api/tasks/${id}`, { status, notes }),
+  getMessages: (withUserId?: string) => get(`/api/messages${withUserId ? `?with_user_id=${withUserId}` : ''}`),
+  sendMessage: (data: any) => post('/api/messages', data),
+  createReview: (data: any) => post('/api/reviews', data),
+  getProviderReviews: (id: string) => get(`/api/reviews/provider/${id}`),
+  getDashboard: () => get('/api/admin/dashboard'),
+  getUsers: (role?: string) => get(`/api/admin/users${role ? `?role=${role}` : ''}`),
+  updateUserRole: (userId: string, role: string) => put(`/api/admin/users/${userId}`, { role }),
+  blockUser: (userId: string, reason: string, durationHours?: number) => post(`/api/admin/users/${userId}/block`, { reason, duration_hours: durationHours }),
+  unblockUser: (userId: string) => post(`/api/admin/users/${userId}/unblock`),
+  deleteUser: (userId: string) => del(`/api/admin/users/${userId}`),
+  getSettings: () => get('/api/settings'),
+  updateSettings: (data: any) => put('/api/settings', data),
+  updateProfile: (data: any) => put('/api/users/profile', data),
+  getAllExecutors: () => get('/api/executors'),
+  getAvailableExecutors: (params?: any) => get('/api/executors/available'),
+  getExecutorProfile: (userId: string) => get(`/api/profile/executor/${userId}`),
+  getMyExecutorProfile: () => get('/api/profile/executor'),
+  createExecutorProfile: (data: any) => post('/api/profile/executor', data),
+  updateExecutorProfile: (data: any) => put('/api/profile/executor', data),
+  getMyAvailability: () => get('/api/availability'),
+  createAvailabilitySlot: (data: any) => post('/api/availability', data),
+  getClientTasks: () => get('/api/client/tasks'),
+  getAvailableTasks: (category?: string) => get(`/api/tasker/available-tasks${category ? `?category=${category}` : ''}`),
+  acceptTask: (taskId: string) => post(`/api/tasker/tasks/${taskId}/accept`),
+  startTask: (taskId: string) => post(`/api/tasker/tasks/${taskId}/start`),
+  createOffer: (data: any) => post('/api/offers', data),
+  getBookingOffers: (bookingId: string) => get(`/api/offers/booking/${bookingId}`),
+  getMyOffers: () => get('/api/offers/my'),
+  acceptOffer: (offerId: string) => post(`/api/offers/${offerId}/accept`),
+  declineOffer: (offerId: string) => post(`/api/offers/${offerId}/decline`),
+};
