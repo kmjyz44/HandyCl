@@ -1,6 +1,5 @@
 import axios from 'axios';
-
-const API_URL = 'https://handyhub-nbvo.onrender.com';
+const API_URL = '';
 
 let token: string | null = null;
 try { token = localStorage.getItem('session_token'); } catch {}
