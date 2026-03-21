@@ -1374,13 +1374,16 @@ async def get_conversation_messages(
     return messages
 
 # Aut@api_router.post("/auth/register")
-  @api_router.post("/auth/register")
-async def register(user_data: UserRegister = Body(...)):
-  if user exists
-    existing_user = await db.users.find_one({"email": user_data.email})
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
+  
+@api_router.post("/auth/register")
+async def register(request: Request):
+    import json
+    try:
+        body = await request.body()
+        user_data_dict = json.loads(body)
+        user_data = UserRegister(**user_data_dict)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
     # Create user
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     user = User(
@@ -1413,13 +1416,15 @@ async def register(user_data: UserRegister = Body(...)):
         "session_token": session_token
     }
 
-@api_router.post("/auth/login")
-async def login(credentials: UserLogin = Body(...)):
-# Find user
-    user_doc = await db.users.find_one({"email": credentials.email}, {"_id": 0})
-    if not user_doc:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+@api_router.post("/auth/login")  
+async def login(request: Request):
+    import json
+    try:
+        body = await request.body()
+        creds_dict = json.loads(body)
+        credentials = UserLogin(**creds_dict)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
     # Verify password
     if not user_doc.get("password_hash") or not verify_password(credentials.password, user_doc["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
