@@ -1411,8 +1411,15 @@ async def register(request: Request):
     }
     await db.user_sessions.insert_one(session_data)
     
+    # Prepare user response without _id and password_hash
+    user_response = user.dict()
+    if "_id" in user_response:
+        del user_response["_id"]
+    if "password_hash" in user_response:
+        del user_response["password_hash"]
+    
     return {
-        "user": user.dict(),
+        "user": user_response,
         "session_token": session_token
     }
 
