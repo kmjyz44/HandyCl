@@ -1,22 +1,25 @@
-import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
-import { useAuthStore } from '../store/authStore';
+import React from 'react';
+import { Tabs, Redirect } from 'expo-router';
+import { useAuthStore } from '../../store/authStore';
+import { View, ActivityIndicator } from 'react-native';
 
-export default function RootLayout() {
-  const loadToken = useAuthStore((state) => state.loadToken);
+export default function TabsLayout() {
+  const { user, token, isLoading } = useAuthStore();
 
-  useEffect(() => {
-    loadToken();
-  }, [loadToken]);
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="register" />
-      <Stack.Screen name="auth-callback" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="service/[id]" options={{ presentation: 'modal' }} />
-    </Stack>
-  );
-}
+  if (!token) {
+    return <Redirect href="/login" />;
+  }
+
+  if (!user) {
+    return <Redirect href="/" />;
+  }
+
+  const role = user.role;
