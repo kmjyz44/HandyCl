@@ -12,106 +12,66 @@ interface User {
   email: string;
   name: string;
   role: 'client' | 'provider' | 'admin';
-  phone?: string;
-  picture?: string;
 }
 
 interface AuthStore {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  setUser: (user: User | null) => Promise<void>;
+  setUser: (user: User | null) => void;
   setToken: (token: string | null) => Promise<void>;
   logout: () => Promise<void>;
   loadToken: () => Promise<void>;
 }
 
-const TOKEN_KEY = 'session_token';
-const USER_KEY = 'session_user';
-
-const saveItem = async (key: string, value: string) => {
+const saveToken = async (token: string) => {
   if (Platform.OS === 'web') {
-    try {
-      localStorage.setItem(key, value);
-    } catch {}
+    localStorage.setItem('session_token', token);
   } else {
-    await SecureStore.setItemAsync(key, value);
+    await SecureStore.setItemAsync('session_token', token);
   }
 };
 
-const getItem = async (key: string): Promise<string | null> => {
+const getToken = async (): Promise<string | null> => {
   if (Platform.OS === 'web') {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
+    return localStorage.getItem('session_token');
   }
-
-  return await SecureStore.getItemAsync(key);
+  return await SecureStore.getItemAsync('session_token');
 };
 
-const deleteItem = async (key: string) => {
+const deleteToken = async () => {
   if (Platform.OS === 'web') {
-    try {
-      localStorage.removeItem(key);
-    } catch {}
+    localStorage.removeItem('session_token');
   } else {
-    await SecureStore.deleteItemAsync(key);
+    await SecureStore.deleteItemAsync('session_token');
   }
 };
 
 export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
   token: null,
-  isLoading: true,
+  isLoading: true, // 🔥 КЛЮЧОВЕ
 
-  setUser: async (user) => {
-    if (user) {
-      await saveItem(USER_KEY, JSON.stringify(user));
-    } else {
-      await deleteItem(USER_KEY);
-    }
-
-    set({ user });
-  },
+  setUser: (user) => set({ user }),
 
   setToken: async (token) => {
-    if (token) {
-      await saveItem(TOKEN_KEY, token);
-    } else {
-      await deleteItem(TOKEN_KEY);
-    }
+    if (token) await saveToken(token);
+    else await deleteToken();
 
     set({ token });
   },
 
   logout: async () => {
-    await deleteItem(TOKEN_KEY);
-    await deleteItem(USER_KEY);
+    await deleteToken();
     set({ user: null, token: null, isLoading: false });
   },
 
   loadToken: async () => {
     try {
-      const [token, rawUser] = await Promise.all([
-        getItem(TOKEN_KEY),
-        getItem(USER_KEY),
-      ]);
-
-      let user: User | null = null;
-
-      if (rawUser) {
-        try {
-          user = JSON.parse(rawUser);
-        } catch {
-          user = null;
-        }
-      }
-
-      set({ token, user, isLoading: false });
+      const token = await getToken();
+      set({ token, isLoading: false });
     } catch {
-      set({ token: null, user: null, isLoading: false });
+      set({ token: null, isLoading: false });
     }
   },
 }));
