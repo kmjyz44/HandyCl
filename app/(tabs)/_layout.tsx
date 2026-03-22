@@ -1,11 +1,13 @@
 import React from 'react';
 import { Tabs, Redirect } from 'expo-router';
-import { useAuthStore } from '../../store/authStore';
-import { View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, View } from 'react-native';
+import { useAuthStore } from '../../store/authStore';
 
 export default function TabsLayout() {
-  const { user, token, isLoading } = useAuthStore();
+  const token = useAuthStore((state) => state.token);
+  const user = useAuthStore((state) => state.user);
+  const isLoading = useAuthStore((state) => state.isLoading);
 
   if (isLoading) {
     return (
@@ -25,77 +27,151 @@ export default function TabsLayout() {
 
   const role = user.role;
 
-  // 👉 ADMIN
-  if (role === 'admin') {
-    return (
-      <Tabs>
-        <Tabs.Screen
-          name="dashboard"
-          options={{
-            title: 'Dashboard',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="speedometer" size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Profile',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="person" size={size} color={color} />
-            ),
-          }}
-        />
-      </Tabs>
-    );
-  }
-
-  // 👉 PROVIDER
-  if (role === 'provider') {
-    return (
-      <Tabs>
-        <Tabs.Screen
-          name="tasks"
-          options={{
-            title: 'Tasks',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="list" size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Profile',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="person" size={size} color={color} />
-            ),
-          }}
-        />
-      </Tabs>
-    );
-  }
-
-  // 👉 CLIENT (default)
   return (
-    <Tabs>
+    <Tabs screenOptions={{ headerShown: false }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Services',
+          title: 'Home',
+          href: role === 'client' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
+
+      <Tabs.Screen
+        name="executors"
+        options={{
+          title: 'Executors',
+          href: role === 'client' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="bookings"
+        options={{
+          title: 'Bookings',
+          href: role === 'client' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="tasks"
+        options={{
+          title: 'Tasks',
+          href: role === 'provider' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="list-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="availability"
+        options={{
+          title: 'Availability',
+          href: role === 'provider' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="earnings"
+        options={{
+          title: 'Earnings',
+          href: role === 'provider' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="wallet-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="dashboard"
+        options={{
+          title: 'Dashboard',
+          href: role === 'admin' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="grid-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="users"
+        options={{
+          title: 'Users',
+          href: role === 'admin' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-circle-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="services"
+        options={{
+          title: 'Services',
+          href: role === 'admin' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="construct-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
+          href: role === 'admin' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+            <Ionicons name="person-outline" size={size} color={color} />
           ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="my-profile"
+        options={{
+          title: 'Profile',
+          href: role === 'client' || role === 'provider' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="messages"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="booking-detail"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="service-detail"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
