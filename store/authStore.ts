@@ -4,74 +4,76 @@ import { Platform } from 'react-native';
 let SecureStore: any = null;
 
 if (Platform.OS !== 'web') {
-  SecureStore = require('expo-secure-store');
+    SecureStore = require('expo-secure-store');
 }
 
 interface User {
-  user_id: string;
-  email: string;
-  name: string;
-  role: 'client' | 'provider' | 'admin';
+    user_id: string;
+    email: string;
+    name: string;
+    role: 'client' | 'provider' | 'admin';
 }
 
 interface AuthStore {
-  user: User | null;
-  token: string | null;
-  isLoading: boolean;
-  setUser: (user: User | null) => void;
-  setToken: (token: string | null) => Promise<void>;
-  logout: () => Promise<void>;
-  loadToken: () => Promise<void>;
+    user: User | null;
+    token: string | null;
+    isLoading: boolean;
+    setUser: (user: User | null) => void;
+    setToken: (token: string | null) => Promise<void>;
+    logout: () => Promise<void>;
+    loadToken: () => Promise<void>;
 }
 
 const saveToken = async (token: string) => {
-  if (Platform.OS === 'web') {
-    localStorage.setItem('session_token', token);
-  } else {
-    await SecureStore.setItemAsync('session_token', token);
-  }
+    if (Platform.OS === 'web') {
+          localStorage.setItem('session_token', token);
+    } else {
+          await SecureStore.setItemAsync('session_token', token);
+    }
 };
 
 const getToken = async (): Promise<string | null> => {
-  if (Platform.OS === 'web') {
-    return localStorage.getItem('session_token');
-  }
-  return await SecureStore.getItemAsync('session_token');
+    if (Platform.OS === 'web') {
+          return localStorage.getItem('session_token');
+    }
+    return await SecureStore.getItemAsync('session_token');
 };
 
 const deleteToken = async () => {
-  if (Platform.OS === 'web') {
-    localStorage.removeItem('session_token');
-  } else {
-    await SecureStore.deleteItemAsync('session_token');
-  }
+    if (Platform.OS === 'web') {
+          localStorage.removeItem('session_token');
+    } else {
+          await SecureStore.deleteItemAsync('session_token');
+    }
 };
 
 export const useAuthStore = create<AuthStore>((set) => ({
-  user: null,
-  token: null,
-  isLoading: true, // 🔥 КЛЮЧОВЕ
+    user: null,
+    token: null,
+    isLoading: true, // 🔥 Start with loading=true to ensure loadToken completes first
 
-  setUser: (user) => set({ user }),
+    setUser: (user) => set({ user }),
 
-  setToken: async (token) => {
-    if (token) await saveToken(token);
-    else await deleteToken();
+    setToken: async (token) => {
+          if (token) await saveToken(token);
+          else await deleteToken();
 
-    set({ token });
-  },
+      set({ token });
+    },
 
-  logout: async () => {
-    await deleteToken();
-    set({ user: null, token: null, isLoading: false });
-  },
+    logout: async () => {
+          await deleteToken();
+          set({ user: null, token: null, isLoading: false });
+    },
 
-  loadToken: async () => {
-    try {
-      const token = await getToken();
-      set({ token, isLoading: false });
-    } catch {
-      set({ token: null, isLoading: false });
-    }
-  },
+    loadToken: async () => {
+          try {
+                  const token = await getToken();
+                  set({ token, isLoading: false });
+          } catch (error) {
+                  console.error('Error loading token:', error);
+                  set({ token: null, isLoading: false });
+          }
+    },
 }));
+
