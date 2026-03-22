@@ -51,7 +51,7 @@ const deleteToken = async () => {
 export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
   token: null,
-  isLoading: true,
+  isLoading: false,
 
   setUser: (user) => set({ user }),
 
