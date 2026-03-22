@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
-  Alert,
+
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,7 +41,7 @@ export default function BrowseServices() {
       );
       setServices(data);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load services');
+      console.error('Failed to load services:', error.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
