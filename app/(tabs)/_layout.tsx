@@ -1,20 +1,23 @@
-import React, { useEffect } from 'react';
-import { Tabs, useRouter } from 'expo-router';
+import React from 'react';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
+import { View, ActivityIndicator } from 'react-native';
 
 export default function TabsLayout() {
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
   const role = user?.role;
-  const router = useRouter();
 
-  useEffect(() => {
-    if (!user || !role) {
-      router.replace('/login');
-    }
-  }, [user, role]);
+  if (token && !user) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
 
-  if (!user || !role) {
+  if (!token && !user) {
     return null;
   }
 
