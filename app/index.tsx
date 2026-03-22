@@ -4,9 +4,11 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../utils/api';
 
+
 export default function Index() {
     const router = useRouter();
     const { token, isLoading, setUser, setToken, loadToken } = useAuthStore();
+
 
   useEffect(() => {
         const initAuth = async () => {
@@ -15,11 +17,13 @@ export default function Index() {
                           return;
                 }
 
+
                 // If no token, redirect to login
                 if (!token) {
                           router.replace('/login');
                           return;
                 }
+
 
                 // Token exists, fetch user data
                 try {
@@ -34,17 +38,22 @@ export default function Index() {
                 }
         };
 
+
                 initAuth();
   }, [token, isLoading, setUser, setToken, router]);
+
 
   return (
         <View style={styles.container}>
                 <ActivityIndicator size="large" />
-        </View>View>
+        </View>
       );
 }
+
 
 const styles = StyleSheet.create({
     container: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });
+
+
 
