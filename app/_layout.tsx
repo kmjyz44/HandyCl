@@ -15,8 +15,11 @@ export default function RootLayout() {
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
       <Stack.Screen name="auth-callback" />
+      <Stack.Screen name="create-task" />
+      <Stack.Screen name="task-detail" />
+      <Stack.Screen name="service" />
+      <Stack.Screen name="executor" />
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="service/[id]" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }
