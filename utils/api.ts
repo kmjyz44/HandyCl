@@ -6,8 +6,7 @@ const API_URL =
   'https://handyhub-nbvo.onrender.com';
 
 const client = axios.create({
-  baseURL:
-    Platform.OS === 'web' ? '/api' : `${API_URL}/api`,
+  baseURL: `${API_URL}/api`,
   headers: { 'Content-Type': 'application/json' },
 });
 
