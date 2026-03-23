@@ -1395,12 +1395,31 @@ async def register(user_data: UserRegister):
     }
     await db.user_sessions.insert_one(session_data)
     
-    # Prepare user response without _id and password_hash
-    user_response = user.dict()
-    if "_id" in user_response:
-        del user_response["_id"]
-    if "password_hash" in user_response:
-        del user_response["password_hash"]
+    # Prepare user response - convert to dict and handle datetime serialization
+    user_response = {
+        "user_id": user.user_id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "phone": user.phone,
+        "picture": user.picture,
+        "google_id": user.google_id,
+        "telegram_chat_id": user.telegram_chat_id,
+        "fcm_token": user.fcm_token,
+        "is_blocked": user.is_blocked,
+        "hidden_from_clients": user.hidden_from_clients,
+        "blocked_until": user.blocked_until.isoformat() if user.blocked_until else None,
+        "blocked_reason": user.blocked_reason,
+        "blocked_by": user.blocked_by,
+        "address": user.address,
+        "latitude": user.latitude,
+        "longitude": user.longitude,
+        "stripe_customer_id": user.stripe_customer_id,
+        "stripe_connect_account_id": user.stripe_connect_account_id,
+        "payment_methods": user.payment_methods or [],
+        "saved_addresses": user.saved_addresses or [],
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+    }
     
     return {
         "user": user_response,
