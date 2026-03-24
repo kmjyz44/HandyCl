@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/apiClient';
@@ -20,7 +19,7 @@ import {
   Gift, HelpCircle, Sparkles, CreditCard, Award, TrendingUp,
   FileText, Briefcase, Target, Zap, ChevronLeft, Search, Bell,
   Image, AlertCircle, CheckCircle, Map, Globe, Wrench,
-  EyeOff, SlidersHorizontal, ArrowUpDown, Filter, Star
+  EyeOff, SlidersHorizontal, ArrowUpDown, Filter
 } from 'lucide-react';
 
 // ==================== ADMIN DASHBOARD ====================
@@ -1459,10 +1458,10 @@ function LocationScreen({ profile, onBack, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const mapRef = React.useRef(null);
-  const mapInstanceRef = React.useRef(null);
-  const circleRef = React.useRef(null);
-  const markerRef = React.useRef(null);
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const circleRef = useRef(null);
+  const markerRef = useRef(null);
   const [mapCenter, setMapCenter] = useState(
     profile?.latitude && profile?.longitude
       ? { lat: profile.latitude, lng: profile.longitude }
@@ -1470,7 +1469,7 @@ function LocationScreen({ profile, onBack, onSaved }) {
   );
 
   // Load Google Maps
-  React.useEffect(() => {
+  useEffect(() => {
     if (tab !== 'map') return;
     if (window.google && window.google.maps) { initMap(); return; }
 
@@ -1533,7 +1532,7 @@ function LocationScreen({ profile, onBack, onSaved }) {
   };
 
   // Update circle radius when slider changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (circleRef.current) {
       circleRef.current.setRadius(radius * 1000);
     }
