@@ -280,9 +280,11 @@ function ProviderDashboard({ user, onLogout }) {
           <NotificationBell onClick={() => setShowNotifications(true)} />
           <button 
             onClick={onLogout}
-            className="p-2 hover:bg-gray-100 rounded-full text-red-600"
+            className="p-2 hover:bg-red-100 rounded-full transition-colors"
+            title="Logout"
+            data-testid="provider-logout-header-btn"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-5 h-5 text-red-600" />
           </button>
         </div>
       </header>
@@ -294,7 +296,7 @@ function ProviderDashboard({ user, onLogout }) {
         {activeTab === 'invoices' && <ProviderInvoicesContent tasks={tasks} />}
         {activeTab === 'calendar' && <ProviderCalendarContent />}
         {activeTab === 'performance' && <ProviderPerformanceContent stats={stats} />}
-        {activeTab === 'profile' && <ProviderProfileContent user={user} profile={profile} onRefresh={loadData} />}
+        {activeTab === 'profile' && <ProviderProfileContent user={user} profile={profile} onRefresh={loadData} onLogout={onLogout} />}
       </main>
 
       {/* Bottom Navigation - TaskRabbit style */}
@@ -2310,7 +2312,7 @@ function TaskerProfileEditor({ profile, onBack, onSaved }) {
   );
 }
 
-function ProviderProfileContent({ user, profile, onRefresh }) {
+function ProviderProfileContent({ user, profile, onRefresh, onLogout }) {
   const [activeSection, setActiveSection] = useState(null);
   const [editData, setEditData] = useState({});
   const [myDocuments, setMyDocuments] = useState([]);
@@ -2375,6 +2377,7 @@ function ProviderProfileContent({ user, profile, onRefresh }) {
     { id: 'payments', icon: CreditCard, label: 'Payments', description: 'Payout accounts' },
     { id: 'invite', icon: Gift, label: 'Invite friends, earn cash', highlight: true, description: 'Share your code' },
     { id: 'support', icon: HelpCircle, label: 'Support', description: 'Get help' },
+    { id: 'logout', icon: LogOut, label: 'Logout', description: 'Sign out of your account', danger: true },
   ];
 
   // Account Details Section
@@ -2891,29 +2894,60 @@ function ProviderProfileContent({ user, profile, onRefresh }) {
           Account Information
         </p>
         <div className="divide-y">
-          {menuItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveSection(item.id)}
-              className={`w-full flex items-center justify-between px-4 py-4 hover:bg-gray-50 transition-colors ${
-                item.highlight ? 'bg-green-50' : ''
-              }`}
-              data-testid={`profile-menu-${item.id}`}
-            >
-              <div className="flex items-center gap-3">
-                <item.icon className={`w-5 h-5 ${item.highlight ? 'text-green-600' : 'text-gray-600'}`} />
-                <div className="text-left">
-                  <span className={`font-medium block ${item.highlight ? 'text-green-700' : 'text-gray-900'}`}>
-                    {item.label}
-                  </span>
-                  {item.description && (
-                    <span className="text-xs text-gray-500">{item.description}</span>
-                  )}
+          {menuItems.map(item => {
+            // Handle logout specially
+            if (item.id === 'logout') {
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to logout?')) {
+                      if (onLogout) onLogout();
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-4 hover:bg-red-50 transition-colors"
+                  data-testid={`profile-menu-${item.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="w-5 h-5 text-red-600" />
+                    <div className="text-left">
+                      <span className="font-medium block text-red-600">
+                        {item.label}
+                      </span>
+                      {item.description && (
+                        <span className="text-xs text-gray-500">{item.description}</span>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-red-400" />
+                </button>
+              );
+            }
+            
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                className={`w-full flex items-center justify-between px-4 py-4 hover:bg-gray-50 transition-colors ${
+                  item.highlight ? 'bg-green-50' : ''
+                }`}
+                data-testid={`profile-menu-${item.id}`}
+              >
+                <div className="flex items-center gap-3">
+                  <item.icon className={`w-5 h-5 ${item.highlight ? 'text-green-600' : 'text-gray-600'}`} />
+                  <div className="text-left">
+                    <span className={`font-medium block ${item.highlight ? 'text-green-700' : 'text-gray-900'}`}>
+                      {item.label}
+                    </span>
+                    {item.description && (
+                      <span className="text-xs text-gray-500">{item.description}</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-gray-400" />
-            </button>
-          ))}
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+            );
+          }))
         </div>
       </div>
 
@@ -3006,6 +3040,14 @@ function ClientDashboard({ user, onLogout }) {
               <MessageSquare className="w-5 h-5 text-gray-600" />
             </button>
             <NotificationBell onClick={() => setShowNotifications(true)} />
+            <button 
+              onClick={onLogout}
+              className="p-2 hover:bg-red-100 rounded-full transition-colors"
+              title="Logout"
+              data-testid="client-logout-header-btn"
+            >
+              <LogOut className="w-5 h-5 text-red-600" />
+            </button>
           </div>
         </div>
         
