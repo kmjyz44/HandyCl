@@ -1007,11 +1007,6 @@ function ProviderProfile() {
         </View>
       </View>
 
-      {/* Logout at bottom of performance */}
-      <TouchableOpacity style={[styles.logoutBtn, { marginHorizontal: 16, marginTop: 16 }]} onPress={handleLogout}>
-        <Ionicons name="log-out-outline" size={22} color="#ef4444" />
-        <Text style={styles.logoutBtnText}>Вийти з акаунту</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 
