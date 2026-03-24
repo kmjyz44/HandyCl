@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Image,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -14,13 +17,38 @@ import { api } from '../../utils/api';
 
 export default function Profile() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, setUser } = useAuthStore();
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  
+  // Client specific state
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [savedAddresses, setSavedAddresses] = useState([]);
+
+  useEffect(() => {
+    if (user?.role === 'client') {
+      loadClientData();
+    }
+  }, [user]);
+
+  const loadClientData = async () => {
+    try {
+      const [pmRes, addrRes] = await Promise.all([
+        api.getPaymentMethods().catch(() => ({ data: [] })),
+        api.getSavedAddresses().catch(() => ({ data: [] }))
+      ]);
+      setPaymentMethods(pmRes.data || []);
+      setSavedAddresses(addrRes.data || []);
+    } catch (error) {
+      console.error('Error loading client data:', error);
+    }
+  };
 
   const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert('Вихід', 'Ви впевнені, що хочете вийти?', [
+      { text: 'Скасувати', style: 'cancel' },
       {
-        text: 'Logout',
+        text: 'Вийти',
         style: 'destructive',
         onPress: async () => {
           try {
@@ -28,105 +56,169 @@ export default function Profile() {
             await logout();
             router.replace('/login');
           } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to logout');
+            Alert.alert('Помилка', error.message || 'Не вдалося вийти');
           }
         },
       },
     ]);
   };
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.avatarContainer}>
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <View style={styles.avatarContainer}>
+        <View style={styles.avatar}>
           {user?.picture ? (
-            <View style={styles.avatar}>
-              {/* Base64 image would go here */}
-              <Ionicons name="person" size={40} color="#fff" />
-            </View>
+            <Image source={{ uri: user.picture }} style={styles.avatarImage} />
           ) : (
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={40} color="#fff" />
-            </View>
+            <Ionicons name="person" size={40} color="#fff" />
           )}
-        </View>
-        <Text style={styles.name}>{user?.name}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
-        <View style={styles.roleBadge}>
-          <Text style={styles.roleText}>{user?.role?.toUpperCase()}</Text>
+          <TouchableOpacity style={styles.cameraBadge} onPress={() => Alert.alert('Фото', 'Завантаження фото буде доступне незабаром')}>
+            <Ionicons name="camera" size={14} color="#fff" />
+          </TouchableOpacity>
         </View>
       </View>
+      <Text style={styles.name}>{user?.name}</Text>
+      <View style={styles.ratingContainer}>
+        <Ionicons name="star" size={16} color="#fbbf24" />
+        <Text style={styles.ratingText}>{user?.rating || '5.0'}</Text>
+        <Text style={styles.reviewsText}>({user?.reviews_count || 0} відгуків)</Text>
+      </View>
+      <Text style={styles.email}>{user?.email}</Text>
+      <View style={styles.roleBadge}>
+        <Text style={styles.roleText}>{user?.role === 'client' ? 'КЛІЄНТ' : 'ВИКОНАВЕЦЬ'}</Text>
+      </View>
+    </View>
+  );
 
-      <ScrollView style={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
+  const renderClientProfile = () => (
+    <ScrollView style={styles.content}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Акаунт</Text>
+        
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveSection(activeSection === 'payments' ? null : 'payments')}>
+          <Ionicons name="card-outline" size={24} color="#10b981" />
+          <Text style={styles.menuText}>Способи оплати</Text>
+          <Ionicons name={activeSection === 'payments' ? "chevron-down" : "chevron-forward"} size={20} color="#d1d5db" />
+        </TouchableOpacity>
+        
+        {activeSection === 'payments' && (
+          <View style={styles.subSection}>
+            {paymentMethods.length === 0 ? (
+              <Text style={styles.emptyText}>Немає збережених карток</Text>
+            ) : (
+              paymentMethods.map((pm: any) => (
+                <View key={pm.id} style={styles.dataItem}>
+                  <Ionicons name="card" size={20} color="#6b7280" />
+                  <Text style={styles.dataText}>{pm.type} •••• {pm.last4}</Text>
+                </View>
+              ))
+            )}
+            <TouchableOpacity style={styles.addButton}>
+              <Text style={styles.addButtonText}>+ Додати картку</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Edit profile feature coming soon')}
-          >
-            <Ionicons name="person-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Edit Profile</Text>
-            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Notifications settings coming soon')}
-          >
-            <Ionicons name="notifications-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Notifications</Text>
-            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Telegram settings coming soon')}
-          >
-            <Ionicons name="paper-plane-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Telegram Notifications</Text>
-            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Support</Text>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Help', 'Contact support at support@handyhub.com')}
-          >
-            <Ionicons name="help-circle-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Help & Support</Text>
-            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Terms & Conditions coming soon')}
-          >
-            <Ionicons name="document-text-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Terms & Conditions</Text>
-            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Privacy Policy coming soon')}
-          >
-            <Ionicons name="shield-checkmark-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Privacy Policy</Text>
-            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={24} color="#ef4444" />
-          <Text style={styles.logoutText}>Logout</Text>
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveSection(activeSection === 'addresses' ? null : 'addresses')}>
+          <Ionicons name="location-outline" size={24} color="#10b981" />
+          <Text style={styles.menuText}>Мої адреси</Text>
+          <Ionicons name={activeSection === 'addresses' ? "chevron-down" : "chevron-forward"} size={20} color="#d1d5db" />
         </TouchableOpacity>
 
-        <Text style={styles.version}>Version 1.0.0</Text>
-      </ScrollView>
+        {activeSection === 'addresses' && (
+          <View style={styles.subSection}>
+            {savedAddresses.length === 0 && !user?.address ? (
+              <Text style={styles.emptyText}>Немає збережених адрес</Text>
+            ) : (
+              <>
+                {user?.address && (
+                  <View style={styles.dataItem}>
+                    <Ionicons name="home" size={20} color="#6b7280" />
+                    <Text style={styles.dataText}>{user.address}</Text>
+                  </View>
+                )}
+                {savedAddresses.map((addr: any) => (
+                  <View key={addr.id} style={styles.dataItem}>
+                    <Ionicons name="map" size={20} color="#6b7280" />
+                    <Text style={styles.dataText}>{addr.street}, {addr.city}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+            <TouchableOpacity style={styles.addButton}>
+              <Text style={styles.addButtonText}>+ Додати адресу</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Запросити друзів', 'Ваш код: FRIEND20')}>
+          <Ionicons name="gift-outline" size={24} color="#10b981" />
+          <Text style={styles.menuText}>Запросити друзів (отримайте $20)</Text>
+          <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Підтримка</Text>
+        <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Підтримка', 'Email: support@handyhub.com')}>
+          <Ionicons name="help-circle-outline" size={24} color="#6b7280" />
+          <Text style={styles.menuText}>Допомога та підтримка</Text>
+          <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+        <Text style={styles.logoutText}>Вийти з акаунту</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.version}>Версія 1.0.0</Text>
+    </ScrollView>
+  );
+
+  const renderProviderProfile = () => (
+    <ScrollView style={styles.content}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Профіль виконавця</Text>
+        
+        <TouchableOpacity style={styles.menuItem}>
+          <Ionicons name="person-outline" size={24} color="#2563eb" />
+          <Text style={styles.menuText}>Про мене</Text>
+          <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem}>
+          <Ionicons name="cash-outline" size={24} color="#2563eb" />
+          <Text style={styles.menuText}>Погодинна ставка</Text>
+          <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem}>
+          <Ionicons name="construct-outline" size={24} color="#2563eb" />
+          <Text style={styles.menuText}>Навички</Text>
+          <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem}>
+          <Ionicons name="globe-outline" size={24} color="#2563eb" />
+          <Text style={styles.menuText}>Мови</Text>
+          <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+        <Text style={styles.logoutText}>Вийти з акаунту</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.version}>Версія 1.0.0</Text>
+    </ScrollView>
+  );
+
+  return (
+    <View style={styles.container}>
+      {renderHeader()}
+      {user?.role === 'provider' ? renderProviderProfile() : renderClientProfile()}
     </View>
   );
 }
@@ -140,26 +232,60 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     padding: 24,
-    paddingTop: 60,
+    paddingTop: 40,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
   avatarContainer: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#10b981',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
   },
   name: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#111827',
     marginBottom: 4,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  ratingText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  reviewsText: {
+    fontSize: 14,
+    color: '#6b7280',
   },
   email: {
     fontSize: 14,
@@ -167,21 +293,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   roleBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   roleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#2563eb',
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#10b981',
   },
   content: {
     flex: 1,
   },
   section: {
-    marginTop: 24,
+    marginTop: 20,
     marginHorizontal: 16,
   },
   sectionTitle: {
@@ -189,7 +315,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#6b7280',
     textTransform: 'uppercase',
-    marginBottom: 12,
+    marginBottom: 8,
     paddingHorizontal: 4,
   },
   menuItem: {
@@ -206,7 +332,44 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#111827',
-    marginLeft: 16,
+    marginLeft: 12,
+  },
+  subSection: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginTop: -4,
+  },
+  dataItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  dataText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    paddingVertical: 10,
+  },
+  addButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  addButtonText: {
+    color: '#10b981',
+    fontWeight: '600',
+    fontSize: 14,
   },
   logoutButton: {
     flexDirection: 'row',

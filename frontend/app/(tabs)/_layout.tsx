@@ -23,9 +23,17 @@ export default function TabsLayout() {
     return (
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: '#2563eb',
+          tabBarActiveTintColor: '#10b981',
           tabBarInactiveTintColor: '#6b7280',
-          headerShown: false,
+          headerShown: true,
+          headerRight: () => (
+            <TouchableOpacity 
+              onPress={() => useAuthStore.getState().logout()} 
+              style={{ marginRight: 15 }}
+            >
+              <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+            </TouchableOpacity>
+          ),
         }}
       >
         <Tabs.Screen
@@ -88,9 +96,17 @@ export default function TabsLayout() {
     return (
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: '#2563eb',
+          tabBarActiveTintColor: '#10b981',
           tabBarInactiveTintColor: '#6b7280',
-          headerShown: false,
+          headerShown: true,
+          headerRight: () => (
+            <TouchableOpacity 
+              onPress={() => useAuthStore.getState().logout()} 
+              style={{ marginRight: 15 }}
+            >
+              <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+            </TouchableOpacity>
+          ),
         }}
       >
         <Tabs.Screen
@@ -145,9 +161,17 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#2563eb',
+        tabBarActiveTintColor: '#10b981',
         tabBarInactiveTintColor: '#6b7280',
-        headerShown: false,
+        headerShown: true,
+          headerRight: () => (
+            <TouchableOpacity 
+              onPress={() => useAuthStore.getState().logout()} 
+              style={{ marginRight: 15 }}
+            >
+              <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+            </TouchableOpacity>
+          ),
       }}
     >
       <Tabs.Screen
