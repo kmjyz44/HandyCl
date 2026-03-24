@@ -853,7 +853,23 @@ function ProviderProfile() {
 
   const pickPortfolioPhoto = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Фото робіт', 'На веб-версії завантаження фото тимчасово недоступне. Використовуйте мобільний додаток.');
+      // On web, trigger a hidden file input
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = true;
+      input.onchange = (e: any) => {
+        const files: File[] = Array.from(e.target.files || []);
+        files.forEach((file: File) => {
+          const reader = new FileReader();
+          reader.onload = (ev: any) => {
+            setPortfolioPhotos(prev => [...prev, ev.target.result as string]);
+          };
+          reader.readAsDataURL(file);
+        });
+        if (files.length > 0) Alert.alert('Успіх', `Додано ${files.length} фото`);
+      };
+      input.click();
       return;
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -1063,65 +1079,119 @@ function ProviderProfile() {
     </View>
   );
 
-  // ── Service Tab ──
+  // ── Service Tab (TaskRabbit-style account menu) ──
   const renderService = () => (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-      <View style={pStyles.serviceSection}>
-        <Text style={pStyles.serviceSectionLabel}>СТРУКТУРА ЗАРОБІТКУ</Text>
-        <TouchableOpacity style={pStyles.earningCard}>
-          <View style={pStyles.earningCardIcon}>
-            <Ionicons name="person-add-outline" size={28} color="#2563eb" />
-          </View>
-          <Text style={pStyles.earningCardTitle}>Самостійна погодинна ставка</Text>
-          <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
-        </TouchableOpacity>
-      </View>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
-      <View style={pStyles.serviceSection}>
-        <Text style={pStyles.serviceSectionLabel}>ФОТО РОБІТ</Text>
-        {portfolioPhotos.length > 0 ? (
-          <View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-              {portfolioPhotos.slice(0, 5).map((photo, i) => (
-                <TouchableOpacity key={i} onLongPress={() => {
-                  Alert.alert('Видалити фото?', '', [
-                    { text: 'Скасувати', style: 'cancel' },
-                    { text: 'Видалити', style: 'destructive', onPress: () => setPortfolioPhotos(portfolioPhotos.filter((_, idx) => idx !== i)) },
-                  ]);
-                }}>
-                  <Image source={{ uri: photo }} style={pStyles.portfolioPhoto} />
-                </TouchableOpacity>
-              ))}
-              {portfolioPhotos.length > 5 && (
-                <View style={[pStyles.portfolioPhoto, { backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' }]}>
-                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>+{portfolioPhotos.length - 5}</Text>
-                </View>
-              )}
-            </ScrollView>
-            <TouchableOpacity style={[pStyles.addPhotoBtn, { marginTop: 8 }]} onPress={pickPortfolioPhoto}>
-              <Ionicons name="add-circle-outline" size={20} color="#2563eb" />
-              <Text style={[pStyles.addPhotoBtnText, { color: '#2563eb' }]}>Додати ще фото</Text>
+      {/* ACCOUNT INFORMATION */}
+      <Text style={pStyles.menuSectionLabel}>ІНФОРМАЦІЯ ПРО АКАУНТ</Text>
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => setBioModalVisible(true)}>
+        <Ionicons name="person-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Деталі акаунту</Text>
+          {bio ? <Text style={pStyles.menuRowSub} numberOfLines={1}>{bio}</Text> : null}
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => setServiceDetailVisible(true)}>
+        <Ionicons name="briefcase-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Профіль виконавця</Text>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={pickPortfolioPhoto}>
+        <Ionicons name="images-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Фото робіт</Text>
+          <Text style={pStyles.menuRowSub}>{portfolioPhotos.length > 0 ? `${portfolioPhotos.length} фото` : 'Додайте фото ваших робіт'}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      {portfolioPhotos.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+          {portfolioPhotos.map((photo, i) => (
+            <TouchableOpacity key={i} onLongPress={() => {
+              Alert.alert('Видалити фото?', '', [
+                { text: 'Скасувати', style: 'cancel' },
+                { text: 'Видалити', style: 'destructive', onPress: () => setPortfolioPhotos(portfolioPhotos.filter((_, idx) => idx !== i)) },
+              ]);
+            }}>
+              <Image source={{ uri: photo }} style={pStyles.portfolioThumb} />
             </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity style={pStyles.addPhotoBtn} onPress={pickPortfolioPhoto}>
-            <Ionicons name="camera-outline" size={24} color="#6b7280" />
-            <Text style={pStyles.addPhotoBtnText}>Додати фото робіт</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+          ))}
+        </ScrollView>
+      )}
+      <View style={pStyles.menuDivider} />
 
-      <View style={pStyles.serviceSection}>
-        <Text style={pStyles.serviceSectionLabel}>ІНША ІНФОРМАЦІЯ</Text>
-        <TouchableOpacity style={pStyles.infoRow} onPress={() => setBioModalVisible(true)}>
-          <Ionicons name="document-text-outline" size={22} color="#374151" />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={pStyles.infoRowText}>Опис досвіду</Text>
-            {bio ? <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }} numberOfLines={1}>{bio}</Text> : null}
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Погодинна ставка', `Поточна ставка: ${profile?.hourly_rate || 25} ₴/год`)}>
+        <Ionicons name="cash-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Оплата та виплати</Text>
+          <Text style={pStyles.menuRowSub}>Погодинна ставка: {profile?.hourly_rate || 25} ₴</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      {/* INVITE */}
+      <TouchableOpacity style={[pStyles.menuRow, { backgroundColor: '#f0fdf4' }]} onPress={() => Alert.alert('Запросити друзів', 'Функція запрошень буде доступна в наступній версії')}>
+        <Ionicons name="gift-outline" size={22} color="#16a34a" style={pStyles.menuRowIcon} />
+        <Text style={[pStyles.menuRowText, { flex: 1, color: '#15803d' }]}>Запросити друзів, отримати бонус</Text>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Підтримка', 'Зверніться на support@handyhub.com')}>
+        <Ionicons name="help-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Підтримка</Text>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      {/* SETTINGS */}
+      <Text style={pStyles.menuSectionLabel}>НАЛАШТУВАННЯ</Text>
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Безпека акаунту', 'Зміна паролю та налаштування безпеки будуть доступні в наступній версії')}>
+        <Ionicons name="shield-checkmark-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Безпека акаунту</Text>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Про HandyHub', 'HandyHub v1.0.0\n\nПлатформа для пошуку виконавців поблизу')}>
+        <Ionicons name="information-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Про додаток</Text>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Призупинити акаунт', 'Ця функція буде доступна в наступній версії')}>
+        <Ionicons name="pause-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Призупинити акаунт</Text>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Вийти</Text>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      {/* DELETE ACCOUNT */}
+      <TouchableOpacity style={[pStyles.menuRow, { marginTop: 8 }]} onPress={() => Alert.alert('Видалити акаунт', 'Ця дія незворотня. Ви впевнені?', [
+        { text: 'Скасувати', style: 'cancel' },
+        { text: 'Видалити', style: 'destructive', onPress: handleLogout },
+      ])}>
+        <Text style={[pStyles.menuRowText, { flex: 1, color: '#ef4444', fontWeight: '600' }]}>Видалити акаунт</Text>
+      </TouchableOpacity>
+
+      <Text style={pStyles.versionText}>HandyHub v1.0.0</Text>
     </ScrollView>
   );
 
@@ -1592,4 +1662,13 @@ const pStyles = StyleSheet.create({
   rateEditRow: { flexDirection: 'row', gap: 12, marginTop: 8, alignItems: 'center' },
   rateSaveBtn: { backgroundColor: '#2563eb', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 14, justifyContent: 'center' },
   rateSaveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  // Menu styles (Services tab)
+  menuSectionLabel: { fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8, backgroundColor: '#f9fafb' },
+  menuRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 16 },
+  menuRowIcon: { marginRight: 14 },
+  menuRowText: { fontSize: 16, color: '#111827', fontWeight: '500' },
+  menuRowSub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  menuDivider: { height: 1, backgroundColor: '#f3f4f6', marginLeft: 56 },
+  portfolioThumb: { width: 80, height: 80, borderRadius: 8, marginRight: 8, marginTop: 4 },
+  versionText: { textAlign: 'center', fontSize: 12, color: '#9ca3af', marginTop: 24, marginBottom: 8 },
 });
