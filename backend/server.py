@@ -7375,6 +7375,56 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     """Start background tasks on app startup."""
     asyncio.create_task(_auto_cleanup_loop())
+    asyncio.create_task(_create_seed_accounts())
+
+async def _create_seed_accounts():
+    """Create default seed accounts (admin, provider, client) if they don't exist."""
+    await asyncio.sleep(2)  # Wait for DB connection to be ready
+    
+    seed_users = [
+        {
+            "email": "admin@handyhub.com",
+            "password": "Admin2024!",
+            "name": "Адміністратор",
+            "role": UserRole.ADMIN,
+            "phone": "+380000000001",
+        },
+        {
+            "email": "provider@handyhub.com",
+            "password": "Provider2024!",
+            "name": "Тестовий Виконавець",
+            "role": UserRole.PROVIDER,
+            "phone": "+380000000002",
+        },
+        {
+            "email": "client@handyhub.com",
+            "password": "Client2024!",
+            "name": "Тестовий Клієнт",
+            "role": UserRole.CLIENT,
+            "phone": "+380000000003",
+        },
+    ]
+    
+    for seed in seed_users:
+        existing = await db.users.find_one({"email": seed["email"]})
+        if not existing:
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            user = User(
+                user_id=user_id,
+                email=seed["email"],
+                name=seed["name"],
+                role=seed["role"],
+                phone=seed["phone"],
+                password_hash=hash_password(seed["password"])
+            )
+            user_dict = user.dict()
+            user_dict["plain_password"] = seed["password"]
+            await db.users.insert_one(user_dict)
+            print(f"[SEED] Created {seed['role']} account: {seed['email']}")
+        else:
+            print(f"[SEED] Account already exists: {seed['email']}")
+    
+    print("[SEED] Seed accounts check complete.")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
