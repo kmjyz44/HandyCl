@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/apiClient';
@@ -3656,6 +3657,7 @@ function ClientProfileContent({ user, onLogout }) {
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [newPayment, setNewPayment] = useState({ card_number: '', expiry: '', cvv: '', name: '' });
   const [newAddress, setNewAddress] = useState({ label: '', street: '', city: '', zip: '' });
+  const [uploading, setUploading] = useState(false);
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
@@ -3663,12 +3665,12 @@ function ClientProfileContent({ user, onLogout }) {
   });
 
   // Load payment methods and addresses from backend on mount
-  React.useEffect(() => {
+  useEffect(() => {
     const loadUserData = async () => {
       try {
         const [pmRes, addrRes] = await Promise.all([
-          api.getPaymentMethods(),
-          api.getSavedAddresses()
+          api.getPaymentMethods().catch(() => ({ data: [] })),
+          api.getSavedAddresses().catch(() => ({ data: [] }))
         ]);
         setPaymentMethods(pmRes.data || []);
         setSavedAddresses(addrRes.data || []);
@@ -3690,10 +3692,33 @@ function ClientProfileContent({ user, onLogout }) {
 
   const handleMenuClick = (id) => {
     if (id === 'logout') {
-      if (onLogout) onLogout();
+      if (window.confirm(t('confirm_logout') || 'Are you sure you want to logout?')) {
+        if (onLogout) onLogout();
+      }
       return;
     }
     setActiveSection(activeSection === id ? null : id);
+  };
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        await api.updateProfile({ picture: reader.result });
+        alert(t('photo_updated') || 'Profile photo updated!');
+        window.location.reload(); // Refresh to show new photo
+      } catch (error) {
+        console.error('Error uploading photo:', error);
+        alert(t('error_uploading') || 'Error uploading photo');
+      } finally {
+        setUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveProfile = async () => {
@@ -3770,20 +3795,39 @@ function ClientProfileContent({ user, onLogout }) {
       {/* Profile Header */}
       <div className="bg-white rounded-2xl p-6 border">
         <div className="flex items-center gap-4 mb-4">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-            {user?.picture ? (
-              <img src={user.picture} alt={user.name} className="w-16 h-16 rounded-full object-cover" />
-            ) : (
-              <User className="w-8 h-8 text-green-600" />
-            )}
+          <div className="relative group">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
+              {user?.picture ? (
+                <img src={user.picture} alt={user.name} className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-10 h-10 text-green-600" />
+              )}
+              {uploading && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+            <label className="absolute bottom-0 right-0 w-7 h-7 bg-green-600 rounded-full flex items-center justify-center cursor-pointer border-2 border-white shadow-sm hover:bg-green-700 transition-colors">
+              <Camera className="w-4 h-4 text-white" />
+              <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={uploading} />
+            </label>
           </div>
           <div className="flex-1">
             <h2 className="text-xl font-bold text-gray-900">{user?.name}</h2>
-            <p className="text-gray-500">{user?.email}</p>
+            <div className="flex items-center gap-3 mt-1">
+              <div className="flex items-center gap-1 text-sm text-gray-500">
+                <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                <span className="font-medium text-gray-900">{user?.rating || '5.0'}</span>
+                <span>({user?.reviews_count || 0} {t('reviews') || 'reviews'})</span>
+              </div>
+              <span className="w-1 h-1 bg-gray-300 rounded-full" />
+              <p className="text-sm text-gray-500">{user?.email}</p>
+            </div>
           </div>
           <button 
             onClick={() => setEditingProfile(!editingProfile)}
-            className="p-2 hover:bg-gray-100 rounded-full"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
             data-testid="edit-profile-btn"
           >
             <Edit className="w-5 h-5 text-gray-600" />
