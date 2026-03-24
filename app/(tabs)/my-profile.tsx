@@ -606,7 +606,6 @@ function ClientProfile() {
 
 // ─── PROVIDER PROFILE (TaskRabbit style) ──────────────────────────────────────
 
-// Skill categories with subcategories (Ukrainian)
 const SKILL_CATEGORIES = [
   {
     id: 'assembly',
@@ -615,9 +614,12 @@ const SKILL_CATEGORIES = [
     color: '#2563eb',
     bg: '#eff6ff',
     skills: [
-      { id: 'furniture_assembly', name: 'Збірка меблів', tools: ['Викрутка', 'Дриль', 'Рівень', 'Молоток'], description: 'Збирайте меблі будь-якого типу — від IKEA до замовних виробів.' },
-      { id: 'ikea_assembly', name: 'Збірка IKEA', tools: ['Шестигранник', 'Молоток', 'Рівень'], description: 'Збірка та монтаж меблів IKEA будь-якої складності.' },
-      { id: 'shelving', name: 'Монтаж полиць', tools: ['Дриль', 'Дюбелі', 'Рівень'], description: 'Встановлення полиць, стелажів та систем зберігання.' },
+      { id: 'furniture_assembly', name: 'Збірка меблів', tools: ['Викрутка', 'Дриль', 'Рівень', 'Молоток'], description: 'Збирайте меблі будь-якого типу — від IKEA до замовних виробів. Клієнти очікують акуратного монтажу без пошкоджень.' },
+      { id: 'ikea_assembly', name: 'Збірка IKEA', tools: ['Шестигранник', 'Молоток', 'Рівень', 'Викрутка'], description: 'Збірка та монтаж меблів IKEA будь-якої складності. Знання інструкцій IKEA обов\'язкове.' },
+      { id: 'shelving', name: 'Монтаж полиць', tools: ['Дриль', 'Дюбелі', 'Рівень', 'Олівець'], description: 'Встановлення полиць, стелажів та систем зберігання на стінах будь-якого типу.' },
+      { id: 'wardrobe', name: 'Збірка шаф', tools: ['Шуруповерт', 'Рівень', 'Молоток'], description: 'Збірка вбудованих та окремостоячих шаф, гардеробних систем.' },
+      { id: 'office_furniture', name: 'Офісні меблі', tools: ['Дриль', 'Викрутка', 'Рівень'], description: 'Збірка офісних столів, крісел, стелажів та перегородок.' },
+      { id: 'tv_mount', name: 'Монтаж телевізора', tools: ['Дриль', 'Дюбелі', 'Рівень', 'Кронштейн'], description: 'Встановлення телевізорів на стіну, підключення кабелів, приховування проводів.' },
     ],
   },
   {
@@ -627,9 +629,12 @@ const SKILL_CATEGORIES = [
     color: '#0891b2',
     bg: '#ecfeff',
     skills: [
-      { id: 'home_cleaning', name: 'Прибирання будинку', tools: ['Пилосос', 'Швабра', 'Засоби для чищення'], description: 'Генеральне або регулярне прибирання житлових приміщень.' },
-      { id: 'office_cleaning', name: 'Прибирання офісу', tools: ['Пилосос', 'Серветки', 'Дезінфектор'], description: 'Прибирання офісних та комерційних приміщень.' },
-      { id: 'deep_cleaning', name: 'Генеральне прибирання', tools: ['Парогенератор', 'Хімічні засоби', 'Щітки'], description: 'Глибоке очищення всіх поверхонь, включно з важкодоступними місцями.' },
+      { id: 'home_cleaning', name: 'Прибирання будинку', tools: ['Пилосос', 'Швабра', 'Засоби для чищення', 'Відро'], description: 'Генеральне або регулярне прибирання житлових приміщень. Включає миття підлог, вікон, санвузлів.' },
+      { id: 'office_cleaning', name: 'Прибирання офісу', tools: ['Пилосос', 'Серветки', 'Дезінфектор', 'Швабра'], description: 'Прибирання офісних та комерційних приміщень після робочого дня або тижня.' },
+      { id: 'deep_cleaning', name: 'Генеральне прибирання', tools: ['Парогенератор', 'Хімічні засоби', 'Щітки', 'Рукавички'], description: 'Глибоке очищення всіх поверхонь, включно з важкодоступними місцями, духовками, холодильниками.' },
+      { id: 'move_in_out', name: 'Прибирання при переїзді', tools: ['Пилосос', 'Швабра', 'Хімія', 'Серветки'], description: 'Прибирання квартири або будинку перед заїздом або після виїзду.' },
+      { id: 'window_cleaning', name: 'Миття вікон', tools: ['Скребок', 'Засіб для скла', 'Серветки', 'Відро'], description: 'Миття вікон зсередини та зовні, балконних дверей та вітрин.' },
+      { id: 'carpet_cleaning', name: 'Чищення килимів', tools: ['Пилосос', 'Парочистач', 'Засоби для килимів'], description: 'Глибоке чищення килимів та м\'яких меблів від бруду та плям.' },
     ],
   },
   {
@@ -639,20 +644,28 @@ const SKILL_CATEGORIES = [
     color: '#7c3aed',
     bg: '#f5f3ff',
     skills: [
-      { id: 'appliance_install', name: 'Встановлення техніки', tools: ['Дриль', 'Ключі', 'Рівень'], description: 'Підключення та встановлення побутової техніки.' },
-      { id: 'door_repair', name: 'Ремонт дверей та меблів', tools: ['Шуруповерт', 'Петлі', 'Клей'], description: 'Ремонт та регулювання дверей, шаф, ящиків.' },
-      { id: 'painting', name: 'Фарбування', tools: ['Валик', 'Пензлі', 'Малярна стрічка', 'Фарба'], description: 'Фарбування стін, стель та інших поверхонь.' },
+      { id: 'appliance_install', name: 'Встановлення техніки', tools: ['Дриль', 'Ключі', 'Рівень', 'Ізолента'], description: 'Підключення та встановлення побутової техніки: пральних машин, посудомийок, кондиціонерів.' },
+      { id: 'door_repair', name: 'Ремонт дверей та меблів', tools: ['Шуруповерт', 'Петлі', 'Клей', 'Стамеска'], description: 'Ремонт та регулювання дверей, шаф, ящиків. Заміна фурнітури.' },
+      { id: 'painting', name: 'Фарбування', tools: ['Валик', 'Пензлі', 'Малярна стрічка', 'Фарба', 'Лоток'], description: 'Фарбування стін, стель та інших поверхонь. Підготовка поверхні, ґрунтування, фінішне покриття.' },
+      { id: 'tiling', name: 'Укладання плитки', tools: ['Зубчастий шпатель', 'Плиткоріз', 'Рівень', 'Затирка'], description: 'Укладання керамічної плитки у ванних кімнатах, кухнях та інших приміщеннях.' },
+      { id: 'flooring', name: 'Укладання підлоги', tools: ['Молоток', 'Підбивання', 'Рівень', 'Пилка'], description: 'Укладання ламінату, паркету, лінолеуму та інших покриттів.' },
+      { id: 'drywall', name: 'Гіпсокартон', tools: ['Шуруповерт', 'Ніж', 'Рівень', 'Шпатель'], description: 'Монтаж гіпсокартонних перегородок, стель, ніш та арок.' },
+      { id: 'plumbing', name: 'Сантехніка', tools: ['Ключі', 'Фум-стрічка', 'Паяльник', 'Труби'], description: 'Встановлення та ремонт сантехніки: кранів, унітазів, раковин, душових кабін.' },
+      { id: 'electrical', name: 'Електрика', tools: ['Викрутка', 'Тестер', 'Плоскогубці', 'Ізолента'], description: 'Встановлення розеток, вимикачів, світильників. Базові електромонтажні роботи.' },
     ],
   },
   {
     id: 'moving',
-    name: 'Переїзд',
+    name: 'Переїзд та доставка',
     icon: 'cube-outline' as const,
     color: '#d97706',
     bg: '#fffbeb',
     skills: [
-      { id: 'moving_help', name: 'Допомога з переїздом', tools: ['Вантажний автомобіль', 'Ремені', 'Захисна плівка'], description: 'Перевезення речей та меблів при переїзді.' },
-      { id: 'packing', name: 'Пакування речей', tools: ['Коробки', 'Скотч', 'Бульбашкова плівка'], description: 'Акуратне пакування та підготовка речей до переїзду.' },
+      { id: 'moving_help', name: 'Допомога з переїздом', tools: ['Вантажний автомобіль', 'Ремені', 'Захисна плівка', 'Ковдри'], description: 'Перевезення речей та меблів при переїзді. Акуратне завантаження та розвантаження.' },
+      { id: 'packing', name: 'Пакування речей', tools: ['Коробки', 'Скотч', 'Бульбашкова плівка', 'Маркер'], description: 'Акуратне пакування та підготовка речей до переїзду. Маркування коробок.' },
+      { id: 'furniture_moving', name: 'Перенесення меблів', tools: ['Ремені', 'Захисна плівка', 'Рукавички'], description: 'Переміщення важких меблів всередині приміщення або між поверхами.' },
+      { id: 'delivery', name: 'Доставка', tools: ['Автомобіль або велосипед', 'Телефон'], description: 'Доставка товарів, документів та посилок по місту.' },
+      { id: 'junk_removal', name: 'Вивіз сміття', tools: ['Вантажний автомобіль', 'Рукавички', 'Мішки'], description: 'Вивіз старих меблів, будівельного сміття та непотрібних речей.' },
     ],
   },
   {
@@ -662,8 +675,11 @@ const SKILL_CATEGORIES = [
     color: '#16a34a',
     bg: '#f0fdf4',
     skills: [
-      { id: 'lawn_care', name: 'Догляд за газоном', tools: ['Газонокосарка', 'Тример', 'Граблі'], description: 'Кошення трави, обрізка кущів та догляд за садом.' },
-      { id: 'snow_removal', name: 'Прибирання снігу', tools: ['Лопата', 'Сніговидувач', 'Сіль'], description: 'Прибирання снігу з доріжок, парковок та дахів.' },
+      { id: 'lawn_care', name: 'Догляд за газоном', tools: ['Газонокосарка', 'Тример', 'Граблі', 'Мішки'], description: 'Кошення трави, обрізка кущів, прибирання листя та догляд за садом.' },
+      { id: 'snow_removal', name: 'Прибирання снігу', tools: ['Лопата', 'Сніговидувач', 'Сіль', 'Пісок'], description: 'Прибирання снігу з доріжок, парковок, ганків та дахів.' },
+      { id: 'garden_planting', name: 'Садівництво', tools: ['Лопата', 'Граблі', 'Поливалка', 'Рукавички'], description: 'Посадка рослин, квітів, дерев та кущів. Догляд за городом.' },
+      { id: 'pressure_washing', name: 'Миття під тиском', tools: ['Мийка високого тиску', 'Шланг', 'Засоби'], description: 'Миття фасадів, доріжок, терас, парканів та автомобілів.' },
+      { id: 'fence_install', name: 'Встановлення огорожі', tools: ['Дриль', 'Лопата', 'Рівень', 'Бетон'], description: 'Встановлення та ремонт парканів, воріт та огорож різних типів.' },
     ],
   },
   {
@@ -673,8 +689,37 @@ const SKILL_CATEGORIES = [
     color: '#db2777',
     bg: '#fdf2f8',
     skills: [
-      { id: 'errand', name: 'Доручення', tools: ['Автомобіль', 'Телефон'], description: 'Виконання різноманітних доручень та покупок.' },
-      { id: 'delivery', name: 'Доставка', tools: ['Автомобіль або велосипед'], description: 'Доставка товарів, документів та посилок.' },
+      { id: 'errand', name: 'Доручення', tools: ['Автомобіль', 'Телефон'], description: 'Виконання різноманітних доручень: покупки, черги, оформлення документів.' },
+      { id: 'shopping', name: 'Шопінг-асистент', tools: ['Автомобіль', 'Список покупок'], description: 'Допомога з покупками в магазинах, ринках та онлайн-замовленнями.' },
+      { id: 'pet_care', name: 'Догляд за тваринами', tools: ['Повідець', 'Корм', 'Іграшки'], description: 'Вигул собак, догляд за домашніми тваринами під час відсутності господарів.' },
+      { id: 'elderly_help', name: 'Допомога літнім людям', tools: ['Терпіння', 'Транспорт'], description: 'Супровід, допомога по господарству та виконання доручень для літніх людей.' },
+    ],
+  },
+  {
+    id: 'it_tech',
+    name: 'IT та техніка',
+    icon: 'laptop-outline' as const,
+    color: '#0f766e',
+    bg: '#f0fdfa',
+    skills: [
+      { id: 'computer_setup', name: 'Налаштування комп\'ютера', tools: ['Комп\'ютер', 'Інструменти', 'USB-носій'], description: 'Встановлення операційної системи, програм, антивірусу. Налаштування мережі.' },
+      { id: 'tv_setup', name: 'Налаштування Smart TV', tools: ['Пульт', 'HDMI-кабель', 'Інтернет'], description: 'Підключення та налаштування Smart TV, приставок, стрімінгових сервісів.' },
+      { id: 'phone_repair', name: 'Ремонт телефонів', tools: ['Набір викруток', 'Запчастини', 'Пінцет'], description: 'Заміна екранів, батарей та інших компонентів смартфонів.' },
+      { id: 'network_setup', name: 'Налаштування мережі', tools: ['Роутер', 'Кабелі', 'Тестер'], description: 'Встановлення та налаштування Wi-Fi роутерів, мережевого обладнання.' },
+      { id: 'data_recovery', name: 'Відновлення даних', tools: ['Комп\'ютер', 'Спеціальне ПЗ', 'Жорсткий диск'], description: 'Відновлення видалених файлів, фото та документів з різних носіїв.' },
+    ],
+  },
+  {
+    id: 'events',
+    name: 'Заходи та свята',
+    icon: 'balloon-outline' as const,
+    color: '#9333ea',
+    bg: '#faf5ff',
+    skills: [
+      { id: 'event_setup', name: 'Організація заходів', tools: ['Декор', 'Столи', 'Стільці', 'Освітлення'], description: 'Підготовка та оформлення приміщень для свят, корпоративів та вечірок.' },
+      { id: 'photography', name: 'Фотографія', tools: ['Фотоапарат', 'Спалах', 'Штатив'], description: 'Фотозйомка заходів, портретів, предметна та репортажна фотографія.' },
+      { id: 'catering_help', name: 'Допомога на кухні', tools: ['Кухонний інвентар', 'Фартух'], description: 'Допомога з приготуванням та подачею їжі на заходах.' },
+      { id: 'bartending', name: 'Бармен', tools: ['Шейкер', 'Барний інвентар', 'Посуд'], description: 'Приготування коктейлів та напоїв на заходах та вечірках.' },
     ],
   },
   {
@@ -684,8 +729,10 @@ const SKILL_CATEGORIES = [
     color: '#6b7280',
     bg: '#f9fafb',
     skills: [
-      { id: 'handyman', name: 'Майстер на всі руки', tools: ['Набір інструментів'], description: 'Дрібний ремонт та різноманітні роботи по будинку.' },
-      { id: 'it_help', name: 'IT допомога', tools: ['Комп\'ютер', 'Інструменти'], description: 'Налаштування техніки, встановлення програм, усунення неполадок.' },
+      { id: 'handyman', name: 'Майстер на всі руки', tools: ['Набір інструментів', 'Матеріали'], description: 'Дрібний ремонт та різноманітні роботи по будинку, які не входять в інші категорії.' },
+      { id: 'tutoring', name: 'Репетиторство', tools: ['Підручники', 'Зошити', 'Комп\'ютер'], description: 'Навчання та підготовка учнів з різних предметів.' },
+      { id: 'translation', name: 'Переклад', tools: ['Комп\'ютер', 'Словники'], description: 'Усний та письмовий переклад документів та текстів.' },
+      { id: 'driving', name: 'Водій', tools: ['Автомобіль', 'Права'], description: 'Перевезення пасажирів та вантажів по місту та за його межами.' },
     ],
   },
 ];
@@ -704,29 +751,29 @@ function ProviderProfile() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Tabs: 'performance' | 'skills' | 'service'
+  // Active tab
   const [activeTab, setActiveTab] = useState<'performance' | 'skills' | 'service'>('performance');
 
-  // Provider skills (stored locally + synced with backend)
+  // Provider skills
   const [providerSkills, setProviderSkills] = useState<ProviderSkill[]>([]);
 
   // Stats
   const [stats, setStats] = useState({
-    monthEarnings: 0,
-    taskCount: 0,
-    rating: 0,
-    reviewCount: 0,
-    avgPosition: '-',
-    shownPercent: 0,
-    activatedSkillsCount: 0,
-    eliteProgress: 0,
-    eliteMilestones: 0,
-    eliteTotalMilestones: 4,
-    eliteMonth: 'Квітень 2026',
-    liveChallenges: 0,
-    wins: 0,
+    monthEarnings: 0, taskCount: 0, rating: 0, reviewCount: 0,
+    avgPosition: '-', shownPercent: 0, activatedSkillsCount: 0,
+    eliteProgress: 0, eliteMilestones: 0, eliteTotalMilestones: 4,
+    eliteMonth: 'Квітень 2026', liveChallenges: 0, wins: 0,
   });
+
+  // Bio/experience
+  const [bio, setBio] = useState('');
+  const [experienceYears, setExperienceYears] = useState('');
+  const [bioModalVisible, setBioModalVisible] = useState(false);
+
+  // Portfolio photos (local URIs)
+  const [portfolioPhotos, setPortfolioPhotos] = useState<string[]>([]);
 
   // Add Skills modal
   const [addSkillsVisible, setAddSkillsVisible] = useState(false);
@@ -739,12 +786,6 @@ function ProviderProfile() {
   const [selectedProviderSkill, setSelectedProviderSkill] = useState<ProviderSkill | null>(null);
   const [editingRate, setEditingRate] = useState('');
 
-  // Bio modal
-  const [bioModalVisible, setBioModalVisible] = useState(false);
-  const [bio, setBio] = useState('');
-  const [experienceYears, setExperienceYears] = useState('');
-  const [saving, setSaving] = useState(false);
-
   useEffect(() => { loadProfile(); }, []);
 
   const loadProfile = async () => {
@@ -753,7 +794,6 @@ function ProviderProfile() {
       setProfile(data);
       setBio(data.bio || '');
       setExperienceYears(data.experience_years?.toString() || '');
-      // Convert stored skills array to ProviderSkill objects
       const storedSkills: ProviderSkill[] = (data.skills || []).map((s: any, i: number) => {
         if (typeof s === 'string') {
           return { id: `skill_${i}`, category_id: 'other', name: s, hourly_rate: data.hourly_rate || 25, status: 'active' as const };
@@ -761,12 +801,12 @@ function ProviderProfile() {
         return s;
       });
       setProviderSkills(storedSkills);
-      // Mock stats from profile data
+      setPortfolioPhotos(data.portfolio_photos || []);
       setStats(prev => ({
         ...prev,
         rating: data.rating || 0,
         reviewCount: data.review_count || 0,
-        activatedSkillsCount: storedSkills.filter(s => s.status === 'active').length,
+        activatedSkillsCount: storedSkills.filter((s: ProviderSkill) => s.status === 'active').length,
       }));
     } catch {
       setProfile({ user_id: user?.user_id || '', skills: [], portfolio_photos: [], certifications: [], languages: [] });
@@ -779,27 +819,26 @@ function ProviderProfile() {
     Alert.alert('Вийти з акаунту', 'Ви впевнені, що хочете вийти?', [
       { text: 'Скасувати', style: 'cancel' },
       {
-        text: 'Вийти',
-        style: 'destructive',
+        text: 'Вийти', style: 'destructive',
         onPress: async () => {
           try { await api.logout().catch(() => {}); } catch {}
           await logout();
-          if (Platform.OS === 'web') {
-            window.location.href = '/login';
-          } else {
-            router.replace('/login');
-          }
+          if (Platform.OS === 'web') { window.location.href = '/login'; }
+          else { router.replace('/login'); }
         },
       },
     ]);
   };
 
   const pickProfilePhoto = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Фото профілю', 'На веб-версії завантаження фото тимчасово недоступне');
+      return;
+    }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) { Alert.alert('Помилка', 'Потрібен доступ до галереї'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true,
     });
     if (!result.canceled && result.assets[0].base64) {
       setUploadingPhoto(true);
@@ -812,12 +851,29 @@ function ProviderProfile() {
     }
   };
 
+  const pickPortfolioPhoto = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Фото робіт', 'На веб-версії завантаження фото тимчасово недоступне. Використовуйте мобільний додаток.');
+      return;
+    }
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { Alert.alert('Помилка', 'Потрібен доступ до галереї'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.7,
+    });
+    if (!result.canceled) {
+      const newPhotos = [...portfolioPhotos, result.assets[0].uri];
+      setPortfolioPhotos(newPhotos);
+      Alert.alert('Успіх', 'Фото додано до портфоліо');
+    }
+  };
+
   const saveProfile = async (updates: any) => {
     setSaving(true);
     try {
       if (profile?.profile_id) { await api.updateExecutorProfile(updates); }
       else { await api.createExecutorProfile(updates); }
-      loadProfile();
+      await loadProfile();
     } catch (e: any) { Alert.alert('Помилка', e.message || 'Не вдалося зберегти'); }
     finally { setSaving(false); }
   };
@@ -832,7 +888,6 @@ function ProviderProfile() {
     };
     const updated = [...providerSkills, newSkill];
     setProviderSkills(updated);
-    // Save to backend as simple array
     saveProfile({ skills: updated.map(s => s.name), hourly_rate: rate });
     setStats(prev => ({ ...prev, activatedSkillsCount: updated.filter(s => s.status === 'active').length }));
   };
@@ -850,7 +905,6 @@ function ProviderProfile() {
     saveProfile({ skills: updated.map(s => s.name), hourly_rate: rate });
   };
 
-  // Group skills by category
   const skillsByCategory = SKILL_CATEGORIES.map(cat => ({
     ...cat,
     mySkills: providerSkills.filter(s => s.category_id === cat.id),
@@ -860,24 +914,19 @@ function ProviderProfile() {
     return <View style={styles.centered}><ActivityIndicator size="large" color="#2563eb" /></View>;
   }
 
-  const renderStars = (rating: number) => {
-    return [1, 2, 3, 4, 5].map(i => (
-      <Ionicons key={i} name={i <= Math.round(rating) ? 'star' : 'star-outline'} size={20} color="#f59e0b" />
-    ));
-  };
+  const renderStars = (rating: number) => [1, 2, 3, 4, 5].map(i => (
+    <Ionicons key={i} name={i <= Math.round(rating) ? 'star' : 'star-outline'} size={20} color="#f59e0b" />
+  ));
 
   // ── Performance Tab ──
   const renderPerformance = () => (
-    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-      {/* Earnings */}
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
       <View style={pStyles.statSection}>
         <Text style={pStyles.statSectionTitle}>Заробіток</Text>
         <TouchableOpacity style={pStyles.statRow}>
           <View style={{ flex: 1 }}>
             <Text style={pStyles.statLabel}>Сума за місяць</Text>
-            <Text style={pStyles.statValueGreen}>
-              {stats.monthEarnings > 0 ? `₴${stats.monthEarnings.toFixed(2)}` : '₴0.00'}
-            </Text>
+            <Text style={pStyles.statValueGreen}>{stats.monthEarnings > 0 ? `₴${stats.monthEarnings.toFixed(2)}` : '₴0.00'}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
@@ -888,28 +937,18 @@ function ProviderProfile() {
         </View>
       </View>
 
-      {/* Reviews */}
       <View style={pStyles.statSection}>
         <Text style={pStyles.statSectionTitle}>Відгуки</Text>
         <TouchableOpacity style={pStyles.statRow}>
           <View style={{ flex: 1 }}>
-            <Text style={pStyles.statValueLarge}>
-              {stats.rating > 0 ? `${stats.rating.toFixed(1)} / 5` : 'Немає відгуків'}
-            </Text>
-            {stats.reviewCount > 0 && (
-              <Text style={pStyles.statSubLabel}>({stats.reviewCount} відгуків)</Text>
-            )}
+            <Text style={pStyles.statValueLarge}>{stats.rating > 0 ? `${stats.rating.toFixed(1)} / 5` : 'Немає відгуків'}</Text>
+            {stats.reviewCount > 0 && <Text style={pStyles.statSubLabel}>({stats.reviewCount} відгуків)</Text>}
           </View>
-          {stats.rating > 0 && (
-            <View style={{ flexDirection: 'row', gap: 2, marginRight: 8 }}>
-              {renderStars(stats.rating)}
-            </View>
-          )}
+          {stats.rating > 0 && <View style={{ flexDirection: 'row', gap: 2, marginRight: 8 }}>{renderStars(stats.rating)}</View>}
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
       </View>
 
-      {/* Analytics */}
       <View style={pStyles.statSection}>
         <Text style={pStyles.statSectionTitle}>Аналітика</Text>
         <Text style={pStyles.statDescription}>Показники вашої роботи та позиція серед виконавців.</Text>
@@ -927,21 +966,17 @@ function ProviderProfile() {
         </View>
       </View>
 
-      {/* Skills & Rates */}
       <View style={pStyles.statSection}>
         <Text style={pStyles.statSectionTitle}>Навички та ставки</Text>
         <TouchableOpacity style={pStyles.statRow} onPress={() => setActiveTab('skills')}>
           <View style={{ flex: 1 }}>
             <Text style={pStyles.statLabel}>Активних навичок: <Text style={pStyles.statValueGreen}>{stats.activatedSkillsCount}</Text></Text>
-            {stats.activatedSkillsCount === 0 && (
-              <Text style={pStyles.statSubLabel}>Додайте навички, щоб отримувати замовлення</Text>
-            )}
+            {stats.activatedSkillsCount === 0 && <Text style={pStyles.statSubLabel}>Додайте навички, щоб отримувати замовлення</Text>}
           </View>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
       </View>
 
-      {/* Elite Status */}
       <View style={pStyles.statSection}>
         <Text style={pStyles.statSectionTitle}>Elite статус</Text>
         <Text style={pStyles.statDescription}>Станьте Elite та заробляйте до 3x більше!</Text>
@@ -950,7 +985,7 @@ function ProviderProfile() {
             <Text style={pStyles.eliteLabel}>Прогрес Elite</Text>
             <Text style={pStyles.eliteMonth}>{stats.eliteMonth}</Text>
             <View style={pStyles.progressBar}>
-              <View style={[pStyles.progressFill, { width: `${(stats.eliteMilestones / stats.eliteTotalMilestones) * 100}%` }]} />
+              <View style={[pStyles.progressFill, { width: `${(stats.eliteMilestones / stats.eliteTotalMilestones) * 100}%` as any }]} />
             </View>
             <Text style={pStyles.eliteSubtext}>{stats.eliteMilestones} / {stats.eliteTotalMilestones} досягнень виконано</Text>
           </View>
@@ -958,13 +993,12 @@ function ProviderProfile() {
         </TouchableOpacity>
       </View>
 
-      {/* Challenges */}
       <View style={pStyles.statSection}>
         <Text style={pStyles.statSectionTitle}>Виклики</Text>
         <TouchableOpacity style={pStyles.statRow}>
           <Text style={pStyles.statLabel}>Активні виклики</Text>
-          <Text style={pStyles.statValueGreen}>{stats.liveChallenges}</Text>
-          <Ionicons name="chevron-forward" size={18} color="#9ca3af" style={{ marginLeft: 8 }} />
+          <Text style={[pStyles.statValueGreen, { marginRight: 8 }]}>{stats.liveChallenges}</Text>
+          <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
         <View style={pStyles.divider} />
         <View style={pStyles.statRow}>
@@ -973,19 +1007,26 @@ function ProviderProfile() {
         </View>
       </View>
 
-      <View style={{ height: 24 }} />
+      {/* Logout at bottom of performance */}
+      <TouchableOpacity style={[styles.logoutBtn, { marginHorizontal: 16, marginTop: 16 }]} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={22} color="#ef4444" />
+        <Text style={styles.logoutBtnText}>Вийти з акаунту</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 
   // ── Skills Tab ──
   const renderSkills = () => (
     <View style={{ flex: 1 }}>
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {skillsByCategory.length === 0 ? (
           <View style={pStyles.emptySkills}>
             <Ionicons name="construct-outline" size={56} color="#d1d5db" />
             <Text style={pStyles.emptySkillsTitle}>Навичок ще немає</Text>
             <Text style={pStyles.emptySkillsText}>Додайте навички, щоб почати отримувати замовлення від клієнтів</Text>
+            <TouchableOpacity style={[pStyles.agreeBtn, { marginTop: 24, paddingHorizontal: 32 }]} onPress={() => setAddSkillsVisible(true)}>
+              <Text style={pStyles.agreeBtnText}>+ Додати навички</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           skillsByCategory.map(cat => (
@@ -1017,7 +1058,6 @@ function ProviderProfile() {
             </View>
           ))
         )}
-        <View style={{ height: 80 }} />
       </ScrollView>
 
       {/* Add Skills FAB */}
@@ -1030,53 +1070,63 @@ function ProviderProfile() {
 
   // ── Service Tab ──
   const renderService = () => (
-    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-      {/* Earning Structure */}
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
       <View style={pStyles.serviceSection}>
         <Text style={pStyles.serviceSectionLabel}>СТРУКТУРА ЗАРОБІТКУ</Text>
         <TouchableOpacity style={pStyles.earningCard}>
           <View style={pStyles.earningCardIcon}>
-            <Ionicons name="person-add-outline" size={32} color="#2563eb" />
-            <Ionicons name="sparkles" size={14} color="#f59e0b" style={{ position: 'absolute', top: -2, right: -2 }} />
+            <Ionicons name="person-add-outline" size={28} color="#2563eb" />
           </View>
           <Text style={pStyles.earningCardTitle}>Самостійна погодинна ставка</Text>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
       </View>
 
-      {/* Business Photos */}
       <View style={pStyles.serviceSection}>
         <Text style={pStyles.serviceSectionLabel}>ФОТО РОБІТ</Text>
-        {(profile?.portfolio_photos || []).length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-            {(profile.portfolio_photos || []).slice(0, 5).map((photo: string, i: number) => (
-              <Image key={i} source={{ uri: photo }} style={pStyles.portfolioPhoto} />
-            ))}
-            {(profile?.portfolio_photos || []).length > 5 && (
-              <View style={[pStyles.portfolioPhoto, { backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>+{(profile.portfolio_photos || []).length - 5}</Text>
-              </View>
-            )}
-          </ScrollView>
+        {portfolioPhotos.length > 0 ? (
+          <View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+              {portfolioPhotos.slice(0, 5).map((photo, i) => (
+                <TouchableOpacity key={i} onLongPress={() => {
+                  Alert.alert('Видалити фото?', '', [
+                    { text: 'Скасувати', style: 'cancel' },
+                    { text: 'Видалити', style: 'destructive', onPress: () => setPortfolioPhotos(portfolioPhotos.filter((_, idx) => idx !== i)) },
+                  ]);
+                }}>
+                  <Image source={{ uri: photo }} style={pStyles.portfolioPhoto} />
+                </TouchableOpacity>
+              ))}
+              {portfolioPhotos.length > 5 && (
+                <View style={[pStyles.portfolioPhoto, { backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>+{portfolioPhotos.length - 5}</Text>
+                </View>
+              )}
+            </ScrollView>
+            <TouchableOpacity style={[pStyles.addPhotoBtn, { marginTop: 8 }]} onPress={pickPortfolioPhoto}>
+              <Ionicons name="add-circle-outline" size={20} color="#2563eb" />
+              <Text style={[pStyles.addPhotoBtnText, { color: '#2563eb' }]}>Додати ще фото</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
-          <TouchableOpacity style={pStyles.addPhotoBtn}>
+          <TouchableOpacity style={pStyles.addPhotoBtn} onPress={pickPortfolioPhoto}>
             <Ionicons name="camera-outline" size={24} color="#6b7280" />
             <Text style={pStyles.addPhotoBtnText}>Додати фото робіт</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Other Information */}
       <View style={pStyles.serviceSection}>
         <Text style={pStyles.serviceSectionLabel}>ІНША ІНФОРМАЦІЯ</Text>
         <TouchableOpacity style={pStyles.infoRow} onPress={() => setBioModalVisible(true)}>
           <Ionicons name="document-text-outline" size={22} color="#374151" />
-          <Text style={pStyles.infoRowText}>Опис досвіду</Text>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={pStyles.infoRowText}>Опис досвіду</Text>
+            {bio ? <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }} numberOfLines={1}>{bio}</Text> : null}
+          </View>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
       </View>
-
-      <View style={{ height: 24 }} />
     </ScrollView>
   );
 
@@ -1091,7 +1141,7 @@ function ProviderProfile() {
         </TouchableOpacity>
       </View>
 
-      {/* Avatar section */}
+      {/* Avatar bar */}
       <View style={pStyles.avatarBar}>
         <TouchableOpacity onPress={pickProfilePhoto} disabled={uploadingPhoto} style={{ position: 'relative' }}>
           {uploadingPhoto ? (
@@ -1113,11 +1163,7 @@ function ProviderProfile() {
       {/* Tabs */}
       <View style={pStyles.tabBar}>
         {(['performance', 'skills', 'service'] as const).map(tab => (
-          <TouchableOpacity
-            key={tab}
-            style={[pStyles.tab, activeTab === tab && pStyles.tabActive]}
-            onPress={() => setActiveTab(tab)}
-          >
+          <TouchableOpacity key={tab} style={[pStyles.tab, activeTab === tab && pStyles.tabActive]} onPress={() => setActiveTab(tab)}>
             <Text style={[pStyles.tabText, activeTab === tab && pStyles.tabTextActive]}>
               {tab === 'performance' ? 'Статистика' : tab === 'skills' ? 'Навички' : 'Послуги'}
             </Text>
@@ -1125,7 +1171,6 @@ function ProviderProfile() {
         ))}
       </View>
 
-      {/* Tab content */}
       <View style={{ flex: 1 }}>
         {activeTab === 'performance' && renderPerformance()}
         {activeTab === 'skills' && renderSkills()}
@@ -1137,17 +1182,14 @@ function ProviderProfile() {
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
           <View style={pStyles.modalTopBar}>
             <Text style={pStyles.modalTopTitle}>Додати навички</Text>
-            <TouchableOpacity onPress={() => { setAddSkillsVisible(false); setExpandedCategory(null); setSelectedSkillDetail(null); }}>
+            <TouchableOpacity onPress={() => { setAddSkillsVisible(false); setExpandedCategory(null); }}>
               <Ionicons name="close" size={26} color="#111827" />
             </TouchableOpacity>
           </View>
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
             {SKILL_CATEGORIES.map(cat => (
               <View key={cat.id}>
-                <TouchableOpacity
-                  style={pStyles.categoryRow}
-                  onPress={() => setExpandedCategory(expandedCategory === cat.id ? null : cat.id)}
-                >
+                <TouchableOpacity style={pStyles.categoryRow} onPress={() => setExpandedCategory(expandedCategory === cat.id ? null : cat.id)}>
                   <Ionicons name={cat.icon} size={22} color="#374151" style={{ marginRight: 12 }} />
                   <Text style={pStyles.categoryRowText}>{cat.name}</Text>
                   <Ionicons name={expandedCategory === cat.id ? 'chevron-up' : 'chevron-down'} size={20} color="#9ca3af" />
@@ -1169,11 +1211,9 @@ function ProviderProfile() {
                           disabled={alreadyAdded}
                         >
                           <Text style={pStyles.subSkillText}>{skill.name}</Text>
-                          {alreadyAdded ? (
-                            <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-                          ) : (
-                            <Ionicons name="add-circle-outline" size={20} color="#2563eb" />
-                          )}
+                          {alreadyAdded
+                            ? <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                            : <Ionicons name="add-circle-outline" size={20} color="#2563eb" />}
                         </TouchableOpacity>
                       );
                     })}
@@ -1182,7 +1222,6 @@ function ProviderProfile() {
                 <View style={pStyles.categorySeparator} />
               </View>
             ))}
-            <View style={{ height: 40 }} />
           </ScrollView>
         </View>
       </Modal>
@@ -1198,10 +1237,10 @@ function ProviderProfile() {
                 <TouchableOpacity onPress={() => setSelectedSkillDetail(null)}>
                   <Ionicons name="arrow-back" size={24} color="#111827" />
                 </TouchableOpacity>
-                <Text style={pStyles.modalTopTitle}>{skill.name}</Text>
+                <Text style={[pStyles.modalTopTitle, { flex: 1, textAlign: 'center' }]}>{skill.name}</Text>
                 <View style={{ width: 24 }} />
               </View>
-              <ScrollView style={{ flex: 1, padding: 20 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
                 <Text style={pStyles.skillDetailHeading}>Що очікують клієнти</Text>
                 <Text style={pStyles.skillDetailBody}>{skill.description}</Text>
 
@@ -1231,7 +1270,7 @@ function ProviderProfile() {
                   placeholder="25"
                 />
               </ScrollView>
-              <View style={{ padding: 20, paddingBottom: 32 }}>
+              <View style={{ padding: 20, paddingBottom: 32, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
                 <TouchableOpacity
                   style={pStyles.agreeBtn}
                   onPress={() => {
@@ -1241,6 +1280,7 @@ function ProviderProfile() {
                     setSelectedSkillDetail(null);
                     setAddSkillsVisible(false);
                     setExpandedCategory(null);
+                    Alert.alert('Успіх', `Навичку "${skill.name}" додано!`);
                   }}
                 >
                   <Text style={pStyles.agreeBtnText}>Погодитись та продовжити</Text>
@@ -1261,7 +1301,7 @@ function ProviderProfile() {
                 <TouchableOpacity onPress={() => setServiceDetailVisible(false)}>
                   <Ionicons name="arrow-back" size={24} color="#111827" />
                 </TouchableOpacity>
-                <Text style={pStyles.modalTopTitle}>{selectedProviderSkill.name}</Text>
+                <Text style={[pStyles.modalTopTitle, { flex: 1, textAlign: 'center' }]}>{selectedProviderSkill.name}</Text>
                 <TouchableOpacity onPress={() => {
                   Alert.alert('Видалити навичку', `Видалити "${selectedProviderSkill.name}"?`, [
                     { text: 'Скасувати', style: 'cancel' },
@@ -1272,7 +1312,6 @@ function ProviderProfile() {
                 </TouchableOpacity>
               </View>
 
-              {/* Tabs: General / Partners */}
               <View style={pStyles.serviceDetailTabs}>
                 <View style={[pStyles.serviceDetailTab, pStyles.serviceDetailTabActive]}>
                   <Text style={pStyles.serviceDetailTabTextActive}>Загальне</Text>
@@ -1282,8 +1321,7 @@ function ProviderProfile() {
                 </View>
               </View>
 
-              <ScrollView style={{ flex: 1, padding: 20 }}>
-                {/* Earning Structure */}
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
                 <Text style={pStyles.serviceSectionLabel}>СТРУКТУРА ЗАРОБІТКУ</Text>
                 <TouchableOpacity style={[pStyles.earningCard, { marginTop: 8, backgroundColor: '#eff6ff' }]}>
                   <View style={[pStyles.earningCardIcon, { backgroundColor: '#dbeafe' }]}>
@@ -1293,11 +1331,10 @@ function ProviderProfile() {
                   <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
                 </TouchableOpacity>
 
-                {/* Rate edit */}
                 <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>ПОГОДИННА СТАВКА</Text>
                 <View style={pStyles.rateEditRow}>
                   <TextInput
-                    style={pStyles.rateInput}
+                    style={[pStyles.rateInput, { flex: 1, marginBottom: 0 }]}
                     value={editingRate}
                     onChangeText={setEditingRate}
                     keyboardType="numeric"
@@ -1311,6 +1348,8 @@ function ProviderProfile() {
                         updateSkillRate(selectedProviderSkill.id, rate);
                         Alert.alert('Збережено', 'Ставку оновлено');
                         setServiceDetailVisible(false);
+                      } else {
+                        Alert.alert('Помилка', 'Введіть коректну ставку');
                       }
                     }}
                   >
@@ -1318,18 +1357,26 @@ function ProviderProfile() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Business Photos placeholder */}
                 <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>ФОТО РОБІТ</Text>
-                <TouchableOpacity style={pStyles.addPhotoBtn}>
-                  <Ionicons name="camera-outline" size={24} color="#6b7280" />
+                {portfolioPhotos.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                    {portfolioPhotos.slice(0, 5).map((photo, i) => (
+                      <Image key={i} source={{ uri: photo }} style={pStyles.portfolioPhoto} />
+                    ))}
+                  </ScrollView>
+                ) : null}
+                <TouchableOpacity style={[pStyles.addPhotoBtn, { marginTop: 8 }]} onPress={pickPortfolioPhoto}>
+                  <Ionicons name="camera-outline" size={20} color="#6b7280" />
                   <Text style={pStyles.addPhotoBtnText}>Додати фото</Text>
                 </TouchableOpacity>
 
-                {/* Other info */}
                 <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>ІНША ІНФОРМАЦІЯ</Text>
-                <TouchableOpacity style={pStyles.infoRow}>
+                <TouchableOpacity style={pStyles.infoRow} onPress={() => { setServiceDetailVisible(false); setTimeout(() => setBioModalVisible(true), 300); }}>
                   <Ionicons name="document-text-outline" size={22} color="#374151" />
-                  <Text style={pStyles.infoRowText}>Опис досвіду</Text>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={pStyles.infoRowText}>Опис досвіду</Text>
+                    {bio ? <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }} numberOfLines={1}>{bio}</Text> : null}
+                  </View>
                   <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
                 </TouchableOpacity>
               </ScrollView>
@@ -1344,17 +1391,40 @@ function ProviderProfile() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Опис досвіду</Text>
-              <TouchableOpacity onPress={() => setBioModalVisible(false)}><Ionicons name="close" size={24} color="#6b7280" /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setBioModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
               <Text style={styles.label}>Про мене</Text>
-              <TextInput style={[styles.input, { height: 100, textAlignVertical: 'top' }]} value={bio} onChangeText={setBio} placeholder="Розкажіть про свій досвід..." multiline />
+              <TextInput
+                style={[styles.input, { height: 120, textAlignVertical: 'top' }]}
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Розкажіть про свій досвід, спеціалізацію та підхід до роботи..."
+                multiline
+              />
               <Text style={styles.label}>Роки досвіду</Text>
-              <TextInput style={styles.input} value={experienceYears} onChangeText={setExperienceYears} placeholder="5" keyboardType="numeric" />
+              <TextInput
+                style={styles.input}
+                value={experienceYears}
+                onChangeText={setExperienceYears}
+                placeholder="5"
+                keyboardType="numeric"
+              />
             </View>
             <View style={styles.modalFooter}>
-              <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setBioModalVisible(false)}><Text style={styles.btnCancelText}>Скасувати</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={() => { saveProfile({ bio, experience_years: experienceYears ? parseInt(experienceYears) : undefined }); setBioModalVisible(false); }}>
+              <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setBioModalVisible(false)}>
+                <Text style={styles.btnCancelText}>Скасувати</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSave]}
+                onPress={() => {
+                  saveProfile({ bio, experience_years: experienceYears ? parseInt(experienceYears) : undefined });
+                  setBioModalVisible(false);
+                  Alert.alert('Збережено', 'Опис досвіду оновлено');
+                }}
+              >
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Зберегти</Text>}
               </TouchableOpacity>
             </View>
@@ -1378,24 +1448,11 @@ export default function MyProfile() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   topBarTitle: { fontSize: 22, fontWeight: 'bold', color: '#111827' },
   logoutTopBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#fef2f2', borderRadius: 20 },
   logoutTopText: { fontSize: 14, fontWeight: '600', color: '#ef4444' },
-
   content: { flex: 1 },
-
   avatarSection: { alignItems: 'center', paddingVertical: 28, backgroundColor: '#fff', marginBottom: 8 },
   avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#16a34a', justifyContent: 'center', alignItems: 'center' },
   avatarImage: { width: 100, height: 100, borderRadius: 50 },
@@ -1409,26 +1466,21 @@ const styles = StyleSheet.create({
   ratingEmpty: { fontSize: 13, color: '#9ca3af' },
   clientBadge: { backgroundColor: '#f0fdf4', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 12 },
   clientBadgeText: { fontSize: 12, fontWeight: '700', color: '#16a34a' },
-
   editProfileBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginTop: 8, marginBottom: 4, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
   editProfileText: { flex: 1, fontSize: 16, fontWeight: '500', color: '#2563eb', marginLeft: 12 },
-
   section: { backgroundColor: '#fff', marginHorizontal: 16, marginTop: 8, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#111827' },
   addBtn: { backgroundColor: '#2563eb', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-
   emptyCard: { alignItems: 'center', paddingVertical: 20 },
   emptyText: { fontSize: 15, fontWeight: '500', color: '#6b7280', marginTop: 8 },
   emptySubtext: { fontSize: 13, color: '#9ca3af', marginTop: 4, textAlign: 'center' },
-
   paymentCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: '#e2e8f0' },
   paymentCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   paymentCardInfo: {},
   paymentCardNumber: { fontSize: 15, fontWeight: '600', color: '#111827', letterSpacing: 1 },
   paymentCardHolder: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-
   addressCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: '#e2e8f0' },
   addressLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, flex: 1 },
   addressIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f0fdf4', justifyContent: 'center', alignItems: 'center' },
@@ -1436,15 +1488,11 @@ const styles = StyleSheet.create({
   addressLabel: { fontSize: 14, fontWeight: '600', color: '#111827' },
   addressText: { fontSize: 13, color: '#374151', marginTop: 2 },
   addressCity: { fontSize: 12, color: '#6b7280', marginTop: 1 },
-
   menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 14, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: '#e5e7eb' },
   menuText: { flex: 1, fontSize: 15, color: '#111827', marginLeft: 12 },
-
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginTop: 20, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#fecaca', gap: 10 },
   logoutBtnText: { fontSize: 16, fontWeight: '600', color: '#ef4444' },
-
   version: { textAlign: 'center', fontSize: 12, color: '#9ca3af', marginVertical: 24 },
-
   bioText: { fontSize: 14, color: '#374151', lineHeight: 20, marginTop: 4 },
   placeholderText: { fontSize: 14, color: '#9ca3af', fontStyle: 'italic', marginTop: 4 },
   rateText: { fontSize: 20, fontWeight: '700', color: '#10b981', marginTop: 4 },
@@ -1453,7 +1501,6 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 13, color: '#374151', fontWeight: '500' },
   certItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
   certText: { fontSize: 14, color: '#374151' },
-
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
@@ -1474,7 +1521,6 @@ const styles = StyleSheet.create({
 // ─── PROVIDER-SPECIFIC STYLES ─────────────────────────────────────────────────
 
 const pStyles = StyleSheet.create({
-  // Avatar bar
   avatarBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
   avatarImg: { width: 72, height: 72, borderRadius: 36 },
@@ -1483,15 +1529,11 @@ const pStyles = StyleSheet.create({
   avatarEmail: { fontSize: 13, color: '#6b7280', marginTop: 2 },
   badge: { backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, marginTop: 4, alignSelf: 'flex-start' },
   badgeText: { fontSize: 11, fontWeight: '700', color: '#2563eb' },
-
-  // Tab bar
   tabBar: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   tab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
   tabActive: { borderBottomWidth: 2, borderBottomColor: '#2563eb' },
   tabText: { fontSize: 14, fontWeight: '500', color: '#6b7280' },
   tabTextActive: { color: '#2563eb', fontWeight: '700' },
-
-  // Performance stats
   statSection: { backgroundColor: '#fff', marginTop: 8, paddingHorizontal: 20, paddingVertical: 16 },
   statSectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 },
   statDescription: { fontSize: 13, color: '#6b7280', marginBottom: 4 },
@@ -1501,19 +1543,15 @@ const pStyles = StyleSheet.create({
   statValueLarge: { fontSize: 22, fontWeight: '800', color: '#111827' },
   statSubLabel: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   divider: { height: 1, backgroundColor: '#f3f4f6', marginVertical: 4 },
-
   eliteCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e8f5e9', borderRadius: 12, padding: 16, marginTop: 8 },
   eliteLabel: { fontSize: 12, color: '#374151', marginBottom: 4 },
   eliteMonth: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 },
   progressBar: { height: 8, backgroundColor: '#c8e6c9', borderRadius: 4, overflow: 'hidden', marginBottom: 6 },
-  progressFill: { height: '100%', backgroundColor: '#2563eb', borderRadius: 4 },
+  progressFill: { height: '100%' as any, backgroundColor: '#2563eb', borderRadius: 4 },
   eliteSubtext: { fontSize: 12, color: '#374151' },
-
-  // Skills tab
   emptySkills: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 32 },
   emptySkillsTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginTop: 16 },
   emptySkillsText: { fontSize: 14, color: '#9ca3af', textAlign: 'center', marginTop: 8, lineHeight: 20 },
-
   skillCategoryBlock: { margin: 12, marginBottom: 0, borderRadius: 12, padding: 16 },
   skillCategoryHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   skillCategoryName: { fontSize: 16, fontWeight: '700' },
@@ -1521,12 +1559,9 @@ const pStyles = StyleSheet.create({
   skillCardName: { fontSize: 15, fontWeight: '600', color: '#111827' },
   skillBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   skillBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
-
   addSkillsFab: { position: 'absolute', bottom: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, borderWidth: 1.5, borderColor: '#2563eb', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 },
   addSkillsFabText: { fontSize: 15, fontWeight: '700', color: '#2563eb' },
-
-  // Add skills modal
-  modalTopBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 56, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  modalTopBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 56, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', backgroundColor: '#fff' },
   modalTopTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
   categoryRow: { flexDirection: 'row', alignItems: 'center', padding: 18, backgroundColor: '#fff' },
   categoryRowText: { flex: 1, fontSize: 16, fontWeight: '500', color: '#111827' },
@@ -1534,8 +1569,6 @@ const pStyles = StyleSheet.create({
   subSkillRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   subSkillText: { flex: 1, fontSize: 15, color: '#374151' },
   categorySeparator: { height: 1, backgroundColor: '#e5e7eb' },
-
-  // Skill detail
   skillDetailHeading: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 10 },
   skillDetailBody: { fontSize: 14, color: '#374151', lineHeight: 22 },
   toolRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
@@ -1546,8 +1579,6 @@ const pStyles = StyleSheet.create({
   rateInput: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 14, fontSize: 18, fontWeight: '600', backgroundColor: '#f9fafb', marginTop: 8 },
   agreeBtn: { backgroundColor: '#2563eb', borderRadius: 14, padding: 18, alignItems: 'center' },
   agreeBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
-
-  // Service tab
   serviceSection: { backgroundColor: '#fff', marginTop: 8, padding: 20 },
   serviceSectionLabel: { fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 1, marginBottom: 4 },
   earningCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f4ff', borderRadius: 12, padding: 16, marginTop: 8, gap: 14 },
@@ -1556,16 +1587,14 @@ const pStyles = StyleSheet.create({
   addPhotoBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f9fafb', borderRadius: 10, padding: 16, marginTop: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: '#d1d5db' },
   addPhotoBtnText: { fontSize: 14, color: '#6b7280' },
   portfolioPhoto: { width: 100, height: 100, borderRadius: 8, marginRight: 8 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   infoRowText: { flex: 1, fontSize: 15, color: '#111827' },
-
-  // Service detail
   serviceDetailTabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', backgroundColor: '#fff' },
   serviceDetailTab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
   serviceDetailTabActive: { borderBottomWidth: 2, borderBottomColor: '#2563eb' },
   serviceDetailTabText: { fontSize: 14, color: '#6b7280' },
   serviceDetailTabTextActive: { fontSize: 14, fontWeight: '700', color: '#2563eb' },
-  rateEditRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  rateSaveBtn: { backgroundColor: '#2563eb', borderRadius: 10, paddingHorizontal: 20, justifyContent: 'center' },
+  rateEditRow: { flexDirection: 'row', gap: 12, marginTop: 8, alignItems: 'center' },
+  rateSaveBtn: { backgroundColor: '#2563eb', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 14, justifyContent: 'center' },
   rateSaveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });
