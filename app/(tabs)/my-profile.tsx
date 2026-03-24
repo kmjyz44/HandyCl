@@ -77,12 +77,12 @@ function ClientProfile() {
         text: 'Вийти',
         style: 'destructive',
         onPress: async () => {
-          try {
-            await api.logout().catch(() => {});
-            await logout();
-            router.replace('/login');
-          } catch {
-            await logout();
+          try { await api.logout().catch(() => {}); } catch {}
+          await logout();
+          // For web platform, use window.location for reliable redirect
+          if (Platform.OS === 'web') {
+            window.location.href = '/login';
+          } else {
             router.replace('/login');
           }
         },
@@ -654,7 +654,12 @@ function ProviderProfile() {
         onPress: async () => {
           try { await api.logout().catch(() => {}); } catch {}
           await logout();
-          router.replace('/login');
+          // For web platform, use window.location for reliable redirect
+          if (Platform.OS === 'web') {
+            window.location.href = '/login';
+          } else {
+            router.replace('/login');
+          }
         },
       },
     ]);
