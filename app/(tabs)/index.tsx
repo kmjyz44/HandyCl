@@ -68,8 +68,11 @@ interface BookingState {
   taskDescription: string;
   address: string;
   city: string;
-  date: string;
-  time: string;
+  dates: string[];      // multiple selected dates
+  date: string;         // primary date (first selected)
+  timeFrom: string;     // start time
+  timeTo: string;       // end time
+  time: string;         // primary time (timeFrom)
   selectedTasker: any | null;
 }
 
@@ -98,7 +101,7 @@ export default function HomeScreen() {
   const [step, setStep] = useState<BookingStep>('home');
   const [booking, setBooking] = useState<BookingState>({
     categoryId: '', categoryName: '', skillName: '', taskDescription: '',
-    address: '', city: '', date: '', time: '', selectedTasker: null,
+    address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null,
   });
   const [taskers, setTaskers] = useState<any[]>([]);
   const [loadingTaskers, setLoadingTaskers] = useState(false);
@@ -199,11 +202,12 @@ export default function HomeScreen() {
   };
 
   const submitBooking = async () => {
-    if (!booking.selectedTasker) return;
-    setBookingSubmitting(true);
+    if (!booking.selectedTasker || booking_submitting) return;
+    setBookingSubmitting(true); // block immediately — no further taps
     try {
       const tasker = booking.selectedTasker;
       const rate = tasker.profile?.hourly_rate || tasker.hourly_rate || 0;
+      const primaryDate = booking.dates.length > 0 ? booking.dates[0] : booking.date;
       const result = await api.createBooking({
         title: booking.skillName,
         description: booking.taskDescription || booking.skillName,
@@ -212,37 +216,33 @@ export default function HomeScreen() {
         category: booking.categoryId,
         address: booking.address,
         city: booking.city,
-        date: booking.date,
-        time: booking.time,
+        date: primaryDate,
+        time: booking.timeFrom || booking.time,
+        notes: booking.dates.length > 1
+          ? `Зручні дати: ${booking.dates.join(', ')}. Час: ${booking.timeFrom}–${booking.timeTo}`
+          : booking.timeTo ? `Час: ${booking.timeFrom}–${booking.timeTo}` : undefined,
         total_price: rate,
       });
       // Add to local store so Bookings tab updates immediately
-      if (result?.booking_id) {
-        addBooking({
-          booking_id: result.booking_id,
-          client_id: user?.user_id || '',
-          provider_id: tasker.user_id,
-          date: booking.date,
-          time: booking.time,
-          address: `${booking.address}, ${booking.city}`,
-          status: 'pending',
-          total_price: rate,
-          payment_status: 'pending',
-        });
-      }
-      Alert.alert(
-        'Успіх! 🎉',
-        `Завдання "${booking.skillName}" успішно заброньовано!\n\nВиконавець ${tasker.name || tasker.full_name || 'виконавець'} отримає сповіщення.`,
-        [{ text: 'OK', onPress: () => {
-          setStep('home');
-          setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', date: '', time: '', selectedTasker: null });
-          router.push('/(tabs)/bookings');
-        }}]
-      );
+      addBooking({
+        booking_id: result?.booking_id || `local_${Date.now()}`,
+        client_id: user?.user_id || '',
+        provider_id: tasker.user_id,
+        service_id: '',
+        date: primaryDate,
+        time: booking.timeFrom || booking.time,
+        address: `${booking.address}, ${booking.city}`,
+        status: 'pending',
+        total_price: rate,
+        payment_status: 'pending',
+      });
+      // Reset and redirect immediately — no Alert
+      setStep('home');
+      setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null });
+      router.replace('/(tabs)/bookings');
     } catch (e: any) {
       Alert.alert('Помилка бронювання', e.message || 'Не вдалося створити бронювання. Спробуйте ще раз.');
-    } finally {
-      setBookingSubmitting(false);
+      setBookingSubmitting(false); // re-enable only on error
     }
   };
 
@@ -494,6 +494,14 @@ export default function HomeScreen() {
 
   // STEP: DATE & TIME
   if (step === 'datetime') {
+    const toggleDate = (val: string) => {
+      setBooking(b => {
+        const already = b.dates.includes(val);
+        const newDates = already ? b.dates.filter(d => d !== val) : [...b.dates, val];
+        return { ...b, dates: newDates, date: newDates[0] || '' };
+      });
+    };
+    const canProceed = booking.dates.length > 0 && !!booking.timeFrom;
     return (
       <View style={s.container}>
         <View style={s.stepHeader}>
@@ -504,33 +512,58 @@ export default function HomeScreen() {
           <View style={{ width: 40 }} />
         </View>
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-          <Text style={s.stepSubtitle}>Коли вам зручно?</Text>
+          <Text style={s.stepSubtitle}>Коли вам зручно? Можна вибрати кілька дат</Text>
 
-          {/* Date picker */}
-          <Text style={s.fieldLabel}>Дата</Text>
+          {/* Multi-date picker */}
+          <Text style={s.fieldLabel}>Дата {booking.dates.length > 0 && <Text style={{ color: '#2563eb', fontWeight: '700' }}>(вибрано: {booking.dates.length})</Text>}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-            {dates.map(d => (
-              <TouchableOpacity key={d.value} style={[s.dateChip, booking.date === d.value && s.dateChipActive]} onPress={() => setBooking(b => ({ ...b, date: d.value }))}>
-                <Text style={[s.dateDayName, booking.date === d.value && { color: '#fff' }]}>{d.dayName}</Text>
-                <Text style={[s.dateLabel, booking.date === d.value && { color: '#fff', fontWeight: '700' }]}>{d.label}</Text>
-              </TouchableOpacity>
-            ))}
+            {dates.map(d => {
+              const active = booking.dates.includes(d.value);
+              return (
+                <TouchableOpacity key={d.value} style={[s.dateChip, active && s.dateChipActive]} onPress={() => toggleDate(d.value)}>
+                  <Text style={[s.dateDayName, active && { color: '#fff' }]}>{d.dayName}</Text>
+                  <Text style={[s.dateLabel, active && { color: '#fff', fontWeight: '700' }]}>{d.label}</Text>
+                  {active && <Ionicons name="checkmark" size={12} color="#fff" style={{ marginTop: 2 }} />}
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
 
-          {/* Time picker */}
-          <Text style={s.fieldLabel}>Час початку</Text>
+          {/* Time FROM */}
+          <Text style={s.fieldLabel}>Час початку (з)</Text>
           <View style={s.timesGrid}>
             {TIMES.map(t => (
-              <TouchableOpacity key={t} style={[s.timeChip, booking.time === t && s.timeChipActive]} onPress={() => setBooking(b => ({ ...b, time: t }))}>
-                <Text style={[s.timeChipText, booking.time === t && s.timeChipTextActive]}>{t}</Text>
+              <TouchableOpacity key={t} style={[s.timeChip, booking.timeFrom === t && s.timeChipActive]}
+                onPress={() => setBooking(b => ({ ...b, timeFrom: t, time: t, timeTo: b.timeTo && b.timeTo <= t ? '' : b.timeTo }))}>
+                <Text style={[s.timeChipText, booking.timeFrom === t && s.timeChipTextActive]}>{t}</Text>
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Time TO */}
+          <Text style={[s.fieldLabel, { marginTop: 16 }]}>Час закінчення (до) — необов'язково</Text>
+          <View style={s.timesGrid}>
+            {TIMES.filter(t => !booking.timeFrom || t > booking.timeFrom).map(t => (
+              <TouchableOpacity key={t} style={[s.timeChip, booking.timeTo === t && s.timeChipActive]}
+                onPress={() => setBooking(b => ({ ...b, timeTo: b.timeTo === t ? '' : t }))}>
+                <Text style={[s.timeChipText, booking.timeTo === t && s.timeChipTextActive]}>{t}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Summary */}
+          {(booking.dates.length > 0 || booking.timeFrom) && (
+            <View style={{ marginTop: 20, padding: 14, backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe' }}>
+              <Text style={{ fontWeight: '700', color: '#1e40af', marginBottom: 6 }}>Вибраний час</Text>
+              {booking.dates.length > 0 && <Text style={{ color: '#374151', fontSize: 14 }}>📅 {booking.dates.map(v => { const d = dates.find(x => x.value === v); return d ? `${d.dayName} ${d.label}` : v; }).join(', ')}</Text>}
+              {booking.timeFrom && <Text style={{ color: '#374151', fontSize: 14, marginTop: 4 }}>⏰ {booking.timeFrom}{booking.timeTo ? ` – ${booking.timeTo}` : ''}</Text>}
+            </View>
+          )}
         </ScrollView>
         <View style={s.bottomBar}>
           <TouchableOpacity
-            style={[s.nextBtn, (!booking.date || !booking.time) && s.nextBtnDisabled]}
-            disabled={!booking.date || !booking.time}
+            style={[s.nextBtn, !canProceed && s.nextBtnDisabled]}
+            disabled={!canProceed}
             onPress={() => { loadTaskers(); setStep('taskers'); }}
           >
             <Text style={s.nextBtnText}>Знайти виконавців</Text>
