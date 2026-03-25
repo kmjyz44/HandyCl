@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   RefreshControl,
   Alert,
   Modal,
-  TextInput,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,17 +23,6 @@ const HOURS = Array.from({ length: 24 }, (_, h) => [
   `${h.toString().padStart(2, '0')}:30`,
 ]).flat();
 
-// Ukrainian cities for location picker
-const CITIES = [
-  'Київ', 'Харків', 'Одеса', 'Дніпро', 'Запоріжжя', 'Львів',
-  'Кривий Ріг', 'Миколаїв', 'Маріуполь', 'Луганськ', 'Вінниця',
-  'Херсон', 'Полтава', 'Чернігів', 'Черкаси', 'Суми', 'Житомир',
-  'Хмельницький', 'Рівне', 'Івано-Франківськ', 'Тернопіль', 'Луцьк',
-  'Ужгород', 'Чернівці', 'Кропивницький',
-];
-
-const RADIUSES = [5, 10, 15, 20, 30, 50];
-
 interface AvailabilitySlot {
   slot_id: string;
   day_of_week: number;
@@ -45,11 +33,13 @@ interface AvailabilitySlot {
 }
 
 interface ServiceArea {
-  city: string;
+  lat: number;
+  lng: number;
   radius: number;
+  label: string;
 }
 
-// Simple time picker component (web-friendly, no native Picker)
+// ─── Simple time picker (web-friendly, no native Picker) ──────────────────────
 function TimePicker({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -79,14 +69,48 @@ function TimePicker({ value, onChange, label }: { value: string; onChange: (v: s
   );
 }
 
+// ─── Map iframe (web only) ────────────────────────────────────────────────────
+function MapIframe({ lat, lng, radius, onSave }: {
+  lat: number; lng: number; radius: number;
+  onSave: (lat: number, lng: number, radius: number) => void;
+}) {
+  const iframeRef = useRef<any>(null);
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data?.type === 'save') {
+          onSave(data.lat, data.lng, data.radius);
+        }
+      } catch {}
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [onSave]);
+
+  const src = `/map.html?lat=${lat}&lng=${lng}&radius=${radius}`;
+  return (
+    <iframe
+      ref={iframeRef}
+      title="service-area-map"
+      src={src}
+      style={{ width: '100%', height: '100%', border: 'none' } as any}
+      allow="geolocation"
+    />
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function Availability() {
   const { user } = useAuthStore();
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [mapModalVisible, setMapModalVisible] = useState(false);
   const [editingSlot, setEditingSlot] = useState<AvailabilitySlot | null>(null);
+  const [savingArea, setSavingArea] = useState(false);
 
   // Form state
   const [dayOfWeek, setDayOfWeek] = useState(0);
@@ -95,10 +119,9 @@ export default function Availability() {
   const [isActive, setIsActive] = useState(true);
 
   // Service area state
-  const [serviceArea, setServiceArea] = useState<ServiceArea>({ city: 'Київ', radius: 10 });
-  const [tempCity, setTempCity] = useState('Київ');
-  const [tempRadius, setTempRadius] = useState(10);
-  const [citySearch, setCitySearch] = useState('');
+  const [serviceArea, setServiceArea] = useState<ServiceArea>({
+    lat: 50.45, lng: 30.52, radius: 10, label: 'Київ',
+  });
 
   const loadAvailability = async () => {
     try {
@@ -151,7 +174,6 @@ export default function Availability() {
       if (excludeId && s.slot_id === excludeId) return false;
       const sStart = toMin(s.start_time);
       const sEnd = toMin(s.end_time);
-      // Overlap if intervals intersect
       return newStart < sEnd && newEnd > sStart;
     });
   };
@@ -161,8 +183,6 @@ export default function Availability() {
       Alert.alert('Помилка', 'Час закінчення має бути більше часу початку');
       return;
     }
-
-    // Check for duplicate / overlapping slot
     if (hasOverlap(dayOfWeek, startTime, endTime, editingSlot?.slot_id)) {
       Alert.alert(
         'Перетин часу',
@@ -170,22 +190,19 @@ export default function Availability() {
       );
       return;
     }
-
     try {
       const slotData = {
         day_of_week: dayOfWeek,
         start_time: startTime,
         end_time: endTime,
-        location: serviceArea.city,
+        location: serviceArea.label,
         is_active: isActive,
       };
-
       if (editingSlot) {
         await api.updateAvailabilitySlot(editingSlot.slot_id, slotData);
       } else {
         await api.createAvailabilitySlot(slotData);
       }
-
       setModalVisible(false);
       loadAvailability();
     } catch (error: any) {
@@ -220,23 +237,40 @@ export default function Availability() {
     }
   };
 
+  // Called when the map iframe sends a "save" postMessage
+  const handleMapSave = async (lat: number, lng: number, radius: number) => {
+    setSavingArea(true);
+    try {
+      // Reverse geocode to get city name
+      let label = `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=uk`
+        );
+        const data = await res.json();
+        const addr = data.address;
+        label = addr.city || addr.town || addr.village || addr.county || label;
+      } catch {}
+
+      setServiceArea({ lat, lng, radius, label });
+
+      // Persist to executor profile
+      try {
+        await api.updateExecutorProfile({
+          latitude: lat,
+          longitude: lng,
+          service_radius_km: radius,
+        });
+      } catch {}
+
+      setMapModalVisible(false);
+      Alert.alert('Збережено', `Зона роботи: ${label} · ${radius} км`);
+    } finally {
+      setSavingArea(false);
+    }
+  };
+
   const slotsByDay = DAYS.map((_, i) => slots.filter((s) => s.day_of_week === i));
-
-  const openLocationModal = () => {
-    setTempCity(serviceArea.city);
-    setTempRadius(serviceArea.radius);
-    setCitySearch('');
-    setLocationModalVisible(true);
-  };
-
-  const saveLocation = () => {
-    setServiceArea({ city: tempCity, radius: tempRadius });
-    setLocationModalVisible(false);
-  };
-
-  const filteredCities = CITIES.filter((c) =>
-    c.toLowerCase().includes(citySearch.toLowerCase())
-  );
 
   if (loading) {
     return (
@@ -268,7 +302,7 @@ export default function Availability() {
         </View>
 
         {/* Service Area Card */}
-        <TouchableOpacity style={styles.serviceAreaCard} onPress={openLocationModal}>
+        <TouchableOpacity style={styles.serviceAreaCard} onPress={() => setMapModalVisible(true)}>
           <View style={styles.serviceAreaLeft}>
             <View style={styles.serviceAreaIconWrap}>
               <Ionicons name="map-outline" size={26} color="#2563eb" />
@@ -276,7 +310,7 @@ export default function Availability() {
             <View>
               <Text style={styles.serviceAreaTitle}>Зона роботи</Text>
               <Text style={styles.serviceAreaSub}>
-                {serviceArea.city} · радіус {serviceArea.radius} км
+                {serviceArea.label} · радіус {serviceArea.radius} км
               </Text>
             </View>
           </View>
@@ -308,23 +342,17 @@ export default function Availability() {
                       key={slot.slot_id}
                       style={[styles.slotItem, !slot.is_active && styles.slotInactive]}
                     >
-                      <TouchableOpacity
-                        style={styles.slotToggle}
-                        onPress={() => toggleSlotActive(slot)}
-                      >
+                      <TouchableOpacity style={styles.slotToggle} onPress={() => toggleSlotActive(slot)}>
                         <Ionicons
                           name={slot.is_active ? 'checkmark-circle' : 'ellipse-outline'}
                           size={24}
                           color={slot.is_active ? '#10b981' : '#d1d5db'}
                         />
                       </TouchableOpacity>
-
                       <View style={styles.slotInfo}>
                         <View style={styles.timeRow}>
                           <Ionicons name="time-outline" size={16} color="#6b7280" />
-                          <Text style={styles.slotTime}>
-                            {slot.start_time} - {slot.end_time}
-                          </Text>
+                          <Text style={styles.slotTime}>{slot.start_time} - {slot.end_time}</Text>
                         </View>
                         {slot.location && (
                           <View style={styles.locationRow}>
@@ -333,7 +361,6 @@ export default function Availability() {
                           </View>
                         )}
                       </View>
-
                       <View style={styles.slotActions}>
                         <TouchableOpacity style={styles.editSlotButton} onPress={() => openModal(slot)}>
                           <Ionicons name="pencil" size={18} color="#2563eb" />
@@ -357,7 +384,7 @@ export default function Availability() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Add/Edit Slot Modal */}
+      {/* ── Add/Edit Slot Modal ── */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -390,22 +417,14 @@ export default function Availability() {
               <TimePicker value={startTime} onChange={setStartTime} label="Час початку" />
               <TimePicker value={endTime} onChange={setEndTime} label="Час закінчення" />
 
-              {/* Active toggle */}
               <TouchableOpacity style={styles.checkboxRow} onPress={() => setIsActive(!isActive)}>
-                <Ionicons
-                  name={isActive ? 'checkbox' : 'square-outline'}
-                  size={24}
-                  color="#2563eb"
-                />
+                <Ionicons name={isActive ? 'checkbox' : 'square-outline'} size={24} color="#2563eb" />
                 <Text style={styles.checkboxLabel}>Активний слот</Text>
               </TouchableOpacity>
             </ScrollView>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-              >
+              <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={() => setModalVisible(false)}>
                 <Text style={styles.cancelButtonText}>Скасувати</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.button, styles.saveButton]} onPress={handleSave}>
@@ -416,107 +435,34 @@ export default function Availability() {
         </View>
       </Modal>
 
-      {/* Location / Service Area Modal */}
-      <Modal visible={locationModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Зона роботи</Text>
-              <TouchableOpacity onPress={() => setLocationModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.form} nestedScrollEnabled>
-              {/* Map placeholder with Leaflet iframe */}
-              <View style={styles.mapContainer}>
-                {Platform.OS === 'web' ? (
-                  <iframe
-                    title="map"
-                    style={{ width: '100%', height: 220, border: 'none', borderRadius: 12 } as any}
-                    src={`https://www.openstreetmap.org/export/embed.html?bbox=22.0,44.0,40.0,52.5&layer=mapnik&marker=${
-                      tempCity === 'Київ' ? '50.45,30.52' :
-                      tempCity === 'Харків' ? '49.99,36.23' :
-                      tempCity === 'Одеса' ? '46.48,30.72' :
-                      tempCity === 'Дніпро' ? '48.46,35.04' :
-                      tempCity === 'Львів' ? '49.84,24.03' :
-                      '50.45,30.52'
-                    }`}
-                  />
-                ) : (
-                  <View style={styles.mapPlaceholder}>
-                    <Ionicons name="map" size={48} color="#2563eb" />
-                    <Text style={styles.mapPlaceholderText}>Карта доступна у веб-версії</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* City search */}
-              <Text style={styles.label}>Місто</Text>
-              <View style={styles.searchRow}>
-                <Ionicons name="search-outline" size={18} color="#9ca3af" style={{ marginRight: 8 }} />
-                <TextInput
-                  style={{ flex: 1, fontSize: 16 }}
-                  value={citySearch}
-                  onChangeText={setCitySearch}
-                  placeholder="Пошук міста..."
-                />
-              </View>
-              <View style={styles.cityList}>
-                {filteredCities.map((city) => (
-                  <TouchableOpacity
-                    key={city}
-                    style={[styles.cityItem, tempCity === city && styles.cityItemSelected]}
-                    onPress={() => { setTempCity(city); setCitySearch(''); }}
-                  >
-                    <Ionicons
-                      name={tempCity === city ? 'radio-button-on' : 'radio-button-off'}
-                      size={18}
-                      color={tempCity === city ? '#2563eb' : '#9ca3af'}
-                    />
-                    <Text style={[styles.cityItemText, tempCity === city && styles.cityItemTextSelected]}>
-                      {city}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Radius */}
-              <Text style={[styles.label, { marginTop: 16 }]}>Радіус роботи</Text>
-              <View style={styles.radiusRow}>
-                {RADIUSES.map((r) => (
-                  <TouchableOpacity
-                    key={r}
-                    style={[styles.radiusChip, tempRadius === r && styles.radiusChipActive]}
-                    onPress={() => setTempRadius(r)}
-                  >
-                    <Text style={[styles.radiusChipText, tempRadius === r && styles.radiusChipTextActive]}>
-                      {r} км
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <View style={styles.selectedAreaCard}>
-                <Ionicons name="location" size={20} color="#2563eb" />
-                <Text style={styles.selectedAreaText}>
-                  {tempCity} · радіус {tempRadius} км
-                </Text>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => setLocationModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Скасувати</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.button, styles.saveButton]} onPress={saveLocation}>
-                <Text style={styles.saveButtonText}>Зберегти</Text>
-              </TouchableOpacity>
-            </View>
+      {/* ── Full-screen Map Modal ── */}
+      <Modal visible={mapModalVisible} animationType="slide">
+        <View style={{ flex: 1 }}>
+          {/* Close button overlay */}
+          <View style={styles.mapCloseRow}>
+            <TouchableOpacity style={styles.mapCloseBtn} onPress={() => setMapModalVisible(false)}>
+              <Ionicons name="close" size={22} color="#111827" />
+            </TouchableOpacity>
+            <Text style={styles.mapCloseTitle}>Зона роботи</Text>
+            {savingArea && <ActivityIndicator size="small" color="#2563eb" style={{ marginLeft: 8 }} />}
           </View>
+
+          {Platform.OS === 'web' ? (
+            <MapIframe
+              lat={serviceArea.lat}
+              lng={serviceArea.lng}
+              radius={serviceArea.radius}
+              onSave={handleMapSave}
+            />
+          ) : (
+            <View style={styles.mapNativePlaceholder}>
+              <Ionicons name="map" size={64} color="#2563eb" />
+              <Text style={styles.mapNativeTitle}>Карта доступна у веб-версії</Text>
+              <Text style={styles.mapNativeSub}>
+                Відкрийте HandyHub у браузері для вибору зони роботи на карті
+              </Text>
+            </View>
+          )}
         </View>
       </Modal>
     </View>
@@ -543,7 +489,6 @@ const styles = StyleSheet.create({
   },
   infoText: { flex: 1, fontSize: 14, color: '#1e40af', lineHeight: 20 },
 
-  // Service area card
   serviceAreaCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 12,
@@ -557,7 +502,6 @@ const styles = StyleSheet.create({
   serviceAreaTitle: { fontSize: 16, fontWeight: '600', color: '#111827' },
   serviceAreaSub: { fontSize: 13, color: '#6b7280', marginTop: 2 },
 
-  // Day cards
   dayCard: {
     backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 12,
     borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden',
@@ -590,7 +534,7 @@ const styles = StyleSheet.create({
   noSlots: { padding: 16, alignItems: 'center' },
   noSlotsText: { fontSize: 14, color: '#9ca3af', fontStyle: 'italic' },
 
-  // Modal
+  // Slot modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%' },
   modalHeader: {
@@ -600,8 +544,6 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
   form: { padding: 24 },
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
-
-  // Day chips
   dayChip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
     backgroundColor: '#f3f4f6', marginRight: 8, borderWidth: 1, borderColor: '#e5e7eb',
@@ -609,8 +551,6 @@ const styles = StyleSheet.create({
   dayChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   dayChipText: { fontSize: 14, fontWeight: '600', color: '#374151' },
   dayChipTextActive: { color: '#fff' },
-
-  // Time picker
   timePickerBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10,
@@ -627,7 +567,6 @@ const styles = StyleSheet.create({
   timeOptionSelected: { backgroundColor: '#eff6ff' },
   timeOptionText: { fontSize: 15, color: '#374151' },
   timeOptionTextSelected: { color: '#2563eb', fontWeight: '700' },
-
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   checkboxLabel: { fontSize: 16, color: '#374151' },
   modalFooter: {
@@ -640,35 +579,19 @@ const styles = StyleSheet.create({
   saveButton: { backgroundColor: '#2563eb' },
   saveButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
 
-  // Location modal
-  mapContainer: { borderRadius: 12, overflow: 'hidden', marginBottom: 16, height: 220, backgroundColor: '#e5e7eb' },
-  mapPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
-  mapPlaceholderText: { fontSize: 14, color: '#6b7280' },
-  searchRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#f9fafb', marginBottom: 8,
+  // Map modal
+  mapCloseRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12,
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
+    zIndex: 10,
   },
-  cityList: { maxHeight: 200 },
-  cityItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 10, paddingHorizontal: 4,
-    borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+  mapCloseBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center',
   },
-  cityItemSelected: { backgroundColor: '#eff6ff' },
-  cityItemText: { fontSize: 15, color: '#374151' },
-  cityItemTextSelected: { color: '#2563eb', fontWeight: '600' },
-  radiusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  radiusChip: {
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb',
-  },
-  radiusChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  radiusChipText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  radiusChipTextActive: { color: '#fff' },
-  selectedAreaCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#eff6ff', borderRadius: 10, padding: 14,
-  },
-  selectedAreaText: { fontSize: 15, fontWeight: '600', color: '#1e40af' },
+  mapCloseTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  mapNativePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, padding: 32 },
+  mapNativeTitle: { fontSize: 20, fontWeight: '700', color: '#111827', textAlign: 'center' },
+  mapNativeSub: { fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22 },
 });
