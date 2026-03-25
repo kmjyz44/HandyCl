@@ -771,6 +771,11 @@ function ProviderProfile() {
   const [bio, setBio] = useState('');
   const [experienceYears, setExperienceYears] = useState('');
   const [bioModalVisible, setBioModalVisible] = useState(false);
+  const [accountDetailsVisible, setAccountDetailsVisible] = useState(false);
+  const [editingAccountDetails, setEditingAccountDetails] = useState(false);
+  const [accountName, setAccountName] = useState('');
+  const [accountPhone, setAccountPhone] = useState('');
+  const [accountAddress, setAccountAddress] = useState('');
 
   // Portfolio photos (local URIs)
   const [portfolioPhotos, setPortfolioPhotos] = useState<string[]>([]);
@@ -832,7 +837,28 @@ function ProviderProfile() {
 
   const pickProfilePhoto = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Фото профілю', 'На веб-версії завантаження фото тимчасово недоступне');
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (e: any) => {
+        const file: File = e.target.files[0];
+        if (!file) return;
+        setUploadingPhoto(true);
+        try {
+          const reader = new FileReader();
+          reader.onload = async (ev: any) => {
+            try {
+              const updatedUser = await api.updateProfile({ picture: ev.target.result });
+              setUser(updatedUser);
+              Alert.alert('Успіх', 'Фото профілю оновлено');
+            } catch (err: any) {
+              Alert.alert('Помилка', err.message || 'Не вдалося оновити фото');
+            } finally { setUploadingPhoto(false); }
+          };
+          reader.readAsDataURL(file);
+        } catch { setUploadingPhoto(false); }
+      };
+      input.click();
       return;
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -846,6 +872,7 @@ function ProviderProfile() {
         const picture = `data:image/jpeg;base64,${result.assets[0].base64}`;
         const updatedUser = await api.updateProfile({ picture });
         setUser(updatedUser);
+        Alert.alert('Успіх', 'Фото профілю оновлено');
       } catch (e: any) { Alert.alert('Помилка', e.message || 'Не вдалося оновити фото'); }
       finally { setUploadingPhoto(false); }
     }
@@ -1086,11 +1113,11 @@ function ProviderProfile() {
       {/* ACCOUNT INFORMATION */}
       <Text style={pStyles.menuSectionLabel}>ІНФОРМАЦІЯ ПРО АКАУНТ</Text>
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => setBioModalVisible(true)}>
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => { setAccountName(user?.full_name || user?.username || ''); setAccountPhone(profile?.phone || ''); setAccountAddress(profile?.address || ''); setEditingAccountDetails(false); setAccountDetailsVisible(true); }}>
         <Ionicons name="person-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>
           <Text style={pStyles.menuRowText}>Деталі акаунту</Text>
-          {bio ? <Text style={pStyles.menuRowSub} numberOfLines={1}>{bio}</Text> : null}
+          <Text style={pStyles.menuRowSub}>{user?.full_name || user?.username || user?.email || ''}</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
@@ -1230,7 +1257,7 @@ function ProviderProfile() {
         {(['performance', 'skills', 'service'] as const).map(tab => (
           <TouchableOpacity key={tab} style={[pStyles.tab, activeTab === tab && pStyles.tabActive]} onPress={() => setActiveTab(tab)}>
             <Text style={[pStyles.tabText, activeTab === tab && pStyles.tabTextActive]}>
-              {tab === 'performance' ? 'Статистика' : tab === 'skills' ? 'Навички' : 'Послуги'}
+              {tab === 'performance' ? 'Статистика' : tab === 'skills' ? 'Навички' : 'Профіль'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -1448,6 +1475,90 @@ function ProviderProfile() {
             </View>
           );
         })()}
+      </Modal>
+
+      {/* ── Account Details Modal (TaskRabbit style) ── */}
+      <Modal visible={accountDetailsVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <TouchableOpacity onPress={() => setAccountDetailsVisible(false)}>
+              <Ionicons name="arrow-back" size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Деталі акаунту</Text>
+            <TouchableOpacity onPress={() => setEditingAccountDetails(!editingAccountDetails)}>
+              <Text style={{ fontSize: 16, color: '#2563eb', fontWeight: '600' }}>{editingAccountDetails ? 'Скасувати' : 'Редагувати'}</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+            {/* Avatar + name row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', flex: 1 }}>{user?.full_name || user?.username || 'Виконавець'}</Text>
+              <TouchableOpacity onPress={pickProfilePhoto} style={{ position: 'relative' }}>
+                {uploadingPhoto ? (
+                  <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: '#e5e7eb', alignItems: 'center', justifyContent: 'center' }}>
+                    <ActivityIndicator color="#2563eb" />
+                  </View>
+                ) : user?.picture ? (
+                  <Image source={{ uri: user.picture }} style={{ width: 60, height: 60, borderRadius: 30 }} />
+                ) : (
+                  <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="person" size={30} color="#fff" />
+                  </View>
+                )}
+                <View style={{ position: 'absolute', bottom: 0, right: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' }}>
+                  <Ionicons name="camera" size={11} color="#fff" />
+                </View>
+              </TouchableOpacity>
+            </View>
+            {/* Fields */}
+            {([
+              { label: 'Ім\'я', value: accountName, setter: setAccountName, key: 'name', editable: true },
+              { label: 'Email', value: user?.email || '', setter: null, key: 'email', editable: false },
+              { label: 'Мобільний телефон', value: accountPhone, setter: setAccountPhone, key: 'phone', editable: true },
+              { label: 'Адреса', value: accountAddress, setter: setAccountAddress, key: 'address', editable: true },
+            ] as { label: string; value: string; setter: ((v: string) => void) | null; key: string; editable: boolean }[]).map((field) => (
+              <View key={field.key}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827', width: 140 }}>{field.label}</Text>
+                  {editingAccountDetails && field.editable && field.setter ? (
+                    <TextInput
+                      style={{ flex: 1, fontSize: 15, color: '#374151', borderBottomWidth: 1, borderBottomColor: '#2563eb', paddingVertical: 2 }}
+                      value={field.value}
+                      onChangeText={field.setter}
+                      placeholder={field.label}
+                    />
+                  ) : (
+                    <Text style={{ flex: 1, fontSize: 15, color: '#374151', textAlign: 'right' }}>{field.value || '—'}</Text>
+                  )}
+                </View>
+                <View style={{ height: 1, backgroundColor: '#f3f4f6', marginHorizontal: 20 }} />
+              </View>
+            ))}
+            {/* Info banner */}
+            <View style={{ margin: 16, padding: 16, backgroundColor: '#fffbeb', borderRadius: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+              <Ionicons name="information-circle-outline" size={22} color="#d97706" />
+              <Text style={{ flex: 1, fontSize: 13, color: '#92400e' }}>Переїхали в нове місто? Зверніться до підтримки щоб оновити локацію.</Text>
+            </View>
+            {editingAccountDetails && (
+              <TouchableOpacity
+                style={{ margin: 16, padding: 16, backgroundColor: '#2563eb', borderRadius: 14, alignItems: 'center' }}
+                onPress={async () => {
+                  setSaving(true);
+                  try {
+                    await api.updateProfile({ full_name: accountName, phone: accountPhone, address: accountAddress });
+                    Alert.alert('Збережено', 'Деталі акаунту оновлено');
+                    setEditingAccountDetails(false);
+                    setAccountDetailsVisible(false);
+                  } catch (e: any) {
+                    Alert.alert('Помилка', e.message || 'Не вдалося зберегти');
+                  } finally { setSaving(false); }
+                }}
+              >
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Зберегти зміни</Text>}
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
       </Modal>
 
       {/* ── Bio Modal ── */}
