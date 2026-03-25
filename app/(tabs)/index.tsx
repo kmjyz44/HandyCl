@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
+import { useBookingStore } from '../../store/bookingStore';
 import { api } from '../../utils/api';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
@@ -93,6 +94,7 @@ function getDates() {
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { addBooking } = useBookingStore();
   const [step, setStep] = useState<BookingStep>('home');
   const [booking, setBooking] = useState<BookingState>({
     categoryId: '', categoryName: '', skillName: '', taskDescription: '',
@@ -102,6 +104,8 @@ export default function HomeScreen() {
   const [loadingTaskers, setLoadingTaskers] = useState(false);
   const [booking_submitting, setBookingSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
+  const [loadingGeo, setLoadingGeo] = useState(false);
   const dates = getDates();
 
   // ── Helpers ──
@@ -145,25 +149,98 @@ export default function HomeScreen() {
     }
   };
 
+  const detectLocation = async () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      Alert.alert('Геолокація', 'Геолокація не підтримується у цьому браузері');
+      return;
+    }
+    setLoadingGeo(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=uk`,
+            { headers: { 'User-Agent': 'HandyHub/1.0' } }
+          );
+          const data = await res.json();
+          const addr = data.address || {};
+          const city = addr.city || addr.town || addr.village || addr.county || '';
+          const street = addr.road || addr.pedestrian || '';
+          const houseNumber = addr.house_number || '';
+          const streetAddr = street ? `${street}${houseNumber ? ', ' + houseNumber : ''}` : '';
+          setBooking(b => ({ ...b, city, address: streetAddr }));
+        } catch {
+          Alert.alert('Помилка', 'Не вдалося визначити адресу');
+        } finally {
+          setLoadingGeo(false);
+        }
+      },
+      () => {
+        setLoadingGeo(false);
+        Alert.alert('Геолокація', 'Не вдалося отримати доступ до геолокації. Введіть адресу вручну.');
+      },
+      { timeout: 10000 }
+    );
+  };
+
+  const searchAddress = async (query: string) => {
+    if (query.length < 3) { setAddressSuggestions([]); return; }
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=ua&limit=5&accept-language=uk`,
+        { headers: { 'User-Agent': 'HandyHub/1.0' } }
+      );
+      const data = await res.json();
+      setAddressSuggestions(data);
+    } catch {
+      setAddressSuggestions([]);
+    }
+  };
+
   const submitBooking = async () => {
     if (!booking.selectedTasker) return;
     setBookingSubmitting(true);
     try {
-      await api.createBooking({
-        provider_id: booking.selectedTasker.user_id || booking.selectedTasker.provider_id,
-        skill: booking.skillName,
+      const tasker = booking.selectedTasker;
+      const rate = tasker.profile?.hourly_rate || tasker.hourly_rate || 0;
+      const result = await api.createBooking({
+        title: booking.skillName,
+        description: booking.taskDescription || booking.skillName,
+        provider_id: tasker.user_id || tasker.provider_id,
+        provider_hourly_rate: rate,
         category: booking.categoryId,
-        description: booking.taskDescription,
         address: booking.address,
         city: booking.city,
-        scheduled_date: booking.date,
-        scheduled_time: booking.time,
+        date: booking.date,
+        time: booking.time,
+        total_price: rate,
       });
-      Alert.alert('Успіх! 🎉', `Завдання "${booking.skillName}" успішно заброньовано!\n\nВиконавець ${booking.selectedTasker.full_name || booking.selectedTasker.username} отримає сповіщення.`, [
-        { text: 'OK', onPress: () => { setStep('home'); setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', date: '', time: '', selectedTasker: null }); } }
-      ]);
+      // Add to local store so Bookings tab updates immediately
+      if (result?.booking_id) {
+        addBooking({
+          booking_id: result.booking_id,
+          client_id: user?.user_id || '',
+          provider_id: tasker.user_id,
+          date: booking.date,
+          time: booking.time,
+          address: `${booking.address}, ${booking.city}`,
+          status: 'pending',
+          total_price: rate,
+          payment_status: 'pending',
+        });
+      }
+      Alert.alert(
+        'Успіх! 🎉',
+        `Завдання "${booking.skillName}" успішно заброньовано!\n\nВиконавець ${tasker.name || tasker.full_name || 'виконавець'} отримає сповіщення.`,
+        [{ text: 'OK', onPress: () => {
+          setStep('home');
+          setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', date: '', time: '', selectedTasker: null });
+          router.push('/(tabs)/bookings');
+        }}]
+      );
     } catch (e: any) {
-      Alert.alert('Помилка', e.message || 'Не вдалося створити бронювання');
+      Alert.alert('Помилка бронювання', e.message || 'Не вдалося створити бронювання. Спробуйте ще раз.');
     } finally {
       setBookingSubmitting(false);
     }
@@ -334,13 +411,35 @@ export default function HomeScreen() {
           <Text style={s.stepTitle}>Адреса</Text>
           <View style={{ width: 40 }} />
         </View>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
           <Text style={s.stepSubtitle}>Де потрібно виконати завдання?</Text>
 
+          {/* Geolocation button */}
+          <TouchableOpacity
+            style={[s.geoBtn, loadingGeo && { opacity: 0.6 }]}
+            onPress={detectLocation}
+            disabled={loadingGeo}
+          >
+            {loadingGeo
+              ? <ActivityIndicator size="small" color="#2563eb" />
+              : <Ionicons name="locate-outline" size={20} color="#2563eb" />
+            }
+            <Text style={s.geoBtnText}>
+              {loadingGeo ? 'Визначаємо місцезнаходження...' : 'Визначити моє місцезнаходження'}
+            </Text>
+          </TouchableOpacity>
+
           <Text style={s.fieldLabel}>Місто</Text>
+          <View style={s.chipsRow}>
+            {['Київ', 'Харків', 'Одеса', 'Дніпро', 'Львів', 'Запоріжжя'].map(city => (
+              <TouchableOpacity key={city} style={[s.chip, booking.city === city && s.chipActive]} onPress={() => setBooking(b => ({ ...b, city }))}>
+                <Text style={[s.chipText, booking.city === city && s.chipTextActive]}>{city}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <TextInput
-            style={s.input}
-            placeholder="Київ"
+            style={[s.input, { marginTop: 8 }]}
+            placeholder="або введіть місто..."
             value={booking.city}
             onChangeText={v => setBooking(b => ({ ...b, city: v }))}
             placeholderTextColor="#9ca3af"
@@ -351,25 +450,39 @@ export default function HomeScreen() {
             style={s.input}
             placeholder="вул. Хрещатик, 1"
             value={booking.address}
-            onChangeText={v => setBooking(b => ({ ...b, address: v }))}
+            onChangeText={v => {
+              setBooking(b => ({ ...b, address: v }));
+              searchAddress(`${v}, ${booking.city}`);
+            }}
             placeholderTextColor="#9ca3af"
           />
-
-          {/* Quick city chips */}
-          <Text style={s.fieldLabel}>Популярні міста</Text>
-          <View style={s.chipsRow}>
-            {['Київ', 'Харків', 'Одеса', 'Дніпро', 'Львів', 'Запоріжжя'].map(city => (
-              <TouchableOpacity key={city} style={[s.chip, booking.city === city && s.chipActive]} onPress={() => setBooking(b => ({ ...b, city }))}>
-                <Text style={[s.chipText, booking.city === city && s.chipTextActive]}>{city}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* Address autocomplete suggestions */}
+          {addressSuggestions.length > 0 && (
+            <View style={s.suggestionsBox}>
+              {addressSuggestions.map((s2: any, i: number) => (
+                <TouchableOpacity
+                  key={i}
+                  style={s.suggestionRow}
+                  onPress={() => {
+                    const parts = s2.display_name.split(',');
+                    const street = parts[0]?.trim() || s2.display_name;
+                    const city = parts.find((p: string) => ['Київ','Харків','Одеса','Дніпро','Львів','Запоріжжя','Миколаїв','Вінниця','Херсон'].some(c => p.includes(c))) || parts[2]?.trim() || '';
+                    setBooking(b => ({ ...b, address: street, city: city || b.city }));
+                    setAddressSuggestions([]);
+                  }}
+                >
+                  <Ionicons name="location-outline" size={16} color="#6b7280" />
+                  <Text style={s.suggestionText} numberOfLines={2}>{s2.display_name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </ScrollView>
         <View style={s.bottomBar}>
           <TouchableOpacity
             style={[s.nextBtn, (!booking.address.trim() || !booking.city.trim()) && s.nextBtnDisabled]}
             disabled={!booking.address.trim() || !booking.city.trim()}
-            onPress={() => setStep('datetime')}
+            onPress={() => { setAddressSuggestions([]); setStep('datetime'); }}
           >
             <Text style={s.nextBtnText}>Далі — Дата і час</Text>
             <Ionicons name="arrow-forward" size={20} color="#fff" />
@@ -463,40 +576,48 @@ export default function HomeScreen() {
         ) : (
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
             <Text style={s.taskerCount}>{taskers.length} виконавців у {booking.city}</Text>
-            {taskers.map((tasker, idx) => (
+            {taskers.map((tasker, idx) => {
+              const profile = tasker.profile || {};
+              const rate = profile.hourly_rate || tasker.hourly_rate || 25;
+              const rating = tasker.average_rating || tasker.rating || 0;
+              const reviews = tasker.total_reviews || tasker.review_count || 0;
+              const displayName = tasker.name || tasker.full_name || tasker.username || 'Виконавець';
+              const skills = Array.isArray(profile.skills) ? profile.skills : [];
+              return (
               <TouchableOpacity key={tasker.user_id || idx} style={s.taskerCard} onPress={() => { setBooking(b => ({ ...b, selectedTasker: tasker })); setStep('tasker_profile'); }}>
                 <View style={s.taskerCardLeft}>
-                  {tasker.picture ? (
+                  {tasker.picture && !tasker.picture.includes('base64') ? (
                     <Image source={{ uri: tasker.picture }} style={s.taskerAvatar} />
                   ) : (
                     <View style={[s.taskerAvatar, { backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }]}>
-                      <Ionicons name="person" size={24} color="#fff" />
+                      <Text style={{ fontSize: 20, color: '#fff', fontWeight: '700' }}>{displayName[0]?.toUpperCase()}</Text>
                     </View>
                   )}
-                  {tasker.is_elite && (
+                  {profile.badges?.includes('elite') && (
                     <View style={s.eliteBadge}>
                       <Text style={s.eliteBadgeText}>ELITE</Text>
                     </View>
                   )}
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={s.taskerName}>{tasker.full_name || tasker.username || 'Виконавець'}</Text>
+                  <Text style={s.taskerName}>{displayName}</Text>
                   <View style={s.ratingRow}>
                     <Ionicons name="star" size={14} color="#f59e0b" />
-                    <Text style={s.ratingText}>{tasker.rating ? tasker.rating.toFixed(1) : '5.0'}</Text>
-                    <Text style={s.reviewCount}>({tasker.review_count || 0} відгуків)</Text>
+                    <Text style={s.ratingText}>{rating > 0 ? rating.toFixed(1) : 'Новий'}</Text>
+                    <Text style={s.reviewCount}>({reviews} відгуків)</Text>
                   </View>
                   <Text style={s.taskerSkills} numberOfLines={1}>
-                    {(tasker.skills || []).slice(0, 3).map((sk: any) => typeof sk === 'string' ? sk : sk.name).join(' · ')}
+                    {skills.slice(0, 3).join(' · ') || 'Виконавець'}
                   </Text>
                 </View>
                 <View style={s.taskerCardRight}>
-                  <Text style={s.taskerRate}>{tasker.hourly_rate || 25} ₴</Text>
+                  <Text style={s.taskerRate}>{rate} ₴</Text>
                   <Text style={s.taskerRateLabel}>/год</Text>
                   <Ionicons name="chevron-forward" size={18} color="#9ca3af" style={{ marginTop: 4 }} />
                 </View>
               </TouchableOpacity>
-            ))}
+              );
+            })}
           </ScrollView>
         )}
       </View>
@@ -506,6 +627,13 @@ export default function HomeScreen() {
   // STEP: TASKER PROFILE
   if (step === 'tasker_profile' && booking.selectedTasker) {
     const tasker = booking.selectedTasker;
+    const tProfile = tasker.profile || {};
+    const tRate = tProfile.hourly_rate || tasker.hourly_rate || 25;
+    const tRating = tasker.average_rating || tasker.rating || 0;
+    const tReviews = tasker.total_reviews || tasker.review_count || 0;
+    const tName = tasker.name || tasker.full_name || tasker.username || 'Виконавець';
+    const tSkills = Array.isArray(tProfile.skills) ? tProfile.skills : [];
+    const tPhotos = Array.isArray(tProfile.portfolio_photos) ? tProfile.portfolio_photos : [];
     return (
       <View style={s.container}>
         <View style={s.stepHeader}>
@@ -518,21 +646,21 @@ export default function HomeScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
           {/* Hero */}
           <View style={s.taskerHero}>
-            {tasker.picture ? (
+            {tasker.picture && !tasker.picture.includes('base64') ? (
               <Image source={{ uri: tasker.picture }} style={s.taskerHeroAvatar} />
             ) : (
               <View style={[s.taskerHeroAvatar, { backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }]}>
-                <Ionicons name="person" size={48} color="#fff" />
+                <Text style={{ fontSize: 40, color: '#fff', fontWeight: '700' }}>{tName[0]?.toUpperCase()}</Text>
               </View>
             )}
-            <Text style={s.taskerHeroName}>{tasker.full_name || tasker.username || 'Виконавець'}</Text>
+            <Text style={s.taskerHeroName}>{tName}</Text>
             <View style={s.ratingRow}>
               {[1,2,3,4,5].map(i => (
-                <Ionicons key={i} name={i <= Math.round(tasker.rating || 5) ? 'star' : 'star-outline'} size={18} color="#f59e0b" />
+                <Ionicons key={i} name={i <= Math.round(tRating || 5) ? 'star' : 'star-outline'} size={18} color="#f59e0b" />
               ))}
-              <Text style={[s.ratingText, { marginLeft: 6 }]}>{tasker.rating ? tasker.rating.toFixed(1) : '5.0'} · {tasker.review_count || 0} відгуків</Text>
+              <Text style={[s.ratingText, { marginLeft: 6 }]}>{tRating > 0 ? tRating.toFixed(1) : 'Новий'} · {tReviews} відгуків</Text>
             </View>
-            <Text style={s.taskerHeroRate}>{tasker.hourly_rate || 25} ₴/год</Text>
+            <Text style={s.taskerHeroRate}>{tRate} ₴/год</Text>
           </View>
 
           {/* Task summary */}
@@ -553,19 +681,19 @@ export default function HomeScreen() {
           </View>
 
           {/* Bio */}
-          {tasker.bio ? (
+          {tProfile.bio ? (
             <View style={s.section}>
               <Text style={s.sectionTitle}>Про виконавця</Text>
-              <Text style={s.bioText}>{tasker.bio}</Text>
+              <Text style={s.bioText}>{tProfile.bio}</Text>
             </View>
           ) : null}
 
           {/* Skills */}
-          {tasker.skills && tasker.skills.length > 0 ? (
+          {tSkills.length > 0 ? (
             <View style={s.section}>
               <Text style={s.sectionTitle}>Навички</Text>
               <View style={s.skillsWrap}>
-                {tasker.skills.slice(0, 8).map((sk: any, i: number) => (
+                {tSkills.slice(0, 8).map((sk: any, i: number) => (
                   <View key={i} style={s.skillBadge}>
                     <Text style={s.skillBadgeText}>{typeof sk === 'string' ? sk : sk.name}</Text>
                   </View>
@@ -575,11 +703,11 @@ export default function HomeScreen() {
           ) : null}
 
           {/* Portfolio */}
-          {tasker.portfolio_photos && tasker.portfolio_photos.length > 0 ? (
+          {tPhotos.length > 0 ? (
             <View style={s.section}>
               <Text style={s.sectionTitle}>Фото робіт</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {tasker.portfolio_photos.map((photo: string, i: number) => (
+                {tPhotos.map((photo: string, i: number) => (
                   <Image key={i} source={{ uri: photo }} style={s.portfolioThumb} />
                 ))}
               </ScrollView>
@@ -601,6 +729,10 @@ export default function HomeScreen() {
   // STEP: CONFIRM
   if (step === 'confirm') {
     const tasker = booking.selectedTasker!;
+    const cProfile = tasker.profile || {};
+    const cRate = cProfile.hourly_rate || tasker.hourly_rate || 25;
+    const cRating = tasker.average_rating || tasker.rating || 0;
+    const cName = tasker.name || tasker.full_name || tasker.username || 'Виконавець';
     return (
       <View style={s.container}>
         <View style={s.stepHeader}>
@@ -632,27 +764,27 @@ export default function HomeScreen() {
 
           {/* Tasker card */}
           <View style={s.confirmTaskerCard}>
-            {tasker.picture ? (
+            {tasker.picture && !tasker.picture.includes('base64') ? (
               <Image source={{ uri: tasker.picture }} style={s.confirmTaskerAvatar} />
             ) : (
               <View style={[s.confirmTaskerAvatar, { backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }]}>
-                <Ionicons name="person" size={28} color="#fff" />
+                <Text style={{ fontSize: 22, color: '#fff', fontWeight: '700' }}>{cName[0]?.toUpperCase()}</Text>
               </View>
             )}
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={s.taskerName}>{tasker.full_name || tasker.username}</Text>
+              <Text style={s.taskerName}>{cName}</Text>
               <View style={s.ratingRow}>
                 <Ionicons name="star" size={14} color="#f59e0b" />
-                <Text style={s.ratingText}>{tasker.rating ? tasker.rating.toFixed(1) : '5.0'}</Text>
+                <Text style={s.ratingText}>{cRating > 0 ? cRating.toFixed(1) : 'Новий'}</Text>
               </View>
             </View>
-            <Text style={s.taskerRate}>{tasker.hourly_rate || 25} ₴/год</Text>
+            <Text style={s.taskerRate}>{cRate} ₴/год</Text>
           </View>
 
           <View style={s.priceSummary}>
             <Text style={s.priceSummaryTitle}>Орієнтовна вартість</Text>
             <Text style={s.priceSummaryNote}>Фінальна ціна узгоджується з виконавцем</Text>
-            <Text style={s.priceSummaryRate}>{tasker.hourly_rate || 25} ₴/год</Text>
+            <Text style={s.priceSummaryRate}>{cRate} ₴/год</Text>
           </View>
         </ScrollView>
 
@@ -769,4 +901,9 @@ const s = StyleSheet.create({
   priceSummaryTitle: { fontSize: 15, fontWeight: '700', color: '#15803d', marginBottom: 4 },
   priceSummaryNote: { fontSize: 12, color: '#6b7280', marginBottom: 8 },
   priceSummaryRate: { fontSize: 24, fontWeight: '800', color: '#15803d' },
+  geoBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 16, paddingVertical: 12, marginBottom: 20 },
+  geoBtnText: { fontSize: 15, color: '#2563eb', fontWeight: '600', flex: 1 },
+  suggestionsBox: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginTop: -12, marginBottom: 16, overflow: 'hidden' },
+  suggestionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  suggestionText: { flex: 1, fontSize: 13, color: '#374151', lineHeight: 18 },
 });

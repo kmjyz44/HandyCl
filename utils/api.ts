@@ -125,7 +125,10 @@ export const api = {
   // Executors
   getExecutors: async () => {
     const res = await client.get('/executors');
-    return res.data;
+    // Backend returns { executors: [...], total: N } or plain array
+    if (Array.isArray(res.data)) return res.data;
+    if (res.data?.executors) return res.data.executors;
+    return [];
   },
 
   getExecutorsByService: async (params: any) => {
@@ -134,13 +137,13 @@ export const api = {
   },
 
   getExecutorsBySkill: async (params: { skill?: string; category?: string; city?: string }) => {
-    // Try skill-based search first, fall back to general executors
+    // Fall back to general executors list (backend doesn't have by-skill endpoint yet)
     try {
-      const res = await client.get('/executors/by-skill', { params });
-      return res.data;
+      const res = await client.get('/executors');
+      const list = Array.isArray(res.data) ? res.data : (res.data?.executors || []);
+      return list;
     } catch {
-      const res = await client.get('/executors', { params: { city: params.city } });
-      return res.data;
+      return [];
     }
   },
 
@@ -151,8 +154,30 @@ export const api = {
 
   // Bookings (client)
   createBooking: async (data: any) => {
-    const res = await client.post('/bookings', data);
-    return res.data;
+    // Map our category IDs to backend ServiceCategory enum values
+    const categoryMap: Record<string, string> = {
+      assembly: 'handyman_assembly',
+      cleaning: 'cleaning_regular',
+      repair: 'handyman_carpentry',
+      moving: 'moving_local',
+      outdoor: 'gardening',
+      personal: 'other',
+      it_tech: 'other',
+      events: 'other',
+      other: 'other',
+    };
+    const payload = {
+      ...data,
+      category: categoryMap[data.category] || data.category || undefined,
+    };
+    try {
+      const res = await client.post('/bookings', payload);
+      return res.data;
+    } catch (err: any) {
+      // If backend returns non-JSON 500, throw a readable error
+      const msg = err?.response?.data?.detail || err?.response?.data || err?.message || 'Помилка сервера';
+      throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
   },
 
   getClientBookings: async () => {
