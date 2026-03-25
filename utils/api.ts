@@ -133,6 +133,67 @@ export const api = {
     return res.data;
   },
 
+  getExecutorsBySkill: async (params: { skill?: string; category?: string; city?: string }) => {
+    // Try skill-based search first, fall back to general executors
+    try {
+      const res = await client.get('/executors/by-skill', { params });
+      return res.data;
+    } catch {
+      const res = await client.get('/executors', { params: { city: params.city } });
+      return res.data;
+    }
+  },
+
+  getExecutorById: async (id: string) => {
+    const res = await client.get(`/executors/${id}`);
+    return res.data;
+  },
+
+  // Bookings (client)
+  createBooking: async (data: any) => {
+    const res = await client.post('/bookings', data);
+    return res.data;
+  },
+
+  getClientBookings: async () => {
+    const res = await client.get('/bookings');
+    return res.data;
+  },
+
+  cancelBooking: async (id: string) => {
+    const res = await client.post(`/bookings/${id}/cancel`);
+    return res.data;
+  },
+
+  // Tasks (provider)
+  getAvailableTasks: async () => {
+    try {
+      const res = await client.get('/tasks/available');
+      return res.data;
+    } catch {
+      return [];
+    }
+  },
+
+  getTasks: async () => {
+    try {
+      const res = await client.get('/provider/tasks');
+      return res.data;
+    } catch {
+      return [];
+    }
+  },
+
+  getTask: async (id: string) => {
+    const res = await client.get(`/tasks/${id}`);
+    return res.data;
+  },
+
+  onTheWayTask: async (id: string) => {
+    const res = await client.post(`/tasks/${id}/on-the-way`);
+    return res.data;
+  },
+
   // Notifications
   getNotifications: async (unreadOnly = false, limit = 50) => {
     const res = await client.get('/notifications', { params: { unread_only: unreadOnly, limit } });
