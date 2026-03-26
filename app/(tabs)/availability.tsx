@@ -301,11 +301,21 @@ export default function Availability() {
                   <Text style={s.slotTime}>{slot.start_time} – {slot.end_time}</Text>
                 </View>
                 <View style={s.slotActions}>
-                  <TouchableOpacity style={s.slotActionBtn} onPress={() => openEdit(slot)}>
-                    <Ionicons name="pencil" size={14} color="#fff" />
+                  <TouchableOpacity
+                    style={[s.slotActionBtn, Platform.OS === 'web' && { cursor: 'pointer' } as any]}
+                    onPress={() => openEdit(slot)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="pencil" size={16} color="#fff" />
                   </TouchableOpacity>
-                  <TouchableOpacity style={[s.slotActionBtn, s.slotDeleteBtn]} onPress={() => handleDelete(slot)}>
-                    <Ionicons name="trash" size={14} color="#fff" />
+                  <TouchableOpacity
+                    style={[s.slotActionBtn, s.slotDeleteBtn, Platform.OS === 'web' && { cursor: 'pointer' } as any]}
+                    onPress={() => handleDelete(slot)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="trash" size={16} color="#fff" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -433,7 +443,7 @@ const s = StyleSheet.create({
   addDayBtnText: { fontSize: 13, fontWeight: '700', color: ACCENT },
 
   gridScroll: { flex: 1 },
-  grid: { position: 'relative', marginLeft: 56, marginRight: 16 },
+  grid: { position: 'relative', marginLeft: 56, marginRight: 16, zIndex: 1 },
   hourRow: { position: 'absolute', left: -56, right: 0, flexDirection: 'row', alignItems: 'center', height: HOUR_HEIGHT },
   hourLabel: { width: 48, fontSize: 11, color: '#9ca3af', textAlign: 'right', paddingRight: 8 },
   hourLine: { flex: 1, height: 1, backgroundColor: '#f3f4f6' },
@@ -441,15 +451,17 @@ const s = StyleSheet.create({
   slotBlock: {
     position: 'absolute', left: 0, right: 0,
     backgroundColor: '#2563eb',
-    borderRadius: 12, overflow: 'hidden',
+    borderRadius: 12,
+    // overflow: 'hidden' removed — it blocks pointer-events on web for child buttons
     flexDirection: 'row', justifyContent: 'space-between',
     paddingHorizontal: 12, paddingVertical: 8,
+    zIndex: 10,
   },
   slotInner: { flex: 1 },
   slotTitle: { fontSize: 14, fontWeight: '700', color: '#fff' },
   slotTime: { fontSize: 12, color: '#bfdbfe', marginTop: 2 },
-  slotActions: { flexDirection: 'column', gap: 6, justifyContent: 'center' },
-  slotActionBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center' },
+  slotActions: { flexDirection: 'column', gap: 6, justifyContent: 'center', zIndex: 20 },
+  slotActionBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center', zIndex: 20 },
   slotDeleteBtn: { backgroundColor: 'rgba(239,68,68,0.7)' },
 
   emptyBlock: { position: 'absolute', left: 0, right: 0, top: 2 * HOUR_HEIGHT, alignItems: 'center', gap: 8, paddingVertical: 32 },
