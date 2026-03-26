@@ -189,7 +189,7 @@ function ProviderDashboard() {
             const st = STATUS_LABELS[task.status] || { label: task.status, color: '#6b7280', bg: '#f3f4f6' };
             return (
               <TouchableOpacity key={task.task_id} style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 }}
-                onPress={() => router.push({ pathname: '/task-detail', params: { taskId: task.task_id } })}>
+                onPress={() => router.push({ pathname: '/task-detail', params: { id: task.task_id } })}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                   <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', flex: 1, marginRight: 8 }} numberOfLines={2}>{task.title}</Text>
                   <View style={{ backgroundColor: st.bg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
