@@ -820,21 +820,22 @@ function ProviderProfile() {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert('Вийти з акаунту', 'Ви впевнені, що хочете вийти?', [
-      { text: 'Скасувати', style: 'cancel' },
-      {
-        text: 'Вийти', style: 'destructive',
-        onPress: async () => {
-          try { await api.logout().catch(() => {}); } catch {}
-          await logout();
-          if (Platform.OS === 'web') { window.location.href = '/login'; }
-          else { router.replace('/login'); }
-        },
-      },
-    ]);
+  const handleLogout = async () => {
+    const doLogout = async () => {
+      try { await api.logout().catch(() => {}); } catch {}
+      await logout();
+      if (Platform.OS === 'web') { window.location.href = '/login'; }
+      else { router.replace('/login'); }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm('Вийти з акаунту?')) doLogout();
+    } else {
+      Alert.alert('Вийти з акаунту', 'Ви впевнені?', [
+        { text: 'Скасувати', style: 'cancel' },
+        { text: 'Вийти', style: 'destructive', onPress: doLogout },
+      ]);
+    }
   };
-
   const pickProfilePhoto = async () => {
     if (Platform.OS === 'web') {
       const input = document.createElement('input');
