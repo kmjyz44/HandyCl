@@ -40,10 +40,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          href: role === 'client' ? undefined : null,
+          title: role === 'provider' ? 'Tasks' : 'Home',
+          href: (role === 'client' || role === 'provider') ? undefined : null,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <Ionicons name={role === 'provider' ? 'clipboard-outline' : 'home-outline'} size={size} color={color} />
           ),
         }}
       />

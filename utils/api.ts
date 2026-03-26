@@ -193,8 +193,9 @@ export const api = {
   // Tasks (provider)
   getAvailableTasks: async () => {
     try {
-      const res = await client.get('/tasks/available');
-      return res.data;
+      // Correct endpoint: /api/tasker/available-tasks
+      const res = await client.get('/tasker/available-tasks');
+      return Array.isArray(res.data) ? res.data : (res.data?.tasks ?? []);
     } catch {
       return [];
     }
@@ -202,8 +203,9 @@ export const api = {
 
   getTasks: async () => {
     try {
+      // /api/provider/tasks returns { tasks: [...], commission_percent: N }
       const res = await client.get('/provider/tasks');
-      return res.data;
+      return Array.isArray(res.data) ? res.data : (res.data?.tasks ?? []);
     } catch {
       return [];
     }
