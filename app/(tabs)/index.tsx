@@ -234,7 +234,43 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
+  const [userCountry, setUserCountry] = useState<string>('UA'); // default Ukraine
+  const [quickCities, setQuickCities] = useState<string[]>(['Київ', 'Харків', 'Одеса', 'Дніпро', 'Львів', 'Запоріжжя']);
   const dates = getDates();
+
+  // Detect user country via IP on mount
+  React.useEffect(() => {
+    fetch('https://ipapi.co/json/')
+      .then(r => r.json())
+      .then(data => {
+        const country = data.country_code || 'UA';
+        const city = data.city || '';
+        setUserCountry(country);
+        const CITIES_BY_COUNTRY: Record<string, string[]> = {
+          UA: ['Київ', 'Харків', 'Одеса', 'Дніпро', 'Львів', 'Запоріжжя'],
+          US: ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia'],
+          PL: ['Warszawa', 'Kraków', 'Wrocław', 'Poznań', 'Gdańsk', 'Łódź'],
+          DE: ['Berlin', 'Hamburg', 'München', 'Köln', 'Frankfurt', 'Stuttgart'],
+          GB: ['London', 'Birmingham', 'Manchester', 'Leeds', 'Glasgow', 'Liverpool'],
+          FR: ['Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes'],
+          ES: ['Madrid', 'Barcelona', 'Valencia', 'Seville', 'Zaragoza', 'Málaga'],
+          IT: ['Roma', 'Milano', 'Napoli', 'Torino', 'Palermo', 'Genova'],
+          CZ: ['Praha', 'Brno', 'Ostrava', 'Plzeň', 'Liberec', 'Olomouc'],
+          CA: ['Toronto', 'Montreal', 'Vancouver', 'Calgary', 'Edmonton', 'Ottawa'],
+          AU: ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 'Canberra'],
+        };
+        const cities = CITIES_BY_COUNTRY[country] || CITIES_BY_COUNTRY['UA'];
+        // Put detected city first if available and not already in list
+        if (city && !cities.includes(city)) {
+          setQuickCities([city, ...cities.slice(0, 5)]);
+        } else if (city && cities.includes(city)) {
+          setQuickCities([city, ...cities.filter(c => c !== city).slice(0, 5)]);
+        } else {
+          setQuickCities(cities);
+        }
+      })
+      .catch(() => {}); // silently fail, keep defaults
+  }, []);
 
   // ── Helpers ──
   const goBack = () => {
@@ -657,13 +693,15 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <Text style={s.fieldLabel}>Місто</Text>
-          <View style={s.chipsRow}>
-            {['Київ', 'Харків', 'Одеса', 'Дніпро', 'Львів', 'Запоріжжя'].map(city => (
-              <TouchableOpacity key={city} style={[s.chip, booking.city === city && s.chipActive]} onPress={() => setBooking(b => ({ ...b, city }))}>
-                <Text style={[s.chipText, booking.city === city && s.chipTextActive]}>{city}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+            <View style={[s.chipsRow, { flexWrap: 'nowrap' }]}>
+              {quickCities.map(city => (
+                <TouchableOpacity key={city} style={[s.chip, booking.city === city && s.chipActive]} onPress={() => setBooking(b => ({ ...b, city }))}>
+                  <Text style={[s.chipText, booking.city === city && s.chipTextActive]}>{city}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
           <TextInput
             style={[s.input, { marginTop: 8 }]}
             placeholder="або введіть місто..."
@@ -693,7 +731,7 @@ export default function HomeScreen() {
                   onPress={() => {
                     const parts = s2.display_name.split(',');
                     const street = parts[0]?.trim() || s2.display_name;
-                    const city = parts.find((p: string) => ['Київ','Харків','Одеса','Дніпро','Львів','Запоріжжя','Миколаїв','Вінниця','Херсон'].some(c => p.includes(c))) || parts[2]?.trim() || '';
+                    const city = parts[2]?.trim() || parts[1]?.trim() || '';
                     setBooking(b => ({ ...b, address: street, city: city || b.city }));
                     setAddressSuggestions([]);
                   }}
