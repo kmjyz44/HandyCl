@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -231,6 +231,7 @@ export default function HomeScreen() {
   const [taskers, setTaskers] = useState<any[]>([]);
   const [loadingTaskers, setLoadingTaskers] = useState(false);
   const [booking_submitting, setBookingSubmitting] = useState(false);
+  const submittingRef = useRef(false); // synchronous guard against rapid double-taps
   const [searchQuery, setSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
@@ -363,8 +364,10 @@ export default function HomeScreen() {
   };
 
   const submitBooking = async () => {
-    if (!booking.selectedTasker || booking_submitting) return;
-    setBookingSubmitting(true); // block immediately — no further taps
+    // Double-tap guard: ref is synchronous, state controls UI
+    if (!booking.selectedTasker || submittingRef.current) return;
+    submittingRef.current = true;
+    setBookingSubmitting(true);
     try {
       const tasker = booking.selectedTasker;
       const rate = tasker.profile?.hourly_rate || tasker.hourly_rate || 0;
@@ -399,11 +402,14 @@ export default function HomeScreen() {
         payment_status: 'pending',
       });
       // Reset and redirect immediately — no Alert
+      submittingRef.current = false;
+      setBookingSubmitting(false);
       setStep('home');
       setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null, photos: [] });
       router.replace('/(tabs)/bookings');
     } catch (e: any) {
       Alert.alert('Помилка бронювання', e.message || 'Не вдалося створити бронювання. Спробуйте ще раз.');
+      submittingRef.current = false;
       setBookingSubmitting(false); // re-enable only on error
     }
   };
