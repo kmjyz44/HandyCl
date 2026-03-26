@@ -194,49 +194,49 @@ export default function Executors() {
         ) : null}
       </View>
 
-      {/* Filters */}
+      {/* Filters - compact single row */}
       {activeTab === 'all' && (
-        <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Доступність по днях:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterRow}
+          contentContainerStyle={styles.filterRowContent}
+        >
+          {/* Day chips */}
+          <TouchableOpacity
+            style={[styles.chip, selectedDay === null && styles.chipActive]}
+            onPress={() => setSelectedDay(null)}
+          >
+            <Text style={[styles.chipText, selectedDay === null && styles.chipTextActive]}>📅 Всі дні</Text>
+          </TouchableOpacity>
+          {DAYS.map((day, index) => (
             <TouchableOpacity
-              style={[styles.dayChip, selectedDay === null && styles.dayChipActive]}
-              onPress={() => setSelectedDay(null)}
+              key={index}
+              style={[styles.chip, selectedDay === index && styles.chipActive]}
+              onPress={() => setSelectedDay(selectedDay === index ? null : index)}
             >
-              <Text style={[styles.dayChipText, selectedDay === null && styles.dayChipTextActive]}>Всі</Text>
+              <Text style={[styles.chipText, selectedDay === index && styles.chipTextActive]}>{day}</Text>
             </TouchableOpacity>
-            {DAYS.map((day, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[styles.dayChip, selectedDay === index && styles.dayChipActive]}
-                onPress={() => setSelectedDay(selectedDay === index ? null : index)}
-              >
-                <Text style={[styles.dayChipText, selectedDay === index && styles.dayChipTextActive]}>{day}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <Text style={[styles.filterLabel, { marginTop: 12 }]}>Мінімальний рейтинг:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ratingScroll}>
+          ))}
+          {/* Divider */}
+          <View style={styles.chipDivider} />
+          {/* Rating chips */}
+          <TouchableOpacity
+            style={[styles.chip, minRating === null && styles.chipActive]}
+            onPress={() => setMinRating(null)}
+          >
+            <Text style={[styles.chipText, minRating === null && styles.chipTextActive]}>⭐ Будь-який</Text>
+          </TouchableOpacity>
+          {[3, 4, 4.5].map((rating) => (
             <TouchableOpacity
-              style={[styles.ratingChip, minRating === null && styles.ratingChipActive]}
-              onPress={() => setMinRating(null)}
+              key={rating}
+              style={[styles.chip, minRating === rating && styles.chipActive]}
+              onPress={() => setMinRating(minRating === rating ? null : rating)}
             >
-              <Text style={[styles.ratingChipText, minRating === null && styles.ratingChipTextActive]}>Всі</Text>
+              <Text style={[styles.chipText, minRating === rating && styles.chipTextActive]}>★ {rating}+</Text>
             </TouchableOpacity>
-            {[3, 4, 4.5].map((rating) => (
-              <TouchableOpacity
-                key={rating}
-                style={[styles.ratingChip, minRating === rating && styles.ratingChipActive]}
-                onPress={() => setMinRating(minRating === rating ? null : rating)}
-              >
-                <Ionicons name="star" size={14} color={minRating === rating ? '#fff' : '#f59e0b'} />
-                <Text style={[styles.ratingChipText, minRating === rating && styles.ratingChipTextActive]}>
-                  {rating}+
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+          ))}
+        </ScrollView>
       )}
 
       {/* List */}
@@ -364,18 +364,13 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#2563eb', fontWeight: '600' },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginTop: 16, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
   searchInput: { flex: 1, height: 48, fontSize: 16, color: '#111827', marginLeft: 12 },
-  filterSection: { paddingHorizontal: 16, paddingTop: 16 },
-  filterLabel: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
-  daysScroll: { flexGrow: 0 },
-  ratingScroll: { flexGrow: 0 },
-  dayChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', marginRight: 8 },
-  dayChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  dayChipText: { fontSize: 14, color: '#374151' },
-  dayChipTextActive: { color: '#fff', fontWeight: '600' },
-  ratingChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', marginRight: 8, gap: 4 },
-  ratingChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  ratingChipText: { fontSize: 14, color: '#374151' },
-  ratingChipTextActive: { color: '#fff', fontWeight: '600' },
+  filterRow: { flexGrow: 0, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  filterRowContent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 6 },
+  chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
+  chipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  chipText: { fontSize: 12, color: '#374151', fontWeight: '500' },
+  chipTextActive: { color: '#fff', fontWeight: '600' },
+  chipDivider: { width: 1, height: 20, backgroundColor: '#e5e7eb', marginHorizontal: 4 },
   content: { flex: 1, paddingTop: 16 },
   emptyState: { alignItems: 'center', paddingVertical: 64 },
   emptyText: { fontSize: 18, fontWeight: '600', color: '#374151', marginTop: 16 },

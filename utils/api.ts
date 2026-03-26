@@ -152,6 +152,37 @@ export const api = {
     return res.data;
   },
 
+  // Executor profile (used by /executor/[id].tsx)
+  getExecutorProfile: async (id: string) => {
+    try {
+      const res = await client.get(`/executors/${id}/profile`);
+      return res.data;
+    } catch {
+      // Fallback to /executors/:id
+      const res = await client.get(`/executors/${id}`);
+      return res.data;
+    }
+  },
+
+  getExecutorAvailability: async (id: string) => {
+    try {
+      const res = await client.get(`/executors/${id}/availability`);
+      if (Array.isArray(res.data)) return res.data;
+      return res.data?.availability || res.data?.slots || [];
+    } catch {
+      return [];
+    }
+  },
+
+  getExecutorPricing: async (id: string) => {
+    try {
+      const res = await client.get(`/executors/${id}/pricing`);
+      return res.data;
+    } catch {
+      return null;
+    }
+  },
+
   // Alias used by executors.tsx
   getAvailableExecutors: async (params?: any) => {
     try {
