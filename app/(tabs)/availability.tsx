@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,472 +13,389 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../utils/api';
-import { useAuthStore } from '../../store/authStore';
 
-const DAYS = ['Понеділок', 'Вівторок', 'Середа', 'Четвер', "П'ятниця", 'Субота', 'Неділя'];
+// ─── Constants ────────────────────────────────────────────────────────────────
 const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
-const DAY_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1'];
+const DAYS_FULL = ['Понеділок', 'Вівторок', 'Середа', 'Четвер', "П'ятниця", 'Субота', 'Неділя'];
+const ACCENT = '#2563eb';
 
-// Time slots: 06:00 – 23:00 in 30-min steps
+// Hours 06:00 – 23:00 in 30-min steps
 const HOURS: string[] = [];
 for (let h = 6; h <= 23; h++) {
-  HOURS.push(`${h.toString().padStart(2, '0')}:00`);
-  if (h < 23) HOURS.push(`${h.toString().padStart(2, '0')}:30`);
+  HOURS.push(`${String(h).padStart(2, '0')}:00`);
+  if (h < 23) HOURS.push(`${String(h).padStart(2, '0')}:30`);
 }
 
-function webAlert(title: string, msg: string) {
-  if (Platform.OS === 'web') {
-    window.alert(`${title}\n\n${msg}`);
-  } else {
-    Alert.alert(title, msg);
-  }
+// Pixel height per hour in the weekly grid
+const HOUR_HEIGHT = 56;
+const GRID_START = 6; // 06:00
+
+function timeToY(t: string) {
+  const [h, m] = t.split(':').map(Number);
+  return (h - GRID_START + m / 60) * HOUR_HEIGHT;
 }
 
 function webConfirm(msg: string): boolean {
-  if (Platform.OS === 'web') {
-    return window.confirm(msg);
-  }
-  return true; // on native, use Alert.alert with callback instead
+  if (Platform.OS === 'web') return window.confirm(msg);
+  return true;
+}
+function webAlert(title: string, msg: string) {
+  if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
+  else Alert.alert(title, msg);
 }
 
-interface AvailabilitySlot {
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface Slot {
   slot_id: string;
-  day_of_week: number;
+  day_of_week: number; // 0=Mon … 6=Sun
   start_time: string;
   end_time: string;
-  location?: string;
   is_active: boolean;
 }
 
-interface ServiceArea {
-  lat: number;
-  lng: number;
-  radius: number;
-  label: string;
-}
-
-// ─── Map iframe (web only) ────────────────────────────────────────────────────
-function MapIframe({ lat, lng, radius, onSave }: {
-  lat: number; lng: number; radius: number;
-  onSave: (lat: number, lng: number, radius: number) => void;
+// ─── TimePicker ───────────────────────────────────────────────────────────────
+function TimePicker({ label, value, onChange, filterAfter }: {
+  label: string; value: string; onChange: (v: string) => void; filterAfter?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const options = filterAfter ? HOURS.filter(h => h > filterAfter) : HOURS;
+  return (
+    <View style={tp.wrap}>
+      <Text style={tp.label}>{label}</Text>
+      <TouchableOpacity style={tp.btn} onPress={() => setOpen(true)}>
+        <Text style={[tp.btnText, !value && tp.placeholder]}>{value || 'Вибрати'}</Text>
+        <Ionicons name="chevron-down" size={16} color="#6b7280" />
+      </TouchableOpacity>
+      <Modal visible={open} transparent animationType="fade">
+        <TouchableOpacity style={tp.overlay} onPress={() => setOpen(false)} activeOpacity={1}>
+          <View style={tp.sheet}>
+            <Text style={tp.sheetTitle}>{label}</Text>
+            <ScrollView style={tp.list} nestedScrollEnabled>
+              {options.map(t => (
+                <TouchableOpacity key={t} style={[tp.option, value === t && tp.optionActive]}
+                  onPress={() => { onChange(t); setOpen(false); }}>
+                  <Text style={[tp.optionText, value === t && tp.optionTextActive]}>{t}</Text>
+                  {value === t && <Ionicons name="checkmark" size={18} color={ACCENT} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+}
+const tp = StyleSheet.create({
+  wrap: { flex: 1 },
+  label: { fontSize: 12, fontWeight: '700', color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
+  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14 },
+  btnText: { fontSize: 20, fontWeight: '700', color: '#111827' },
+  placeholder: { color: '#9ca3af', fontWeight: '400', fontSize: 16 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: 400, paddingTop: 16 },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: '#111827', textAlign: 'center', marginBottom: 8 },
+  list: { paddingHorizontal: 16 },
+  option: { paddingVertical: 14, paddingHorizontal: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  optionActive: { backgroundColor: '#eff6ff', borderRadius: 8 },
+  optionText: { fontSize: 16, color: '#374151' },
+  optionTextActive: { color: ACCENT, fontWeight: '700' },
+});
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export default function Availability() {
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Selected day in weekly view
+  const today = new Date();
+  const todayDow = (today.getDay() + 6) % 7; // 0=Mon
+  const [selectedDay, setSelectedDay] = useState(todayDow);
+
+  // Add/Edit modal
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
+  const [formDay, setFormDay] = useState(todayDow);
+  const [formStart, setFormStart] = useState('');
+  const [formEnd, setFormEnd] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Service area
+  const [mapVisible, setMapVisible] = useState(false);
+  const [areaLabel, setAreaLabel] = useState('Не вказано');
+  const [areaRadius, setAreaRadius] = useState(10);
+  const [areaLat, setAreaLat] = useState(50.45);
+  const [areaLng, setAreaLng] = useState(30.52);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await api.getMyAvailability();
+      setSlots(res.slots || []);
+    } catch {}
+    setLoading(false);
+    setRefreshing(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Listen for map postMessage
   useEffect(() => {
-    const handler = (event: MessageEvent) => {
+    if (Platform.OS !== 'web') return;
+    const handler = async (e: MessageEvent) => {
       try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data?.type === 'save') onSave(data.lat, data.lng, data.radius);
+        const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (d?.type !== 'save') return;
+        let label = `${d.lat.toFixed(3)}, ${d.lng.toFixed(3)}`;
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${d.lat}&lon=${d.lng}&format=json&accept-language=uk`);
+          const j = await r.json();
+          const a = j.address;
+          label = a.city || a.town || a.village || a.county || label;
+        } catch {}
+        setAreaLabel(label);
+        setAreaRadius(d.radius);
+        setAreaLat(d.lat);
+        setAreaLng(d.lng);
+        try { await api.updateExecutorProfile({ latitude: d.lat, longitude: d.lng, service_radius_km: d.radius }); } catch {}
+        setMapVisible(false);
       } catch {}
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [onSave]);
+  }, []);
 
-  return (
-    <iframe
-      title="service-area-map"
-      src={`/map.html?lat=${lat}&lng=${lng}&radius=${radius}`}
-      style={{ width: '100%', height: '100%', border: 'none' } as any}
-      allow="geolocation"
-    />
-  );
-}
-
-// ─── Time grid chip picker ────────────────────────────────────────────────────
-function TimeGrid({ value, onChange, label, filterAfter }: {
-  value: string; onChange: (v: string) => void; label: string; filterAfter?: string;
-}) {
-  const filtered = filterAfter ? HOURS.filter(h => h > filterAfter) : HOURS;
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.timeGrid}>
-        {filtered.map(t => (
-          <TouchableOpacity
-            key={t}
-            style={[styles.timeChip, value === t && styles.timeChipActive]}
-            onPress={() => onChange(t)}
-          >
-            <Text style={[styles.timeChipText, value === t && styles.timeChipTextActive]}>{t}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
-export default function Availability() {
-  const { user } = useAuthStore();
-  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [mapModalVisible, setMapModalVisible] = useState(false);
-  const [editingSlot, setEditingSlot] = useState<AvailabilitySlot | null>(null);
-  const [savingSlot, setSavingSlot] = useState(false);
-  const [savingArea, setSavingArea] = useState(false);
-
-  // Form state
-  const [dayOfWeek, setDayOfWeek] = useState(0);
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('18:00');
-  const [isActive, setIsActive] = useState(true);
-
-  // Service area state
-  const [serviceArea, setServiceArea] = useState<ServiceArea>({
-    lat: 50.45, lng: 30.52, radius: 10, label: 'Київ',
-  });
-
-  const loadAvailability = async () => {
-    try {
-      const response = await api.getMyAvailability();
-      setSlots(response.slots || []);
-    } catch (error: any) {
-      console.error('Failed to load availability:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => { loadAvailability(); }, []);
-
-  const onRefresh = () => { setRefreshing(true); loadAvailability(); };
-
-  const openModal = (slot?: AvailabilitySlot, presetDay?: number) => {
-    if (slot) {
-      setEditingSlot(slot);
-      setDayOfWeek(slot.day_of_week);
-      setStartTime(slot.start_time);
-      setEndTime(slot.end_time);
-      setIsActive(slot.is_active);
-    } else {
-      setEditingSlot(null);
-      setDayOfWeek(presetDay ?? 0);
-      setStartTime('09:00');
-      setEndTime('18:00');
-      setIsActive(true);
-    }
+  const openAdd = (day?: number) => {
+    setEditingSlot(null);
+    setFormDay(day ?? selectedDay);
+    setFormStart('');
+    setFormEnd('');
     setModalVisible(true);
   };
 
-  const hasOverlap = (day: number, start: string, end: string, excludeId?: string): boolean => {
+  const openEdit = (slot: Slot) => {
+    setEditingSlot(slot);
+    setFormDay(slot.day_of_week);
+    setFormStart(slot.start_time);
+    setFormEnd(slot.end_time);
+    setModalVisible(true);
+  };
+
+  const hasOverlap = (day: number, start: string, end: string, excludeId?: string) => {
     const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-    const ns = toMin(start), ne = toMin(end);
     return slots.some(s => {
       if (s.day_of_week !== day) return false;
       if (excludeId && s.slot_id === excludeId) return false;
-      return ns < toMin(s.end_time) && ne > toMin(s.start_time);
+      return toMin(start) < toMin(s.end_time) && toMin(end) > toMin(s.start_time);
     });
   };
 
   const handleSave = async () => {
-    if (startTime >= endTime) {
-      webAlert('Помилка', 'Час закінчення має бути більше часу початку');
+    if (!formStart || !formEnd) { webAlert('Помилка', 'Вкажіть час початку і закінчення'); return; }
+    if (formStart >= formEnd) { webAlert('Помилка', 'Час закінчення має бути пізніше початку'); return; }
+    if (hasOverlap(formDay, formStart, formEnd, editingSlot?.slot_id)) {
+      webAlert('Перетин часу', `На ${DAYS_FULL[formDay]} вже є слот, що перетинається з ${formStart}–${formEnd}.`);
       return;
     }
-    if (hasOverlap(dayOfWeek, startTime, endTime, editingSlot?.slot_id)) {
-      webAlert('Перетин часу', `На ${DAYS[dayOfWeek]} вже є слот, що перетинається з ${startTime}–${endTime}.`);
-      return;
-    }
-    setSavingSlot(true);
+    setSaving(true);
     try {
-      const slotData = { day_of_week: dayOfWeek, start_time: startTime, end_time: endTime, location: serviceArea.label, is_active: isActive };
-      if (editingSlot) {
-        await api.updateAvailabilitySlot(editingSlot.slot_id, slotData);
-      } else {
-        await api.createAvailabilitySlot(slotData);
-      }
+      const data = { day_of_week: formDay, start_time: formStart, end_time: formEnd, is_active: true };
+      if (editingSlot) await api.updateAvailabilitySlot(editingSlot.slot_id, data);
+      else await api.createAvailabilitySlot(data);
       setModalVisible(false);
-      loadAvailability();
-    } catch (error: any) {
-      webAlert('Помилка', error.message || 'Не вдалося зберегти');
-    } finally {
-      setSavingSlot(false);
-    }
+      load();
+    } catch (err: any) { webAlert('Помилка', err.message || 'Не вдалося зберегти'); }
+    finally { setSaving(false); }
   };
 
-  const handleDelete = async (slotId: string) => {
-    const doDelete = async () => {
-      try {
-        await api.deleteAvailabilitySlot(slotId);
-        loadAvailability();
-      } catch (error: any) {
-        webAlert('Помилка', error.message || 'Не вдалося видалити');
-      }
+  const handleDelete = async (slot: Slot) => {
+    const doIt = async () => {
+      try { await api.deleteAvailabilitySlot(slot.slot_id); load(); }
+      catch (err: any) { webAlert('Помилка', err.message || 'Не вдалося видалити'); }
     };
     if (Platform.OS === 'web') {
-      if (window.confirm('Видалити цей часовий слот?')) doDelete();
+      if (window.confirm(`Видалити слот ${slot.start_time}–${slot.end_time}?`)) doIt();
     } else {
-      Alert.alert('Видалити слот', 'Ви впевнені?', [
+      Alert.alert('Видалити', `${DAYS_FULL[slot.day_of_week]} ${slot.start_time}–${slot.end_time}`, [
         { text: 'Скасувати', style: 'cancel' },
-        { text: 'Видалити', style: 'destructive', onPress: doDelete },
+        { text: 'Видалити', style: 'destructive', onPress: doIt },
       ]);
     }
   };
 
-  const toggleSlotActive = async (slot: AvailabilitySlot) => {
-    try {
-      await api.updateAvailabilitySlot(slot.slot_id, { is_active: !slot.is_active });
-      loadAvailability();
-    } catch {}
-  };
+  // Build 7-day header dates
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    const diff = i - todayDow;
+    d.setDate(today.getDate() + diff);
+    return d;
+  });
 
-  const handleMapSave = async (lat: number, lng: number, radius: number) => {
-    setSavingArea(true);
-    try {
-      let label = `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=uk`);
-        const data = await res.json();
-        const addr = data.address;
-        label = addr.city || addr.town || addr.village || addr.county || label;
-      } catch {}
-      setServiceArea({ lat, lng, radius, label });
-      try { await api.updateExecutorProfile({ latitude: lat, longitude: lng, service_radius_km: radius }); } catch {}
-      setMapModalVisible(false);
-      webAlert('Збережено', `Зона роботи: ${label} · ${radius} км`);
-    } finally {
-      setSavingArea(false);
-    }
-  };
+  const daySlots = slots.filter(s => s.day_of_week === selectedDay).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
-  const slotsByDay = DAYS.map((_, i) => slots.filter(s => s.day_of_week === i));
-
-  // Convert time string to percentage of day (6:00=0% to 23:00=100%)
-  const timeToPercent = (t: string) => {
-    const [h, m] = t.split(':').map(Number);
-    return ((h - 6) * 60 + m) / ((23 - 6) * 60) * 100;
-  };
-
-  if (loading) {
-    return <View style={styles.centered}><ActivityIndicator size="large" color="#2563eb" /></View>;
-  }
+  if (loading) return <View style={s.centered}><ActivityIndicator size="large" color={ACCENT} /></View>;
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Мій графік</Text>
-          <Text style={styles.headerSub}>Вкажіть коли ви доступні для роботи</Text>
-        </View>
-        <TouchableOpacity style={styles.addButton} onPress={() => openModal()}>
+    <View style={s.root}>
+      {/* ── Header ── */}
+      <View style={s.header}>
+        <Text style={s.headerTitle}>Мій графік</Text>
+        <TouchableOpacity style={s.addFab} onPress={() => openAdd()}>
           <Ionicons name="add" size={22} color="#fff" />
-          <Text style={styles.addButtonText}>Додати</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {/* Service Area Card */}
-        <TouchableOpacity style={styles.serviceAreaCard} onPress={() => setMapModalVisible(true)}>
-          <View style={styles.serviceAreaLeft}>
-            <View style={styles.serviceAreaIconWrap}>
-              <Ionicons name="map" size={22} color="#2563eb" />
-            </View>
-            <View>
-              <Text style={styles.serviceAreaTitle}>Зона роботи</Text>
-              <Text style={styles.serviceAreaSub}>{serviceArea.label} · радіус {serviceArea.radius} км</Text>
-            </View>
-          </View>
-          <View style={styles.editBadge}>
-            <Text style={styles.editBadgeText}>Змінити</Text>
-          </View>
-        </TouchableOpacity>
+      {/* ── Service area banner ── */}
+      <TouchableOpacity style={s.areaBanner} onPress={() => setMapVisible(true)}>
+        <Ionicons name="location" size={18} color={ACCENT} />
+        <Text style={s.areaText}>{areaLabel} · {areaRadius} км</Text>
+        <Text style={s.areaEdit}>Змінити</Text>
+      </TouchableOpacity>
 
-        {/* Week summary bar */}
-        <View style={styles.weekBar}>
-          {DAYS_SHORT.map((d, i) => {
-            const hasSlots = slotsByDay[i].length > 0;
-            const activeSlots = slotsByDay[i].filter(s => s.is_active).length;
-            return (
-              <TouchableOpacity key={i} style={styles.weekBarDay} onPress={() => openModal(undefined, i)}>
-                <View style={[styles.weekBarDot, { backgroundColor: hasSlots ? DAY_COLORS[i] : '#e5e7eb' }]}>
-                  {hasSlots && <Text style={styles.weekBarCount}>{activeSlots}</Text>}
-                </View>
-                <Text style={[styles.weekBarLabel, hasSlots && { color: DAY_COLORS[i], fontWeight: '700' }]}>{d}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Day cards */}
-        {DAYS.map((day, dayIndex) => {
-          const daySlots = slotsByDay[dayIndex];
-          const color = DAY_COLORS[dayIndex];
+      {/* ── Week strip ── */}
+      <View style={s.weekStrip}>
+        {weekDates.map((d, i) => {
+          const hasSl = slots.some(sl => sl.day_of_week === i);
+          const isToday = i === todayDow;
+          const isSel = i === selectedDay;
           return (
-            <View key={dayIndex} style={styles.dayCard}>
-              {/* Day header */}
-              <View style={[styles.dayHeader, { borderLeftColor: color, borderLeftWidth: 4 }]}>
-                <View style={styles.dayHeaderLeft}>
-                  <View style={[styles.dayBadge, { backgroundColor: color + '18' }]}>
-                    <Text style={[styles.dayBadgeText, { color }]}>{DAYS_SHORT[dayIndex]}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.dayName}>{day}</Text>
-                    <Text style={styles.daySlotCount}>
-                      {daySlots.length === 0 ? 'Вихідний' : `${daySlots.length} слот${daySlots.length > 1 ? 'и' : ''}`}
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity style={[styles.addDayBtn, { backgroundColor: color + '18' }]} onPress={() => openModal(undefined, dayIndex)}>
-                  <Ionicons name="add" size={18} color={color} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Visual timeline */}
-              {daySlots.length > 0 && (
-                <View style={styles.timeline}>
-                  <View style={styles.timelineTrack}>
-                    {daySlots.map(slot => {
-                      const left = timeToPercent(slot.start_time);
-                      const width = timeToPercent(slot.end_time) - left;
-                      return (
-                        <View
-                          key={slot.slot_id}
-                          style={[
-                            styles.timelineBlock,
-                            { left: `${left}%` as any, width: `${Math.max(width, 3)}%` as any, backgroundColor: slot.is_active ? color : '#d1d5db' },
-                          ]}
-                        />
-                      );
-                    })}
-                  </View>
-                  <View style={styles.timelineLabels}>
-                    <Text style={styles.timelineLabel}>06:00</Text>
-                    <Text style={styles.timelineLabel}>12:00</Text>
-                    <Text style={styles.timelineLabel}>18:00</Text>
-                    <Text style={styles.timelineLabel}>23:00</Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Slot chips */}
-              {daySlots.length > 0 && (
-                <View style={styles.slotChips}>
-                  {daySlots.map(slot => (
-                    <View key={slot.slot_id} style={[styles.slotChip, { borderColor: slot.is_active ? color : '#d1d5db' }]}>
-                      <TouchableOpacity onPress={() => toggleSlotActive(slot)} style={styles.slotChipToggle}>
-                        <View style={[styles.slotChipDot, { backgroundColor: slot.is_active ? color : '#d1d5db' }]} />
-                      </TouchableOpacity>
-                      <Text style={[styles.slotChipTime, { color: slot.is_active ? '#111827' : '#9ca3af' }]}>
-                        {slot.start_time} – {slot.end_time}
-                      </Text>
-                      <TouchableOpacity style={styles.slotChipEdit} onPress={() => openModal(slot)}>
-                        <Ionicons name="pencil-outline" size={14} color={color} />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.slotChipDelete} onPress={() => handleDelete(slot.slot_id)}>
-                        <Ionicons name="close" size={14} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {daySlots.length === 0 && (
-                <TouchableOpacity style={styles.emptyDay} onPress={() => openModal(undefined, dayIndex)}>
-                  <Ionicons name="add-circle-outline" size={20} color="#9ca3af" />
-                  <Text style={styles.emptyDayText}>Натисніть щоб додати часовий слот</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <TouchableOpacity key={i} style={[s.dayCell, isSel && s.dayCellSel]} onPress={() => setSelectedDay(i)}>
+              <Text style={[s.dayCellDow, isSel && s.dayCellTextSel]}>{DAYS_SHORT[i]}</Text>
+              <Text style={[s.dayCellNum, isSel && s.dayCellTextSel, isToday && !isSel && s.todayNum]}>{d.getDate()}</Text>
+              {hasSl && <View style={[s.dotIndicator, isSel && s.dotIndicatorSel]} />}
+            </TouchableOpacity>
           );
         })}
+      </View>
 
-        <View style={{ height: 40 }} />
+      {/* ── Day label ── */}
+      <View style={s.dayLabelRow}>
+        <Text style={s.dayLabel}>{DAYS_FULL[selectedDay]}</Text>
+        <TouchableOpacity style={s.addDayBtn} onPress={() => openAdd(selectedDay)}>
+          <Ionicons name="add" size={16} color={ACCENT} />
+          <Text style={s.addDayBtnText}>Додати</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Time grid ── */}
+      <ScrollView
+        style={s.gridScroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+      >
+        <View style={s.grid}>
+          {/* Hour lines */}
+          {Array.from({ length: 18 }, (_, i) => i + 6).map(h => (
+            <View key={h} style={[s.hourRow, { top: (h - GRID_START) * HOUR_HEIGHT }]}>
+              <Text style={s.hourLabel}>{String(h).padStart(2, '0')}:00</Text>
+              <View style={s.hourLine} />
+            </View>
+          ))}
+
+          {/* Slot blocks */}
+          {daySlots.map(slot => {
+            const top = timeToY(slot.start_time);
+            const height = timeToY(slot.end_time) - top;
+            return (
+              <View key={slot.slot_id} style={[s.slotBlock, { top, height, opacity: slot.is_active ? 1 : 0.45 }]}>
+                <View style={s.slotInner}>
+                  <Text style={s.slotTitle}>Доступний</Text>
+                  <Text style={s.slotTime}>{slot.start_time} – {slot.end_time}</Text>
+                </View>
+                <View style={s.slotActions}>
+                  <TouchableOpacity style={s.slotActionBtn} onPress={() => openEdit(slot)}>
+                    <Ionicons name="pencil" size={14} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[s.slotActionBtn, s.slotDeleteBtn]} onPress={() => handleDelete(slot)}>
+                    <Ionicons name="trash" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+
+          {/* Empty state */}
+          {daySlots.length === 0 && (
+            <TouchableOpacity style={s.emptyBlock} onPress={() => openAdd(selectedDay)}>
+              <Ionicons name="add-circle-outline" size={32} color="#d1d5db" />
+              <Text style={s.emptyText}>Натисніть щоб додати доступність</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Spacer */}
+          <View style={{ height: (23 - GRID_START + 1) * HOUR_HEIGHT }} />
+        </View>
       </ScrollView>
 
-      {/* ── Add/Edit Slot Modal ── */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingSlot ? 'Редагувати слот' : 'Додати часовий слот'}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalClose}>
+      {/* ── Add/Edit Modal ── */}
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View style={m.overlay}>
+          <View style={m.sheet}>
+            <View style={m.handle} />
+            <View style={m.header}>
+              <Text style={m.title}>{editingSlot ? 'Редагувати' : 'Додати доступність'}</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={m.closeBtn}>
                 <Ionicons name="close" size={20} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.form} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-              {/* Day selector */}
-              <Text style={styles.label}>День тижня</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-                {DAYS.map((d, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.dayChip, dayOfWeek === i && { backgroundColor: DAY_COLORS[i], borderColor: DAY_COLORS[i] }]}
-                    onPress={() => setDayOfWeek(i)}
-                  >
-                    <Text style={[styles.dayChipText, dayOfWeek === i && styles.dayChipTextActive]}>{DAYS_SHORT[i]}</Text>
-                    <Text style={[styles.dayChipFull, dayOfWeek === i && { color: '#fff' }]}>{d.slice(0, 3)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Time FROM grid */}
-              <TimeGrid value={startTime} onChange={v => { setStartTime(v); if (endTime <= v) setEndTime(''); }} label="Час початку (з)" />
-
-              {/* Time TO grid */}
-              {startTime && (
-                <TimeGrid value={endTime} onChange={setEndTime} label="Час закінчення (до)" filterAfter={startTime} />
-              )}
-
-              {/* Summary */}
-              {startTime && endTime && (
-                <View style={[styles.summaryBox, { borderColor: DAY_COLORS[dayOfWeek] + '60', backgroundColor: DAY_COLORS[dayOfWeek] + '0d' }]}>
-                  <Ionicons name="time" size={18} color={DAY_COLORS[dayOfWeek]} />
-                  <Text style={[styles.summaryText, { color: DAY_COLORS[dayOfWeek] }]}>
-                    {DAYS[dayOfWeek]}: {startTime} – {endTime}
-                  </Text>
-                </View>
-              )}
-
-              {/* Active toggle */}
-              <TouchableOpacity style={styles.checkboxRow} onPress={() => setIsActive(!isActive)}>
-                <View style={[styles.toggle, isActive && styles.toggleActive]}>
-                  <View style={[styles.toggleThumb, isActive && styles.toggleThumbActive]} />
-                </View>
-                <Text style={styles.checkboxLabel}>Слот активний (видимий клієнтам)</Text>
-              </TouchableOpacity>
+            {/* Day selector */}
+            <Text style={m.sectionLabel}>ДЕНЬ</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={m.dayScroll}>
+              {DAYS_SHORT.map((d, i) => (
+                <TouchableOpacity key={i} style={[m.dayChip, formDay === i && m.dayChipActive]} onPress={() => setFormDay(i)}>
+                  <Text style={[m.dayChipText, formDay === i && m.dayChipTextActive]}>{d}</Text>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
-                <Text style={styles.cancelButtonText}>Скасувати</Text>
+            {/* Time pickers */}
+            <Text style={m.sectionLabel}>ЧАС</Text>
+            <View style={m.timeRow}>
+              <TimePicker label="З" value={formStart} onChange={v => { setFormStart(v); if (formEnd && formEnd <= v) setFormEnd(''); }} />
+              <View style={m.timeSep}><Text style={m.timeSepText}>до</Text></View>
+              <TimePicker label="ДО" value={formEnd} onChange={setFormEnd} filterAfter={formStart || undefined} />
+            </View>
+
+            {/* Summary */}
+            {formStart && formEnd && (
+              <View style={m.summary}>
+                <Ionicons name="time-outline" size={18} color={ACCENT} />
+                <Text style={m.summaryText}>{DAYS_FULL[formDay]}: {formStart} – {formEnd}</Text>
+              </View>
+            )}
+
+            {/* Buttons */}
+            <View style={m.footer}>
+              <TouchableOpacity style={m.discardBtn} onPress={() => setModalVisible(false)}>
+                <Text style={m.discardText}>Скасувати</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.saveButton, (!startTime || !endTime || savingSlot) && { opacity: 0.5 }]}
+                style={[m.saveBtn, (!formStart || !formEnd || saving) && m.saveBtnDisabled]}
                 onPress={handleSave}
-                disabled={!startTime || !endTime || savingSlot}
+                disabled={!formStart || !formEnd || saving}
               >
-                {savingSlot ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveButtonText}>Зберегти</Text>}
+                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={m.saveText}>{editingSlot ? 'Зберегти' : 'Додати'}</Text>}
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* ── Full-screen Map Modal ── */}
-      <Modal visible={mapModalVisible} animationType="slide">
+      {/* ── Map Modal ── */}
+      <Modal visible={mapVisible} animationType="slide">
         <View style={{ flex: 1 }}>
-          <View style={styles.mapCloseRow}>
-            <TouchableOpacity style={styles.mapCloseBtn} onPress={() => setMapModalVisible(false)}>
+          <View style={s.mapHeader}>
+            <TouchableOpacity onPress={() => setMapVisible(false)} style={s.mapBack}>
               <Ionicons name="arrow-back" size={22} color="#111827" />
             </TouchableOpacity>
-            <Text style={styles.mapCloseTitle}>Зона роботи</Text>
-            {savingArea && <ActivityIndicator size="small" color="#2563eb" style={{ marginLeft: 8 }} />}
+            <Text style={s.mapHeaderTitle}>Зона роботи</Text>
           </View>
           {Platform.OS === 'web' ? (
-            <MapIframe lat={serviceArea.lat} lng={serviceArea.lng} radius={serviceArea.radius} onSave={handleMapSave} />
+            <iframe title="map" src={`/map.html?lat=${areaLat}&lng=${areaLng}&radius=${areaRadius}`}
+              style={{ width: '100%', height: '100%', border: 'none' } as any} allow="geolocation" />
           ) : (
-            <View style={styles.mapNativePlaceholder}>
-              <Ionicons name="map" size={64} color="#2563eb" />
-              <Text style={styles.mapNativeTitle}>Карта доступна у веб-версії</Text>
-              <Text style={styles.mapNativeSub}>Відкрийте HandyHub у браузері для вибору зони роботи на карті</Text>
+            <View style={s.mapNative}>
+              <Ionicons name="map" size={64} color={ACCENT} />
+              <Text style={s.mapNativeTitle}>Карта доступна у веб-версії</Text>
             </View>
           )}
         </View>
@@ -487,164 +404,91 @@ export default function Availability() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#fff' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16,
-    borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12, backgroundColor: '#fff' },
   headerTitle: { fontSize: 26, fontWeight: '800', color: '#111827' },
-  headerSub: { fontSize: 13, color: '#6b7280', marginTop: 2 },
-  addButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#2563eb', paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: 24,
-  },
-  addButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  addFab: { width: 40, height: 40, borderRadius: 20, backgroundColor: ACCENT, justifyContent: 'center', alignItems: 'center' },
 
-  content: { flex: 1 },
+  areaBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: '#eff6ff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  areaText: { flex: 1, fontSize: 14, color: '#1e40af', fontWeight: '600' },
+  areaEdit: { fontSize: 13, color: ACCENT, fontWeight: '700' },
 
-  serviceAreaCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#fff', margin: 16, marginBottom: 8,
-    borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  serviceAreaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  serviceAreaIconWrap: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center',
-  },
-  serviceAreaTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  serviceAreaSub: { fontSize: 13, color: '#6b7280', marginTop: 2 },
-  editBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  editBadgeText: { fontSize: 13, fontWeight: '600', color: '#2563eb' },
+  weekStrip: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 8, paddingTop: 4 },
+  dayCell: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 12, marginHorizontal: 2 },
+  dayCellSel: { backgroundColor: ACCENT },
+  dayCellDow: { fontSize: 11, fontWeight: '600', color: '#9ca3af', marginBottom: 2 },
+  dayCellNum: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  dayCellTextSel: { color: '#fff' },
+  todayNum: { color: ACCENT },
+  dotIndicator: { width: 5, height: 5, borderRadius: 3, backgroundColor: ACCENT, marginTop: 3 },
+  dotIndicatorSel: { backgroundColor: '#fff' },
 
-  weekBar: {
-    flexDirection: 'row', justifyContent: 'space-around',
-    backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 8,
-    borderRadius: 16, paddingVertical: 14, paddingHorizontal: 8,
-    borderWidth: 1, borderColor: '#e5e7eb',
-  },
-  weekBarDay: { alignItems: 'center', gap: 6 },
-  weekBarDot: {
-    width: 32, height: 32, borderRadius: 16,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  weekBarCount: { fontSize: 13, fontWeight: '800', color: '#fff' },
-  weekBarLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '500' },
+  dayLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 },
+  dayLabel: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  addDayBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: ACCENT },
+  addDayBtnText: { fontSize: 13, fontWeight: '700', color: ACCENT },
 
-  dayCard: {
-    backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 10,
-    borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
-  },
-  dayHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-  },
-  dayHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  dayBadge: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  dayBadgeText: { fontSize: 15, fontWeight: '800' },
-  dayName: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  daySlotCount: { fontSize: 12, color: '#6b7280', marginTop: 1 },
-  addDayBtn: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  gridScroll: { flex: 1 },
+  grid: { position: 'relative', marginLeft: 56, marginRight: 16 },
+  hourRow: { position: 'absolute', left: -56, right: 0, flexDirection: 'row', alignItems: 'center', height: HOUR_HEIGHT },
+  hourLabel: { width: 48, fontSize: 11, color: '#9ca3af', textAlign: 'right', paddingRight: 8 },
+  hourLine: { flex: 1, height: 1, backgroundColor: '#f3f4f6' },
 
-  timeline: { paddingHorizontal: 16, paddingBottom: 8 },
-  timelineTrack: {
-    height: 10, backgroundColor: '#f3f4f6', borderRadius: 5,
-    position: 'relative', overflow: 'hidden', marginBottom: 4,
+  slotBlock: {
+    position: 'absolute', left: 0, right: 0,
+    backgroundColor: '#2563eb',
+    borderRadius: 12, overflow: 'hidden',
+    flexDirection: 'row', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 8,
   },
-  timelineBlock: {
-    position: 'absolute', top: 0, height: 10, borderRadius: 5,
-  },
-  timelineLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  timelineLabel: { fontSize: 10, color: '#9ca3af' },
+  slotInner: { flex: 1 },
+  slotTitle: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  slotTime: { fontSize: 12, color: '#bfdbfe', marginTop: 2 },
+  slotActions: { flexDirection: 'column', gap: 6, justifyContent: 'center' },
+  slotActionBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center' },
+  slotDeleteBtn: { backgroundColor: 'rgba(239,68,68,0.7)' },
 
-  slotChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 14 },
-  slotChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6,
-    backgroundColor: '#fafafa',
-  },
-  slotChipToggle: { padding: 2 },
-  slotChipDot: { width: 8, height: 8, borderRadius: 4 },
-  slotChipTime: { fontSize: 13, fontWeight: '600' },
-  slotChipEdit: { padding: 2 },
-  slotChipDelete: { padding: 2 },
+  emptyBlock: { position: 'absolute', left: 0, right: 0, top: 2 * HOUR_HEIGHT, alignItems: 'center', gap: 8, paddingVertical: 32 },
+  emptyText: { fontSize: 14, color: '#9ca3af' },
 
-  emptyDay: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 14, paddingHorizontal: 16,
-  },
-  emptyDayText: { fontSize: 14, color: '#9ca3af' },
+  mapHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  mapBack: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
+  mapHeaderTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  mapNative: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
+  mapNativeTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+});
 
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '92%' },
-  modalHandle: { width: 40, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, alignSelf: 'center', marginTop: 12 },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 24, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
-  },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
-  modalClose: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
-  form: { paddingHorizontal: 20, paddingTop: 16 },
+const m = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 32 },
+  handle: { width: 40, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16 },
+  title: { fontSize: 22, fontWeight: '800', color: '#111827' },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
 
-  label: { fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionLabel: { fontSize: 12, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.8, marginHorizontal: 24, marginBottom: 10, marginTop: 4 },
 
-  dayChip: {
-    alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 14, backgroundColor: '#f3f4f6', marginRight: 8,
-    borderWidth: 1.5, borderColor: '#e5e7eb',
-  },
+  dayScroll: { paddingLeft: 20, marginBottom: 20 },
+  dayChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, backgroundColor: '#f3f4f6', marginRight: 8, borderWidth: 1.5, borderColor: '#e5e7eb' },
+  dayChipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
   dayChipText: { fontSize: 15, fontWeight: '700', color: '#374151' },
-  dayChipFull: { fontSize: 11, color: '#6b7280', marginTop: 2 },
   dayChipTextActive: { color: '#fff' },
 
-  timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  timeChip: {
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
-    backgroundColor: '#f3f4f6', borderWidth: 1.5, borderColor: '#e5e7eb',
-  },
-  timeChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  timeChipText: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  timeChipTextActive: { color: '#fff' },
+  timeRow: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 24, gap: 8, marginBottom: 16 },
+  timeSep: { paddingBottom: 14, paddingHorizontal: 4 },
+  timeSepText: { fontSize: 16, color: '#6b7280', fontWeight: '500' },
 
-  summaryBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    padding: 14, borderRadius: 12, borderWidth: 1.5, marginBottom: 16,
-  },
-  summaryText: { fontSize: 15, fontWeight: '700' },
+  summary: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 24, backgroundColor: '#eff6ff', borderRadius: 12, padding: 14, marginBottom: 16 },
+  summaryText: { fontSize: 15, fontWeight: '700', color: ACCENT },
 
-  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  toggle: { width: 44, height: 24, borderRadius: 12, backgroundColor: '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 },
-  toggleActive: { backgroundColor: '#2563eb' },
-  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
-  toggleThumbActive: { alignSelf: 'flex-end' },
-  checkboxLabel: { fontSize: 15, color: '#374151', flex: 1 },
-
-  modalFooter: {
-    flexDirection: 'row', gap: 12, padding: 20,
-    borderTopWidth: 1, borderTopColor: '#f3f4f6',
-  },
-  cancelButton: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center' },
-  cancelButtonText: { fontSize: 16, fontWeight: '700', color: '#374151' },
-  saveButton: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: '#2563eb', alignItems: 'center' },
-  saveButtonText: { fontSize: 16, fontWeight: '700', color: '#fff' },
-
-  // Map modal
-  mapCloseRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', zIndex: 10,
-  },
-  mapCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
-  mapCloseTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  mapNativePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, padding: 32 },
-  mapNativeTitle: { fontSize: 20, fontWeight: '700', color: '#111827', textAlign: 'center' },
-  mapNativeSub: { fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22 },
+  footer: { flexDirection: 'row', gap: 12, paddingHorizontal: 24, marginTop: 8 },
+  discardBtn: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center' },
+  discardText: { fontSize: 16, fontWeight: '700', color: '#374151' },
+  saveBtn: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: ACCENT, alignItems: 'center' },
+  saveBtnDisabled: { opacity: 0.5 },
+  saveText: { fontSize: 16, fontWeight: '700', color: '#fff' },
 });

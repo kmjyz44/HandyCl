@@ -94,9 +94,131 @@ function getDates() {
   return dates;
 }
 
+// ─── PROVIDER DASHBOARD ─────────────────────────────────────────────────────
+const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  posted:                    { label: 'Нове',              color: '#2563eb', bg: '#eff6ff' },
+  offering:                  { label: 'Пропозиції',        color: '#7c3aed', bg: '#f5f3ff' },
+  assigned:                  { label: 'Призначено',        color: '#d97706', bg: '#fffbeb' },
+  hold_placed:               { label: 'Оплата підтвердж.', color: '#059669', bg: '#ecfdf5' },
+  on_the_way:                { label: 'В дорозі',          color: '#0891b2', bg: '#ecfeff' },
+  started:                   { label: 'В роботі',          color: '#ea580c', bg: '#fff7ed' },
+  completed_pending_payment: { label: 'Очікує оплати',     color: '#ca8a04', bg: '#fefce8' },
+  paid:                      { label: 'Оплачено',          color: '#16a34a', bg: '#f0fdf4' },
+  cancelled:                 { label: 'Скасовано',         color: '#dc2626', bg: '#fef2f2' },
+};
+
+function ProviderDashboard() {
+  const { user } = useAuthStore();
+  const router = useRouter();
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [myTasks, setMyTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'available' | 'my'>('available');
+
+  const load = async () => {
+    try {
+      const [avail, mine] = await Promise.all([api.getAvailableTasks(), api.getTasks()]);
+      setTasks(Array.isArray(avail) ? avail : []);
+      setMyTasks(Array.isArray(mine) ? mine : []);
+    } catch {}
+    setLoading(false);
+    setRefreshing(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const displayed = activeTab === 'available' ? tasks : myTasks;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      {/* Header */}
+      <View style={{ paddingTop: 56, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#fff' }}>
+        <Text style={{ fontSize: 26, fontWeight: '800', color: '#111827' }}>
+          Привіт, {user?.name?.split(' ')[0] || 'Виконавцю'} 👋
+        </Text>
+        <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>Ваші завдання на сьогодні</Text>
+      </View>
+
+      {/* Stats row */}
+      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12 }}>
+        {[
+          { label: 'Нові', count: tasks.length, color: '#2563eb', bg: '#eff6ff' },
+          { label: 'Мої', count: myTasks.filter(t => ['assigned','on_the_way','started'].includes(t.status)).length, color: '#059669', bg: '#ecfdf5' },
+          { label: 'Виконано', count: myTasks.filter(t => ['paid','completed_pending_payment'].includes(t.status)).length, color: '#7c3aed', bg: '#f5f3ff' },
+        ].map(stat => (
+          <View key={stat.label} style={{ flex: 1, backgroundColor: stat.bg, borderRadius: 14, padding: 14, alignItems: 'center' }}>
+            <Text style={{ fontSize: 26, fontWeight: '800', color: stat.color }}>{stat.count}</Text>
+            <Text style={{ fontSize: 12, color: stat.color, fontWeight: '600', marginTop: 2 }}>{stat.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Tabs */}
+      <View style={{ flexDirection: 'row', marginHorizontal: 16, backgroundColor: '#f3f4f6', borderRadius: 12, padding: 4, marginBottom: 12 }}>
+        {(['available', 'my'] as const).map(tab => (
+          <TouchableOpacity key={tab} style={[{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' }, activeTab === tab && { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }]}
+            onPress={() => setActiveTab(tab)}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: activeTab === tab ? '#111827' : '#6b7280' }}>
+              {tab === 'available' ? '🔍 Доступні' : '📋 Мої завдання'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Task list */}
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+        >
+          {displayed.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingTop: 60, gap: 12 }}>
+              <Ionicons name="clipboard-outline" size={56} color="#d1d5db" />
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#9ca3af' }}>Завдань немає</Text>
+              <Text style={{ fontSize: 14, color: '#9ca3af', textAlign: 'center' }}>
+                {activeTab === 'available' ? 'Нових завдань у вашій зоні поки немає' : 'Ви ще не прийняли жодного завдання'}
+              </Text>
+            </View>
+          ) : displayed.map(task => {
+            const st = STATUS_LABELS[task.status] || { label: task.status, color: '#6b7280', bg: '#f3f4f6' };
+            return (
+              <TouchableOpacity key={task.task_id} style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 }}
+                onPress={() => router.push({ pathname: '/task-detail', params: { taskId: task.task_id } })}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', flex: 1, marginRight: 8 }} numberOfLines={2}>{task.title}</Text>
+                  <View style={{ backgroundColor: st.bg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: st.color }}>{st.label}</Text>
+                  </View>
+                </View>
+                {task.description ? <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }} numberOfLines={2}>{task.description}</Text> : null}
+                <View style={{ flexDirection: 'row', gap: 16 }}>
+                  {task.address ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="location-outline" size={13} color="#9ca3af" /><Text style={{ fontSize: 12, color: '#9ca3af' }}>{task.address}</Text></View> : null}
+                  {task.scheduled_date ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="calendar-outline" size={13} color="#9ca3af" /><Text style={{ fontSize: 12, color: '#9ca3af' }}>{task.scheduled_date}</Text></View> : null}
+                  {task.estimated_price ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="cash-outline" size={13} color="#9ca3af" /><Text style={{ fontSize: 12, color: '#9ca3af' }}>{task.estimated_price} ₴/год</Text></View> : null}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+
+  // Providers see their own tasks dashboard, not the client booking flow
+  if (user?.role === 'provider') {
+    return <ProviderDashboard />;
+  }
   const { addBooking } = useBookingStore();
   const [step, setStep] = useState<BookingStep>('home');
   const [booking, setBooking] = useState<BookingState>({
