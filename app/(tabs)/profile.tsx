@@ -31,22 +31,23 @@ export default function Profile() {
   const [editPhone, setEditPhone] = useState(user?.phone || '');
 
   const handleLogout = async () => {
-    Alert.alert('Вийти', 'Ви впевнені, що хочете вийти?', [
-      { text: 'Скасувати', style: 'cancel' },
-      {
-        text: 'Вийти',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await api.logout();
-            await logout();
-            router.replace('/login');
-          } catch (error: any) {
-            Alert.alert('Помилка', error.message || 'Не вдалося вийти');
-          }
-        },
-      },
-    ]);
+    // On web, Alert.alert with buttons doesn't work — use window.confirm instead
+    const confirmed = Platform.OS === 'web'
+      ? window.confirm('Ви впевнені, що хочете вийти?')
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert('Вийти', 'Ви впевнені, що хочете вийти?', [
+            { text: 'Скасувати', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Вийти', style: 'destructive', onPress: () => resolve(true) },
+          ]);
+        });
+    if (!confirmed) return;
+    try {
+      await api.logout().catch(() => {});
+      await logout();
+      router.replace('/login');
+    } catch (error: any) {
+      Alert.alert('Помилка', error.message || 'Не вдалося вийти');
+    }
   };
 
   const pickProfilePhoto = async () => {
