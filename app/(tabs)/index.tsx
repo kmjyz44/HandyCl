@@ -528,49 +528,88 @@ export default function HomeScreen() {
               </View>
             ))}
             {booking.photos.length < 5 && (
-              <TouchableOpacity
-                style={s.photoAddBtn}
-                onPress={() => {
-                  Alert.alert('Додати фото', 'Виберіть джерело', [
-                    {
-                      text: 'Камера',
-                      onPress: async () => {
-                        const perm = await ImagePicker.requestCameraPermissionsAsync();
-                        if (!perm.granted) { Alert.alert('Помилка', 'Потрібен доступ до камери'); return; }
-                        const result = await ImagePicker.launchCameraAsync({
-                          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                          allowsEditing: true, quality: 0.6, base64: true,
+              Platform.OS === 'web' ? (
+                <View style={s.photoAddBtn}>
+                  {/* Hidden file input for web */}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    capture={undefined}
+                    style={{
+                      position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                      opacity: 0, cursor: 'pointer', zIndex: 10,
+                    }}
+                    onChange={async (e: any) => {
+                      const files: File[] = Array.from(e.target.files || []);
+                      const remaining = 5 - booking.photos.length;
+                      const toProcess = files.slice(0, remaining);
+                      const base64s: string[] = [];
+                      for (const file of toProcess) {
+                        await new Promise<void>((resolve) => {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            const result = ev.target?.result as string;
+                            // result is data:image/...;base64,XXXX — strip prefix
+                            const b64 = result.split(',')[1];
+                            if (b64) base64s.push(b64);
+                            resolve();
+                          };
+                          reader.readAsDataURL(file);
                         });
-                        if (!result.canceled && result.assets[0].base64) {
-                          setBooking(b => ({ ...b, photos: [...b.photos, result.assets[0].base64!] }));
-                        }
+                      }
+                      if (base64s.length > 0) {
+                        setBooking(b => ({ ...b, photos: [...b.photos, ...base64s].slice(0, 5) }));
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                  <Ionicons name="camera-outline" size={28} color="#2563eb" />
+                  <Text style={s.photoAddText}>Додати{booking.photos.length > 0 ? ' ще' : ''}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={s.photoAddBtn}
+                  onPress={() => {
+                    Alert.alert('Додати фото', 'Виберіть джерело', [
+                      {
+                        text: 'Камера',
+                        onPress: async () => {
+                          const perm = await ImagePicker.requestCameraPermissionsAsync();
+                          if (!perm.granted) { Alert.alert('Помилка', 'Потрібен доступ до камери'); return; }
+                          const result = await ImagePicker.launchCameraAsync({
+                            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                            allowsEditing: true, quality: 0.6, base64: true,
+                          });
+                          if (!result.canceled && result.assets[0].base64) {
+                            setBooking(b => ({ ...b, photos: [...b.photos, result.assets[0].base64!] }));
+                          }
+                        },
                       },
-                    },
-                    {
-                      text: 'Галерея',
-                      onPress: async () => {
-                        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                        if (!perm.granted) { Alert.alert('Помилка', 'Потрібен доступ до галереї'); return; }
-                        const result = await ImagePicker.launchImageLibraryAsync({
-                          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                          allowsMultipleSelection: true, selectionLimit: 5 - booking.photos.length,
-                          quality: 0.6, base64: true,
-                        });
-                        if (!result.canceled) {
-                          const newPhotos = result.assets
-                            .filter(a => a.base64)
-                            .map(a => a.base64!);
-                          setBooking(b => ({ ...b, photos: [...b.photos, ...newPhotos].slice(0, 5) }));
-                        }
+                      {
+                        text: 'Галерея',
+                        onPress: async () => {
+                          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                          if (!perm.granted) { Alert.alert('Помилка', 'Потрібен доступ до галереї'); return; }
+                          const result = await ImagePicker.launchImageLibraryAsync({
+                            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                            allowsMultipleSelection: true, selectionLimit: 5 - booking.photos.length,
+                            quality: 0.6, base64: true,
+                          });
+                          if (!result.canceled) {
+                            const newPhotos = result.assets.filter(a => a.base64).map(a => a.base64!);
+                            setBooking(b => ({ ...b, photos: [...b.photos, ...newPhotos].slice(0, 5) }));
+                          }
+                        },
                       },
-                    },
-                    { text: 'Скасувати', style: 'cancel' },
-                  ]);
-                }}
-              >
-                <Ionicons name="camera-outline" size={28} color="#2563eb" />
-                <Text style={s.photoAddText}>Додати{booking.photos.length > 0 ? ' ще' : ''}</Text>
-              </TouchableOpacity>
+                      { text: 'Скасувати', style: 'cancel' },
+                    ]);
+                  }}
+                >
+                  <Ionicons name="camera-outline" size={28} color="#2563eb" />
+                  <Text style={s.photoAddText}>Додати{booking.photos.length > 0 ? ' ще' : ''}</Text>
+                </TouchableOpacity>
+              )
             )}
           </View>
         </ScrollView>
