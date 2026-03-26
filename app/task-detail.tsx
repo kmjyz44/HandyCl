@@ -261,12 +261,16 @@ export default function TaskDetail() {
         )}
 
         {/* Photos */}
-        {task.photos && task.photos.length > 0 && (
+        {((task.photos && task.photos.length > 0) || (task.problem_photos && task.problem_photos.length > 0)) && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Фото</Text>
+            <Text style={styles.sectionTitle}>Фото завдання</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {task.photos.map((photo: string, index: number) => (
-                <Image key={index} source={{ uri: photo }} style={styles.photo} />
+              {[...(task.photos || []), ...(task.problem_photos || [])].map((photo: string, index: number) => (
+                <Image
+                  key={index}
+                  source={{ uri: photo.startsWith('http') ? photo : `data:image/jpeg;base64,${photo}` }}
+                  style={styles.photo}
+                />
               ))}
             </ScrollView>
           </View>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Image, ActivityIndicator, Alert, Platform, Modal, RefreshControl,
@@ -74,6 +75,7 @@ interface BookingState {
   timeTo: string;       // end time
   time: string;         // primary time (timeFrom)
   selectedTasker: any | null;
+  photos: string[]; // base64 photos from client
 }
 
 const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
@@ -224,6 +226,7 @@ export default function HomeScreen() {
   const [booking, setBooking] = useState<BookingState>({
     categoryId: '', categoryName: '', skillName: '', taskDescription: '',
     address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null,
+    photos: [],
   });
   const [taskers, setTaskers] = useState<any[]>([]);
   const [loadingTaskers, setLoadingTaskers] = useState(false);
@@ -333,6 +336,7 @@ export default function HomeScreen() {
       const result = await api.createBooking({
         title: booking.skillName,
         description: booking.taskDescription || booking.skillName,
+        problem_photos: booking.photos.length > 0 ? booking.photos : undefined,
         provider_id: tasker.user_id || tasker.provider_id,
         provider_hourly_rate: rate,
         category: booking.categoryId,
@@ -360,7 +364,7 @@ export default function HomeScreen() {
       });
       // Reset and redirect immediately — no Alert
       setStep('home');
-      setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null });
+      setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null, photos: [] });
       router.replace('/(tabs)/bookings');
     } catch (e: any) {
       Alert.alert('Помилка бронювання', e.message || 'Не вдалося створити бронювання. Спробуйте ще раз.');
@@ -507,6 +511,68 @@ export default function HomeScreen() {
             placeholderTextColor="#9ca3af"
           />
           <Text style={s.hint}>Чим детальніше опис — тим точніше виконавець оцінить завдання</Text>
+
+          {/* Photo upload section */}
+          <Text style={[s.fieldLabel, { marginTop: 20 }]}>Фото проблеми (необов'язково)</Text>
+          <Text style={[s.hint, { marginBottom: 12 }]}>Додайте до 5 фото, щоб виконавець краще зрозумів завдання</Text>
+          <View style={s.photosRow}>
+            {booking.photos.map((photo, idx) => (
+              <View key={idx} style={s.photoThumbWrap}>
+                <Image source={{ uri: `data:image/jpeg;base64,${photo}` }} style={s.photoThumb} />
+                <TouchableOpacity
+                  style={s.photoRemoveBtn}
+                  onPress={() => setBooking(b => ({ ...b, photos: b.photos.filter((_, i) => i !== idx) }))}
+                >
+                  <Ionicons name="close-circle" size={20} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            {booking.photos.length < 5 && (
+              <TouchableOpacity
+                style={s.photoAddBtn}
+                onPress={() => {
+                  Alert.alert('Додати фото', 'Виберіть джерело', [
+                    {
+                      text: 'Камера',
+                      onPress: async () => {
+                        const perm = await ImagePicker.requestCameraPermissionsAsync();
+                        if (!perm.granted) { Alert.alert('Помилка', 'Потрібен доступ до камери'); return; }
+                        const result = await ImagePicker.launchCameraAsync({
+                          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                          allowsEditing: true, quality: 0.6, base64: true,
+                        });
+                        if (!result.canceled && result.assets[0].base64) {
+                          setBooking(b => ({ ...b, photos: [...b.photos, result.assets[0].base64!] }));
+                        }
+                      },
+                    },
+                    {
+                      text: 'Галерея',
+                      onPress: async () => {
+                        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                        if (!perm.granted) { Alert.alert('Помилка', 'Потрібен доступ до галереї'); return; }
+                        const result = await ImagePicker.launchImageLibraryAsync({
+                          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                          allowsMultipleSelection: true, selectionLimit: 5 - booking.photos.length,
+                          quality: 0.6, base64: true,
+                        });
+                        if (!result.canceled) {
+                          const newPhotos = result.assets
+                            .filter(a => a.base64)
+                            .map(a => a.base64!);
+                          setBooking(b => ({ ...b, photos: [...b.photos, ...newPhotos].slice(0, 5) }));
+                        }
+                      },
+                    },
+                    { text: 'Скасувати', style: 'cancel' },
+                  ]);
+                }}
+              >
+                <Ionicons name="camera-outline" size={28} color="#2563eb" />
+                <Text style={s.photoAddText}>Додати{booking.photos.length > 0 ? ' ще' : ''}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </ScrollView>
         <View style={s.bottomBar}>
           <TouchableOpacity
@@ -936,6 +1002,24 @@ export default function HomeScreen() {
             <Text style={s.taskerRate}>{cRate} ₴/год</Text>
           </View>
 
+          {/* Photos preview in confirm */}
+          {booking.photos.length > 0 && (
+            <View style={[s.confirmCard, { marginBottom: 16 }]}>
+              <Text style={s.confirmTitle}>Фото завдання ({booking.photos.length})</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {booking.photos.map((photo, idx) => (
+                    <Image
+                      key={idx}
+                      source={{ uri: `data:image/jpeg;base64,${photo}` }}
+                      style={{ width: 80, height: 80, borderRadius: 10 }}
+                    />
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          )}
+
           <View style={s.priceSummary}>
             <Text style={s.priceSummaryTitle}>Орієнтовна вартість</Text>
             <Text style={s.priceSummaryNote}>Фінальна ціна узгоджується з виконавцем</Text>
@@ -1061,4 +1145,11 @@ const s = StyleSheet.create({
   suggestionsBox: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginTop: -12, marginBottom: 16, overflow: 'hidden' },
   suggestionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   suggestionText: { flex: 1, fontSize: 13, color: '#374151', lineHeight: 18 },
+  // Photo upload styles
+  photosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
+  photoThumbWrap: { position: 'relative', width: 80, height: 80 },
+  photoThumb: { width: 80, height: 80, borderRadius: 12, backgroundColor: '#f3f4f6' },
+  photoRemoveBtn: { position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 10 },
+  photoAddBtn: { width: 80, height: 80, borderRadius: 12, borderWidth: 2, borderColor: '#bfdbfe', borderStyle: 'dashed', backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  photoAddText: { fontSize: 11, color: '#2563eb', fontWeight: '600' },
 });

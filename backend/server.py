@@ -1663,6 +1663,9 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
             "status": "assigned",
             "provider_hourly_rate": booking_data.provider_hourly_rate,
             "total_price": booking_data.total_price or price,
+            "photos": booking_data.problem_photos or [],
+            "scheduled_date": booking_data.date,
+            "scheduled_time": booking_data.time,
             "created_at": datetime.now(timezone.utc),
         }
         await db.tasks.insert_one(task_doc)
