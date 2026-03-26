@@ -152,6 +152,92 @@ export const api = {
     return res.data;
   },
 
+  // Alias used by executors.tsx
+  getAvailableExecutors: async (params?: any) => {
+    try {
+      const res = await client.get('/executors/available', { params });
+      return res.data; // { executors: [...] }
+    } catch {
+      // Fallback to /executors
+      const res = await client.get('/executors', { params });
+      if (Array.isArray(res.data)) return { executors: res.data };
+      return res.data;
+    }
+  },
+
+  getAllExecutors: async () => {
+    const res = await client.get('/executors');
+    if (Array.isArray(res.data)) return res.data;
+    if (res.data?.executors) return res.data.executors;
+    return [];
+  },
+
+  // Single booking
+  getBooking: async (id: string) => {
+    const res = await client.get(`/bookings/${id}`);
+    return res.data;
+  },
+
+  // Single service
+  getService: async (id: string) => {
+    try {
+      const res = await client.get(`/services/${id}`);
+      return res.data;
+    } catch {
+      return null;
+    }
+  },
+
+  // Favorites
+  getFavoriteExecutors: async () => {
+    try {
+      const res = await client.get('/client/favorites');
+      return res.data?.favorites || res.data || [];
+    } catch {
+      // Fallback: store favorites in localStorage on web
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem('favorite_executors');
+        return stored ? JSON.parse(stored) : [];
+      }
+      return [];
+    }
+  },
+
+  addFavoriteExecutor: async (executor: any) => {
+    try {
+      const res = await client.post('/client/favorites', { executor_id: executor.user_id || executor.id });
+      return res.data;
+    } catch {
+      // Fallback: store in localStorage
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem('favorite_executors');
+        const favs = stored ? JSON.parse(stored) : [];
+        const id = executor.user_id || executor.id;
+        if (!favs.find((f: any) => (f.user_id || f.id) === id)) {
+          favs.push(executor);
+          localStorage.setItem('favorite_executors', JSON.stringify(favs));
+        }
+      }
+      return { ok: true };
+    }
+  },
+
+  removeFavoriteExecutor: async (executorId: string) => {
+    try {
+      const res = await client.delete(`/client/favorites/${executorId}`);
+      return res.data;
+    } catch {
+      // Fallback: remove from localStorage
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem('favorite_executors');
+        const favs = stored ? JSON.parse(stored) : [];
+        const updated = favs.filter((f: any) => (f.user_id || f.id) !== executorId);
+        localStorage.setItem('favorite_executors', JSON.stringify(updated));
+      }
+      return { ok: true };
+    }
+  },
+
   // Bookings (client)
   createBooking: async (data: any) => {
     // Map our category IDs to backend ServiceCategory enum values

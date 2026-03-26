@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,11 @@ import {
   Alert,
   Image,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { api } from '../../utils/api';
-import { useAuthStore } from '../../store/authStore';
 
 interface Executor {
   user_id: string;
@@ -42,59 +42,90 @@ const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
 
 export default function Executors() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
   const [executors, setExecutors] = useState<Executor[]>([]);
+  const [favorites, setFavorites] = useState<Executor[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [minRating, setMinRating] = useState<number | null>(null);
 
-  const loadExecutors = async () => {
+  const loadFavorites = useCallback(async () => {
+    try {
+      const favs = await api.getFavoriteExecutors();
+      const list: Executor[] = Array.isArray(favs) ? favs : [];
+      setFavorites(list);
+      setFavoriteIds(new Set(list.map((f: any) => f.user_id || f.id)));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const loadExecutors = useCallback(async () => {
     try {
       let params: any = {};
-      if (selectedDay !== null) {
-        params.day_of_week = selectedDay;
-      }
-      if (minRating !== null) {
-        params.min_rating = minRating;
-      }
-      
+      if (selectedDay !== null) params.day_of_week = selectedDay;
+      if (minRating !== null) params.min_rating = minRating;
       const response = await api.getAvailableExecutors(params);
-      setExecutors(response.executors || []);
-    } catch (error: any) {
-      console.error('Failed to load executors:', error);
-      // Fallback to regular executors list
+      const list: Executor[] = response?.executors || response || [];
+      setExecutors(Array.isArray(list) ? list : []);
+    } catch {
       try {
         const data = await api.getAllExecutors();
-        setExecutors(data || []);
-      } catch (e) {
-        Alert.alert('Помилка', 'Не вдалося завантажити список виконавців');
+        setExecutors(Array.isArray(data) ? data : []);
+      } catch {
+        if (Platform.OS !== 'web') {
+          Alert.alert('Помилка', 'Не вдалося завантажити список виконавців');
+        }
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [selectedDay, minRating]);
 
   useEffect(() => {
     loadExecutors();
-  }, [selectedDay, minRating]);
+    loadFavorites();
+  }, [loadExecutors, loadFavorites]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadExecutors();
+    loadFavorites();
   };
 
-  const filteredExecutors = executors.filter(executor => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      executor.name?.toLowerCase().includes(query) ||
-      executor.profile?.skills?.some(skill => skill.toLowerCase().includes(query)) ||
-      executor.profile?.bio?.toLowerCase().includes(query)
+  const toggleFavorite = async (executor: Executor) => {
+    const id = executor.user_id;
+    const isFav = favoriteIds.has(id);
+    const newIds = new Set(favoriteIds);
+    if (isFav) {
+      newIds.delete(id);
+      setFavoriteIds(newIds);
+      setFavorites(prev => prev.filter(f => f.user_id !== id));
+      await api.removeFavoriteExecutor(id);
+    } else {
+      newIds.add(id);
+      setFavoriteIds(newIds);
+      setFavorites(prev => [...prev, executor]);
+      await api.addFavoriteExecutor(executor);
+    }
+  };
+
+  const applySearch = (list: Executor[]) => {
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase().trim();
+    return list.filter(e =>
+      e.name?.toLowerCase().includes(q) ||
+      e.email?.toLowerCase().includes(q) ||
+      e.profile?.skills?.some(s => s.toLowerCase().includes(q)) ||
+      e.profile?.bio?.toLowerCase().includes(q)
     );
-  });
+  };
+
+  const displayList = applySearch(activeTab === 'favorites' ? favorites : executors);
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -109,10 +140,6 @@ export default function Executors() {
       );
     }
     return stars;
-  };
-
-  const viewExecutorProfile = (executorId: string) => {
-    router.push(`/executor/${executorId}`);
   };
 
   if (loading) {
@@ -130,15 +157,35 @@ export default function Executors() {
         <Text style={styles.headerSubtitle}>Знайдіть найкращого спеціаліста</Text>
       </View>
 
-      {/* Search Bar */}
+      {/* Tabs */}
+      <View style={styles.tabsRow}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Ionicons name="people-outline" size={16} color={activeTab === 'all' ? '#2563eb' : '#6b7280'} />
+          <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>Всі</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'favorites' && styles.tabActive]}
+          onPress={() => setActiveTab('favorites')}
+        >
+          <Ionicons name="heart" size={16} color={activeTab === 'favorites' ? '#ef4444' : '#6b7280'} />
+          <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>
+            {`Обрані${favorites.length > 0 ? ' (' + favorites.length + ')' : ''}`}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search */}
       <View style={styles.searchContainer}>
         <Ionicons name="search-outline" size={20} color="#6b7280" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Пошук за ім'ям або навичками..."
+          placeholder="Пошук за іменем або навичкою..."
+          placeholderTextColor="#9ca3af"
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#9ca3af"
         />
         {searchQuery ? (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -147,79 +194,78 @@ export default function Executors() {
         ) : null}
       </View>
 
-      {/* Day Filter */}
-      <View style={styles.filterSection}>
-        <Text style={styles.filterLabel}>Доступність по днях:</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
-          <TouchableOpacity
-            style={[styles.dayChip, selectedDay === null && styles.dayChipActive]}
-            onPress={() => setSelectedDay(null)}
-          >
-            <Text style={[styles.dayChipText, selectedDay === null && styles.dayChipTextActive]}>
-              Всі
-            </Text>
-          </TouchableOpacity>
-          {DAYS.map((day, index) => (
+      {/* Filters */}
+      {activeTab === 'all' && (
+        <View style={styles.filterSection}>
+          <Text style={styles.filterLabel}>Доступність по днях:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
             <TouchableOpacity
-              key={index}
-              style={[styles.dayChip, selectedDay === index && styles.dayChipActive]}
-              onPress={() => setSelectedDay(index)}
+              style={[styles.dayChip, selectedDay === null && styles.dayChipActive]}
+              onPress={() => setSelectedDay(null)}
             >
-              <Text style={[styles.dayChipText, selectedDay === index && styles.dayChipTextActive]}>
-                {day}
-              </Text>
+              <Text style={[styles.dayChipText, selectedDay === null && styles.dayChipTextActive]}>Всі</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Rating Filter */}
-      <View style={styles.filterSection}>
-        <Text style={styles.filterLabel}>Мінімальний рейтинг:</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ratingScroll}>
-          <TouchableOpacity
-            style={[styles.ratingChip, minRating === null && styles.ratingChipActive]}
-            onPress={() => setMinRating(null)}
-          >
-            <Text style={[styles.ratingChipText, minRating === null && styles.ratingChipTextActive]}>
-              Всі
-            </Text>
-          </TouchableOpacity>
-          {[3, 4, 4.5].map((rating) => (
+            {DAYS.map((day, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[styles.dayChip, selectedDay === index && styles.dayChipActive]}
+                onPress={() => setSelectedDay(selectedDay === index ? null : index)}
+              >
+                <Text style={[styles.dayChipText, selectedDay === index && styles.dayChipTextActive]}>{day}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <Text style={[styles.filterLabel, { marginTop: 12 }]}>Мінімальний рейтинг:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ratingScroll}>
             <TouchableOpacity
-              key={rating}
-              style={[styles.ratingChip, minRating === rating && styles.ratingChipActive]}
-              onPress={() => setMinRating(rating)}
+              style={[styles.ratingChip, minRating === null && styles.ratingChipActive]}
+              onPress={() => setMinRating(null)}
             >
-              <Ionicons
-                name="star"
-                size={14}
-                color={minRating === rating ? '#fff' : '#f59e0b'}
-              />
-              <Text style={[styles.ratingChipText, minRating === rating && styles.ratingChipTextActive]}>
-                {rating}+
-              </Text>
+              <Text style={[styles.ratingChipText, minRating === null && styles.ratingChipTextActive]}>Всі</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+            {[3, 4, 4.5].map((rating) => (
+              <TouchableOpacity
+                key={rating}
+                style={[styles.ratingChip, minRating === rating && styles.ratingChipActive]}
+                onPress={() => setMinRating(minRating === rating ? null : rating)}
+              >
+                <Ionicons name="star" size={14} color={minRating === rating ? '#fff' : '#f59e0b'} />
+                <Text style={[styles.ratingChipText, minRating === rating && styles.ratingChipTextActive]}>
+                  {rating}+
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
+      {/* List */}
       <ScrollView
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {filteredExecutors.length === 0 ? (
+        {displayList.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={64} color="#d1d5db" />
-            <Text style={styles.emptyText}>Виконавців не знайдено</Text>
-            <Text style={styles.emptySubtext}>Спробуйте змінити фільтри</Text>
+            <Ionicons
+              name={activeTab === 'favorites' ? 'heart-outline' : 'people-outline'}
+              size={64}
+              color="#d1d5db"
+            />
+            <Text style={styles.emptyText}>
+              {activeTab === 'favorites' ? 'Немає обраних виконавців' : 'Виконавців не знайдено'}
+            </Text>
+            <Text style={styles.emptySubtext}>
+              {activeTab === 'favorites'
+                ? 'Натисніть серце на картці виконавця щоб додати в обрані'
+                : 'Спробуйте змінити фільтри'}
+            </Text>
           </View>
         ) : (
-          filteredExecutors.map((executor) => (
+          displayList.map((executor) => (
             <TouchableOpacity
               key={executor.user_id}
               style={styles.executorCard}
-              onPress={() => viewExecutorProfile(executor.user_id)}
+              onPress={() => router.push(`/executor/${executor.user_id}` as any)}
             >
               <View style={styles.cardHeader}>
                 <View style={styles.avatarContainer}>
@@ -234,60 +280,64 @@ export default function Executors() {
                 <View style={styles.executorInfo}>
                   <Text style={styles.executorName}>{executor.name}</Text>
                   <View style={styles.ratingContainer}>
-                    {renderStars(executor.average_rating)}
+                    {renderStars(executor.average_rating || 0)}
                     <Text style={styles.ratingText}>
-                      {executor.average_rating.toFixed(1)} ({executor.total_reviews} відгуків)
+                      {(executor.average_rating || 0).toFixed(1)} ({executor.total_reviews || 0} відгуків)
                     </Text>
                   </View>
-                  {executor.profile?.experience_years && (
-                    <Text style={styles.experience}>
-                      {executor.profile.experience_years} років досвіду
-                    </Text>
-                  )}
+                  {executor.profile?.experience_years ? (
+                    <Text style={styles.experience}>{executor.profile.experience_years} років досвіду</Text>
+                  ) : null}
                 </View>
-                {executor.pricing?.hourly_rate && (
-                  <View style={styles.priceContainer}>
-                    <Text style={styles.priceLabel}>від</Text>
-                    <Text style={styles.price}>${executor.pricing.hourly_rate}</Text>
-                    <Text style={styles.priceUnit}>/год</Text>
-                  </View>
-                )}
+                <View style={styles.cardActions}>
+                  {executor.pricing?.hourly_rate ? (
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.priceLabel}>від</Text>
+                      <Text style={styles.price}>${executor.pricing.hourly_rate}</Text>
+                      <Text style={styles.priceUnit}>/год</Text>
+                    </View>
+                  ) : null}
+                  <TouchableOpacity
+                    style={styles.heartButton}
+                    onPress={(e) => { e.stopPropagation?.(); toggleFavorite(executor); }}
+                  >
+                    <Ionicons
+                      name={favoriteIds.has(executor.user_id) ? 'heart' : 'heart-outline'}
+                      size={24}
+                      color={favoriteIds.has(executor.user_id) ? '#ef4444' : '#9ca3af'}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
-
-              {executor.profile?.bio && (
-                <Text style={styles.bio} numberOfLines={2}>
-                  {executor.profile.bio}
-                </Text>
-              )}
-
-              {executor.profile?.skills && executor.profile.skills.length > 0 && (
+              {executor.profile?.bio ? (
+                <Text style={styles.bio} numberOfLines={2}>{executor.profile.bio}</Text>
+              ) : null}
+              {executor.profile?.skills && executor.profile.skills.length > 0 ? (
                 <View style={styles.skillsContainer}>
                   {executor.profile.skills.slice(0, 4).map((skill, index) => (
                     <View key={index} style={styles.skillBadge}>
                       <Text style={styles.skillText}>{skill}</Text>
                     </View>
                   ))}
-                  {executor.profile.skills.length > 4 && (
+                  {executor.profile.skills.length > 4 ? (
                     <View style={styles.skillBadge}>
                       <Text style={styles.skillText}>+{executor.profile.skills.length - 4}</Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
-              )}
-
-              {executor.availability && executor.availability.length > 0 && (
+              ) : null}
+              {executor.availability && executor.availability.length > 0 ? (
                 <View style={styles.availabilityContainer}>
                   <Ionicons name="calendar-outline" size={14} color="#10b981" />
                   <Text style={styles.availabilityText}>
-                    Доступний: {executor.availability.map(slot => DAYS[slot.day_of_week]).join(', ')}
+                    Доступний: {executor.availability.map((slot: any) => DAYS[slot.day_of_week]).join(', ')}
                   </Text>
                 </View>
-              )}
-
+              ) : null}
               <View style={styles.cardFooter}>
                 <TouchableOpacity
                   style={styles.viewProfileButton}
-                  onPress={() => viewExecutorProfile(executor.user_id)}
+                  onPress={() => router.push(`/executor/${executor.user_id}` as any)}
                 >
                   <Text style={styles.viewProfileText}>Переглянути профіль</Text>
                   <Ionicons name="chevron-forward" size={18} color="#2563eb" />
@@ -302,245 +352,57 @@ export default function Executors() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 4,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  searchInput: {
-    flex: 1,
-    height: 48,
-    fontSize: 16,
-    color: '#111827',
-    marginLeft: 12,
-  },
-  filterSection: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  filterLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  daysScroll: {
-    flexGrow: 0,
-  },
-  ratingScroll: {
-    flexGrow: 0,
-  },
-  dayChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginRight: 8,
-  },
-  dayChipActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  dayChipText: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  dayChipTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  ratingChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginRight: 8,
-    gap: 4,
-  },
-  ratingChipActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  ratingChipText: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  ratingChipTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-    paddingTop: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 64,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 4,
-  },
-  executorCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  avatarContainer: {
-    marginRight: 12,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-  },
-  avatarPlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#2563eb',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  executorInfo: {
-    flex: 1,
-  },
-  executorName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  ratingText: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginLeft: 6,
-  },
-  experience: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  priceContainer: {
-    alignItems: 'flex-end',
-  },
-  priceLabel: {
-    fontSize: 10,
-    color: '#6b7280',
-  },
-  price: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#10b981',
-  },
-  priceUnit: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  bio: {
-    fontSize: 14,
-    color: '#4b5563',
-    marginTop: 12,
-    lineHeight: 20,
-  },
-  skillsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 12,
-    gap: 8,
-  },
-  skillBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  skillText: {
-    fontSize: 12,
-    color: '#2563eb',
-    fontWeight: '500',
-  },
-  availabilityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 6,
-  },
-  availabilityText: {
-    fontSize: 12,
-    color: '#10b981',
-  },
-  cardFooter: {
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-  },
-  viewProfileButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  viewProfileText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2563eb',
-  },
+  container: { flex: 1, backgroundColor: '#f9fafb' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { backgroundColor: '#fff', padding: 24, paddingTop: 60, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#111827' },
+  headerSubtitle: { fontSize: 14, color: '#6b7280', marginTop: 4 },
+  tabsRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingHorizontal: 16 },
+  tab: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, gap: 6, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: '#2563eb' },
+  tabText: { fontSize: 14, color: '#6b7280', fontWeight: '500' },
+  tabTextActive: { color: '#2563eb', fontWeight: '600' },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginTop: 16, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  searchInput: { flex: 1, height: 48, fontSize: 16, color: '#111827', marginLeft: 12 },
+  filterSection: { paddingHorizontal: 16, paddingTop: 16 },
+  filterLabel: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  daysScroll: { flexGrow: 0 },
+  ratingScroll: { flexGrow: 0 },
+  dayChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', marginRight: 8 },
+  dayChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  dayChipText: { fontSize: 14, color: '#374151' },
+  dayChipTextActive: { color: '#fff', fontWeight: '600' },
+  ratingChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', marginRight: 8, gap: 4 },
+  ratingChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  ratingChipText: { fontSize: 14, color: '#374151' },
+  ratingChipTextActive: { color: '#fff', fontWeight: '600' },
+  content: { flex: 1, paddingTop: 16 },
+  emptyState: { alignItems: 'center', paddingVertical: 64 },
+  emptyText: { fontSize: 18, fontWeight: '600', color: '#374151', marginTop: 16 },
+  emptySubtext: { fontSize: 14, color: '#6b7280', marginTop: 4, textAlign: 'center', paddingHorizontal: 32 },
+  executorCard: { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 12, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start' },
+  avatarContainer: { marginRight: 12 },
+  avatar: { width: 64, height: 64, borderRadius: 32 },
+  avatarPlaceholder: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
+  executorInfo: { flex: 1 },
+  executorName: { fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 4 },
+  ratingContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  ratingText: { fontSize: 12, color: '#6b7280', marginLeft: 6 },
+  experience: { fontSize: 12, color: '#6b7280' },
+  cardActions: { alignItems: 'flex-end', gap: 8 },
+  priceContainer: { alignItems: 'flex-end' },
+  priceLabel: { fontSize: 10, color: '#6b7280' },
+  price: { fontSize: 20, fontWeight: 'bold', color: '#10b981' },
+  priceUnit: { fontSize: 12, color: '#6b7280' },
+  heartButton: { padding: 4 },
+  bio: { fontSize: 14, color: '#4b5563', marginTop: 12, lineHeight: 20 },
+  skillsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 8 },
+  skillBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  skillText: { fontSize: 12, color: '#2563eb', fontWeight: '500' },
+  availabilityContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 6 },
+  availabilityText: { fontSize: 12, color: '#10b981' },
+  cardFooter: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  viewProfileButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  viewProfileText: { fontSize: 14, fontWeight: '600', color: '#2563eb' },
 });
