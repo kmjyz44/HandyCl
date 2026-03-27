@@ -1961,6 +1961,19 @@ async def get_task(task_id: str, current_user: User = Depends(get_current_user))
     if task.get("booking_id") and task.get("source") != "booking":
         booking = await db.bookings.find_one({"booking_id": task["booking_id"]}, {"_id": 0})
         task["booking"] = booking
+        # Enrich photos from booking if task doesn't have them
+        if booking:
+            booking_photos = booking.get("problem_photos") or booking.get("photos") or []
+            task_photos = task.get("photos") or []
+            # Merge photos, avoiding duplicates
+            all_photos = list(dict.fromkeys(task_photos + booking_photos))
+            task["photos"] = all_photos
+            task["problem_photos"] = all_photos
+            # Also enrich description if missing
+            if not task.get("description") and booking.get("problem_description"):
+                task["description"] = booking["problem_description"]
+            if not task.get("address") and booking.get("address"):
+                task["address"] = booking["address"]
     
     return task
 
@@ -2191,8 +2204,8 @@ async def complete_task(
     if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
-    if task["status"] not in [TaskStatus.STARTED, TaskStatus.IN_PROGRESS, TaskStatus.ON_THE_WAY]:
-        raise HTTPException(status_code=400, detail="Task must be started to complete")
+    if task["status"] not in [TaskStatus.STARTED, TaskStatus.ON_THE_WAY, TaskStatus.ASSIGNED, TaskStatus.HOLD_PLACED]:
+        raise HTTPException(status_code=400, detail=f"Task must be in progress to complete (current: {task['status']})")
     
     now = datetime.now(timezone.utc)
     # Auto-calculate actual hours from started_at if not provided
@@ -2227,6 +2240,22 @@ async def complete_task(
                 "actual_hours": actual_hours
             }}
         )
+    
+    # Send notification to client about payment required
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        notif = {
+            "notification_id": str(uuid.uuid4()),
+            "user_id": client_id,
+            "type": "payment_required",
+            "title": "Оплата за завдання",
+            "message": f"Виконавець завершив роботу. Відпрацьовано: {actual_hours} год. Будь ласка, оплатіть рахунок.",
+            "task_id": real_task_id,
+            "booking_id": task.get("booking_id"),
+            "is_read": False,
+            "created_at": now
+        }
+        await db.notifications.insert_one(notif)
     
     return {"message": "Task completed", "status": TaskStatus.COMPLETED_PENDING_PAYMENT, "actual_hours": actual_hours}
 

@@ -167,9 +167,17 @@ export default function TaskDetail() {
         provider_notes: closingMsg || undefined,
       });
       const hrs = res?.actual_hours ?? hours ?? '—';
-      Alert.alert('Завдання завершено!', `Відпрацьовано: ${hrs} год\nКлієнт отримає запит на оплату.`);
       setShowInvoice(false);
-      await loadTask();
+      if (Platform.OS === 'web') {
+        window.alert(`✅ Завдання завершено!\nВідпрацьовано: ${hrs} год\nКлієнт отримає сповіщення про оплату.`);
+        router.replace('/(tabs)/bookings');
+      } else {
+        Alert.alert(
+          'Завдання завершено!',
+          `Відпрацьовано: ${hrs} год\nКлієнт отримає сповіщення про оплату.`,
+          [{ text: 'ОК', onPress: () => router.replace('/(tabs)/bookings') }]
+        );
+      }
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e.message || 'Помилка';
       Alert.alert('Помилка', msg);

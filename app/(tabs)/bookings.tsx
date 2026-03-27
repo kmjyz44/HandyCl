@@ -88,8 +88,11 @@ export default function Bookings() {
     const isCompleted = COMPLETED_STATUSES.includes(booking.status);
 
     const handlePress = () => {
-      if (booking.task_id) {
-        router.push(`/task-detail?id=${booking.task_id}`);
+      // Use linked task_id if task exists, else use booking_id (task-detail resolves both)
+      const taskId = booking.task?.task_id || booking.task_id || booking.booking_id;
+      const hasTask = !!(booking.task?.task_id || booking.task_id);
+      if (hasTask || ['assigned','on_the_way','started','completed_pending_payment','paid','completed'].includes(booking.status)) {
+        router.push(`/task-detail?id=${taskId}`);
       } else {
         router.push({ pathname: '/(tabs)/booking-detail', params: { booking_id: booking.booking_id } });
       }
