@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 const API_URL =
   (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '') ||
-  'https://handyhub-nbvo.onrender.com';
+  'https://backend-production-a461.up.railway.app';
 
 const client = axios.create({
   baseURL: `${API_URL}/api`,
