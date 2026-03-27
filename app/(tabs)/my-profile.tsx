@@ -780,6 +780,9 @@ function ProviderProfile() {
   const [photosModalVisible, setPhotosModalVisible] = useState(false);
   const [savingPhotos, setSavingPhotos] = useState(false);
 
+  // Service area
+  const [serviceAreaVisible, setServiceAreaVisible] = useState(false);
+
   // Add Skills modal
   const [addSkillsVisible, setAddSkillsVisible] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -1168,6 +1171,20 @@ function ProviderProfile() {
         <View style={{ flex: 1 }}>
           <Text style={pStyles.menuRowText}>Оплата та виплати</Text>
           <Text style={pStyles.menuRowSub}>Погодинна ставка: {profile?.hourly_rate || 25} ₴</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => setServiceAreaVisible(true)}>
+        <Ionicons name="map-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Зона роботи</Text>
+          <Text style={pStyles.menuRowSub}>
+            {profile?.service_radius_km
+              ? `Радіус: ${profile.service_radius_km} км`
+              : 'Встановіть зону обслуговування'}
+          </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
@@ -1568,6 +1585,62 @@ function ProviderProfile() {
               </TouchableOpacity>
             )}
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ── Service Area Modal ── */}
+      <Modal visible={serviceAreaVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <TouchableOpacity onPress={() => setServiceAreaVisible(false)}>
+              <Ionicons name="arrow-back" size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Зона роботи</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          {Platform.OS === 'web' ? (
+            <View style={{ flex: 1 }}>
+              <iframe
+                title="service-area-map"
+                src={`/map.html?lat=${profile?.latitude || 50.45}&lng=${profile?.longitude || 30.52}&radius=${profile?.service_radius_km || 10}`}
+                style={{ width: '100%', height: '100%', border: 'none' } as any}
+                onLoad={(e: any) => {
+                  // Listen for save messages from iframe
+                  const handler = (event: MessageEvent) => {
+                    try {
+                      const data = JSON.parse(event.data);
+                      if (data.type === 'save') {
+                        api.updateExecutorProfile({
+                          latitude: data.lat,
+                          longitude: data.lng,
+                          service_radius_km: data.radius,
+                        }).then(() => {
+                          loadProfile();
+                          setServiceAreaVisible(false);
+                          Alert.alert('Збережено', `Зона роботи: ${data.radius} км`);
+                        }).catch((err: any) => {
+                          Alert.alert('Помилка', err.message || 'Не вдалося зберегти');
+                        });
+                        window.removeEventListener('message', handler);
+                      }
+                    } catch {}
+                  };
+                  window.addEventListener('message', handler);
+                }}
+              />
+            </View>
+          ) : (
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                <Ionicons name="map-outline" size={64} color="#2563eb" />
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginTop: 16 }}>Карта зони роботи</Text>
+                <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', marginTop: 8 }}>
+                  Ця функція доступна у веб-версії додатку.
+                  Відкрийте сайт в браузері для налаштування.
+                </Text>
+              </View>
+            </ScrollView>
+          )}
         </View>
       </Modal>
 
