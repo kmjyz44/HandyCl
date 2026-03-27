@@ -186,9 +186,26 @@
     }
   };
 
-  // Initial render
-  updateMap(lat, lng);
-  reverseGeocode(lat, lng);
+  // Initial render — auto-detect location if no params given
+  const hasParams = params.get('lat') && params.get('lng');
+  if (!hasParams && navigator.geolocation) {
+    document.getElementById('address').textContent = '⏳ Визначаємо ваше місцезнаходження...';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        updateMap(pos.coords.latitude, pos.coords.longitude);
+        reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {
+        // Fallback to Kyiv if geolocation denied
+        updateMap(lat, lng);
+        reverseGeocode(lat, lng);
+      },
+      { enableHighAccuracy: false, timeout: 8000 }
+    );
+  } else {
+    updateMap(lat, lng);
+    reverseGeocode(lat, lng);
+  }
 </script>
 </body>
 </html>
