@@ -24,6 +24,50 @@ export default function Users() {
   const [blockReason, setBlockReason] = useState('');
   const [blockDuration, setBlockDuration] = useState('');
 
+  const [modModalVisible, setModModalVisible] = useState(false);
+  const [modModules, setModModules] = useState<string[]>([]);
+  const ALL_MODULES = ['tasks','bookings','users','payments','reviews','messages','services','analytics','settings'];
+  const MODULE_LABELS: Record<string,string> = {
+    tasks:'Завдання', bookings:'Бронювання', users:'Користувачі',
+    payments:'Оплати', reviews:'Відгуки', messages:'Повідомлення',
+    services:'Послуги', analytics:'Аналітика', settings:'Налаштування'
+  };
+
+  const handleSetModerator = async (user: any) => {
+    Alert.alert('Зробити модератором', `Надати ${user.name} роль модератора?`, [
+      { text: 'Скасувати', style: 'cancel' },
+      { text: 'Підтвердити', onPress: async () => {
+        try { await api.setModerator(user.user_id); Alert.alert('Успіх', `${user.name} тепер модератор`); loadUsers(); }
+        catch (e: any) { Alert.alert('Помилка', e.message); }
+      }}
+    ]);
+  };
+
+  const handleRemoveModerator = async (user: any) => {
+    Alert.alert('Зняти модератора', `Забрати у ${user.name} роль модератора?`, [
+      { text: 'Скасувати', style: 'cancel' },
+      { text: 'Підтвердити', style: 'destructive', onPress: async () => {
+        try { await api.removeModerator(user.user_id); Alert.alert('Успіх', 'Роль модератора знято'); loadUsers(); }
+        catch (e: any) { Alert.alert('Помилка', e.message); }
+      }}
+    ]);
+  };
+
+  const openModulesModal = (user: any) => {
+    setSelectedUser(user);
+    setModModules(user.moderator_modules || ALL_MODULES);
+    setModModalVisible(true);
+  };
+
+  const saveModules = async () => {
+    try {
+      await api.updateModeratorModules(selectedUser.user_id, modModules);
+      Alert.alert('Успіх', 'Доступ до модулів оновлено');
+      setModModalVisible(false);
+      loadUsers();
+    } catch (e: any) { Alert.alert('Помилка', e.message); }
+  };
+
   const loadUsers = async () => {
     try {
       const data = await api.getUsers();
@@ -274,6 +318,41 @@ export default function Users() {
         </View>
       </Modal>
     </View>
+
+      {/* Moderator Modules Modal */}
+      <Modal visible={modModalVisible} animationType='slide' transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Доступ до модулів</Text>
+              <TouchableOpacity onPress={() => setModModalVisible(false)}>
+                <Ionicons name='close' size={24} color='#6b7280' />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalBody}>
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 12 }}>
+                {selectedUser?.name} — оберіть модулі доступу:
+              </Text>
+              {ALL_MODULES.map((mod) => (
+                <TouchableOpacity
+                  key={mod}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
+                  onPress={() => setModModules(prev => prev.includes(mod) ? prev.filter(m => m !== mod) : [...prev, mod])}
+                >
+                  <Ionicons name={modModules.includes(mod) ? 'checkbox' : 'square-outline'} size={22} color={modModules.includes(mod) ? '#2563eb' : '#9ca3af'} />
+                  <Text style={{ marginLeft: 12, fontSize: 15, color: '#111827' }}>{MODULE_LABELS[mod] || mod}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: '#2563eb', marginTop: 16, marginBottom: 8 }]}
+                onPress={saveModules}
+              >
+                <Text style={styles.modalButtonText}>Зберегти</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
   );
 }
 

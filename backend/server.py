@@ -36,6 +36,7 @@ class UserRole(str, Enum):
     CLIENT = "client"
     PROVIDER = "provider"
     ADMIN = "admin"
+    MODERATOR = "moderator"
 
 class BookingStatus(str, Enum):
     DRAFT = "draft"
@@ -1924,7 +1925,11 @@ async def get_tasks(current_user: User = Depends(get_current_user)):
 async def get_task(task_id: str, current_user: User = Depends(get_current_user)):
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
     
-    # Fallback: look up in bookings collection (task_id may be a booking_id)
+    # Fallback 1: task was created from a booking — look up by booking_id in tasks
+    if not task:
+        task = await db.tasks.find_one({"booking_id": task_id}, {"_id": 0})
+    
+    # Fallback 2: look up in bookings collection (task_id may be a booking_id, not yet accepted)
     if not task:
         booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
         if booking:
@@ -2093,7 +2098,19 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
     }
     await db.tasks.insert_one(task_doc)
     
-    return {"message": "Booking accepted", "status": BookingStatus.ASSIGNED, "task_id": new_task_id}
+    return {"message": "Booking accepted", "status": BookingStatus.ASSIGNED, "task_id": new_task_id, "new_task_id": new_task_id}
+
+
+async def _resolve_task(task_id: str):
+    """Find task in tasks collection, falling back to booking_id lookup."""
+    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    if task:
+        return task
+    # Maybe task_id is actually a booking_id — look up the task created from it
+    task = await db.tasks.find_one({"booking_id": task_id}, {"_id": 0})
+    if task:
+        return task
+    return None
 
 @api_router.post("/tasks/{task_id}/on-the-way")
 async def task_on_the_way(task_id: str, current_user: User = Depends(get_current_user)):
@@ -2101,16 +2118,17 @@ async def task_on_the_way(task_id: str, current_user: User = Depends(get_current
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can update task status")
     
-    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    task = await _resolve_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task["task_id"]
     
     if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
     now = datetime.now(timezone.utc)
     await db.tasks.update_one(
-        {"task_id": task_id},
+        {"task_id": real_task_id},
         {"$set": {"status": TaskStatus.ON_THE_WAY, "on_the_way_at": now, "updated_at": now}}
     )
     if task.get("booking_id"):
@@ -2118,7 +2136,7 @@ async def task_on_the_way(task_id: str, current_user: User = Depends(get_current
             {"booking_id": task["booking_id"]},
             {"$set": {"status": BookingStatus.ON_THE_WAY, "on_the_way_at": now}}
         )
-    return {"message": "Status updated: On the way", "status": TaskStatus.ON_THE_WAY}
+    return {"message": "Status updated: On the way", "status": TaskStatus.ON_THE_WAY, "task_id": real_task_id}
 
 @api_router.post("/tasks/{task_id}/start")
 async def start_task(task_id: str, current_user: User = Depends(get_current_user)):
@@ -2126,11 +2144,12 @@ async def start_task(task_id: str, current_user: User = Depends(get_current_user
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can start tasks")
     
-    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    task = await _resolve_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task["task_id"]
     
-    if task["provider_id"] != current_user.user_id:
+    if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
     if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.ON_THE_WAY]:
@@ -2138,7 +2157,7 @@ async def start_task(task_id: str, current_user: User = Depends(get_current_user
     
     now = datetime.now(timezone.utc)
     await db.tasks.update_one(
-        {"task_id": task_id},
+        {"task_id": real_task_id},
         {"$set": {
             "status": TaskStatus.STARTED,
             "started_at": now,
@@ -2152,7 +2171,7 @@ async def start_task(task_id: str, current_user: User = Depends(get_current_user
             {"$set": {"status": BookingStatus.STARTED, "started_at": now}}
         )
     
-    return {"message": "Task started", "status": TaskStatus.STARTED}
+    return {"message": "Task started", "status": TaskStatus.STARTED, "task_id": real_task_id}
 
 @api_router.post("/tasks/{task_id}/complete")
 async def complete_task(
@@ -2164,11 +2183,12 @@ async def complete_task(
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can complete tasks")
     
-    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    task = await _resolve_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task["task_id"]
     
-    if task["provider_id"] != current_user.user_id:
+    if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
     if task["status"] not in [TaskStatus.STARTED, TaskStatus.IN_PROGRESS]:
@@ -2185,7 +2205,7 @@ async def complete_task(
     materials = completion.materials_cost or completion.expenses
     
     await db.tasks.update_one(
-        {"task_id": task_id},
+        {"task_id": real_task_id},
         {"$set": {
             "status": TaskStatus.COMPLETED_PENDING_PAYMENT,
             "completed_at": now,
@@ -2338,6 +2358,185 @@ async def mark_message_read(message_id: str, current_user: User = Depends(get_cu
         {"$set": {"read": True}}
     )
     return {"message": "Message marked as read"}
+
+
+@api_router.get("/tasks/{task_id}/messages")
+async def get_task_messages(task_id: str, current_user: User = Depends(get_current_user)):
+    """Get all messages for a task (group chat)"""
+    # Resolve task to check access
+    task = await _resolve_task(task_id)
+    if not task:
+        # Try bookings
+        booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(status_code=404, detail="Task not found")
+        task = booking
+    
+    # Access check: client, provider, admin, moderator
+    is_admin = current_user.role in [UserRole.ADMIN, UserRole.MODERATOR]
+    is_client = task.get("client_id") == current_user.user_id
+    is_provider = task.get("provider_id") == current_user.user_id
+    if not (is_admin or is_client or is_provider):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    messages = await db.messages.find(
+        {"task_id": {"$in": [task_id, task.get("task_id", task_id)]}},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(500)
+    
+    # Enrich with sender info
+    for msg in messages:
+        sender = await db.users.find_one({"user_id": msg["from_user_id"]}, {"_id": 0, "password_hash": 0})
+        if sender:
+            msg["sender"] = {"name": sender.get("name",""), "role": sender.get("role",""), "picture": sender.get("picture")}
+    
+    return messages
+
+@api_router.post("/tasks/{task_id}/messages")
+async def send_task_message(task_id: str, body: MessageCreate, current_user: User = Depends(get_current_user)):
+    """Send a message in task group chat"""
+    task = await _resolve_task(task_id)
+    if not task:
+        booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(status_code=404, detail="Task not found")
+        task = booking
+    
+    real_task_id = task.get("task_id", task_id)
+    is_admin = current_user.role in [UserRole.ADMIN, UserRole.MODERATOR]
+    is_client = task.get("client_id") == current_user.user_id
+    is_provider = task.get("provider_id") == current_user.user_id
+    if not (is_admin or is_client or is_provider):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+    msg = {
+        "message_id": msg_id,
+        "task_id": real_task_id,
+        "from_user_id": current_user.user_id,
+        "text": body.text,
+        "read": False,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.messages.insert_one(msg)
+    msg.pop("_id", None)
+    
+    # Enrich with sender
+    msg["sender"] = {"name": current_user.name, "role": current_user.role, "picture": getattr(current_user, "picture", None)}
+    return msg
+
+@api_router.post("/tasks/{task_id}/pay")
+async def pay_task(task_id: str, payment_data: dict, current_user: User = Depends(get_current_user)):
+    """Client pays for completed task"""
+    task = await _resolve_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task["task_id"]
+    
+    if task.get("client_id") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only the client can pay")
+    
+    if task["status"] != TaskStatus.COMPLETED_PENDING_PAYMENT:
+        raise HTTPException(status_code=400, detail="Task is not awaiting payment")
+    
+    now = datetime.now(timezone.utc)
+    payment_method = payment_data.get("payment_method", "unknown")
+    
+    await db.tasks.update_one(
+        {"task_id": real_task_id},
+        {"$set": {
+            "status": TaskStatus.PAID,
+            "paid_at": now,
+            "payment_method": payment_method,
+            "updated_at": now
+        }}
+    )
+    if task.get("booking_id"):
+        await db.bookings.update_one(
+            {"booking_id": task["booking_id"]},
+            {"$set": {"status": BookingStatus.PAID, "paid_at": now, "payment_method": payment_method}}
+        )
+    
+    return {"message": "Payment confirmed", "status": "paid", "paid_at": now.isoformat()}
+
+
+# ─── Moderator Management ──────────────────────────────────────────────────────
+AVAILABLE_MODULES = [
+    "tasks", "bookings", "users", "payments", "reviews",
+    "messages", "services", "analytics", "settings"
+]
+
+@api_router.post("/admin/users/{user_id}/set-moderator")
+async def set_moderator(user_id: str, current_user: User = Depends(get_current_user)):
+    """Admin promotes a user to moderator role"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin can manage moderators")
+    
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "role": UserRole.MODERATOR,
+            "moderator_modules": AVAILABLE_MODULES,  # full access by default
+            "promoted_to_moderator_at": datetime.now(timezone.utc),
+            "promoted_by": current_user.user_id
+        }}
+    )
+    return {"message": "User promoted to moderator", "modules": AVAILABLE_MODULES}
+
+@api_router.post("/admin/users/{user_id}/remove-moderator")
+async def remove_moderator(user_id: str, current_user: User = Depends(get_current_user)):
+    """Admin removes moderator role"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin can manage moderators")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"role": UserRole.CLIENT, "moderator_modules": []}}
+    )
+    return {"message": "Moderator role removed"}
+
+@api_router.put("/admin/users/{user_id}/moderator-modules")
+async def update_moderator_modules(
+    user_id: str,
+    modules: List[str],
+    current_user: User = Depends(get_current_user)
+):
+    """Admin updates which modules a moderator can access"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin can manage moderators")
+    
+    invalid = [m for m in modules if m not in AVAILABLE_MODULES]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Invalid modules: {invalid}")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"moderator_modules": modules, "updated_at": datetime.now(timezone.utc)}}
+    )
+    return {"message": "Modules updated", "modules": modules}
+
+@api_router.get("/admin/moderators")
+async def get_moderators(current_user: User = Depends(get_current_user)):
+    """Get all moderators with their module access"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin can view moderators")
+    
+    mods = await db.users.find(
+        {"role": UserRole.MODERATOR},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(100)
+    return mods
+
+@api_router.get("/admin/available-modules")
+async def get_available_modules(current_user: User = Depends(get_current_user)):
+    """Get list of all available modules"""
+    if current_user.role not in [UserRole.ADMIN, UserRole.MODERATOR]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return {"modules": AVAILABLE_MODULES}
 
 # Review Routes
 @api_router.post("/reviews")

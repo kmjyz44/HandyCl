@@ -415,6 +415,39 @@ export const api = {
     const res = await client.post(`/tasks/${id}/complete`, data);
     return res.data;
   },
+  payTask: async (id: string, data: { payment_method: string }) => {
+    const res = await client.post(`/tasks/${id}/pay`, data);
+    return res.data;
+  },
+  getTaskMessages: async (taskId: string) => {
+    const res = await client.get(`/tasks/${taskId}/messages`);
+    return res.data;
+  },
+  sendTaskMessage: async (taskId: string, text: string) => {
+    const res = await client.post(`/tasks/${taskId}/messages`, { text });
+    return res.data;
+  },
+  // Moderator management
+  getModerators: async () => {
+    const res = await client.get('/admin/moderators');
+    return res.data;
+  },
+  setModerator: async (userId: string) => {
+    const res = await client.post(`/admin/users/${userId}/set-moderator`);
+    return res.data;
+  },
+  removeModerator: async (userId: string) => {
+    const res = await client.post(`/admin/users/${userId}/remove-moderator`);
+    return res.data;
+  },
+  updateModeratorModules: async (userId: string, modules: string[]) => {
+    const res = await client.put(`/admin/users/${userId}/moderator-modules`, modules);
+    return res.data;
+  },
+  getAvailableModules: async () => {
+    const res = await client.get('/admin/available-modules');
+    return res.data;
+  },
 
   // Messages
   getConversations: async () => {
