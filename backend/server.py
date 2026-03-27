@@ -2569,9 +2569,10 @@ async def get_executors_by_service(
         if city or (lat is not None and lng is not None):
             executor_cities = [c.lower() for c in (profile.get("service_cities") or [])]
             executor_zones  = [z.lower() for z in (profile.get("service_zones") or [])]
-            exec_lat  = profile.get("latitude")
-            exec_lng  = profile.get("longitude")
-            exec_radius_km = profile.get("service_radius_km") or 0
+            # Also try user-level lat/lng as fallback (saved via map)
+            exec_lat  = profile.get("latitude") or executor.get("latitude")
+            exec_lng  = profile.get("longitude") or executor.get("longitude")
+            exec_radius_km = profile.get("service_radius_km") or executor.get("service_radius_km") or 0
 
             location_ok = False
 
@@ -2583,16 +2584,27 @@ async def get_executors_by_service(
                     if city_lower in ec or ec in city_lower:
                         location_ok = True
                         break
+                # Also check user-level city field
+                if not location_ok:
+                    user_city = (executor.get("city") or "").lower().strip()
+                    if user_city and (city_lower in user_city or user_city in city_lower):
+                        location_ok = True
 
             # 2. Check radius if executor has set coordinates and radius
-            if not location_ok and lat is not None and lng is not None and exec_lat and exec_lng and exec_radius_km > 0:
-                import math
-                dlat = math.radians(lat - exec_lat)
-                dlng = math.radians(lng - exec_lng)
-                a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(lat)) * math.sin(dlng/2)**2
-                distance_km = 6371 * 2 * math.asin(math.sqrt(a))
-                if distance_km <= exec_radius_km:
-                    location_ok = True
+            import math
+            if not location_ok and exec_lat and exec_lng and exec_radius_km > 0:
+                # If client provided coordinates, use them; otherwise geocode city
+                client_lat, client_lng = lat, lng
+                if client_lat is None and city:
+                    # We can't geocode here, but we already checked city names above
+                    pass
+                if client_lat is not None and client_lng is not None:
+                    dlat = math.radians(client_lat - exec_lat)
+                    dlng = math.radians(client_lng - exec_lng)
+                    a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(client_lat)) * math.sin(dlng/2)**2
+                    distance_km = 6371 * 2 * math.asin(math.sqrt(a))
+                    if distance_km <= exec_radius_km:
+                        location_ok = True
 
             # 3. If executor has NO location set at all — include them (they haven't configured yet)
             if not location_ok and not executor_cities and not executor_zones and not exec_lat:

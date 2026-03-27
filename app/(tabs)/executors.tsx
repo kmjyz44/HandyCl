@@ -268,7 +268,11 @@ export default function Executors() {
               onPress={() => router.push(`/executor/${executor.user_id}` as any)}
             >
               <View style={styles.cardHeader}>
-                <View style={styles.avatarContainer}>
+                <TouchableOpacity
+                  style={styles.avatarContainer}
+                  onPress={() => router.push(`/executor/${executor.user_id}` as any)}
+                  activeOpacity={0.8}
+                >
                   {executor.picture ? (
                     <Image source={{ uri: executor.picture }} style={styles.avatar} />
                   ) : (
@@ -276,7 +280,7 @@ export default function Executors() {
                       <Ionicons name="person" size={32} color="#fff" />
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
                 <View style={styles.executorInfo}>
                   <Text style={styles.executorName}>{executor.name}</Text>
                   <View style={styles.ratingContainer}>

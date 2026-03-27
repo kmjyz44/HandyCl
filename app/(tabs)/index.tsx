@@ -15,22 +15,22 @@ const SKILL_CATEGORIES = [
   {
     id: 'assembly', name: 'Збірка меблів', icon: 'cube-outline' as const,
     color: '#2563eb', bg: '#eff6ff',
-    skills: ['Збірка меблів IKEA', 'Збірка офісних меблів', 'Збірка ліжок', 'Збірка шаф', 'Збірка кухні', 'Збірка дитячих меблів'],
+    skills: ['Збірка меблів IKEA', 'Збірка офісних меблів', 'Збірка ліжок', 'Збірка шаф', 'Монтаж полиць', 'Монтаж телевізора'],
   },
   {
     id: 'cleaning', name: 'Прибирання', icon: 'sparkles-outline' as const,
     color: '#0891b2', bg: '#ecfeff',
-    skills: ['Регулярне прибирання', 'Генеральне прибирання', 'Прибирання після ремонту', 'Прибирання офісу', 'Прибирання після переїзду', 'Миття вікон'],
+    skills: ['Прибирання будинку', 'Генеральне прибирання', 'Прибирання офісу', 'Прибирання при переїзді', 'Миття вікон', 'Чищення килимів'],
   },
   {
-    id: 'repair', name: 'Ремонт будинку', icon: 'hammer-outline' as const,
-    color: '#d97706', bg: '#fffbeb',
-    skills: ['Дрібний ремонт', 'Сантехніка', 'Електрика', 'Фарбування стін', 'Укладання плитки', 'Монтаж полиць', 'Встановлення дверей', 'Ремонт підлоги'],
-  },
-  {
-    id: 'moving', name: 'Переїзд', icon: 'car-outline' as const,
+    id: 'home_improvements', name: 'Ремонт будинку', icon: 'hammer-outline' as const,
     color: '#7c3aed', bg: '#f5f3ff',
-    skills: ['Допомога з переїздом', 'Пакування речей', 'Вантажні послуги', 'Розпакування', 'Утилізація меблів'],
+    skills: ['Встановлення техніки', 'Ремонт дверей та меблів', 'Фарбування', 'Укладання плитки', 'Укладання підлоги', 'Гіпсокартон', 'Сантехніка', 'Електрика'],
+  },
+  {
+    id: 'moving', name: 'Переїзд та доставка', icon: 'car-outline' as const,
+    color: '#d97706', bg: '#fffbeb',
+    skills: ['Допомога з переїздом', 'Пакування речей', 'Перенесення меблів', 'Доставка', 'Вивіз сміття'],
   },
   {
     id: 'outdoor', name: 'Зовнішні роботи', icon: 'leaf-outline' as const,
@@ -298,12 +298,32 @@ export default function HomeScreen() {
     setLoadingTaskers(true);
     try {
       const primaryDate = booking.dates.length > 0 ? booking.dates[0] : booking.date;
+
+      // If we have a city but no coordinates, geocode the city first
+      let clientLat = booking.lat;
+      let clientLng = booking.lng;
+      if (booking.city && (clientLat == null || clientLng == null)) {
+        try {
+          const geoRes = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(booking.city)}&limit=1&accept-language=uk`,
+            { headers: { 'User-Agent': 'HandyHub/1.0' } }
+          );
+          const geoData = await geoRes.json();
+          if (geoData && geoData[0]) {
+            clientLat = parseFloat(geoData[0].lat);
+            clientLng = parseFloat(geoData[0].lon);
+            // Save geocoded coords to booking state for reuse
+            setBooking(b => ({ ...b, lat: clientLat!, lng: clientLng! }));
+          }
+        } catch { /* ignore geocoding errors */ }
+      }
+
       const data = await api.getExecutorsBySkill({
         skill: booking.skillName,
         category: booking.categoryId,
         city: booking.city,
-        lat: booking.lat,
-        lng: booking.lng,
+        lat: clientLat ?? undefined,
+        lng: clientLng ?? undefined,
         date: primaryDate || undefined,
         timeFrom: booking.timeFrom || undefined,
       });
@@ -772,16 +792,42 @@ export default function HomeScreen() {
 
   // STEP: DATE & TIME
   if (step === 'datetime') {
-    const toggleDate = (val: string) => {
+    // Provider-style calendar: week strip + time grid
+    const HOUR_HEIGHT = 56;
+    const GRID_START = 7; // 07:00
+    const GRID_END = 22;  // 22:00
+    const GRID_HOURS = Array.from({ length: GRID_END - GRID_START + 1 }, (_, i) => i + GRID_START);
+    const CAL_TIMES = Array.from({ length: (GRID_END - GRID_START) * 2 }, (_, i) => {
+      const h = GRID_START + Math.floor(i / 2);
+      const m = i % 2 === 0 ? '00' : '30';
+      return `${String(h).padStart(2, '0')}:${m}`;
+    });
+
+    // Selected day index (0=today)
+    const [calDayIdx, setCalDayIdx] = React.useState(0);
+    const selectedDateObj = dates[calDayIdx];
+    const selectedDateVal = selectedDateObj?.value || '';
+    const isDateSelected = booking.dates.includes(selectedDateVal);
+
+    const toggleCalDate = (val: string) => {
       setBooking(b => {
         const already = b.dates.includes(val);
         const newDates = already ? b.dates.filter(d => d !== val) : [...b.dates, val];
         return { ...b, dates: newDates, date: newDates[0] || '' };
       });
     };
+
+    const selectTime = (t: string) => {
+      // If no date selected yet, auto-select current day
+      if (!isDateSelected) toggleCalDate(selectedDateVal);
+      setBooking(b => ({ ...b, timeFrom: t, time: t }));
+    };
+
     const canProceed = booking.dates.length > 0 && !!booking.timeFrom;
+
     return (
       <View style={s.container}>
+        {/* Header */}
         <View style={s.stepHeader}>
           <TouchableOpacity onPress={goBack} style={s.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#111827" />
@@ -789,56 +835,121 @@ export default function HomeScreen() {
           <Text style={s.stepTitle}>Дата і час</Text>
           <View style={{ width: 40 }} />
         </View>
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-          <Text style={s.stepSubtitle}>Коли вам зручно? Можна вибрати кілька дат</Text>
 
-          {/* Multi-date picker */}
-          <Text style={s.fieldLabel}>Дата {booking.dates.length > 0 && <Text style={{ color: '#2563eb', fontWeight: '700' }}>(вибрано: {booking.dates.length})</Text>}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-            {dates.map(d => {
-              const active = booking.dates.includes(d.value);
-              return (
-                <TouchableOpacity key={d.value} style={[s.dateChip, active && s.dateChipActive]} onPress={() => toggleDate(d.value)}>
-                  <Text style={[s.dateDayName, active && { color: '#fff' }]}>{d.dayName}</Text>
-                  <Text style={[s.dateLabel, active && { color: '#fff', fontWeight: '700' }]}>{d.label}</Text>
-                  {active && <Ionicons name="checkmark" size={12} color="#fff" style={{ marginTop: 2 }} />}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* Time FROM */}
-          <Text style={s.fieldLabel}>Час початку (з)</Text>
-          <View style={s.timesGrid}>
-            {TIMES.map(t => (
-              <TouchableOpacity key={t} style={[s.timeChip, booking.timeFrom === t && s.timeChipActive]}
-                onPress={() => setBooking(b => ({ ...b, timeFrom: t, time: t, timeTo: b.timeTo && b.timeTo <= t ? '' : b.timeTo }))}>
-                <Text style={[s.timeChipText, booking.timeFrom === t && s.timeChipTextActive]}>{t}</Text>
+        {/* Week strip */}
+        <View style={{
+          flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 8,
+          backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6'
+        }}>
+          {dates.slice(0, 7).map((d, i) => {
+            const isSel = i === calDayIdx;
+            const hasTime = booking.dates.includes(d.value);
+            return (
+              <TouchableOpacity
+                key={d.value}
+                onPress={() => setCalDayIdx(i)}
+                style={[{
+                  flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 12,
+                  backgroundColor: isSel ? '#2563eb' : 'transparent',
+                  marginHorizontal: 2,
+                }]}
+              >
+                <Text style={{ fontSize: 11, color: isSel ? '#fff' : '#6b7280', fontWeight: '500', marginBottom: 2 }}>
+                  {d.dayName}
+                </Text>
+                <Text style={{
+                  fontSize: 16, fontWeight: '700',
+                  color: isSel ? '#fff' : (i === 0 ? '#2563eb' : '#111827')
+                }}>
+                  {d.label.split(' ')[0]}
+                </Text>
+                {hasTime && (
+                  <View style={{
+                    width: 6, height: 6, borderRadius: 3,
+                    backgroundColor: isSel ? '#fff' : '#2563eb',
+                    marginTop: 3
+                  }} />
+                )}
               </TouchableOpacity>
-            ))}
-          </View>
+            );
+          })}
+        </View>
 
-          {/* Time TO */}
-          <Text style={[s.fieldLabel, { marginTop: 16 }]}>Час закінчення (до) — необов'язково</Text>
-          <View style={s.timesGrid}>
-            {TIMES.filter(t => !booking.timeFrom || t > booking.timeFrom).map(t => (
-              <TouchableOpacity key={t} style={[s.timeChip, booking.timeTo === t && s.timeChipActive]}
-                onPress={() => setBooking(b => ({ ...b, timeTo: b.timeTo === t ? '' : t }))}>
-                <Text style={[s.timeChipText, booking.timeTo === t && s.timeChipTextActive]}>{t}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        {/* Day label + date toggle */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#fff' }}>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827' }}>
+            {selectedDateObj?.dayName} {selectedDateObj?.label}
+          </Text>
+          <TouchableOpacity
+            onPress={() => toggleCalDate(selectedDateVal)}
+            style={[{
+              paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+              borderWidth: 1.5,
+              borderColor: isDateSelected ? '#2563eb' : '#d1d5db',
+              backgroundColor: isDateSelected ? '#eff6ff' : '#fff',
+              flexDirection: 'row', alignItems: 'center', gap: 4
+            }]}
+          >
+            {isDateSelected && <Ionicons name="checkmark" size={14} color="#2563eb" />}
+            <Text style={{ fontSize: 13, fontWeight: '600', color: isDateSelected ? '#2563eb' : '#6b7280' }}>
+              {isDateSelected ? 'Вибрано' : 'Вибрати день'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-          {/* Summary */}
-          {(booking.dates.length > 0 || booking.timeFrom) && (
-            <View style={{ marginTop: 20, padding: 14, backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe' }}>
-              <Text style={{ fontWeight: '700', color: '#1e40af', marginBottom: 6 }}>Вибраний час</Text>
-              {booking.dates.length > 0 && <Text style={{ color: '#374151', fontSize: 14 }}>📅 {booking.dates.map(v => { const d = dates.find(x => x.value === v); return d ? `${d.dayName} ${d.label}` : v; }).join(', ')}</Text>}
-              {booking.timeFrom && <Text style={{ color: '#374151', fontSize: 14, marginTop: 4 }}>⏰ {booking.timeFrom}{booking.timeTo ? ` – ${booking.timeTo}` : ''}</Text>}
+        {/* Time grid */}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
+          <View style={{ position: 'relative', marginLeft: 48, marginRight: 16 }}>
+            {/* Hour lines */}
+            {GRID_HOURS.map(h => (
+              <View key={h} style={{ position: 'absolute', left: -48, right: 0, top: (h - GRID_START) * HOUR_HEIGHT, height: HOUR_HEIGHT, flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Text style={{ width: 42, fontSize: 11, color: '#9ca3af', textAlign: 'right', paddingRight: 8, paddingTop: 2 }}>
+                  {String(h).padStart(2, '0')}:00
+                </Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: '#f3f4f6', marginTop: 8 }} />
+              </View>
+            ))}
+
+            {/* Tappable time slots */}
+            <View style={{ height: (GRID_END - GRID_START) * HOUR_HEIGHT }}>
+              {CAL_TIMES.map((t, idx) => {
+                const topPos = idx * (HOUR_HEIGHT / 2);
+                const isSelected = booking.timeFrom === t;
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    onPress={() => selectTime(t)}
+                    style={[{
+                      position: 'absolute', left: 0, right: 0,
+                      top: topPos, height: HOUR_HEIGHT / 2,
+                      justifyContent: 'center', paddingLeft: 8,
+                      borderRadius: isSelected ? 8 : 0,
+                      backgroundColor: isSelected ? '#2563eb' : 'transparent',
+                      zIndex: isSelected ? 2 : 1,
+                    }]}
+                  >
+                    {isSelected && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="time" size={14} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{t}</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>— обрано</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          )}
+          </View>
         </ScrollView>
-        <View style={s.bottomBar}>
+
+        {/* Bottom bar */}
+        <View style={[s.bottomBar, { paddingTop: 8 }]}>
+          {booking.dates.length > 0 && booking.timeFrom && (
+            <Text style={{ textAlign: 'center', fontSize: 13, color: '#6b7280', marginBottom: 8 }}>
+              📅 {booking.dates.map(v => { const d = dates.find(x => x.value === v); return d ? `${d.dayName} ${d.label}` : v; }).join(', ')}
+              {'  '}⏰ {booking.timeFrom}
+            </Text>
+          )}
           <TouchableOpacity
             style={[s.nextBtn, !canProceed && s.nextBtnDisabled]}
             disabled={!canProceed}

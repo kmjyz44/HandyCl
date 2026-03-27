@@ -107,6 +107,17 @@
   if (params.get('lng')) lng = parseFloat(params.get('lng'));
   if (params.get('radius')) radius = parseInt(params.get('radius'));
 
+  // Check if zone was previously saved (restore green state)
+  let zoneSaved = false;
+  try {
+    const saved = JSON.parse(localStorage.getItem('zone_saved') || 'null');
+    if (saved && saved.lat && saved.lng) {
+      if (!params.get('lat')) { lat = saved.lat; lng = saved.lng; }
+      if (!params.get('radius')) radius = saved.radius || 10;
+      zoneSaved = true;
+    }
+  } catch(e) {}
+
   const map = L.map('map', { zoomControl: true }).setView([lat, lng], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
@@ -123,9 +134,10 @@
     if (marker) map.removeLayer(marker);
     if (circle) map.removeLayer(circle);
     marker = L.marker([lat, lng], { icon: markerIcon, draggable: true }).addTo(map);
+    const circleColor = zoneSaved ? '#16a34a' : '#2563eb';
     circle = L.circle([lat, lng], {
-      radius: radius * 1000, color: '#2563eb',
-      fillColor: '#2563eb', fillOpacity: 0.12, weight: 2,
+      radius: radius * 1000, color: circleColor,
+      fillColor: circleColor, fillOpacity: 0.12, weight: 2,
     }).addTo(map);
     marker.on('dragend', (e) => {
       const pos = e.target.getLatLng();
@@ -260,8 +272,18 @@
       const toast = document.getElementById('toast');
       toast.style.display = 'block';
       setTimeout(() => { toast.style.display = 'none'; }, 2500);
+
+      // Permanently change button to "Edit zone" and circle to green
       btn.textContent = '✅ Збережено!';
-      setTimeout(() => { btn.textContent = 'Зберегти зону'; btn.disabled = false; }, 2500);
+      setTimeout(() => {
+        btn.textContent = '✏️ Редагувати зону';
+        btn.style.background = '#16a34a';
+        btn.disabled = false;
+        // Change circle color to green to indicate saved state
+        if (circle) { circle.setStyle({ color: '#16a34a', fillColor: '#16a34a' }); }
+        // Persist saved state in localStorage
+        localStorage.setItem('zone_saved', JSON.stringify({ lat, lng, radius }));
+      }, 1500);
     } catch (e) {
       alert('Помилка збереження: ' + (e.message || e));
       btn.textContent = 'Зберегти зону';
@@ -303,7 +325,8 @@
 
   // ── Initial render ──
   const hasParams = params.get('lat') && params.get('lng');
-  if (!hasParams && navigator.geolocation) {
+  const hasLocation = hasParams || zoneSaved;
+  if (!hasLocation && navigator.geolocation) {
     document.getElementById('address').textContent = '⏳ Визначаємо ваше місцезнаходження...';
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -316,6 +339,13 @@
   } else {
     updateMap(lat, lng);
     reverseGeocode(lat, lng);
+  }
+
+  // Restore saved button state
+  if (zoneSaved) {
+    const btn = document.getElementById('save-btn');
+    btn.textContent = '✏️ Редагувати зону';
+    btn.style.background = '#16a34a';
   }
 </script>
 </body>
