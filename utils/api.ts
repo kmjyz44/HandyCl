@@ -136,14 +136,39 @@ export const api = {
     return res.data;
   },
 
-  getExecutorsBySkill: async (params: { skill?: string; category?: string; city?: string }) => {
-    // Fall back to general executors list (backend doesn't have by-skill endpoint yet)
+  getExecutorsBySkill: async (params: { skill?: string; category?: string; city?: string; lat?: number; lng?: number; date?: string; timeFrom?: string }) => {
     try {
-      const res = await client.get('/executors');
-      const list = Array.isArray(res.data) ? res.data : (res.data?.executors || []);
+      // Use the full by-service endpoint which supports skill + location + availability filtering
+      const queryParams: Record<string, any> = {};
+      if (params.skill) queryParams.service_name = params.skill;
+      if (params.city) queryParams.city = params.city;
+      if (params.lat != null) queryParams.lat = params.lat;
+      if (params.lng != null) queryParams.lng = params.lng;
+      const res = await client.get('/executors/by-service', { params: queryParams });
+      let list = Array.isArray(res.data) ? res.data : (res.data?.executors || []);
+      // Client-side availability filter: if date + time selected, only show executors available that day/time
+      if (params.date && params.timeFrom) {
+        const dayOfWeek = new Date(params.date).getDay(); // 0=Sun, 1=Mon, ...
+        list = list.filter((ex: any) => {
+          const slots = ex.availability_slots || [];
+          if (!slots.length) return true; // no slots set — include
+          return slots.some((slot: any) =>
+            slot.is_active !== false &&
+            slot.day_of_week === dayOfWeek &&
+            slot.start_time <= params.timeFrom! &&
+            slot.end_time > params.timeFrom!
+          );
+        });
+      }
       return list;
     } catch {
-      return [];
+      // Fallback: load all executors without filtering
+      try {
+        const res = await client.get('/executors');
+        return Array.isArray(res.data) ? res.data : (res.data?.executors || []);
+      } catch {
+        return [];
+      }
     }
   },
 

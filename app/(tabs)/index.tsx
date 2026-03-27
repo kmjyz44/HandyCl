@@ -76,6 +76,8 @@ interface BookingState {
   time: string;         // primary time (timeFrom)
   selectedTasker: any | null;
   photos: string[]; // base64 photos from client
+  lat?: number;       // client latitude (for executor location filter)
+  lng?: number;       // client longitude
 }
 
 const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
@@ -295,10 +297,15 @@ export default function HomeScreen() {
   const loadTaskers = async () => {
     setLoadingTaskers(true);
     try {
+      const primaryDate = booking.dates.length > 0 ? booking.dates[0] : booking.date;
       const data = await api.getExecutorsBySkill({
         skill: booking.skillName,
         category: booking.categoryId,
         city: booking.city,
+        lat: booking.lat,
+        lng: booking.lng,
+        date: primaryDate || undefined,
+        timeFrom: booking.timeFrom || undefined,
       });
       setTaskers(Array.isArray(data) ? data : []);
     } catch {
@@ -334,7 +341,7 @@ export default function HomeScreen() {
           const street = addr.road || addr.pedestrian || '';
           const houseNumber = addr.house_number || '';
           const streetAddr = street ? `${street}${houseNumber ? ', ' + houseNumber : ''}` : '';
-          setBooking(b => ({ ...b, city, address: streetAddr }));
+          setBooking(b => ({ ...b, city, address: streetAddr, lat: latitude, lng: longitude }));
         } catch {
           Alert.alert('Помилка', 'Не вдалося визначити адресу');
         } finally {

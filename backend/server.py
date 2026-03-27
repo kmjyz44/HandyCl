@@ -2520,6 +2520,15 @@ async def get_executors_by_service(
             ]}}}],
             "as": "completed_tasks"
         }},
+        {"$lookup": {
+            "from": "availability_slots",
+            "let": {"uid": "$user_id"},
+            "pipeline": [{"$match": {"$expr": {"$and": [
+                {"$eq": ["$user_id", "$$uid"]},
+                {"$eq": ["$is_active", True]}
+            ]}}}],
+            "as": "availability_slots"
+        }},
         {"$addFields": {
             "profile": {"$arrayElemAt": ["$profile", 0]},
             "total_reviews": {"$size": "$reviews"},
