@@ -3946,7 +3946,9 @@ async def get_escrow_status(
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
+    full_name: Optional[str] = None  # alias for name
     phone: Optional[str] = None
+    address: Optional[str] = None
     telegram_chat_id: Optional[str] = None
     picture: Optional[str] = None
 
@@ -3957,10 +3959,15 @@ async def update_profile(
     current_user: User = Depends(get_current_user)
 ):
     update_data = {}
-    if profile_data.name:
-        update_data["name"] = profile_data.name
+    # Accept both 'name' and 'full_name'
+    new_name = profile_data.full_name or profile_data.name
+    if new_name:
+        update_data["name"] = new_name
+        update_data["full_name"] = new_name
     if profile_data.phone:
         update_data["phone"] = profile_data.phone
+    if profile_data.address is not None:
+        update_data["address"] = profile_data.address
     if profile_data.telegram_chat_id:
         update_data["telegram_chat_id"] = profile_data.telegram_chat_id
     if profile_data.picture is not None:

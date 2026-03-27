@@ -1111,7 +1111,7 @@ function ProviderProfile() {
       {/* ACCOUNT INFORMATION */}
       <Text style={pStyles.menuSectionLabel}>ІНФОРМАЦІЯ ПРО АКАУНТ</Text>
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => { setAccountName(user?.full_name || user?.username || ''); setAccountPhone(profile?.phone || ''); setAccountAddress(profile?.address || ''); setEditingAccountDetails(false); setAccountDetailsVisible(true); }}>
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => { setAccountName(user?.full_name || user?.name || user?.username || ''); setAccountPhone(user?.phone || profile?.phone || ''); setAccountAddress(user?.address || profile?.address || ''); setEditingAccountDetails(false); setAccountDetailsVisible(true); }}>
         <Ionicons name="person-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>
           <Text style={pStyles.menuRowText}>Деталі акаунту</Text>
@@ -1543,7 +1543,8 @@ function ProviderProfile() {
                 onPress={async () => {
                   setSaving(true);
                   try {
-                    await api.updateProfile({ full_name: accountName, phone: accountPhone, address: accountAddress });
+                    const updatedUser = await api.updateProfile({ full_name: accountName, name: accountName, phone: accountPhone, address: accountAddress });
+                    if (updatedUser) setUser(updatedUser);
                     Alert.alert('Збережено', 'Деталі акаунту оновлено');
                     setEditingAccountDetails(false);
                     setAccountDetailsVisible(false);

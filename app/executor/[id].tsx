@@ -10,6 +10,7 @@ import {
   Image,
   Dimensions,
   Modal,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -38,6 +39,10 @@ interface ExecutorProfile {
   };
   average_rating: number;
   total_reviews: number;
+  latitude?: number;
+  longitude?: number;
+  service_radius_km?: number;
+  service_cities?: string[];
 }
 
 interface AvailabilitySlot {
@@ -281,6 +286,47 @@ export default function ExecutorProfile() {
             </View>
           </View>
         )}
+
+        {/* Service Area Map */}
+        {(profile.latitude && profile.longitude && profile.service_radius_km) ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Зона роботи</Text>
+            <Text style={styles.coverageSubtitle}>
+              Виконавець працює в радіусі {profile.service_radius_km} км
+            </Text>
+            {Platform.OS === 'web' ? (
+              <View style={styles.mapContainer}>
+                <iframe
+                  title="coverage-map"
+                  src={`/coverage-map.html?lat=${profile.latitude}&lng=${profile.longitude}&radius=${profile.service_radius_km}&name=${encodeURIComponent(profile.user?.name || '')}`}
+                  style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 } as any}
+                />
+              </View>
+            ) : (
+              <View style={styles.mapPlaceholder}>
+                <Ionicons name="map-outline" size={40} color="#2563eb" />
+                <Text style={styles.mapPlaceholderText}>
+                  Зона роботи: {profile.service_radius_km} км
+                </Text>
+                {profile.service_cities && profile.service_cities.length > 0 && (
+                  <Text style={styles.mapPlaceholderSub}>
+                    {profile.service_cities.join(', ')}
+                  </Text>
+                )}
+              </View>
+            )}
+            {profile.service_cities && profile.service_cities.length > 0 && (
+              <View style={styles.citiesRow}>
+                {profile.service_cities.map((city, i) => (
+                  <View key={i} style={styles.cityChip}>
+                    <Ionicons name="location-outline" size={12} color="#2563eb" />
+                    <Text style={styles.cityChipText}>{city}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : null}
 
         {/* Portfolio */}
         {profile.portfolio_photos && profile.portfolio_photos.length > 0 && (
@@ -711,5 +757,59 @@ const styles = StyleSheet.create({
     width: width - 32,
     height: width - 32,
     borderRadius: 8,
+  },
+  coverageSubtitle: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 12,
+  },
+  mapContainer: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#e5e7eb',
+    marginBottom: 12,
+  },
+  mapPlaceholder: {
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  mapPlaceholderText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e40af',
+  },
+  mapPlaceholderSub: {
+    fontSize: 13,
+    color: '#3b82f6',
+  },
+  citiesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  cityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  cityChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1e40af',
   },
 });
