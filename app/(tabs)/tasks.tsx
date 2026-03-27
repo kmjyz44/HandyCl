@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -50,9 +50,15 @@ interface Task {
   scheduled_date: string;
   scheduled_time: string;
   estimated_price?: number;
-  client?: any;
+  photos?: string[];
+  client?: {
+    user_id: string;
+    name: string;
+    photo_url?: string;
+  };
   my_offer?: any;
   allow_offers: boolean;
+  source?: string;
 }
 
 export default function AvailableTasks() {
@@ -104,16 +110,22 @@ export default function AvailableTasks() {
   const renderTaskCard = (task: Task, isMyTask: boolean = false) => {
     const status = getStatusInfo(task.status);
     const category = getCategoryInfo(task.category);
+    const clientName = task.client?.name || 'Клієнт';
+    const clientPhoto = task.client?.photo_url;
+    const price = task.estimated_price;
+    const taskPhotos = task.photos || [];
 
     return (
       <TouchableOpacity
         key={task.task_id}
         style={styles.taskCard}
         onPress={() => openTaskDetail(task)}
+        activeOpacity={0.85}
       >
+        {/* Header row: category badge + status */}
         <View style={styles.taskHeader}>
-          <View style={[styles.categoryBadge, { backgroundColor: `${status.color}15` }]}>
-            <Ionicons name={category.icon as any} size={16} color={status.color} />
+          <View style={[styles.categoryBadge, { backgroundColor: `${status.color}18` }]}>
+            <Ionicons name={category.icon as any} size={15} color={status.color} />
             <Text style={[styles.categoryText, { color: status.color }]}>
               {category.name}
             </Text>
@@ -123,54 +135,93 @@ export default function AvailableTasks() {
           </View>
         </View>
 
-        <Text style={styles.taskTitle}>{task.title}</Text>
-        <Text style={styles.taskDesc} numberOfLines={2}>{task.description}</Text>
+        {/* Title */}
+        <Text style={styles.taskTitle}>{task.title || 'Без назви'}</Text>
 
+        {/* Description */}
+        {!!task.description && (
+          <Text style={styles.taskDesc} numberOfLines={2}>{task.description}</Text>
+        )}
+
+        {/* Task photos strip */}
+        {taskPhotos.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosStrip}>
+            {taskPhotos.slice(0, 5).map((uri, idx) => (
+              <Image key={idx} source={{ uri }} style={styles.taskPhoto} />
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Location + date */}
         <View style={styles.taskInfo}>
-          <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={16} color="#6b7280" />
-            <Text style={styles.infoText}>{task.address}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="calendar-outline" size={16} color="#6b7280" />
-            <Text style={styles.infoText}>
-              {task.scheduled_date} о {task.scheduled_time}
-            </Text>
-          </View>
+          {!!task.address && (
+            <View style={styles.infoRow}>
+              <Ionicons name="location-outline" size={15} color="#6b7280" />
+              <Text style={styles.infoText} numberOfLines={1}>{task.address}</Text>
+            </View>
+          )}
+          {(!!task.scheduled_date || !!task.scheduled_time) && (
+            <View style={styles.infoRow}>
+              <Ionicons name="calendar-outline" size={15} color="#6b7280" />
+              <Text style={styles.infoText}>
+                {task.scheduled_date}{task.scheduled_date && task.scheduled_time ? ' о ' : ''}{task.scheduled_time}
+              </Text>
+            </View>
+          )}
         </View>
 
-        {task.estimated_price && (
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Орієнтовна ціна:</Text>
-            <Text style={styles.priceValue}>${task.estimated_price}</Text>
-          </View>
-        )}
+        {/* Price + client row */}
+        <View style={styles.bottomRow}>
+          {/* Client avatar + name */}
+          {task.client && !isMyTask && (
+            <View style={styles.clientInfo}>
+              {clientPhoto ? (
+                <Image source={{ uri: clientPhoto }} style={styles.clientAvatar} />
+              ) : (
+                <View style={styles.clientAvatarPlaceholder}>
+                  <Text style={styles.clientAvatarInitial}>
+                    {clientName.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.clientName} numberOfLines={1}>{clientName}</Text>
+            </View>
+          )}
 
-        {task.client && !isMyTask && (
-          <View style={styles.clientInfo}>
-            <Ionicons name="person-circle-outline" size={20} color="#6b7280" />
-            <Text style={styles.clientName}>{task.client.name}</Text>
-          </View>
-        )}
+          {/* Price */}
+          {price != null && price > 0 ? (
+            <View style={styles.priceChip}>
+              <Ionicons name="cash-outline" size={14} color="#10b981" />
+              <Text style={styles.priceValue}>{price} грн</Text>
+            </View>
+          ) : (
+            <View style={styles.priceChip}>
+              <Ionicons name="cash-outline" size={14} color="#9ca3af" />
+              <Text style={[styles.priceValue, { color: '#9ca3af' }]}>Ціна не вказана</Text>
+            </View>
+          )}
+        </View>
 
+        {/* My offer badge */}
         {task.my_offer && (
           <View style={styles.myOfferBadge}>
-            <Ionicons name="paper-plane" size={14} color="#8b5cf6" />
+            <Ionicons name="paper-plane" size={13} color="#8b5cf6" />
             <Text style={styles.myOfferText}>
-              Ваша пропозиція: ${task.my_offer.proposed_price}
+              Ваша пропозиція: {task.my_offer.proposed_price} грн
             </Text>
           </View>
         )}
 
+        {/* Footer CTA */}
         <View style={styles.cardFooter}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.viewButton}
             onPress={() => openTaskDetail(task)}
           >
             <Text style={styles.viewButtonText}>
               {isMyTask ? 'Деталі' : task.allow_offers ? 'Надіслати пропозицію' : 'Переглянути'}
             </Text>
-            <Ionicons name="chevron-forward" size={18} color="#2563eb" />
+            <Ionicons name="chevron-forward" size={17} color="#2563eb" />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -300,12 +351,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   taskHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   categoryBadge: {
     flexDirection: 'row',
@@ -330,66 +386,102 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   taskTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#111827',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   taskDesc: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
-    lineHeight: 20,
-    marginBottom: 12,
+    lineHeight: 19,
+    marginBottom: 10,
+  },
+  photosStrip: {
+    marginBottom: 10,
+  },
+  taskPhoto: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: '#f3f4f6',
   },
   taskInfo: {
-    gap: 6,
+    gap: 5,
     marginBottom: 12,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   infoText: {
     fontSize: 13,
     color: '#6b7280',
+    flex: 1,
   },
-  priceRow: {
+  bottomRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    justifyContent: 'space-between',
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
-  },
-  priceLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  priceValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#10b981',
+    marginBottom: 4,
   },
   clientInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
+    gap: 8,
+    flex: 1,
+    marginRight: 8,
+  },
+  clientAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#e5e7eb',
+  },
+  clientAvatarPlaceholder: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clientAvatarInitial: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2563eb',
   },
   clientName: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#374151',
+    fontWeight: '500',
+    flex: 1,
+  },
+  priceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  priceValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#10b981',
   },
   myOfferBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 12,
-    padding: 10,
+    marginTop: 10,
+    padding: 9,
     backgroundColor: '#f3e8ff',
     borderRadius: 8,
   },
@@ -400,7 +492,7 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     marginTop: 12,
-    paddingTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
   },

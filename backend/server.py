@@ -4532,26 +4532,49 @@ async def get_available_tasks(
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only taskers can view available tasks")
     
-    # Get tasker profile for skills matching (reserved for future use)
-    _profile = await db.executor_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
-    
-    query = {"status": {"$in": [TaskStatus.POSTED, TaskStatus.OFFERING]}}
+    result = []
+
+    # 1. Tasks from tasks collection (assigned to no one or open)
+    task_query: dict = {"status": {"$in": ["posted", "offering", "assigned"]}}
     if category:
-        query["category"] = category
-    
-    tasks = await db.tasks.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
-    
-    for task in tasks:
-        client = await db.users.find_one({"user_id": task["client_id"]}, {"_id": 0, "password_hash": 0})
+        task_query["category"] = category
+    tasks_docs = await db.tasks.find(task_query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for task in tasks_docs:
+        client = await db.users.find_one({"user_id": task.get("client_id")}, {"_id": 0, "password_hash": 0})
         task["client"] = client
-        # Check if tasker already sent offer
         existing_offer = await db.offers.find_one({
-            "booking_id": task["task_id"],
+            "booking_id": task.get("task_id"),
             "tasker_id": current_user.user_id
         })
         task["my_offer"] = existing_offer
-    
-    return tasks
+        task["source"] = "task"
+        result.append(task)
+
+    # 2. Bookings from bookings collection with status posted/offering (no provider assigned yet)
+    booking_query: dict = {
+        "status": {"$in": ["posted", "offering"]},
+        "provider_id": {"$in": [None, ""]}
+    }
+    if category:
+        booking_query["category"] = category
+    bookings_docs = await db.bookings.find(booking_query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    existing_task_booking_ids = {t.get("booking_id") for t in tasks_docs}
+    for bk in bookings_docs:
+        if bk.get("booking_id") in existing_task_booking_ids:
+            continue  # already included via tasks collection
+        client = await db.users.find_one({"user_id": bk.get("client_id")}, {"_id": 0, "password_hash": 0})
+        bk["client"] = client
+        bk["task_id"] = bk["booking_id"]  # alias so frontend works
+        bk["scheduled_date"] = bk.get("date", "")
+        bk["scheduled_time"] = bk.get("time", "")
+        bk["estimated_price"] = bk.get("total_price") or bk.get("estimated_price")
+        bk["allow_offers"] = bk.get("allow_offers", True)
+        bk["photos"] = bk.get("problem_photos") or []
+        bk["my_offer"] = None
+        bk["source"] = "booking"
+        result.append(bk)
+
+    return result
 
 @api_router.post("/tasker/tasks/{task_id}/accept")
 async def tasker_accept_task(task_id: str, current_user: User = Depends(get_current_user)):
