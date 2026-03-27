@@ -774,8 +774,11 @@ function ProviderProfile() {
   const [accountPhone, setAccountPhone] = useState('');
   const [accountAddress, setAccountAddress] = useState('');
 
-  // Portfolio photos (local URIs)
+  // Portfolio photos with captions
   const [portfolioPhotos, setPortfolioPhotos] = useState<string[]>([]);
+  const [photoCaptions, setPhotoCaptions] = useState<Record<number, string>>({});
+  const [photosModalVisible, setPhotosModalVisible] = useState(false);
+  const [savingPhotos, setSavingPhotos] = useState(false);
 
   // Add Skills modal
   const [addSkillsVisible, setAddSkillsVisible] = useState(false);
@@ -803,7 +806,15 @@ function ProviderProfile() {
         return s;
       });
       setProviderSkills(storedSkills);
-      setPortfolioPhotos(data.portfolio_photos || []);
+      const photos = data.portfolio_photos || [];
+      setPortfolioPhotos(photos);
+      // Load captions from localStorage
+      if (Platform.OS === 'web') {
+        try {
+          const stored = localStorage.getItem(`photo_captions_${data.user_id || user?.user_id}`);
+          if (stored) setPhotoCaptions(JSON.parse(stored));
+        } catch {}
+      }
       setStats(prev => ({
         ...prev,
         rating: data.rating || 0,
@@ -1128,7 +1139,7 @@ function ProviderProfile() {
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={pickPortfolioPhoto}>
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => setPhotosModalVisible(true)}>
         <Ionicons name="images-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>
           <Text style={pStyles.menuRowText}>Фото робіт</Text>
@@ -1139,13 +1150,13 @@ function ProviderProfile() {
       {portfolioPhotos.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
           {portfolioPhotos.map((photo, i) => (
-            <TouchableOpacity key={i} onLongPress={() => {
-              Alert.alert('Видалити фото?', '', [
-                { text: 'Скасувати', style: 'cancel' },
-                { text: 'Видалити', style: 'destructive', onPress: () => setPortfolioPhotos(portfolioPhotos.filter((_, idx) => idx !== i)) },
-              ]);
-            }}>
-              <Image source={{ uri: photo }} style={pStyles.portfolioThumb} />
+            <TouchableOpacity key={i} onPress={() => setPhotosModalVisible(true)}>
+              <View style={{ marginRight: 8, marginTop: 4 }}>
+                <Image source={{ uri: photo }} style={pStyles.portfolioThumb} />
+                {photoCaptions[i] ? (
+                  <Text numberOfLines={1} style={{ fontSize: 10, color: '#6b7280', width: 80, marginTop: 2 }}>{photoCaptions[i]}</Text>
+                ) : null}
+              </View>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -1556,6 +1567,97 @@ function ProviderProfile() {
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Зберегти зміни</Text>}
               </TouchableOpacity>
             )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ── Photos Modal ── */}
+      <Modal visible={photosModalVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <TouchableOpacity onPress={() => setPhotosModalVisible(false)}>
+              <Ionicons name="arrow-back" size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Фото робіт</Text>
+            <TouchableOpacity
+              onPress={async () => {
+                setSavingPhotos(true);
+                try {
+                  await api.updateExecutorProfile({ portfolio_photos: portfolioPhotos });
+                  if (Platform.OS === 'web') {
+                    try {
+                      localStorage.setItem(
+                        `photo_captions_${profile?.user_id || user?.user_id}`,
+                        JSON.stringify(photoCaptions)
+                      );
+                    } catch {}
+                  }
+                  Alert.alert('Збережено', 'Фото робіт оновлено');
+                  setPhotosModalVisible(false);
+                } catch (e: any) {
+                  Alert.alert('Помилка', e.message || 'Не вдалося зберегти');
+                } finally { setSavingPhotos(false); }
+              }}
+            >
+              {savingPhotos ? <ActivityIndicator color="#2563eb" size="small" /> : <Text style={{ fontSize: 16, color: '#2563eb', fontWeight: '600' }}>Зберегти</Text>}
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+            {portfolioPhotos.length === 0 && (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="images-outline" size={64} color="#d1d5db" />
+                <Text style={{ fontSize: 16, color: '#9ca3af', marginTop: 12 }}>Фото ще не додано</Text>
+                <Text style={{ fontSize: 13, color: '#d1d5db', marginTop: 4 }}>Натисніть кнопку нижче</Text>
+              </View>
+            )}
+            {portfolioPhotos.map((photo, i) => (
+              <View key={i} style={{ marginBottom: 20, backgroundColor: '#f9fafb', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
+                <Image source={{ uri: photo }} style={{ width: '100%', height: 220, resizeMode: 'cover' }} />
+                <View style={{ padding: 12 }}>
+                  <TextInput
+                    style={{
+                      fontSize: 14,
+                      color: '#374151',
+                      borderWidth: 1,
+                      borderColor: '#e5e7eb',
+                      borderRadius: 10,
+                      padding: 10,
+                      backgroundColor: '#fff',
+                      minHeight: 44,
+                    }}
+                    value={photoCaptions[i] || ''}
+                    onChangeText={(text) => setPhotoCaptions(prev => ({ ...prev, [i]: text }))}
+                    placeholder="Короткий опис фото..."
+                    placeholderTextColor="#9ca3af"
+                    maxLength={120}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={{ marginTop: 8, alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    onPress={() => {
+                      const newPhotos = portfolioPhotos.filter((_, idx) => idx !== i);
+                      const newCaptions: Record<number, string> = {};
+                      newPhotos.forEach((_, newIdx) => {
+                        const oldIdx = newIdx >= i ? newIdx + 1 : newIdx;
+                        if (photoCaptions[oldIdx]) newCaptions[newIdx] = photoCaptions[oldIdx];
+                      });
+                      setPortfolioPhotos(newPhotos);
+                      setPhotoCaptions(newCaptions);
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                    <Text style={{ fontSize: 13, color: '#ef4444' }}>Видалити</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderWidth: 2, borderColor: '#2563eb', borderRadius: 14, borderStyle: 'dashed' }}
+              onPress={pickPortfolioPhoto}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#2563eb" />
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#2563eb' }}>Додати фото</Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>

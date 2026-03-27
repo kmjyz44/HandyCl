@@ -43,6 +43,7 @@ interface ExecutorProfile {
   longitude?: number;
   service_radius_km?: number;
   service_cities?: string[];
+  service_zones?: string[];
 }
 
 interface AvailabilitySlot {
@@ -288,36 +289,41 @@ export default function ExecutorProfile() {
         )}
 
         {/* Service Area Map */}
-        {(profile.latitude && profile.longitude && profile.service_radius_km) ? (
+        {(profile.latitude && profile.longitude) || profile.service_radius_km || (profile.service_cities && profile.service_cities.length > 0) || (profile.service_zones && profile.service_zones.length > 0) ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Зона роботи</Text>
-            <Text style={styles.coverageSubtitle}>
-              Виконавець працює в радіусі {profile.service_radius_km} км
-            </Text>
-            {Platform.OS === 'web' ? (
-              <View style={styles.mapContainer}>
-                <iframe
-                  title="coverage-map"
-                  src={`/coverage-map.html?lat=${profile.latitude}&lng=${profile.longitude}&radius=${profile.service_radius_km}&name=${encodeURIComponent(profile.user?.name || '')}`}
-                  style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 } as any}
-                />
-              </View>
+            {profile.service_radius_km ? (
+              <Text style={styles.coverageSubtitle}>
+                Виконавець працює в радіусі {profile.service_radius_km} км
+              </Text>
+            ) : null}
+            {profile.latitude && profile.longitude && profile.service_radius_km ? (
+              Platform.OS === 'web' ? (
+                <View style={styles.mapContainer}>
+                  <iframe
+                    title="coverage-map"
+                    src={`/coverage-map.html?lat=${profile.latitude}&lng=${profile.longitude}&radius=${profile.service_radius_km}&name=${encodeURIComponent(profile.user?.name || '')}`}
+                    style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 } as any}
+                  />
+                </View>
+              ) : (
+                <View style={styles.mapPlaceholder}>
+                  <Ionicons name="map-outline" size={40} color="#2563eb" />
+                  <Text style={styles.mapPlaceholderText}>
+                    Зона роботи: {profile.service_radius_km} км
+                  </Text>
+                </View>
+              )
             ) : (
               <View style={styles.mapPlaceholder}>
                 <Ionicons name="map-outline" size={40} color="#2563eb" />
-                <Text style={styles.mapPlaceholderText}>
-                  Зона роботи: {profile.service_radius_km} км
-                </Text>
-                {profile.service_cities && profile.service_cities.length > 0 && (
-                  <Text style={styles.mapPlaceholderSub}>
-                    {profile.service_cities.join(', ')}
-                  </Text>
-                )}
+                <Text style={styles.mapPlaceholderText}>Зона обслуговування</Text>
+                <Text style={styles.mapPlaceholderSub}>Виконавець не вказав координати</Text>
               </View>
             )}
-            {profile.service_cities && profile.service_cities.length > 0 && (
+            {((profile.service_cities && profile.service_cities.length > 0) || (profile.service_zones && profile.service_zones.length > 0)) && (
               <View style={styles.citiesRow}>
-                {profile.service_cities.map((city, i) => (
+                {[...(profile.service_cities || []), ...(profile.service_zones || [])].map((city, i) => (
                   <View key={i} style={styles.cityChip}>
                     <Ionicons name="location-outline" size={12} color="#2563eb" />
                     <Text style={styles.cityChipText}>{city}</Text>

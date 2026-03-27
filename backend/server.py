@@ -409,6 +409,8 @@ class ExecutorProfile(BaseModel):
     service_radius_km: Optional[float] = None  # Service radius in km
     service_cities: List[str] = []
     service_zip_codes: List[str] = []
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     # Verification status
     verification_status: str = "not_submitted"  # not_submitted, pending, approved, rejected
     is_verified: bool = False
@@ -443,7 +445,8 @@ class ExecutorProfileCreate(BaseModel):
     service_radius_km: Optional[float] = None
     service_cities: List[str] = []
     service_zip_codes: List[str] = []
-
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 class ExecutorProfileUpdate(BaseModel):
     bio: Optional[str] = None
     skills: Optional[List[str]] = None
@@ -463,7 +466,8 @@ class ExecutorProfileUpdate(BaseModel):
     service_radius_km: Optional[float] = None
     service_cities: Optional[List[str]] = None
     service_zip_codes: Optional[List[str]] = None
-
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 # ==================== VERIFICATION & DOCUMENTS ====================
 
 class TaskerDocument(BaseModel):
@@ -2343,8 +2347,16 @@ async def get_executor_profile(user_id: str):
     reviews = await db.reviews.find({"provider_id": user_id}, {"_id": 0}).to_list(100)
     avg_rating = sum(r["rating"] for r in reviews) / len(reviews) if reviews else 0
     
+    # Merge user lat/lng into profile if profile doesn't have them
+    merged_lat = profile.get("latitude") or (user.get("latitude") if user else None)
+    merged_lng = profile.get("longitude") or (user.get("longitude") if user else None)
+    merged_radius = profile.get("service_radius_km")
+    
     return {
         **profile,
+        "latitude": merged_lat,
+        "longitude": merged_lng,
+        "service_radius_km": merged_radius,
         "user": user,
         "average_rating": round(avg_rating, 2),
         "total_reviews": len(reviews)
