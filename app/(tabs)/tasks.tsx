@@ -68,7 +68,10 @@ export default function AvailableTasks() {
   const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'available' | 'my'>('available');
+  const [activeTab, setActiveTab] = useState<'available' | 'my' | 'done'>('available');
+  const COMPLETED_STATUSES = ['completed_pending_payment', 'paid', 'completed'];
+  const activeMyTasks = myTasks.filter(t => !COMPLETED_STATUSES.includes(t.status));
+  const doneTasks = myTasks.filter(t => COMPLETED_STATUSES.includes(t.status));
 
   const loadTasks = async () => {
     try {
@@ -257,7 +260,16 @@ export default function AvailableTasks() {
           onPress={() => setActiveTab('my')}
         >
           <Text style={[styles.tabText, activeTab === 'my' && styles.tabTextActive]}>
-            Мої ({myTasks.length})
+            Мої ({activeMyTasks.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'done' && styles.tabActiveDone]}
+          onPress={() => setActiveTab('done')}
+        >
+          <Ionicons name="checkmark-done-circle" size={14} color={activeTab === 'done' ? '#22c55e' : '#9ca3af'} style={{ marginRight: 3 }} />
+          <Text style={[styles.tabText, activeTab === 'done' && styles.tabTextDone]}>
+            Виконані ({doneTasks.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -276,14 +288,24 @@ export default function AvailableTasks() {
               <Text style={styles.emptySubtitle}>Нові завдання з'являться тут</Text>
             </View>
           )
-        ) : (
-          myTasks.length > 0 ? (
-            myTasks.map(task => renderTaskCard(task, true))
+        ) : activeTab === 'my' ? (
+          activeMyTasks.length > 0 ? (
+            activeMyTasks.map(task => renderTaskCard(task, true))
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="briefcase-outline" size={64} color="#d1d5db" />
-              <Text style={styles.emptyTitle}>У вас немає завдань</Text>
+              <Text style={styles.emptyTitle}>У вас немає активних завдань</Text>
               <Text style={styles.emptySubtitle}>Прийміть завдання зі списку доступних</Text>
+            </View>
+          )
+        ) : (
+          doneTasks.length > 0 ? (
+            doneTasks.map(task => renderTaskCard(task, true))
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="checkmark-done-circle-outline" size={64} color="#d1d5db" />
+              <Text style={styles.emptyTitle}>Немає виконаних завдань</Text>
+              <Text style={styles.emptySubtitle}>Завершені завдання з'являться тут</Text>
             </View>
           )
         )}
@@ -339,6 +361,12 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#fff',
+  },
+  tabActiveDone: {
+    backgroundColor: '#dcfce7',
+  },
+  tabTextDone: {
+    color: '#22c55e',
   },
   content: {
     flex: 1,

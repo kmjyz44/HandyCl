@@ -359,12 +359,12 @@ export const api = {
   },
 
   onTheWayTask: async (id: string) => {
-    // Try tasker-specific endpoint first, fall back to generic
+    // Use generic endpoint which resolves by booking_id too
     try {
-      const res = await client.post(`/tasker/tasks/${id}/on-the-way`);
+      const res = await client.post(`/tasks/${id}/on-the-way`);
       return res.data;
     } catch {
-      const res = await client.post(`/tasks/${id}/on-the-way`);
+      const res = await client.post(`/tasker/tasks/${id}/on-the-way`);
       return res.data;
     }
   },

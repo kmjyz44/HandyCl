@@ -365,7 +365,7 @@ class Message(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class MessageCreate(BaseModel):
-    to_user_id: str
+    to_user_id: Optional[str] = None
     text: str
     booking_id: Optional[str] = None
 
@@ -2191,7 +2191,7 @@ async def complete_task(
     if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
-    if task["status"] not in [TaskStatus.STARTED, TaskStatus.IN_PROGRESS]:
+    if task["status"] not in [TaskStatus.STARTED, TaskStatus.IN_PROGRESS, TaskStatus.ON_THE_WAY]:
         raise HTTPException(status_code=400, detail="Task must be started to complete")
     
     now = datetime.now(timezone.utc)
@@ -4951,7 +4951,7 @@ async def tasker_start_task(task_id: str, current_user: User = Depends(get_curre
     if not task or task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    if task["status"] not in [TaskStatus.HOLD_PLACED, TaskStatus.ON_THE_WAY]:
+    if task["status"] not in [TaskStatus.HOLD_PLACED, TaskStatus.ON_THE_WAY, TaskStatus.ASSIGNED]:
         raise HTTPException(status_code=400, detail="Cannot start task in current status")
     
     now = datetime.now(timezone.utc)

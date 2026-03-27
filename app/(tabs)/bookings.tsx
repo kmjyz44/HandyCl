@@ -1,13 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -16,42 +10,44 @@ import { useAuthStore } from '../../store/authStore';
 import { api } from '../../utils/api';
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b',
-  confirmed: '#3b82f6',
-  in_progress: '#8b5cf6',
-  completed: '#10b981',
-  cancelled: '#ef4444',
-  draft: '#9ca3af',
-  posted: '#3b82f6',
-  offering: '#8b5cf6',
-  assigned: '#f59e0b',
-  hold_placed: '#10b981',
-  on_the_way: '#06b6d4',
-  started: '#f97316',
+  pending:                   '#f59e0b',
+  confirmed:                 '#3b82f6',
+  in_progress:               '#8b5cf6',
+  completed:                 '#10b981',
+  cancelled:                 '#ef4444',
+  draft:                     '#9ca3af',
+  posted:                    '#3b82f6',
+  offering:                  '#8b5cf6',
+  assigned:                  '#f59e0b',
+  hold_placed:               '#10b981',
+  on_the_way:                '#06b6d4',
+  started:                   '#f97316',
   completed_pending_payment: '#eab308',
-  paid: '#22c55e',
-  cancelled_by_client: '#ef4444',
-  cancelled_by_tasker: '#ef4444',
+  paid:                      '#22c55e',
+  cancelled_by_client:       '#ef4444',
+  cancelled_by_tasker:       '#ef4444',
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Очікує',
-  confirmed: 'Підтверджено',
-  in_progress: 'Виконується',
-  completed: 'Завершено',
-  cancelled: 'Скасовано',
-  draft: 'Чернетка',
-  posted: 'Очікує виконавця',
-  offering: 'Приймає пропозиції',
-  assigned: 'Виконавець призначений',
-  hold_placed: 'Оплата підтверджена',
-  on_the_way: 'Виконавець в дорозі',
-  started: 'Виконується',
+  pending:                   'Очікує',
+  confirmed:                 'Підтверджено',
+  in_progress:               'Виконується',
+  completed:                 'Завершено',
+  cancelled:                 'Скасовано',
+  draft:                     'Чернетка',
+  posted:                    'Очікує виконавця',
+  offering:                  'Приймає пропозиції',
+  assigned:                  'Виконавець призначений',
+  hold_placed:               'Оплата підтверджена',
+  on_the_way:                'Виконавець в дорозі',
+  started:                   'Виконується',
   completed_pending_payment: 'Очікує оплати',
-  paid: 'Завершено',
-  cancelled_by_client: 'Скасовано вами',
-  cancelled_by_tasker: 'Скасовано виконавцем',
+  paid:                      'Оплачено ✓',
+  cancelled_by_client:       'Скасовано вами',
+  cancelled_by_tasker:       'Скасовано виконавцем',
 };
+
+const COMPLETED_STATUSES = ['completed_pending_payment', 'paid', 'completed'];
 
 export default function Bookings() {
   const router = useRouter();
@@ -59,6 +55,7 @@ export default function Bookings() {
   const user = useAuthStore((state) => state.user);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
 
   const loadBookings = async () => {
     try {
@@ -72,115 +69,148 @@ export default function Bookings() {
     }
   };
 
-  useEffect(() => {
-    loadBookings();
-  }, []);
+  useEffect(() => { loadBookings(); }, []);
+  const onRefresh = () => { setRefreshing(true); loadBookings(); };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadBookings();
-  };
-
-  const getStatusColor = (status: string) => STATUS_COLORS[status] || '#6b7280';
-  const getStatusLabel = (status: string) => STATUS_LABELS[status] || status;
+  const activeBookings = bookings.filter(b => !COMPLETED_STATUSES.includes(b.status));
+  const completedBookings = bookings.filter(b => COMPLETED_STATUSES.includes(b.status));
+  const displayList = activeTab === 'active' ? activeBookings : completedBookings;
 
   if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
-    );
+    return <View style={styles.centered}><ActivityIndicator size="large" color="#2563eb" /></View>;
   }
+
+  const renderCard = (booking: any) => {
+    const statusColor = STATUS_COLORS[booking.status] || '#6b7280';
+    const statusLabel = STATUS_LABELS[booking.status] || booking.status;
+    const price = booking.total_price || booking.estimated_price || 0;
+    const title = booking.title || booking.service?.name || 'Послуга';
+    const isCompleted = COMPLETED_STATUSES.includes(booking.status);
+
+    const handlePress = () => {
+      if (booking.task_id) {
+        router.push(`/task-detail?id=${booking.task_id}`);
+      } else {
+        router.push({ pathname: '/(tabs)/booking-detail', params: { booking_id: booking.booking_id } });
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        key={booking.booking_id}
+        style={styles.bookingCard}
+        onPress={handlePress}
+        activeOpacity={0.85}
+      >
+        <View style={[styles.statusStrip, { backgroundColor: statusColor }]} />
+        <View style={styles.cardInner}>
+          <View style={styles.bookingHeader}>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
+              <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+            </View>
+            <Text style={styles.bookingId}>#{booking.booking_id.slice(-6)}</Text>
+          </View>
+
+          <Text style={styles.bookingTitle} numberOfLines={1}>{title}</Text>
+
+          <View style={styles.bookingInfo}>
+            {!!(booking.scheduled_date || booking.date) && (
+              <View style={styles.infoRow}>
+                <Ionicons name="calendar-outline" size={15} color="#6b7280" />
+                <Text style={styles.infoText}>
+                  {booking.scheduled_date || booking.date}
+                  {(booking.scheduled_time || booking.time) ? ` о ${booking.scheduled_time || booking.time}` : ''}
+                </Text>
+              </View>
+            )}
+            {!!booking.address && (
+              <View style={styles.infoRow}>
+                <Ionicons name="location-outline" size={15} color="#6b7280" />
+                <Text style={styles.infoText} numberOfLines={1}>{booking.address}</Text>
+              </View>
+            )}
+            {price > 0 && (
+              <View style={styles.infoRow}>
+                <Ionicons name="cash-outline" size={15} color="#10b981" />
+                <Text style={[styles.infoText, { color: '#10b981', fontWeight: '600' }]}>{price} грн</Text>
+              </View>
+            )}
+            {isCompleted && booking.actual_hours != null && (
+              <View style={styles.infoRow}>
+                <Ionicons name="time-outline" size={15} color="#2563eb" />
+                <Text style={[styles.infoText, { color: '#2563eb' }]}>Відпрацьовано: {booking.actual_hours} год</Text>
+              </View>
+            )}
+          </View>
+
+          {booking.status === 'completed_pending_payment' && user?.role === 'client' && (
+            <View style={styles.payPrompt}>
+              <Ionicons name="card-outline" size={15} color="#92400e" />
+              <Text style={styles.payPromptText}>Натисніть щоб оплатити</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Мої бронювання</Text>
+        <Text style={styles.headerTitle}>Мої замовлення</Text>
         <Text style={styles.headerSubtitle}>
           {user?.role === 'provider' ? 'Ваші призначені завдання' : 'Ваші замовлення послуг'}
         </Text>
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'active' && styles.tabActive]}
+          onPress={() => setActiveTab('active')}
+        >
+          <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>
+            Активні ({activeBookings.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'completed' && styles.tabActiveCompleted]}
+          onPress={() => setActiveTab('completed')}
+        >
+          <Ionicons
+            name="checkmark-done-circle"
+            size={15}
+            color={activeTab === 'completed' ? '#22c55e' : '#9ca3af'}
+            style={{ marginRight: 5 }}
+          />
+          <Text style={[styles.tabText, activeTab === 'completed' && styles.tabTextCompleted]}>
+            Виконані ({completedBookings.length})
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {bookings.length === 0 ? (
+        {displayList.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={64} color="#d1d5db" />
-            <Text style={styles.emptyText}>Немає бронювань</Text>
-            {user?.role === 'client' && (
-              <TouchableOpacity
-                style={styles.browseButton}
-                onPress={() => router.push('/(tabs)')}
-              >
+            <Ionicons
+              name={activeTab === 'active' ? 'calendar-outline' : 'checkmark-done-circle-outline'}
+              size={64}
+              color="#d1d5db"
+            />
+            <Text style={styles.emptyText}>
+              {activeTab === 'active' ? 'Немає активних замовлень' : 'Немає виконаних завдань'}
+            </Text>
+            {activeTab === 'active' && user?.role === 'client' && (
+              <TouchableOpacity style={styles.browseButton} onPress={() => router.push('/(tabs)')}>
                 <Text style={styles.browseButtonText}>Знайти виконавця</Text>
               </TouchableOpacity>
             )}
           </View>
         ) : (
-          bookings.map((booking) => {
-            const statusColor = getStatusColor(booking.status);
-            const statusLabel = getStatusLabel(booking.status);
-            const price = booking.total_price || booking.estimated_price || 0;
-            const title = booking.title || booking.service?.name || 'Послуга';
-
-            return (
-              <TouchableOpacity
-                key={booking.booking_id}
-                style={styles.bookingCard}
-                onPress={() => router.push({
-                  pathname: '/(tabs)/booking-detail',
-                  params: { booking_id: booking.booking_id }
-                })}
-                activeOpacity={0.85}
-              >
-                {/* Status strip */}
-                <View style={[styles.statusStrip, { backgroundColor: statusColor }]} />
-
-                <View style={styles.cardInner}>
-                  {/* Header */}
-                  <View style={styles.bookingHeader}>
-                    <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-                      <Text style={[styles.statusText, { color: statusColor }]}>
-                        {statusLabel}
-                      </Text>
-                    </View>
-                    <Text style={styles.bookingId}>#{booking.booking_id.slice(-6)}</Text>
-                  </View>
-
-                  {/* Title */}
-                  <Text style={styles.bookingTitle} numberOfLines={1}>{title}</Text>
-
-                  {/* Info rows */}
-                  <View style={styles.bookingInfo}>
-                    {(!!booking.date || !!booking.time) && (
-                      <View style={styles.infoRow}>
-                        <Ionicons name="calendar-outline" size={15} color="#6b7280" />
-                        <Text style={styles.infoText}>
-                          {booking.date || ''}{booking.date && booking.time ? ' о ' : ''}{booking.time || ''}
-                        </Text>
-                      </View>
-                    )}
-                    {!!booking.address && (
-                      <View style={styles.infoRow}>
-                        <Ionicons name="location-outline" size={15} color="#6b7280" />
-                        <Text style={styles.infoText} numberOfLines={1}>{booking.address}</Text>
-                      </View>
-                    )}
-                    {price > 0 && (
-                      <View style={styles.infoRow}>
-                        <Ionicons name="cash-outline" size={15} color="#10b981" />
-                        <Text style={[styles.infoText, { color: '#10b981', fontWeight: '600' }]}>
-                          {price} грн
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })
+          displayList.map(renderCard)
         )}
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -189,15 +219,8 @@ export default function Bookings() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#f9fafb' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     backgroundColor: '#fff',
     padding: 24,
@@ -205,20 +228,40 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
+  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#111827' },
+  headerSubtitle: { fontSize: 14, color: '#6b7280', marginTop: 4 },
+  tabs: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    paddingHorizontal: 16,
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 4,
-  },
-  content: {
+  tab: {
     flex: 1,
-    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
+  tabActive: { borderBottomColor: '#2563eb' },
+  tabActiveCompleted: { borderBottomColor: '#22c55e' },
+  tabText: { fontSize: 14, fontWeight: '600', color: '#9ca3af' },
+  tabTextActive: { color: '#2563eb' },
+  tabTextCompleted: { color: '#22c55e' },
+  content: { flex: 1, padding: 16 },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 64 },
+  emptyText: { marginTop: 16, fontSize: 16, color: '#6b7280' },
+  browseButton: {
+    marginTop: 24,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  browseButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   bookingCard: {
     backgroundColor: '#fff',
     marginBottom: 12,
@@ -233,72 +276,29 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  statusStrip: {
-    width: 5,
-  },
-  cardInner: {
-    flex: 1,
-    padding: 14,
-  },
+  statusStrip: { width: 5 },
+  cardInner: { flex: 1, padding: 14 },
   bookingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  bookingId: {
-    fontSize: 11,
-    color: '#9ca3af',
-    fontFamily: 'monospace',
-  },
-  bookingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  bookingInfo: {
-    gap: 5,
-  },
-  infoRow: {
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  statusText: { fontSize: 12, fontWeight: '700' },
+  bookingId: { fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' },
+  bookingTitle: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 8 },
+  bookingInfo: { gap: 5 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  infoText: { fontSize: 13, color: '#6b7280', flex: 1 },
+  payPrompt: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 10,
+    backgroundColor: '#fef9c3',
+    padding: 8,
+    borderRadius: 8,
   },
-  infoText: {
-    fontSize: 13,
-    color: '#6b7280',
-    flex: 1,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
-  },
-  emptyText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  browseButton: {
-    marginTop: 24,
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  browseButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  payPromptText: { fontSize: 13, color: '#92400e', fontWeight: '600' },
 });
