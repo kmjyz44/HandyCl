@@ -317,7 +317,6 @@ export default function Users() {
           </View>
         </View>
       </Modal>
-    </View>
 
       {/* Moderator Modules Modal */}
       <Modal visible={modModalVisible} animationType='slide' transparent>
@@ -353,6 +352,7 @@ export default function Users() {
           </View>
         </View>
       </Modal>
+    </View>
   );
 }
 
