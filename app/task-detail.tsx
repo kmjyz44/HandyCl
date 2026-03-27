@@ -16,15 +16,29 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
-  posted: { label: 'Нове', color: '#3b82f6' },
-  offering: { label: 'Приймає пропозиції', color: '#8b5cf6' },
-  assigned: { label: 'Призначено вам', color: '#f59e0b', next: 'accept', nextLabel: 'Прийняти завдання' },
-  hold_placed: { label: 'Оплата підтверджена', color: '#10b981', next: 'on_the_way', nextLabel: 'Виїхав' },
-  on_the_way: { label: 'В дорозі', color: '#06b6d4', next: 'start', nextLabel: 'Почати роботу' },
-  started: { label: 'В роботі', color: '#f97316', next: 'complete', nextLabel: 'Завершити' },
-  completed_pending_payment: { label: 'Очікує оплати', color: '#eab308' },
-  paid: { label: 'Оплачено', color: '#22c55e' },
+// Status config for BOTH executor and client views
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
+  draft:                     { label: 'Чернетка',               color: '#9ca3af', icon: 'document-outline' },
+  posted:                    { label: 'Очікує виконавця',       color: '#3b82f6', icon: 'time-outline' },
+  offering:                  { label: 'Приймає пропозиції',     color: '#8b5cf6', icon: 'chatbubbles-outline' },
+  assigned:                  { label: 'Виконавець призначений', color: '#f59e0b', icon: 'person-outline' },
+  hold_placed:               { label: 'Оплата підтверджена',    color: '#10b981', icon: 'card-outline' },
+  on_the_way:                { label: 'Виконавець в дорозі',    color: '#06b6d4', icon: 'car-outline' },
+  started:                   { label: 'Виконується',            color: '#f97316', icon: 'construct-outline' },
+  completed_pending_payment: { label: 'Очікує оплати',          color: '#eab308', icon: 'hourglass-outline' },
+  paid:                      { label: 'Завершено',              color: '#22c55e', icon: 'checkmark-circle-outline' },
+  cancelled_by_client:       { label: 'Скасовано клієнтом',     color: '#ef4444', icon: 'close-circle-outline' },
+  cancelled_by_tasker:       { label: 'Скасовано виконавцем',   color: '#ef4444', icon: 'close-circle-outline' },
+};
+
+// What action button to show for executor depending on current status
+const EXECUTOR_ACTIONS: Record<string, { action: string; label: string; color: string }> = {
+  posted:      { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb' },
+  offering:    { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb' },
+  assigned:    { action: 'on_the_way', label: 'Виїхав',            color: '#06b6d4' },
+  hold_placed: { action: 'on_the_way', label: 'Виїхав',            color: '#06b6d4' },
+  on_the_way:  { action: 'start',      label: 'Почати роботу',     color: '#f97316' },
+  started:     { action: 'complete',   label: 'Завершити роботу',  color: '#10b981' },
 };
 
 export default function TaskDetail() {
@@ -34,12 +48,12 @@ export default function TaskDetail() {
   const [task, setTask] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  
+
   // Offer modal
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [offerPrice, setOfferPrice] = useState('');
   const [offerMessage, setOfferMessage] = useState('');
-  
+
   // Complete modal
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [actualHours, setActualHours] = useState('');
@@ -68,11 +82,11 @@ export default function TaskDetail() {
       switch (action) {
         case 'accept':
           await api.acceptTask(id);
-          Alert.alert('Успіх', 'Завдання прийнято!');
+          Alert.alert('Успіх', 'Ви прийняли завдання!');
           break;
         case 'on_the_way':
           await api.onTheWayTask(id);
-          Alert.alert('Успіх', 'Статус оновлено: В дорозі');
+          Alert.alert('Успіх', 'Статус: В дорозі');
           break;
         case 'start':
           await api.startTask(id);
@@ -83,7 +97,7 @@ export default function TaskDetail() {
           setActionLoading(false);
           return;
       }
-      loadTask();
+      await loadTask();
     } catch (error: any) {
       Alert.alert('Помилка', error.message || 'Не вдалося виконати дію');
     } finally {
@@ -96,7 +110,6 @@ export default function TaskDetail() {
       Alert.alert('Помилка', 'Вкажіть ціну');
       return;
     }
-    
     setActionLoading(true);
     try {
       await api.createOffer({
@@ -121,7 +134,6 @@ export default function TaskDetail() {
       Alert.alert('Помилка', 'Вкажіть кількість годин');
       return;
     }
-    
     setActionLoading(true);
     try {
       const result = await api.completeTask(id, {
@@ -129,8 +141,9 @@ export default function TaskDetail() {
         materials_cost: materialsCost ? parseFloat(materialsCost) : undefined,
         provider_notes: providerNotes || undefined,
       });
-      Alert.alert('Завдання завершено!', 
-        `Фінальна ціна: $${result.final_price}\nВаш заробіток: $${result.tasker_payout}`
+      Alert.alert(
+        'Завдання завершено!',
+        `Фінальна ціна: ${result.final_price} грн\nВаш заробіток: ${result.tasker_payout} грн`
       );
       setShowCompleteModal(false);
       loadTask();
@@ -151,9 +164,27 @@ export default function TaskDetail() {
 
   if (!task) return null;
 
-  const statusConfig = STATUS_CONFIG[task.status] || { label: task.status, color: '#6b7280' };
+  const statusCfg = STATUS_CONFIG[task.status] || { label: task.status, color: '#6b7280', icon: 'help-circle-outline' };
+  const isProvider = user?.role === 'provider';
   const isMyTask = task.provider_id === user?.user_id;
-  const canSendOffer = task.allow_offers && !task.my_offer && user?.role === 'provider';
+  const isOpenTask = !task.provider_id && (task.status === 'posted' || task.status === 'offering');
+
+  // What action button to show for executor
+  const executorAction = isProvider
+    ? isOpenTask
+      ? EXECUTOR_ACTIONS['posted']         // open booking — show Accept
+      : isMyTask
+        ? EXECUTOR_ACTIONS[task.status]    // my task — show next step
+        : null
+    : null;
+
+  // Offer button: only for open tasks where offers are allowed and executor hasn't sent one
+  const canSendOffer = isProvider && task.allow_offers && !task.my_offer && isOpenTask;
+
+  const clientName = task.client?.name || 'Клієнт';
+  const clientPhoto = task.client?.photo_url;
+  const price = task.estimated_price || task.total_price;
+  const taskPhotos = [...(task.photos || []), ...(task.problem_photos || [])];
 
   return (
     <View style={styles.container}>
@@ -167,41 +198,47 @@ export default function TaskDetail() {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* Status */}
-        <View style={[styles.statusBar, { backgroundColor: statusConfig.color }]}>
-          <Ionicons name="information-circle" size={20} color="#fff" />
-          <Text style={styles.statusText}>{statusConfig.label}</Text>
+        {/* Status Banner */}
+        <View style={[styles.statusBar, { backgroundColor: statusCfg.color }]}>
+          <Ionicons name={statusCfg.icon as any} size={20} color="#fff" />
+          <Text style={styles.statusText}>{statusCfg.label}</Text>
         </View>
 
-        {/* Main Info */}
+        {/* Title + description */}
         <View style={styles.section}>
-          <Text style={styles.title}>{task.title}</Text>
-          <Text style={styles.description}>{task.description}</Text>
+          <Text style={styles.title}>{task.title || 'Без назви'}</Text>
+          {!!task.description && (
+            <Text style={styles.description}>{task.description}</Text>
+          )}
         </View>
 
         {/* Details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Деталі</Text>
-          
-          <View style={styles.detailRow}>
-            <Ionicons name="location-outline" size={20} color="#6b7280" />
-            <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Адреса</Text>
-              <Text style={styles.detailValue}>{task.address}</Text>
-            </View>
-          </View>
 
-          <View style={styles.detailRow}>
-            <Ionicons name="calendar-outline" size={20} color="#6b7280" />
-            <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Дата та час</Text>
-              <Text style={styles.detailValue}>
-                {task.scheduled_date} о {task.scheduled_time}
-              </Text>
+          {!!task.address && (
+            <View style={styles.detailRow}>
+              <Ionicons name="location-outline" size={20} color="#6b7280" />
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Адреса</Text>
+                <Text style={styles.detailValue}>{task.address}</Text>
+              </View>
             </View>
-          </View>
+          )}
 
-          {task.estimated_hours && (
+          {(!!task.scheduled_date || !!task.scheduled_time || !!task.date || !!task.time) && (
+            <View style={styles.detailRow}>
+              <Ionicons name="calendar-outline" size={20} color="#6b7280" />
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Дата та час</Text>
+                <Text style={styles.detailValue}>
+                  {task.scheduled_date || task.date || ''}{(task.scheduled_date || task.date) && (task.scheduled_time || task.time) ? ' о ' : ''}{task.scheduled_time || task.time || ''}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {!!task.estimated_hours && (
             <View style={styles.detailRow}>
               <Ionicons name="time-outline" size={20} color="#6b7280" />
               <View style={styles.detailContent}>
@@ -216,22 +253,24 @@ export default function TaskDetail() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Вартість</Text>
           <View style={styles.priceCard}>
-            {task.estimated_price && (
+            {price != null && price > 0 ? (
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Орієнтовна ціна</Text>
-                <Text style={styles.priceValue}>${task.estimated_price}</Text>
+                <Text style={styles.priceValueGreen}>{price} грн</Text>
               </View>
+            ) : (
+              <Text style={styles.noPrice}>Ціна не вказана</Text>
             )}
-            {task.final_price && (
+            {!!task.final_price && (
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Фінальна ціна</Text>
-                <Text style={[styles.priceValue, styles.finalPrice]}>${task.final_price}</Text>
+                <Text style={[styles.priceValueGreen, { fontSize: 20 }]}>{task.final_price} грн</Text>
               </View>
             )}
-            {task.platform_fee && (
+            {!!task.platform_fee && (
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Комісія платформи</Text>
-                <Text style={styles.feeValue}>-${task.platform_fee.toFixed(2)}</Text>
+                <Text style={styles.feeValue}>-{task.platform_fee.toFixed(2)} грн</Text>
               </View>
             )}
           </View>
@@ -242,11 +281,17 @@ export default function TaskDetail() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Клієнт</Text>
             <View style={styles.clientCard}>
-              <View style={styles.clientAvatar}>
-                <Ionicons name="person" size={24} color="#fff" />
-              </View>
+              {clientPhoto ? (
+                <Image source={{ uri: clientPhoto }} style={styles.clientAvatar} />
+              ) : (
+                <View style={styles.clientAvatarPlaceholder}>
+                  <Text style={styles.clientAvatarInitial}>
+                    {clientName.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
               <View style={styles.clientInfo}>
-                <Text style={styles.clientName}>{task.client.name}</Text>
+                <Text style={styles.clientName}>{clientName}</Text>
                 {task.client.phone && (
                   <Text style={styles.clientPhone}>{task.client.phone}</Text>
                 )}
@@ -260,12 +305,12 @@ export default function TaskDetail() {
           </View>
         )}
 
-        {/* Photos */}
-        {((task.photos && task.photos.length > 0) || (task.problem_photos && task.problem_photos.length > 0)) && (
+        {/* Task Photos */}
+        {taskPhotos.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Фото завдання</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {[...(task.photos || []), ...(task.problem_photos || [])].map((photo: string, index: number) => (
+              {taskPhotos.map((photo: string, index: number) => (
                 <Image
                   key={index}
                   source={{ uri: photo.startsWith('http') ? photo : `data:image/jpeg;base64,${photo}` }}
@@ -277,7 +322,7 @@ export default function TaskDetail() {
         )}
 
         {/* Completion Info */}
-        {task.actual_hours && (
+        {!!task.actual_hours && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Результат роботи</Text>
             <View style={styles.completionCard}>
@@ -285,13 +330,13 @@ export default function TaskDetail() {
                 <Text style={styles.completionLabel}>Відпрацьовано годин</Text>
                 <Text style={styles.completionValue}>{task.actual_hours}</Text>
               </View>
-              {task.materials_cost && (
+              {!!task.materials_cost && (
                 <View style={styles.completionRow}>
                   <Text style={styles.completionLabel}>Витрати на матеріали</Text>
-                  <Text style={styles.completionValue}>${task.materials_cost}</Text>
+                  <Text style={styles.completionValue}>{task.materials_cost} грн</Text>
                 </View>
               )}
-              {task.provider_notes && (
+              {!!task.provider_notes && (
                 <View style={styles.notesRow}>
                   <Text style={styles.completionLabel}>Коментар виконавця</Text>
                   <Text style={styles.notesText}>{task.provider_notes}</Text>
@@ -301,14 +346,15 @@ export default function TaskDetail() {
           </View>
         )}
 
-        <View style={{ height: 120 }} />
+        <View style={{ height: 140 }} />
       </ScrollView>
 
-      {/* Action Buttons */}
+      {/* Action Buttons Footer */}
       <View style={styles.footer}>
+        {/* Send offer button */}
         {canSendOffer && (
           <TouchableOpacity
-            style={styles.offerButton}
+            style={[styles.actionButton, { backgroundColor: '#8b5cf6', marginBottom: 8 }]}
             onPress={() => setShowOfferModal(true)}
           >
             <Ionicons name="paper-plane" size={20} color="#fff" />
@@ -316,22 +362,27 @@ export default function TaskDetail() {
           </TouchableOpacity>
         )}
 
-        {isMyTask && statusConfig.next && (
+        {/* Main executor action button */}
+        {executorAction && (
           <TouchableOpacity
-            style={[styles.actionButton, actionLoading && styles.buttonDisabled]}
-            onPress={() => handleAction(statusConfig.next!)}
+            style={[styles.actionButton, { backgroundColor: executorAction.color }, actionLoading && styles.buttonDisabled]}
+            onPress={() => handleAction(executorAction.action)}
             disabled={actionLoading}
           >
             {actionLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons 
-                  name={statusConfig.next === 'complete' ? 'checkmark-circle' : 'arrow-forward-circle'} 
-                  size={20} 
-                  color="#fff" 
+                <Ionicons
+                  name={
+                    executorAction.action === 'accept' ? 'checkmark-circle' :
+                    executorAction.action === 'complete' ? 'checkmark-done-circle' :
+                    'arrow-forward-circle'
+                  }
+                  size={22}
+                  color="#fff"
                 />
-                <Text style={styles.actionButtonText}>{statusConfig.nextLabel}</Text>
+                <Text style={styles.actionButtonText}>{executorAction.label}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -349,13 +400,13 @@ export default function TaskDetail() {
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Ціна ($) *</Text>
+              <Text style={styles.inputLabel}>Ціна (грн) *</Text>
               <TextInput
                 style={styles.input}
                 value={offerPrice}
                 onChangeText={setOfferPrice}
                 keyboardType="numeric"
-                placeholder="50"
+                placeholder="500"
               />
               <Text style={styles.inputLabel}>Повідомлення (опціонально)</Text>
               <TextInput
@@ -408,7 +459,7 @@ export default function TaskDetail() {
                 keyboardType="numeric"
                 placeholder="2.5"
               />
-              <Text style={styles.inputLabel}>Витрати на матеріали ($)</Text>
+              <Text style={styles.inputLabel}>Витрати на матеріали (грн)</Text>
               <TextInput
                 style={styles.input}
                 value={materialsCost}
@@ -464,11 +515,11 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   statusBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    padding: 12, gap: 8,
+    padding: 14, gap: 8,
   },
-  statusText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  statusText: { fontSize: 15, fontWeight: '700', color: '#fff' },
   section: { backgroundColor: '#fff', padding: 20, marginTop: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
   description: { fontSize: 15, color: '#4b5563', lineHeight: 22 },
   detailRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16, gap: 12 },
@@ -478,14 +529,16 @@ const styles = StyleSheet.create({
   priceCard: { backgroundColor: '#f9fafb', padding: 16, borderRadius: 12 },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
   priceLabel: { fontSize: 14, color: '#6b7280' },
-  priceValue: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  finalPrice: { color: '#10b981', fontSize: 20 },
+  priceValueGreen: { fontSize: 18, fontWeight: '700', color: '#10b981' },
+  noPrice: { fontSize: 14, color: '#9ca3af', fontStyle: 'italic' },
   feeValue: { fontSize: 14, color: '#ef4444' },
   clientCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  clientAvatar: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: '#2563eb',
+  clientAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#e5e7eb' },
+  clientAvatarPlaceholder: {
+    width: 48, height: 48, borderRadius: 24, backgroundColor: '#dbeafe',
     justifyContent: 'center', alignItems: 'center',
   },
+  clientAvatarInitial: { fontSize: 20, fontWeight: '700', color: '#2563eb' },
   clientInfo: { flex: 1 },
   clientName: { fontSize: 16, fontWeight: '600', color: '#111827' },
   clientPhone: { fontSize: 14, color: '#6b7280', marginTop: 2 },
@@ -506,15 +559,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: '#e5e7eb',
   },
   actionButton: {
-    flexDirection: 'row', backgroundColor: '#2563eb', padding: 16,
-    borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 8,
-  },
-  offerButton: {
-    flexDirection: 'row', backgroundColor: '#8b5cf6', padding: 16,
-    borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 8,
+    flexDirection: 'row', padding: 16,
+    borderRadius: 14, justifyContent: 'center', alignItems: 'center', gap: 8,
   },
   buttonDisabled: { opacity: 0.6 },
-  actionButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  actionButtonText: { fontSize: 16, fontWeight: '700', color: '#fff' },
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
   },

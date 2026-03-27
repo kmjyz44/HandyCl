@@ -1921,20 +1921,37 @@ async def get_tasks(current_user: User = Depends(get_current_user)):
 @api_router.get("/tasks/{task_id}")
 async def get_task(task_id: str, current_user: User = Depends(get_current_user)):
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
     
-    # Check access
-    if current_user.role == UserRole.PROVIDER and task["provider_id"] != current_user.user_id:
+    # Fallback: look up in bookings collection (task_id may be a booking_id)
+    if not task:
+        booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
+        if booking:
+            task = dict(booking)
+            task["task_id"] = booking["booking_id"]
+            task["scheduled_date"] = booking.get("date", "")
+            task["scheduled_time"] = booking.get("time", "")
+            task["estimated_price"] = booking.get("total_price") or booking.get("estimated_price")
+            task["photos"] = booking.get("problem_photos") or []
+            task["allow_offers"] = booking.get("allow_offers", True)
+            task["source"] = "booking"
+        else:
+            raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Check access — for open bookings (no provider yet), any provider can view
+    provider_id = task.get("provider_id")
+    if current_user.role == UserRole.PROVIDER and provider_id and provider_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     if current_user.role == UserRole.CLIENT and task.get("client_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Enrich with related info
+    if task.get("client_id"):
+        client_doc = await db.users.find_one({"user_id": task["client_id"]}, {"_id": 0, "password_hash": 0})
+        task["client"] = client_doc
     if task.get("provider_id"):
         provider = await db.users.find_one({"user_id": task["provider_id"]}, {"_id": 0, "password_hash": 0})
         task["provider"] = provider
-    if task.get("booking_id"):
+    if task.get("booking_id") and task.get("source") != "booking":
         booking = await db.bookings.find_one({"booking_id": task["booking_id"]}, {"_id": 0})
         task["booking"] = booking
     
@@ -1994,32 +2011,106 @@ async def update_task(
 
 @api_router.post("/tasks/{task_id}/accept")
 async def accept_task(task_id: str, current_user: User = Depends(get_current_user)):
-    """Executor accepts the task"""
+    """Executor accepts the task — works for both tasks collection and bookings collection"""
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can accept tasks")
+    
+    # Try tasks collection first
+    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    
+    if task:
+        # Classic task flow
+        if task.get("provider_id") and task["provider_id"] != current_user.user_id:
+            raise HTTPException(status_code=403, detail="This task is not assigned to you")
+        if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.POSTED, TaskStatus.OFFERING]:
+            raise HTTPException(status_code=400, detail="Task cannot be accepted in current status")
+        await db.tasks.update_one(
+            {"task_id": task_id},
+            {"$set": {
+                "status": TaskStatus.ASSIGNED,
+                "provider_id": current_user.user_id,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        if task.get("booking_id"):
+            await db.bookings.update_one(
+                {"booking_id": task["booking_id"]},
+                {"$set": {"status": BookingStatus.ASSIGNED, "provider_id": current_user.user_id}}
+            )
+        return {"message": "Task accepted", "status": TaskStatus.ASSIGNED}
+    
+    # Fallback: try bookings collection
+    booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    if booking.get("provider_id") and booking["provider_id"] != current_user.user_id:
+        raise HTTPException(status_code=403, detail="This booking is already taken")
+    
+    if booking["status"] not in ["posted", "offering"]:
+        raise HTTPException(status_code=400, detail="Booking cannot be accepted in current status")
+    
+    # Assign provider to booking
+    await db.bookings.update_one(
+        {"booking_id": task_id},
+        {"$set": {
+            "status": BookingStatus.ASSIGNED,
+            "provider_id": current_user.user_id,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    # Create a task entry so subsequent status changes work
+    new_task_id = f"task_{task_id[8:]}" if task_id.startswith("booking_") else f"task_{task_id}"
+    task_doc = {
+        "task_id": new_task_id,
+        "booking_id": task_id,
+        "client_id": booking.get("client_id"),
+        "provider_id": current_user.user_id,
+        "title": booking.get("title", ""),
+        "description": booking.get("description", ""),
+        "address": booking.get("address", ""),
+        "city": booking.get("city"),
+        "latitude": booking.get("latitude"),
+        "longitude": booking.get("longitude"),
+        "category": booking.get("category"),
+        "status": TaskStatus.ASSIGNED,
+        "scheduled_date": booking.get("date", ""),
+        "scheduled_time": booking.get("time", ""),
+        "estimated_price": booking.get("total_price") or booking.get("estimated_price"),
+        "total_price": booking.get("total_price", 0),
+        "photos": booking.get("problem_photos") or [],
+        "allow_offers": booking.get("allow_offers", True),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    await db.tasks.insert_one(task_doc)
+    
+    return {"message": "Booking accepted", "status": BookingStatus.ASSIGNED, "task_id": new_task_id}
+
+@api_router.post("/tasks/{task_id}/on-the-way")
+async def task_on_the_way(task_id: str, current_user: User = Depends(get_current_user)):
+    """Executor marks they are on the way"""
+    if current_user.role != UserRole.PROVIDER:
+        raise HTTPException(status_code=403, detail="Only providers can update task status")
     
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if task["provider_id"] != current_user.user_id:
+    if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
-    
-    if task["status"] != TaskStatus.ASSIGNED:
-        raise HTTPException(status_code=400, detail="Task cannot be accepted in current status")
     
     await db.tasks.update_one(
         {"task_id": task_id},
-        {"$set": {"status": TaskStatus.ACCEPTED}}
+        {"$set": {"status": TaskStatus.ON_THE_WAY, "updated_at": datetime.now(timezone.utc)}}
     )
-    
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
-            {"$set": {"status": BookingStatus.ACCEPTED}}
+            {"$set": {"status": BookingStatus.ON_THE_WAY}}
         )
-    
-    return {"message": "Task accepted", "status": TaskStatus.ACCEPTED}
+    return {"message": "Status updated: On the way", "status": TaskStatus.ON_THE_WAY}
 
 @api_router.post("/tasks/{task_id}/start")
 async def start_task(task_id: str, current_user: User = Depends(get_current_user)):

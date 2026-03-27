@@ -359,8 +359,14 @@ export const api = {
   },
 
   onTheWayTask: async (id: string) => {
-    const res = await client.post(`/tasks/${id}/on-the-way`);
-    return res.data;
+    // Try tasker-specific endpoint first, fall back to generic
+    try {
+      const res = await client.post(`/tasker/tasks/${id}/on-the-way`);
+      return res.data;
+    } catch {
+      const res = await client.post(`/tasks/${id}/on-the-way`);
+      return res.data;
+    }
   },
 
   // Notifications
