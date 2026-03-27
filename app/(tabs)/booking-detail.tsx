@@ -15,23 +15,43 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../utils/api';
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b',
-  posted: '#f59e0b',
-  confirmed: '#3b82f6',
-  assigned: '#3b82f6',
-  in_progress: '#8b5cf6',
-  completed: '#10b981',
-  cancelled: '#ef4444',
+  draft:                     '#9ca3af',
+  pending:                   '#f59e0b',
+  posted:                    '#3b82f6',
+  offering:                  '#8b5cf6',
+  confirmed:                 '#3b82f6',
+  assigned:                  '#f59e0b',
+  hold_placed:               '#f59e0b',
+  on_the_way:                '#06b6d4',
+  in_progress:               '#f97316',
+  started:                   '#f97316',
+  completed_pending_payment: '#22c55e',
+  paid:                      '#10b981',
+  completed:                 '#10b981',
+  cancelled:                 '#ef4444',
+  cancelled_by_client:       '#ef4444',
+  cancelled_by_tasker:       '#ef4444',
+  dispute:                   '#dc2626',
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Очікує',
-  posted: 'Опубліковано',
-  confirmed: 'Підтверджено',
-  assigned: 'Призначено',
-  in_progress: 'В процесі',
-  completed: 'Виконано',
-  cancelled: 'Скасовано',
+  draft:                     'Чернетка',
+  pending:                   'Очікує',
+  posted:                    'Очікує виконавця',
+  offering:                  'Приймає пропозиції',
+  confirmed:                 'Підтверджено',
+  assigned:                  'Прийнято виконавцем',
+  hold_placed:               'Виконавець призначено',
+  on_the_way:                'Виконавець в дорозі',
+  in_progress:               'Виконується',
+  started:                   'Виконується',
+  completed_pending_payment: 'Завершено — очікує оплати',
+  paid:                      'Оплачено',
+  completed:                 'Виконано',
+  cancelled:                 'Скасовано',
+  cancelled_by_client:       'Скасовано клієнтом',
+  cancelled_by_tasker:       'Скасовано виконавцем',
+  dispute:                   'Спір',
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -178,7 +198,7 @@ export default function BookingDetail() {
               <View style={styles.infoRow}>
                 <Ionicons name="cash" size={20} color="#6b7280" />
                 <Text style={styles.infoLabel}>Сума:</Text>
-                <Text style={styles.infoValue}>${Number(booking.total_price).toFixed(2)}</Text>
+                <Text style={styles.infoValue}>{Number(booking.total_price).toFixed(0)} грн</Text>
               </View>
             )}
 
@@ -253,6 +273,32 @@ export default function BookingDetail() {
                 <Text style={[styles.infoValue, styles.monospace]}>{booking.provider_id.slice(-8)}</Text>
               </View>
             </View>
+          </View>
+        )}
+
+        {/* View Task Detail button — shown when task is in progress or completed */}
+        {['assigned','on_the_way','started','completed_pending_payment','paid','completed'].includes(booking.status) && (
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.payButton, { backgroundColor: '#2563eb' }]}
+              onPress={() => router.push({ pathname: '/task-detail', params: { id: booking.booking_id } })}
+            >
+              <Ionicons name="eye" size={20} color="#fff" />
+              <Text style={styles.payButtonText}>Деталі завдання</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Pay button — shown when completed pending payment */}
+        {booking.status === 'completed_pending_payment' && (
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.payButton, { backgroundColor: '#22c55e' }]}
+              onPress={() => router.push({ pathname: '/task-detail', params: { id: booking.booking_id } })}
+            >
+              <Ionicons name="card" size={20} color="#fff" />
+              <Text style={styles.payButtonText}>Оплатити завдання</Text>
+            </TouchableOpacity>
           </View>
         )}
 

@@ -45,7 +45,9 @@ const EXEC_ACTIONS: Record<string, { action: string; label: string; color: strin
 function fmtTime(iso?: string | null): string {
   if (!iso) return '—';
   try {
-    const d = new Date(iso);
+    // Backend stores UTC without Z suffix — add it so JS parses as UTC, then displays in local time
+    const normalized = /[Z+]/.test(iso) ? iso : iso + 'Z';
+    const d = new Date(normalized);
     const p = (n: number) => String(n).padStart(2, '0');
     return `${p(d.getDate())}.${p(d.getMonth()+1)} о ${p(d.getHours())}:${p(d.getMinutes())}`;
   } catch { return '—'; }
@@ -54,8 +56,9 @@ function fmtTime(iso?: string | null): string {
 function calcDuration(start?: string | null, end?: string | null): string {
   if (!start) return '—';
   try {
-    const s = new Date(start).getTime();
-    const e = end ? new Date(end).getTime() : Date.now();
+    const norm = (iso: string) => /[Z+]/.test(iso) ? iso : iso + 'Z';
+    const s = new Date(norm(start)).getTime();
+    const e = end ? new Date(norm(end)).getTime() : Date.now();
     const diff = e - s;
     if (diff <= 0) return '—';
     const h = Math.floor(diff / 3600000);
