@@ -346,11 +346,13 @@ class TaskUpdate(BaseModel):
     end_time: Optional[str] = None
 
 class TaskComplete(BaseModel):
-    actual_hours: float
+    actual_hours: Optional[float] = None   # auto-calculated if omitted
     expenses: Optional[float] = None
-    start_time: str
-    end_time: str
+    materials_cost: Optional[float] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     provider_comments: Optional[str] = None
+    provider_notes: Optional[str] = None   # alias for provider_comments
 
 class Message(BaseModel):
     message_id: str
@@ -2024,18 +2026,20 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
             raise HTTPException(status_code=403, detail="This task is not assigned to you")
         if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.POSTED, TaskStatus.OFFERING]:
             raise HTTPException(status_code=400, detail="Task cannot be accepted in current status")
+        now = datetime.now(timezone.utc)
         await db.tasks.update_one(
             {"task_id": task_id},
             {"$set": {
                 "status": TaskStatus.ASSIGNED,
                 "provider_id": current_user.user_id,
-                "updated_at": datetime.now(timezone.utc)
+                "accepted_at": now,
+                "updated_at": now
             }}
         )
         if task.get("booking_id"):
             await db.bookings.update_one(
                 {"booking_id": task["booking_id"]},
-                {"$set": {"status": BookingStatus.ASSIGNED, "provider_id": current_user.user_id}}
+                {"$set": {"status": BookingStatus.ASSIGNED, "provider_id": current_user.user_id, "accepted_at": now}}
             )
         return {"message": "Task accepted", "status": TaskStatus.ASSIGNED}
     
@@ -2051,12 +2055,14 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
         raise HTTPException(status_code=400, detail="Booking cannot be accepted in current status")
     
     # Assign provider to booking
+    now = datetime.now(timezone.utc)
     await db.bookings.update_one(
         {"booking_id": task_id},
         {"$set": {
             "status": BookingStatus.ASSIGNED,
             "provider_id": current_user.user_id,
-            "updated_at": datetime.now(timezone.utc)
+            "accepted_at": now,
+            "updated_at": now
         }}
     )
     
@@ -2081,8 +2087,9 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
         "total_price": booking.get("total_price", 0),
         "photos": booking.get("problem_photos") or [],
         "allow_offers": booking.get("allow_offers", True),
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "accepted_at": now,
+        "created_at": now,
+        "updated_at": now,
     }
     await db.tasks.insert_one(task_doc)
     
@@ -2101,14 +2108,15 @@ async def task_on_the_way(task_id: str, current_user: User = Depends(get_current
     if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
+    now = datetime.now(timezone.utc)
     await db.tasks.update_one(
         {"task_id": task_id},
-        {"$set": {"status": TaskStatus.ON_THE_WAY, "updated_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": TaskStatus.ON_THE_WAY, "on_the_way_at": now, "updated_at": now}}
     )
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
-            {"$set": {"status": BookingStatus.ON_THE_WAY}}
+            {"$set": {"status": BookingStatus.ON_THE_WAY, "on_the_way_at": now}}
         )
     return {"message": "Status updated: On the way", "status": TaskStatus.ON_THE_WAY}
 
@@ -2125,24 +2133,26 @@ async def start_task(task_id: str, current_user: User = Depends(get_current_user
     if task["provider_id"] != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
-    if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.ACCEPTED]:
+    if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.ON_THE_WAY]:
         raise HTTPException(status_code=400, detail="Task cannot be started in current status")
     
+    now = datetime.now(timezone.utc)
     await db.tasks.update_one(
         {"task_id": task_id},
         {"$set": {
-            "status": TaskStatus.IN_PROGRESS,
-            "started_at": datetime.now(timezone.utc)
+            "status": TaskStatus.STARTED,
+            "started_at": now,
+            "updated_at": now
         }}
     )
     
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
-            {"$set": {"status": BookingStatus.IN_PROGRESS}}
+            {"$set": {"status": BookingStatus.STARTED, "started_at": now}}
         )
     
-    return {"message": "Task started", "status": TaskStatus.IN_PROGRESS}
+    return {"message": "Task started", "status": TaskStatus.STARTED}
 
 @api_router.post("/tasks/{task_id}/complete")
 async def complete_task(
@@ -2161,29 +2171,44 @@ async def complete_task(
     if task["provider_id"] != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
-    if task["status"] != TaskStatus.IN_PROGRESS:
-        raise HTTPException(status_code=400, detail="Task must be in progress to complete")
+    if task["status"] not in [TaskStatus.STARTED, TaskStatus.IN_PROGRESS]:
+        raise HTTPException(status_code=400, detail="Task must be started to complete")
+    
+    now = datetime.now(timezone.utc)
+    # Auto-calculate actual hours from started_at if not provided
+    actual_hours = completion.actual_hours
+    if not actual_hours and task.get("started_at"):
+        delta = now - task["started_at"].replace(tzinfo=timezone.utc) if task["started_at"].tzinfo is None else now - task["started_at"]
+        actual_hours = round(delta.total_seconds() / 3600, 2)
+    
+    notes = completion.provider_notes or completion.provider_comments
+    materials = completion.materials_cost or completion.expenses
     
     await db.tasks.update_one(
         {"task_id": task_id},
         {"$set": {
-            "status": TaskStatus.COMPLETED,
-            "completed_at": datetime.now(timezone.utc),
-            "actual_hours": completion.actual_hours,
-            "expenses": completion.expenses,
-            "start_time": completion.start_time,
-            "end_time": completion.end_time,
-            "provider_comments": completion.provider_comments
+            "status": TaskStatus.COMPLETED_PENDING_PAYMENT,
+            "completed_at": now,
+            "actual_hours": actual_hours,
+            "materials_cost": materials,
+            "expenses": materials,
+            "provider_notes": notes,
+            "provider_comments": notes,
+            "updated_at": now
         }}
     )
     
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
-            {"$set": {"status": BookingStatus.COMPLETED}}
+            {"$set": {
+                "status": BookingStatus.COMPLETED_PENDING_PAYMENT,
+                "completed_at": now,
+                "actual_hours": actual_hours
+            }}
         )
     
-    return {"message": "Task completed", "status": TaskStatus.COMPLETED}
+    return {"message": "Task completed", "status": TaskStatus.COMPLETED_PENDING_PAYMENT, "actual_hours": actual_hours}
 
 @api_router.post("/tasks/{task_id}/decline")
 async def decline_task(
@@ -4683,12 +4708,17 @@ async def tasker_accept_task(task_id: str, current_user: User = Depends(get_curr
     if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Task is not assigned to you")
     
+    now = datetime.now(timezone.utc)
     await db.tasks.update_one(
         {"task_id": task_id},
-        {"$set": {"status": TaskStatus.HOLD_PLACED, "updated_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": TaskStatus.ASSIGNED, "accepted_at": now, "updated_at": now}}
     )
-    
-    return {"message": "Task accepted, waiting for payment hold"}
+    if task.get("booking_id"):
+        await db.bookings.update_one(
+            {"booking_id": task["booking_id"]},
+            {"$set": {"status": BookingStatus.ASSIGNED, "accepted_at": now}}
+        )
+    return {"message": "Task accepted"}
 
 @api_router.post("/tasker/tasks/{task_id}/on-the-way")
 async def tasker_on_the_way(task_id: str, current_user: User = Depends(get_current_user)):
@@ -4700,11 +4730,16 @@ async def tasker_on_the_way(task_id: str, current_user: User = Depends(get_curre
     if not task or task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
+    now = datetime.now(timezone.utc)
     await db.tasks.update_one(
         {"task_id": task_id},
-        {"$set": {"status": TaskStatus.ON_THE_WAY, "updated_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": TaskStatus.ON_THE_WAY, "on_the_way_at": now, "updated_at": now}}
     )
-    
+    if task.get("booking_id"):
+        await db.bookings.update_one(
+            {"booking_id": task["booking_id"]},
+            {"$set": {"status": BookingStatus.ON_THE_WAY, "on_the_way_at": now}}
+        )
     return {"message": "Status updated: On the way"}
 
 @api_router.post("/tasker/tasks/{task_id}/start")
@@ -4720,15 +4755,21 @@ async def tasker_start_task(task_id: str, current_user: User = Depends(get_curre
     if task["status"] not in [TaskStatus.HOLD_PLACED, TaskStatus.ON_THE_WAY]:
         raise HTTPException(status_code=400, detail="Cannot start task in current status")
     
+    now = datetime.now(timezone.utc)
     await db.tasks.update_one(
         {"task_id": task_id},
         {"$set": {
             "status": TaskStatus.STARTED,
-            "actual_start_time": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc)
+            "started_at": now,
+            "actual_start_time": now,
+            "updated_at": now
         }}
     )
-    
+    if task.get("booking_id"):
+        await db.bookings.update_one(
+            {"booking_id": task["booking_id"]},
+            {"$set": {"status": BookingStatus.STARTED, "started_at": now}}
+        )
     return {"message": "Task started"}
 
 @api_router.post("/tasker/tasks/{task_id}/complete")
