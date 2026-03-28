@@ -10,7 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../../utils/api';
 import { useAuthStore } from '../../store/authStore';
 
@@ -64,14 +64,17 @@ interface Task {
 export default function AvailableTasks() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'available' | 'my' | 'done'>('available');
   const COMPLETED_STATUSES = ['completed_pending_payment', 'paid', 'completed'];
   const activeMyTasks = myTasks.filter(t => !COMPLETED_STATUSES.includes(t.status));
   const doneTasks = myTasks.filter(t => COMPLETED_STATUSES.includes(t.status));
+  // Support deep-link tab param from dashboard tiles
+  const initialTab = (params.tab === 'my' || params.tab === 'done') ? params.tab : 'available';
+  const [activeTab, setActiveTab] = useState<'available' | 'my' | 'done'>(initialTab as any);
 
   const loadTasks = async () => {
     try {
@@ -300,7 +303,44 @@ export default function AvailableTasks() {
           )
         ) : (
           doneTasks.length > 0 ? (
-            doneTasks.map(task => renderTaskCard(task, true))
+            <>
+              {/* Summary card for paid/completed tasks */}
+              {(() => {
+                const paidTasks = doneTasks.filter(t => t.status === 'paid');
+                const totalHours = paidTasks.reduce((s, t) => s + ((t as any).actual_hours || 0), 0);
+                const totalAmount = paidTasks.reduce((s, t) => s + ((t as any).final_price || (t as any).estimated_price || 0), 0);
+                const totalTips = paidTasks.reduce((s, t) => s + ((t as any).tip_amount || 0), 0);
+                if (paidTasks.length === 0) return null;
+                return (
+                  <View style={styles.doneSummaryCard}>
+                    <Text style={styles.doneSummaryTitle}>Загальна статистика оплачених</Text>
+                    <View style={styles.doneSummaryRow}>
+                      <View style={styles.doneSummaryItem}>
+                        <Ionicons name="hourglass-outline" size={22} color="#2563eb" />
+                        <Text style={styles.doneSummaryValue}>{totalHours > 0 ? `${totalHours.toFixed(1)} год` : '—'}</Text>
+                        <Text style={styles.doneSummaryLabel}>Години</Text>
+                      </View>
+                      <View style={styles.doneSummaryItem}>
+                        <Ionicons name="cash-outline" size={22} color="#10b981" />
+                        <Text style={styles.doneSummaryValue}>{totalAmount > 0 ? `${totalAmount.toFixed(0)} грн` : '—'}</Text>
+                        <Text style={styles.doneSummaryLabel}>Сума</Text>
+                      </View>
+                      <View style={styles.doneSummaryItem}>
+                        <Ionicons name="gift-outline" size={22} color="#f59e0b" />
+                        <Text style={styles.doneSummaryValue}>{totalTips > 0 ? `${totalTips.toFixed(0)} грн` : '—'}</Text>
+                        <Text style={styles.doneSummaryLabel}>Чайові</Text>
+                      </View>
+                      <View style={styles.doneSummaryItem}>
+                        <Ionicons name="checkmark-circle-outline" size={22} color="#7c3aed" />
+                        <Text style={styles.doneSummaryValue}>{totalAmount + totalTips > 0 ? `${(totalAmount + totalTips).toFixed(0)} грн` : '—'}</Text>
+                        <Text style={styles.doneSummaryLabel}>Всього</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })()}
+              {doneTasks.map(task => renderTaskCard(task, true))}
+            </>
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="checkmark-done-circle-outline" size={64} color="#d1d5db" />
@@ -549,5 +589,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginTop: 4,
+  },
+  doneSummaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  doneSummaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  doneSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  doneSummaryItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  doneSummaryValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  doneSummaryLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '500',
   },
 });

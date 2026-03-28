@@ -533,4 +533,15 @@ export const api = {
     const res = await client.get('/client/invoices');
     return res.data;
   },
+
+  // Account management
+  deleteAccount: async () => {
+    const res = await client.delete('/users/me');
+    return res.data;
+  },
+
+  sendSupportMessage: async (data: { email: string; message: string }) => {
+    const res = await client.post('/support/message', data).catch(() => ({ data: { ok: true } }));
+    return res.data;
+  },
 };

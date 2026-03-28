@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends, Query
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -2262,40 +2262,47 @@ async def complete_task(
 
 @api_router.post("/tasks/{task_id}/decline")
 async def decline_task(
-    task_id: str, 
-    reason: Optional[str] = None,
+    task_id: str,
+    reason: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Executor declines the task"""
+    """Executor declines the task before or after accepting"""
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can decline tasks")
-    
+
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    
-    if task["provider_id"] != current_user.user_id:
+
+    # Allow decline if assigned to this provider OR if task is posted/offering (provider browsing)
+    if task.get("provider_id") and task["provider_id"] != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
-    
-    if task["status"] != TaskStatus.ASSIGNED:
-        raise HTTPException(status_code=400, detail="Only assigned tasks can be declined")
-    
+
+    declinable = [TaskStatus.ASSIGNED, TaskStatus.POSTED, TaskStatus.OFFERING, "hold_placed"]
+    if task["status"] not in declinable:
+        raise HTTPException(status_code=400, detail="Task cannot be declined at this stage")
+
+    if not reason or not reason.strip():
+        raise HTTPException(status_code=422, detail="Reason for declining is required")
+
     await db.tasks.update_one(
         {"task_id": task_id},
         {"$set": {
             "status": TaskStatus.DECLINED,
-            "provider_comments": reason
+            "provider_comments": reason.strip(),
+            "declined_at": datetime.utcnow().isoformat() + "Z",
+            "declined_by": current_user.user_id,
         }}
     )
-    
-    # Revert booking to posted status (waiting for new tasker)
+
+    # Revert booking to posted status so client can find a new tasker
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
             {"$set": {"status": BookingStatus.POSTED, "provider_id": None}}
         )
-    
-    return {"message": "Task declined", "status": TaskStatus.DECLINED}
+
+    return {"message": "Task declined", "status": TaskStatus.DECLINED, "reason": reason.strip()}
 
 @api_router.put("/admin/tasks/{task_id}")
 async def admin_update_task(
@@ -7796,6 +7803,37 @@ async def delete_faq(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="FAQ not found")
     return {"message": "FAQ deleted"}
+
+# ── Self-service account management ──────────────────────────────────────────
+
+@api_router.delete("/users/me")
+async def delete_my_account(current_user: User = Depends(get_current_user)):
+    """User deletes their own account"""
+    user_id = current_user.user_id
+    await db.users.delete_one({"user_id": user_id})
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.bookings.delete_many({"$or": [{"client_id": user_id}, {"provider_id": user_id}]})
+    await db.tasks.delete_many({"provider_id": user_id})
+    await db.reviews.delete_many({"$or": [{"client_id": user_id}, {"provider_id": user_id}]})
+    await db.executor_profiles.delete_one({"user_id": user_id})
+    return {"message": "Account deleted"}
+
+
+class SupportMessage(BaseModel):
+    email: str
+    message: str
+
+
+@api_router.post("/support/message")
+async def send_support_message(data: SupportMessage):
+    """Store support message"""
+    await db.support_messages.insert_one({
+        "email": data.email,
+        "message": data.message,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True}
+
 
 # Include the router in the main app
 app.include_router(api_router)

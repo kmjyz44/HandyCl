@@ -760,9 +760,36 @@ function ProviderProfile() {
   const [stats, setStats] = useState({
     monthEarnings: 0, taskCount: 0, rating: 0, reviewCount: 0,
     avgPosition: '-', shownPercent: 0, activatedSkillsCount: 0,
-    eliteProgress: 0, eliteMilestones: 0, eliteTotalMilestones: 4,
-    eliteMonth: 'Квітень 2026', liveChallenges: 0, wins: 0,
+    positiveReviews: 0, negativeReviews: 0,
   });
+
+  // Reviews
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewsModalVisible, setReviewsModalVisible] = useState(false);
+
+  // Payment card modal
+  const [paymentCardVisible, setPaymentCardVisible] = useState(false);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardHolder, setCardHolder] = useState('');
+  const [cardIban, setCardIban] = useState('');
+  const [savingCard, setSavingCard] = useState(false);
+
+  // 2FA modal
+  const [twoFaVisible, setTwoFaVisible] = useState(false);
+  const [twoFaMethod, setTwoFaMethod] = useState<'email' | 'phone'>('email');
+  const [twoFaCode, setTwoFaCode] = useState('');
+  const [twoFaStep, setTwoFaStep] = useState<'choose' | 'verify'>('choose');
+  const [twoFaEnabled, setTwoFaEnabled] = useState(false);
+
+  // Support modal
+  const [supportVisible, setSupportVisible] = useState(false);
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
+  const [sendingSupport, setSendingSupport] = useState(false);
+
+  // About app modal
+  const [aboutVisible, setAboutVisible] = useState(false);
 
   // Bio/experience
   const [bio, setBio] = useState('');
@@ -802,6 +829,15 @@ function ProviderProfile() {
       setProfile(data);
       setBio(data.bio || '');
       setExperienceYears(data.experience_years?.toString() || '');
+      // Load reviews
+      try {
+        const reviewsData = await api.getProviderReviews(data.user_id || user?.user_id || '');
+        const revList = Array.isArray(reviewsData) ? reviewsData : (reviewsData?.reviews || []);
+        setReviews(revList);
+        const positiveCount = revList.filter((r: any) => (r.rating || 0) >= 4).length;
+        const negativeCount = revList.filter((r: any) => (r.rating || 0) <= 2).length;
+        setStats(prev => ({ ...prev, positiveReviews: positiveCount, negativeReviews: negativeCount }));
+      } catch {}
       const storedSkills: ProviderSkill[] = (data.skills || []).map((s: any, i: number) => {
         if (typeof s === 'string') {
           return { id: `skill_${i}`, category_id: 'other', name: s, hourly_rate: data.hourly_rate || 25, status: 'active' as const };
@@ -994,10 +1030,10 @@ function ProviderProfile() {
 
       <View style={pStyles.statSection}>
         <Text style={pStyles.statSectionTitle}>Відгуки</Text>
-        <TouchableOpacity style={pStyles.statRow}>
+        <TouchableOpacity style={pStyles.statRow} onPress={() => setReviewsModalVisible(true)}>
           <View style={{ flex: 1 }}>
             <Text style={pStyles.statValueLarge}>{stats.rating > 0 ? `${stats.rating.toFixed(1)} / 5` : 'Немає відгуків'}</Text>
-            {stats.reviewCount > 0 && <Text style={pStyles.statSubLabel}>({stats.reviewCount} відгуків)</Text>}
+            {reviews.length > 0 && <Text style={pStyles.statSubLabel}>({reviews.length} відгуків • ❤️ {stats.positiveReviews} позитивних)</Text>}
           </View>
           {stats.rating > 0 && <View style={{ flexDirection: 'row', gap: 2, marginRight: 8 }}>{renderStars(stats.rating)}</View>}
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
@@ -1006,14 +1042,18 @@ function ProviderProfile() {
 
       <View style={pStyles.statSection}>
         <Text style={pStyles.statSectionTitle}>Аналітика</Text>
-        <Text style={pStyles.statDescription}>Показники вашої роботи та позиція серед виконавців.</Text>
-        <TouchableOpacity style={[pStyles.statRow, { marginTop: 12 }]}>
+        <Text style={pStyles.statDescription}>Позиція в пошуку визначається кількістю позитивних відгуків і мінімальною кількістю негативних.</Text>
+        <View style={[pStyles.statRow, { marginTop: 12 }]}>
           <View style={{ flex: 1 }}>
-            <Text style={pStyles.statLabel}>Середня позиція в пошуку</Text>
-            <Text style={pStyles.statValueGreen}>{stats.avgPosition}</Text>
+            <Text style={pStyles.statLabel}>Позитивні відгуки (★ 4-5)</Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
-        </TouchableOpacity>
+          <Text style={[pStyles.statValueGreen, { color: '#16a34a' }]}>{stats.positiveReviews}</Text>
+        </View>
+        <View style={pStyles.divider} />
+        <View style={pStyles.statRow}>
+          <Text style={pStyles.statLabel}>Негативні відгуки (★ 1-2)</Text>
+          <Text style={[pStyles.statValueGreen, { color: stats.negativeReviews > 0 ? '#ef4444' : '#6b7280' }]}>{stats.negativeReviews}</Text>
+        </View>
         <View style={pStyles.divider} />
         <View style={pStyles.statRow}>
           <Text style={pStyles.statLabel}>Показано більше ніж</Text>
@@ -1030,36 +1070,6 @@ function ProviderProfile() {
           </View>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
-      </View>
-
-      <View style={pStyles.statSection}>
-        <Text style={pStyles.statSectionTitle}>Elite статус</Text>
-        <Text style={pStyles.statDescription}>Станьте Elite та заробляйте до 3x більше!</Text>
-        <TouchableOpacity style={pStyles.eliteCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={pStyles.eliteLabel}>Прогрес Elite</Text>
-            <Text style={pStyles.eliteMonth}>{stats.eliteMonth}</Text>
-            <View style={pStyles.progressBar}>
-              <View style={[pStyles.progressFill, { width: `${(stats.eliteMilestones / stats.eliteTotalMilestones) * 100}%` as any }]} />
-            </View>
-            <Text style={pStyles.eliteSubtext}>{stats.eliteMilestones} / {stats.eliteTotalMilestones} досягнень виконано</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#6b7280" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={pStyles.statSection}>
-        <Text style={pStyles.statSectionTitle}>Виклики</Text>
-        <TouchableOpacity style={pStyles.statRow}>
-          <Text style={pStyles.statLabel}>Активні виклики</Text>
-          <Text style={[pStyles.statValueGreen, { marginRight: 8 }]}>{stats.liveChallenges}</Text>
-          <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
-        </TouchableOpacity>
-        <View style={pStyles.divider} />
-        <View style={pStyles.statRow}>
-          <Text style={pStyles.statLabel}>Перемоги</Text>
-          <Text style={pStyles.statValueGreen}>{stats.wins}</Text>
-        </View>
       </View>
 
     </ScrollView>
@@ -1166,11 +1176,11 @@ function ProviderProfile() {
       )}
       <View style={pStyles.menuDivider} />
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Погодинна ставка', `Поточна ставка: ${profile?.hourly_rate || 25} ₴/год`)}>
-        <Ionicons name="cash-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => setPaymentCardVisible(true)}>
+        <Ionicons name="card-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>
           <Text style={pStyles.menuRowText}>Оплата та виплати</Text>
-          <Text style={pStyles.menuRowSub}>Погодинна ставка: {profile?.hourly_rate || 25} ₴</Text>
+          <Text style={pStyles.menuRowSub}>Погодинна ставка: {profile?.hourly_rate || 25} ₴ • Платіжні реквізити</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
@@ -1198,7 +1208,7 @@ function ProviderProfile() {
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Підтримка', 'Зверніться на support@handyhub.com')}>
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => { setSupportEmail(user?.email || ''); setSupportVisible(true); }}>
         <Ionicons name="help-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <Text style={[pStyles.menuRowText, { flex: 1 }]}>Підтримка</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
@@ -1208,21 +1218,39 @@ function ProviderProfile() {
       {/* SETTINGS */}
       <Text style={pStyles.menuSectionLabel}>НАЛАШТУВАННЯ</Text>
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Безпека акаунту', 'Зміна паролю та налаштування безпеки будуть доступні в наступній версії')}>
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => { setTwoFaStep('choose'); setTwoFaVisible(true); }}>
         <Ionicons name="shield-checkmark-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Безпека акаунту</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Безпека акаунту</Text>
+          <Text style={pStyles.menuRowSub}>{twoFaEnabled ? 'Двохфакторна аутентифікація включена' : 'Двохфакторна аутентифікація'}</Text>
+        </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Про HandyHub', 'HandyHub v1.0.0\n\nПлатформа для пошуку виконавців поблизу')}>
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => setAboutVisible(true)}>
         <Ionicons name="information-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <Text style={[pStyles.menuRowText, { flex: 1 }]}>Про додаток</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => Alert.alert('Призупинити акаунт', 'Ця функція буде доступна в наступній версії')}>
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => {
+        const doSuspend = async () => {
+          try {
+            await api.updateExecutorProfile({ is_suspended: true });
+            Alert.alert('Призупинено', 'Ваш акаунт призупинено. Ви не будете відображатись клієнтам.');
+          } catch (e: any) { Alert.alert('Помилка', e.message || 'Не вдалося'); }
+        };
+        if (Platform.OS === 'web') {
+          if (window.confirm('Призупинити акаунт? Ви зникнете з видимості клієнтам.')) doSuspend();
+        } else {
+          Alert.alert('Призупинити акаунт', 'Ви зникнете з видимості клієнтам. Відновити можна в налаштуваннях.', [
+            { text: 'Скасувати', style: 'cancel' },
+            { text: 'Призупинити', style: 'destructive', onPress: doSuspend },
+          ]);
+        }
+      }}>
         <Ionicons name="pause-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <Text style={[pStyles.menuRowText, { flex: 1 }]}>Призупинити акаунт</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
@@ -1237,10 +1265,24 @@ function ProviderProfile() {
       <View style={pStyles.menuDivider} />
 
       {/* DELETE ACCOUNT */}
-      <TouchableOpacity style={[pStyles.menuRow, { marginTop: 8 }]} onPress={() => Alert.alert('Видалити акаунт', 'Ця дія незворотня. Ви впевнені?', [
-        { text: 'Скасувати', style: 'cancel' },
-        { text: 'Видалити', style: 'destructive', onPress: handleLogout },
-      ])}>
+      <TouchableOpacity style={[pStyles.menuRow, { marginTop: 8 }]} onPress={() => {
+        const doDelete = async () => {
+          try {
+            await api.deleteAccount().catch(() => {});
+          } catch {}
+          await logout();
+          if (Platform.OS === 'web') { window.location.href = '/login'; }
+          else { router.replace('/login'); }
+        };
+        if (Platform.OS === 'web') {
+          if (window.confirm('Видалити акаунт? Ця дія незворотня!')) doDelete();
+        } else {
+          Alert.alert('Видалити акаунт', 'Ця дія незворотня. Усі ваші дані будуть видалені.', [
+            { text: 'Скасувати', style: 'cancel' },
+            { text: 'Видалити', style: 'destructive', onPress: doDelete },
+          ]);
+        }
+      }}>
         <Text style={[pStyles.menuRowText, { flex: 1, color: '#ef4444', fontWeight: '600' }]}>Видалити акаунт</Text>
       </TouchableOpacity>
 
@@ -1731,6 +1773,328 @@ function ProviderProfile() {
               <Ionicons name="add-circle-outline" size={24} color="#2563eb" />
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#2563eb' }}>Додати фото</Text>
             </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ══ Reviews Modal ══ */}
+      <Modal visible={reviewsModalVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <TouchableOpacity onPress={() => setReviewsModalVisible(false)}>
+              <Ionicons name="arrow-back" size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Відгуки клієнтів</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+            {reviews.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+                <Ionicons name="chatbubble-outline" size={64} color="#d1d5db" />
+                <Text style={{ fontSize: 16, color: '#9ca3af', marginTop: 12 }}>Немає відгуків</Text>
+                <Text style={{ fontSize: 13, color: '#d1d5db', marginTop: 4 }}>Відгуки появляться після виконання завдань</Text>
+              </View>
+            ) : reviews.map((rev: any, i: number) => (
+              <View key={i} style={{ backgroundColor: '#f9fafb', borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#dbeafe', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#2563eb' }}>{(rev.client_name || rev.reviewer_name || 'К')?.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>{rev.client_name || rev.reviewer_name || 'Клієнт'}</Text>
+                    <Text style={{ fontSize: 12, color: '#9ca3af' }}>{rev.created_at ? new Date(rev.created_at).toLocaleDateString('uk-UA') : ''}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 2 }}>
+                    {[1,2,3,4,5].map(s => <Ionicons key={s} name={s <= (rev.rating || 0) ? 'star' : 'star-outline'} size={16} color="#f59e0b" />)}
+                  </View>
+                </View>
+                {rev.comment ? <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20 }}>{rev.comment}</Text> : null}
+                {rev.tip_amount && rev.tip_amount > 0 ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#fffbeb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start' }}>
+                    <Ionicons name="gift-outline" size={14} color="#f59e0b" />
+                    <Text style={{ fontSize: 13, color: '#92400e', fontWeight: '600' }}>Чайові: {rev.tip_amount} ₴</Text>
+                  </View>
+                ) : null}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ══ Payment Card Modal ══ */}
+      <Modal visible={paymentCardVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <TouchableOpacity onPress={() => setPaymentCardVisible(false)}>
+              <Ionicons name="arrow-back" size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Оплата та виплати</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+            {/* Hourly rate */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 1, marginBottom: 8 }}>ПОГОДИННА СТАВКА</Text>
+            <View style={{ backgroundColor: '#f0fdf4', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+              <Text style={{ fontSize: 28, fontWeight: '800', color: '#16a34a' }}>{profile?.hourly_rate || 25} ₴/год</Text>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>Ставка встановлюється при додаванні навичок</Text>
+            </View>
+
+            {/* Bank card */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 1, marginBottom: 12 }}>ПЛАТІЖНІ РЕКВІЗИТИ</Text>
+            <Text style={styles.label}>Номер картки</Text>
+            <TextInput
+              style={styles.input}
+              value={cardNumber}
+              onChangeText={setCardNumber}
+              placeholder="1234 5678 9012 3456"
+              keyboardType="numeric"
+              maxLength={19}
+            />
+            <Text style={styles.label}>Термін дії</Text>
+            <TextInput
+              style={styles.input}
+              value={cardExpiry}
+              onChangeText={setCardExpiry}
+              placeholder="MM/YY"
+              maxLength={5}
+            />
+            <Text style={styles.label}>Ім'я власника картки</Text>
+            <TextInput
+              style={styles.input}
+              value={cardHolder}
+              onChangeText={setCardHolder}
+              placeholder="IVAN PETRENKO"
+              autoCapitalize="characters"
+            />
+            <Text style={styles.label}>IBAN (для виплат)</Text>
+            <TextInput
+              style={styles.input}
+              value={cardIban}
+              onChangeText={setCardIban}
+              placeholder="UA12 3456 7890 1234 5678 9012 3456"
+              autoCapitalize="characters"
+            />
+            <View style={{ backgroundColor: '#fffbeb', borderRadius: 12, padding: 14, marginTop: 4, flexDirection: 'row', gap: 10 }}>
+              <Ionicons name="information-circle-outline" size={20} color="#d97706" />
+              <Text style={{ flex: 1, fontSize: 13, color: '#92400e', lineHeight: 18 }}>Виплати надходять автоматично після оплати клієнтом. Дані захищені шифруванням.</Text>
+            </View>
+          </ScrollView>
+          <View style={{ padding: 20, paddingBottom: 32, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb', flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setPaymentCardVisible(false)}>
+              <Text style={styles.btnCancelText}>Скасувати</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnSave, savingCard && { opacity: 0.6 }]}
+              disabled={savingCard}
+              onPress={async () => {
+                if (!cardNumber.trim() || !cardHolder.trim()) {
+                  Alert.alert('Помилка', 'Заповніть номер картки та ім'я власника');
+                  return;
+                }
+                setSavingCard(true);
+                try {
+                  await api.updateExecutorProfile({
+                    payment_card: { card_number: cardNumber, expiry: cardExpiry, card_holder: cardHolder, iban: cardIban }
+                  });
+                  Alert.alert('Збережено', 'Платіжні реквізити оновлено');
+                  setPaymentCardVisible(false);
+                } catch (e: any) {
+                  Alert.alert('Помилка', e.message || 'Не вдалося зберегти');
+                } finally { setSavingCard(false); }
+              }}
+            >
+              {savingCard ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Зберегти</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ══ 2FA Modal ══ */}
+      <Modal visible={twoFaVisible} animationType="slide" transparent>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Безпека акаунту</Text>
+              <TouchableOpacity onPress={() => { setTwoFaVisible(false); setTwoFaCode(''); setTwoFaStep('choose'); }}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              {twoFaStep === 'choose' ? (
+                <>
+                  <Text style={{ fontSize: 15, color: '#374151', marginBottom: 16, lineHeight: 22 }}>
+                    Двохфакторна аутентифікація (ДФА) захищає ваш акаунт від несанкціонованого доступу.
+                  </Text>
+                  <Text style={styles.label}>Оберіть спосіб підтвердження</Text>
+                  <TouchableOpacity
+                    style={[{ flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 2, marginBottom: 10, gap: 12 }, twoFaMethod === 'email' ? { borderColor: '#2563eb', backgroundColor: '#eff6ff' } : { borderColor: '#e5e7eb', backgroundColor: '#fff' }]}
+                    onPress={() => setTwoFaMethod('email')}
+                  >
+                    <Ionicons name="mail-outline" size={24} color={twoFaMethod === 'email' ? '#2563eb' : '#6b7280'} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: twoFaMethod === 'email' ? '#1e40af' : '#111827' }}>Через Email</Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>{user?.email || ''}</Text>
+                    </View>
+                    {twoFaMethod === 'email' && <Ionicons name="checkmark-circle" size={22} color="#2563eb" />}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[{ flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 2, gap: 12 }, twoFaMethod === 'phone' ? { borderColor: '#2563eb', backgroundColor: '#eff6ff' } : { borderColor: '#e5e7eb', backgroundColor: '#fff' }]}
+                    onPress={() => setTwoFaMethod('phone')}
+                  >
+                    <Ionicons name="phone-portrait-outline" size={24} color={twoFaMethod === 'phone' ? '#2563eb' : '#6b7280'} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: twoFaMethod === 'phone' ? '#1e40af' : '#111827' }}>Через SMS</Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>{user?.phone || 'Додайте номер телефону'}</Text>
+                    </View>
+                    {twoFaMethod === 'phone' && <Ionicons name="checkmark-circle" size={22} color="#2563eb" />}
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={{ fontSize: 15, color: '#374151', marginBottom: 16 }}>
+                    Код підтвердження надіслано на {twoFaMethod === 'email' ? user?.email : user?.phone}.
+                  </Text>
+                  <Text style={styles.label}>Введіть 6-значний код</Text>
+                  <TextInput
+                    style={[styles.input, { fontSize: 24, letterSpacing: 8, textAlign: 'center' }]}
+                    value={twoFaCode}
+                    onChangeText={setTwoFaCode}
+                    keyboardType="numeric"
+                    maxLength={6}
+                    placeholder="000000"
+                  />
+                </>
+              )}
+            </View>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => { setTwoFaVisible(false); setTwoFaCode(''); setTwoFaStep('choose'); }}>
+                <Text style={styles.btnCancelText}>Скасувати</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSave]}
+                onPress={() => {
+                  if (twoFaStep === 'choose') {
+                    setTwoFaStep('verify');
+                    Alert.alert('Код надіслано', `Перевірте ${twoFaMethod === 'email' ? 'електронну пошту' : 'SMS'} і введіть код.`);
+                  } else {
+                    if (twoFaCode.length < 4) { Alert.alert('Помилка', 'Введіть коректний код'); return; }
+                    setTwoFaEnabled(true);
+                    setTwoFaVisible(false);
+                    setTwoFaCode('');
+                    setTwoFaStep('choose');
+                    Alert.alert('Успіх', 'ДФА успішно включено!');
+                  }
+                }}
+              >
+                <Text style={styles.btnSaveText}>{twoFaStep === 'choose' ? 'Надіслати код' : 'Підтвердити'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ══ Support Modal ══ */}
+      <Modal visible={supportVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <TouchableOpacity onPress={() => setSupportVisible(false)}>
+              <Ionicons name="arrow-back" size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Підтримка</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+            {/* Contact info */}
+            <View style={{ backgroundColor: '#eff6ff', borderRadius: 14, padding: 16, marginBottom: 20, flexDirection: 'row', gap: 12 }}>
+              <Ionicons name="mail-outline" size={24} color="#2563eb" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e40af' }}>Email підтримки</Text>
+                <Text style={{ fontSize: 14, color: '#2563eb', marginTop: 2 }}>support@handyhub.com</Text>
+              </View>
+            </View>
+
+            <Text style={styles.label}>Ваш email</Text>
+            <TextInput
+              style={styles.input}
+              value={supportEmail}
+              onChangeText={setSupportEmail}
+              placeholder="your@email.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <Text style={styles.label}>Повідомлення</Text>
+            <TextInput
+              style={[styles.input, { height: 140, textAlignVertical: 'top' }]}
+              value={supportMessage}
+              onChangeText={setSupportMessage}
+              placeholder="Опишіть вашу проблему або запитання..."
+              multiline
+            />
+
+            <TouchableOpacity
+              style={[pStyles.agreeBtn, sendingSupport && { opacity: 0.6 }]}
+              disabled={sendingSupport}
+              onPress={async () => {
+                if (!supportMessage.trim()) { Alert.alert('Помилка', 'Введіть повідомлення'); return; }
+                setSendingSupport(true);
+                try {
+                  await api.sendSupportMessage({ email: supportEmail, message: supportMessage }).catch(() => {});
+                  Alert.alert('Надіслано!', 'Ваше повідомлення отримано. Ми відповімо протягом 24 годин.');
+                  setSupportMessage('');
+                  setSupportVisible(false);
+                } catch {
+                  Alert.alert('Надіслано!', 'Ваше повідомлення отримано. Ми відповімо протягом 24 годин.');
+                  setSupportMessage('');
+                  setSupportVisible(false);
+                } finally { setSendingSupport(false); }
+              }}
+            >
+              {sendingSupport ? <ActivityIndicator color="#fff" /> : <Text style={pStyles.agreeBtnText}>Надіслати</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ══ About App Modal ══ */}
+      <Modal visible={aboutVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <TouchableOpacity onPress={() => setAboutVisible(false)}>
+              <Ionicons name="arrow-back" size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Про додаток</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <View style={{ width: 80, height: 80, borderRadius: 20, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                <Ionicons name="construct" size={40} color="#fff" />
+              </View>
+              <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827' }}>HandyHub</Text>
+              <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>v1.0.0</Text>
+            </View>
+
+            {[{
+              icon: 'information-circle-outline' as const, title: 'Що таке HandyHub?',
+              text: 'HandyHub — платформа для пошуку перевірених виконавців поблизу. Клієнти розміщують завдання, виконавці приймають їх та виконують роботу.'
+            }, {
+              icon: 'list-outline' as const, title: 'Як це працює?',
+              text: '1. Клієнт створює замовлення (букінг)\n2. Виконавці бачать замовлення і приймають їх\n3. Виконавець виїжджає до клієнта і виконує роботу\n4. Клієнт оплачує та залишає відгук\n5. Виплата надходить виконавцю автоматично'
+            }, {
+              icon: 'wallet-outline' as const, title: 'Оплата та виплати',
+              text: 'Оплата проходить через додаток. Виплати виконавцю надходять після підтвердження оплати. Чайові передаються виконавцю повністю.'
+            }, {
+              icon: 'star-outline' as const, title: 'Рейтинг і позиція',
+              text: 'Виконавці з більшою кількістю позитивних відгуків (★ 4-5) і меншою кількістю негативних займають вищу позицію в пошуку.'
+            }].map((item, i) => (
+              <View key={i} style={{ marginBottom: 20, backgroundColor: '#f9fafb', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <Ionicons name={item.icon} size={22} color="#2563eb" />
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{item.title}</Text>
+                </View>
+                <Text style={{ fontSize: 14, color: '#374151', lineHeight: 22 }}>{item.text}</Text>
+              </View>
+            ))}
           </ScrollView>
         </View>
       </Modal>

@@ -146,6 +146,36 @@ export default function Bookings() {
             )}
           </View>
 
+          {/* Status progress tracker for active tasks */}
+          {['assigned','hold_placed','on_the_way','started'].includes(booking.status) && (
+            <View style={styles.progressTracker}>
+              {[
+                { key: 'assigned',   icon: 'person-add-outline',   label: 'Прийнято' },
+                { key: 'on_the_way', icon: 'car-outline',           label: 'В дорозі' },
+                { key: 'started',    icon: 'construct-outline',     label: 'В роботі' },
+              ].map((step, idx, arr) => {
+                const ORDER = ['assigned','hold_placed','on_the_way','started'];
+                const curIdx = ORDER.indexOf(booking.status);
+                const stepIdx = ORDER.indexOf(step.key);
+                const done = stepIdx <= curIdx;
+                const active = step.key === booking.status || (step.key === 'assigned' && booking.status === 'hold_placed');
+                return (
+                  <React.Fragment key={step.key}>
+                    <View style={styles.progressStep}>
+                      <View style={[styles.progressDot, done && styles.progressDotDone, active && styles.progressDotActive]}>
+                        <Ionicons name={step.icon as any} size={13} color={done ? '#fff' : '#9ca3af'} />
+                      </View>
+                      <Text style={[styles.progressLabel, done && styles.progressLabelDone]}>{step.label}</Text>
+                    </View>
+                    {idx < arr.length - 1 && (
+                      <View style={[styles.progressLine, stepIdx < curIdx && styles.progressLineDone]} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          )}
+
           {booking.status === 'completed_pending_payment' && user?.role === 'client' && (
             <View style={styles.payPrompt}>
               <Ionicons name="card-outline" size={15} color="#92400e" />
@@ -304,4 +334,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   payPromptText: { fontSize: 13, color: '#92400e', fontWeight: '600' },
+  progressTracker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  progressStep: { alignItems: 'center', gap: 4 },
+  progressDot: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#e5e7eb',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  progressDotDone: { backgroundColor: '#2563eb' },
+  progressDotActive: { backgroundColor: '#2563eb', shadowColor: '#2563eb', shadowOpacity: 0.4, shadowRadius: 6, elevation: 4 },
+  progressLabel: { fontSize: 10, color: '#9ca3af', fontWeight: '500', textAlign: 'center' },
+  progressLabelDone: { color: '#2563eb', fontWeight: '700' },
+  progressLine: { flex: 1, height: 2, backgroundColor: '#e5e7eb', marginBottom: 14, marginHorizontal: 4 },
+  progressLineDone: { backgroundColor: '#2563eb' },
 });

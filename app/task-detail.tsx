@@ -112,6 +112,11 @@ export default function TaskDetail() {
   const [reviewTip, setReviewTip] = useState('');
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
+  // Decline modal
+  const [showDecline, setShowDecline] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
+  const [decliningLoading, setDecliningLoading] = useState(false);
+
   useEffect(() => { loadTask(); }, [taskId]);
 
   const loadTask = async () => {
@@ -238,6 +243,27 @@ export default function TaskDetail() {
       }
     } finally {
       setReviewSubmitting(false);
+    }
+  };
+
+  const handleDecline = async () => {
+    if (!declineReason.trim()) {
+      Alert.alert('Вкажіть причину', 'Будь ласка, вкажіть коротку причину відмови.');
+      return;
+    }
+    setDecliningLoading(true);
+    try {
+      await api.declineTask(taskId, declineReason.trim());
+      setShowDecline(false);
+      setDeclineReason('');
+      Alert.alert('Відхилено', 'Завдання відхилено. Клієнт отримає сповіщення.', [
+        { text: 'ОК', onPress: () => router.replace('/(tabs)/tasks') },
+      ]);
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e.message || 'Помилка';
+      Alert.alert('Помилка', msg);
+    } finally {
+      setDecliningLoading(false);
     }
   };
 
@@ -527,6 +553,17 @@ export default function TaskDetail() {
                   <Text style={s.actionBtnText}>{execAction.label}</Text>
                 </>
             }
+          </TouchableOpacity>
+        )}
+
+        {/* Decline button — visible for provider before accepting (posted/offering) or when assigned */}
+        {isProvider && ['posted','offering','assigned','hold_placed'].includes(status) && (
+          <TouchableOpacity
+            style={[s.declineBtn]}
+            onPress={() => setShowDecline(true)}
+          >
+            <Ionicons name="close-circle-outline" size={20} color="#ef4444" />
+            <Text style={s.declineBtnText}>Відхилити</Text>
           </TouchableOpacity>
         )}
 
@@ -871,6 +908,68 @@ export default function TaskDetail() {
           </View>
         </View>
       </Modal>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          DECLINE MODAL
+      ═══════════════════════════════════════════════════════════════ */}
+      <Modal visible={showDecline} animationType="slide" transparent>
+        <View style={s.overlay}>
+          <View style={[s.modalBox, { maxHeight: 380 }]}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Відхилити завдання</Text>
+              <TouchableOpacity onPress={() => { setShowDecline(false); setDeclineReason(''); }}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={s.modalBody}>
+              <Text style={[s.inputLabel, { marginBottom: 8 }]}>Причина відмови *</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+                Клієнт отримає сповіщення з причиною відмови.
+              </Text>
+              {/* Quick reason chips */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                {['Зайнятий', 'Не моя спеціалізація', 'Незручна адреса', 'Інша причина'].map(r => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[s.tipAmtBtn, declineReason === r && s.tipAmtBtnActive, { borderColor: '#ef4444' }]}
+                    onPress={() => setDeclineReason(declineReason === r ? '' : r)}
+                  >
+                    <Text style={[s.tipAmtText, declineReason === r && { color: '#fff' }]}>{r}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={[s.input, s.textArea, { minHeight: 80 }]}
+                value={declineReason}
+                onChangeText={setDeclineReason}
+                multiline
+                placeholder="Або напишіть свою причину..."
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+
+            <View style={s.modalFooter}>
+              <TouchableOpacity
+                style={[s.modalBtn, s.cancelBtn]}
+                onPress={() => { setShowDecline(false); setDeclineReason(''); }}
+              >
+                <Text style={s.cancelBtnText}>Скасувати</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, { backgroundColor: '#ef4444', flex: 1 }, decliningLoading && s.btnDisabled]}
+                onPress={handleDecline}
+                disabled={decliningLoading}
+              >
+                {decliningLoading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.submitBtnText}>Відхилити</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1045,4 +1144,13 @@ const s = StyleSheet.create({
   tipAmtBtnActive: { backgroundColor: '#f59e0b', borderColor: '#f59e0b' },
   tipAmtText: { fontSize: 13, fontWeight: '600', color: '#92400e' },
   tipAmtTextActive: { color: '#fff' },
+
+  // ── Decline ──
+  declineBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12, borderWidth: 1.5, borderColor: '#ef4444',
+    backgroundColor: '#fff5f5',
+  },
+  declineBtnText: { fontSize: 14, fontWeight: '700', color: '#ef4444' },
 });

@@ -144,17 +144,18 @@ function ProviderDashboard() {
         <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>Ваші завдання на сьогодні</Text>
       </View>
 
-      {/* Stats row */}
+      {/* Stats row — clickable tiles */}
       <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12 }}>
         {[
-          { label: 'Нові', count: tasks.length, color: '#2563eb', bg: '#eff6ff' },
-          { label: 'Мої', count: myTasks.filter(t => ['assigned','on_the_way','started'].includes(t.status)).length, color: '#059669', bg: '#ecfdf5' },
-          { label: 'Виконано', count: myTasks.filter(t => ['paid','completed_pending_payment'].includes(t.status)).length, color: '#7c3aed', bg: '#f5f3ff' },
+          { label: 'Нові', count: tasks.length, color: '#2563eb', bg: '#eff6ff', tab: 'available' },
+          { label: 'Мої', count: myTasks.filter(t => ['assigned','on_the_way','started'].includes(t.status)).length, color: '#059669', bg: '#ecfdf5', tab: 'my' },
+          { label: 'Виконано', count: myTasks.filter(t => ['paid','completed_pending_payment','completed'].includes(t.status)).length, color: '#7c3aed', bg: '#f5f3ff', tab: 'done' },
         ].map(stat => (
-          <View key={stat.label} style={{ flex: 1, backgroundColor: stat.bg, borderRadius: 14, padding: 14, alignItems: 'center' }}>
+          <TouchableOpacity key={stat.label} style={{ flex: 1, backgroundColor: stat.bg, borderRadius: 14, padding: 14, alignItems: 'center' }}
+            onPress={() => router.push({ pathname: '/(tabs)/tasks', params: { tab: stat.tab } })}>
             <Text style={{ fontSize: 26, fontWeight: '800', color: stat.color }}>{stat.count}</Text>
             <Text style={{ fontSize: 12, color: stat.color, fontWeight: '600', marginTop: 2 }}>{stat.label}</Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
 
