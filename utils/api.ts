@@ -110,6 +110,11 @@ export const api = {
     return res.data;
   },
 
+  createReview: async (data: { booking_id: string; rating: number; comment?: string; tip_amount?: number }) => {
+    const res = await client.post('/reviews', data);
+    return res.data;
+  },
+
   // Bookings
   getBookings: async () => {
     const res = await client.get('/bookings');

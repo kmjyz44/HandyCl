@@ -105,6 +105,13 @@ export default function TaskDetail() {
   const [showPayment, setShowPayment] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState('');
 
+  // Review modal (shown after payment)
+  const [showReview, setShowReview] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewTip, setReviewTip] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
   useEffect(() => { loadTask(); }, [taskId]);
 
   const loadTask = async () => {
@@ -191,14 +198,46 @@ export default function TaskDetail() {
     setActionLoading(true);
     try {
       await api.payTask(taskId, { payment_method: selectedMethod });
-      Alert.alert('Оплату підтверджено!', 'Завдання переміщено до оплачених.');
       setShowPayment(false);
       await loadTask();
+      // Show review modal after successful payment
+      setShowReview(true);
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e.message || 'Помилка';
       Alert.alert('Помилка', msg);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const submitReview = async () => {
+    if (reviewRating < 1 || reviewRating > 5) { Alert.alert('Оберіть оцінку від 1 до 5'); return; }
+    setReviewSubmitting(true);
+    try {
+      // Use booking_id if available, otherwise task_id
+      const bookingId = task.booking_id || task.booking?.booking_id || taskId;
+      await api.createReview({
+        booking_id: bookingId,
+        rating: reviewRating,
+        comment: reviewComment || undefined,
+        tip_amount: reviewTip ? parseFloat(reviewTip) : undefined,
+      });
+      setShowReview(false);
+      if (Platform.OS === 'web') {
+        window.alert('Дякуємо за відгук! Ваша оцінка допоможе іншим клієнтам.');
+      } else {
+        Alert.alert('Дякуємо!', 'Ваш відгук збережено.', [{ text: 'ОК' }]);
+      }
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e.message || 'Помилка';
+      // If already reviewed, just close
+      if (msg.includes('already reviewed') || msg.includes('вже')) {
+        setShowReview(false);
+      } else {
+        Alert.alert('Помилка', msg);
+      }
+    } finally {
+      setReviewSubmitting(false);
     }
   };
 
@@ -719,11 +758,124 @@ export default function TaskDetail() {
           </View>
         </View>
       </Modal>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          REVIEW MODAL (after payment)
+      ═══════════════════════════════════════════════════════════════ */}
+      <Modal visible={showReview} animationType="slide" transparent>
+        <View style={s.overlay}>
+          <View style={s.modalBox}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Відгук про виконавця</Text>
+              <TouchableOpacity onPress={() => setShowReview(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={s.modalBody}>
+              {/* Provider info */}
+              <View style={s.reviewProviderRow}>
+                {task.provider?.picture || task.provider?.photo_url ? (
+                  <Image source={{ uri: task.provider.picture || task.provider.photo_url }} style={s.reviewAvatar} />
+                ) : (
+                  <View style={[s.reviewAvatar, s.reviewAvatarPlaceholder]}>
+                    <Text style={s.reviewAvatarInitial}>
+                      {(task.provider?.name || 'В')[0].toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={s.reviewProviderName}>{task.provider?.name || 'Виконавець'}</Text>
+                  <Text style={s.reviewProviderSub}>{task.title || 'Завдання'}</Text>
+                </View>
+              </View>
+
+              {/* Star rating */}
+              <Text style={[s.inputLabel, { marginTop: 20, marginBottom: 12 }]}>Оцінка виконавця</Text>
+              <View style={s.starsRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity key={star} onPress={() => setReviewRating(star)} style={s.starBtn}>
+                    <Ionicons
+                      name={star <= reviewRating ? 'star' : 'star-outline'}
+                      size={36}
+                      color={star <= reviewRating ? '#f59e0b' : '#d1d5db'}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.ratingLabel}>
+                {reviewRating === 1 ? 'Погано' : reviewRating === 2 ? 'Нижче середнього' : reviewRating === 3 ? 'Нормально' : reviewRating === 4 ? 'Добре' : 'Відмінно'}
+              </Text>
+
+              {/* Comment */}
+              <Text style={[s.inputLabel, { marginTop: 20 }]}>Коментар (необов’язково)</Text>
+              <TextInput
+                style={[s.input, s.textArea]}
+                value={reviewComment}
+                onChangeText={setReviewComment}
+                multiline
+                placeholder="Напишіть ваш відгук..."
+                placeholderTextColor="#9ca3af"
+              />
+
+              {/* Tip */}
+              <View style={s.tipCard}>
+                <View style={s.tipHeader}>
+                  <Ionicons name="gift-outline" size={20} color="#f59e0b" />
+                  <Text style={s.tipTitle}>Чайові (необов’язково)</Text>
+                </View>
+                <Text style={s.tipHint}>Покажіть вдячність за чудову роботу — 100% виконавцю</Text>
+                {/* Quick tip buttons */}
+                <View style={s.tipBtns}>
+                  {['50', '100', '200', '500'].map((amt) => (
+                    <TouchableOpacity
+                      key={amt}
+                      style={[s.tipAmtBtn, reviewTip === amt && s.tipAmtBtnActive]}
+                      onPress={() => setReviewTip(reviewTip === amt ? '' : amt)}
+                    >
+                      <Text style={[s.tipAmtText, reviewTip === amt && s.tipAmtTextActive]}>
+                        +{amt} грн
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={[s.input, { marginBottom: 0, marginTop: 8 }]}
+                  value={reviewTip}
+                  onChangeText={setReviewTip}
+                  keyboardType="numeric"
+                  placeholder="Або введіть свою суму..."
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={s.modalFooter}>
+              <TouchableOpacity
+                style={[s.modalBtn, s.cancelBtn]}
+                onPress={() => setShowReview(false)}
+              >
+                <Text style={s.cancelBtnText}>Пропустити</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, s.submitBtn, { backgroundColor: '#f59e0b' }, reviewSubmitting && s.btnDisabled]}
+                onPress={submitReview}
+                disabled={reviewSubmitting}
+              >
+                {reviewSubmitting
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.submitBtnText}>Надіслати відгук</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles ────────────────────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   centered:  { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -870,4 +1022,27 @@ const s = StyleSheet.create({
   methodCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12, backgroundColor: '#f9fafb', marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb' },
   methodIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   methodLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: '#111827' },
+
+  // ── Review ──
+  reviewProviderRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8 },
+  reviewAvatar: { width: 56, height: 56, borderRadius: 28 },
+  reviewAvatarPlaceholder: { backgroundColor: '#dbeafe', justifyContent: 'center', alignItems: 'center' },
+  reviewAvatarInitial: { fontSize: 22, fontWeight: '700', color: '#2563eb' },
+  reviewProviderName: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  reviewProviderSub: { fontSize: 13, color: '#6b7280', marginTop: 2 },
+
+  starsRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 8 },
+  starBtn: { padding: 4 },
+  ratingLabel: { textAlign: 'center', fontSize: 15, fontWeight: '600', color: '#f59e0b', marginBottom: 8 },
+
+  // ── Tip ──
+  tipCard: { backgroundColor: '#fffbeb', borderRadius: 12, padding: 16, marginTop: 8, borderWidth: 1, borderColor: '#fde68a' },
+  tipHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  tipTitle: { fontSize: 15, fontWeight: '700', color: '#92400e' },
+  tipHint: { fontSize: 12, color: '#78350f', marginBottom: 12 },
+  tipBtns: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+  tipAmtBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#fde68a', alignItems: 'center' },
+  tipAmtBtnActive: { backgroundColor: '#f59e0b', borderColor: '#f59e0b' },
+  tipAmtText: { fontSize: 13, fontWeight: '600', color: '#92400e' },
+  tipAmtTextActive: { color: '#fff' },
 });

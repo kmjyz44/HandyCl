@@ -376,12 +376,13 @@ class Review(BaseModel):
     provider_id: str
     rating: int  # 1-5
     comment: Optional[str] = None
+    tip_amount: Optional[float] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
 class ReviewCreate(BaseModel):
     booking_id: str
     rating: int
     comment: Optional[str] = None
+    tip_amount: Optional[float] = None
 
 class ReviewUpdate(BaseModel):
     rating: Optional[int] = None
@@ -2570,33 +2571,60 @@ async def get_available_modules(current_user: User = Depends(get_current_user)):
 # Review Routes
 @api_router.post("/reviews")
 async def create_review(review_data: ReviewCreate, current_user: User = Depends(get_current_user)):
-    # Get booking
+    # Get booking — try by booking_id first, then by task_id (task may have been created from booking)
     booking = await db.bookings.find_one({"booking_id": review_data.booking_id}, {"_id": 0})
     if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
+        # Maybe review_data.booking_id is actually a task_id — look up the task and get its booking_id
+        task_doc = await db.tasks.find_one({"task_id": review_data.booking_id}, {"_id": 0})
+        if task_doc and task_doc.get("booking_id"):
+            booking = await db.bookings.find_one({"booking_id": task_doc["booking_id"]}, {"_id": 0})
+        if not booking:
+            # Last resort: treat task as a virtual booking
+            if task_doc:
+                booking = task_doc
+                booking["booking_id"] = task_doc["task_id"]
+            else:
+                raise HTTPException(status_code=404, detail="Booking not found")
     
-    if booking["client_id"] != current_user.user_id:
+    if booking.get("client_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Only the client can review")
     
     if not booking.get("provider_id"):
         raise HTTPException(status_code=400, detail="No provider assigned to this booking")
     
     # Check if already reviewed
-    existing_review = await db.reviews.find_one({"booking_id": review_data.booking_id})
+    existing_review = await db.reviews.find_one({"booking_id": booking["booking_id"]})
     if existing_review:
         raise HTTPException(status_code=400, detail="Booking already reviewed")
     
     review_id = f"review_{uuid.uuid4().hex[:12]}"
     review = Review(
         review_id=review_id,
-        booking_id=review_data.booking_id,
+        booking_id=booking["booking_id"],
         client_id=current_user.user_id,
         provider_id=booking["provider_id"],
         rating=review_data.rating,
-        comment=review_data.comment
+        comment=review_data.comment,
+        tip_amount=review_data.tip_amount
     )
     
     await db.reviews.insert_one(review.dict())
+    
+    # If tip provided, update task and booking with tip_amount
+    if review_data.tip_amount and review_data.tip_amount > 0:
+        now = datetime.now(timezone.utc)
+        await db.bookings.update_one(
+            {"booking_id": booking["booking_id"]},
+            {"$set": {"tip_amount": review_data.tip_amount, "updated_at": now}}
+        )
+        # Also update the linked task if any
+        task_to_update = await db.tasks.find_one({"booking_id": booking["booking_id"]}, {"_id": 0})
+        if task_to_update:
+            await db.tasks.update_one(
+                {"task_id": task_to_update["task_id"]},
+                {"$set": {"tip_amount": review_data.tip_amount, "updated_at": now}}
+            )
+    
     return review.dict()
 
 @api_router.get("/reviews/provider/{provider_id}")
@@ -4878,8 +4906,11 @@ async def get_available_tasks(
     
     result = []
 
-    # 1. Tasks from tasks collection (assigned to no one or open)
-    task_query: dict = {"status": {"$in": ["posted", "offering", "assigned"]}}
+    # 1. Tasks from tasks collection - only truly open tasks (posted/offering with no provider)
+    task_query: dict = {
+        "status": {"$in": ["posted", "offering"]},
+        "$or": [{"provider_id": {"$exists": False}}, {"provider_id": None}, {"provider_id": ""}]
+    }
     if category:
         task_query["category"] = category
     tasks_docs = await db.tasks.find(task_query, {"_id": 0}).sort("created_at", -1).to_list(100)
