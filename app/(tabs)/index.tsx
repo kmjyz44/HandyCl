@@ -119,6 +119,7 @@ function ProviderDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'available' | 'my'>('available');
+  const [statFilter, setStatFilter] = useState<'available' | 'my' | 'done' | null>(null);
 
   const load = async () => {
     try {
@@ -150,13 +151,25 @@ function ProviderDashboard() {
           { label: 'Нові', count: tasks.length, color: '#2563eb', bg: '#eff6ff', tab: 'available' },
           { label: 'Мої', count: myTasks.filter(t => ['assigned','on_the_way','started'].includes(t.status)).length, color: '#059669', bg: '#ecfdf5', tab: 'my' },
           { label: 'Виконано', count: myTasks.filter(t => ['paid','completed_pending_payment','completed'].includes(t.status)).length, color: '#7c3aed', bg: '#f5f3ff', tab: 'done' },
-        ].map(stat => (
-          <TouchableOpacity key={stat.label} style={{ flex: 1, backgroundColor: stat.bg, borderRadius: 14, padding: 14, alignItems: 'center' }}
-            onPress={() => router.push({ pathname: '/(tabs)/tasks', params: { tab: stat.tab } })}>
-            <Text style={{ fontSize: 26, fontWeight: '800', color: stat.color }}>{stat.count}</Text>
-            <Text style={{ fontSize: 12, color: stat.color, fontWeight: '600', marginTop: 2 }}>{stat.label}</Text>
-          </TouchableOpacity>
-        ))}
+        ].map(stat => {
+          const isActive = statFilter === stat.tab;
+          return (
+            <TouchableOpacity
+              key={stat.label}
+              style={[
+                { flex: 1, backgroundColor: stat.bg, borderRadius: 14, padding: 14, alignItems: 'center' },
+                isActive && { borderWidth: 2, borderColor: stat.color },
+              ]}
+              onPress={() => {
+                setStatFilter(stat.tab as any);
+                router.push({ pathname: '/(tabs)/tasks', params: { tab: stat.tab } });
+              }}
+            >
+              <Text style={{ fontSize: 26, fontWeight: '800', color: stat.color }}>{stat.count}</Text>
+              <Text style={{ fontSize: 12, color: stat.color, fontWeight: '600', marginTop: 2 }}>{stat.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Tabs */}

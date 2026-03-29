@@ -2205,7 +2205,7 @@ async def complete_task(
     if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
-    if task["status"] not in [TaskStatus.STARTED, TaskStatus.ON_THE_WAY, TaskStatus.ASSIGNED, TaskStatus.HOLD_PLACED]:
+    if task["status"] not in [TaskStatus.STARTED, TaskStatus.ON_THE_WAY, TaskStatus.ASSIGNED, TaskStatus.HOLD_PLACED, "on_the_way", "started", "assigned"]:
         raise HTTPException(status_code=400, detail=f"Task must be in progress to complete (current: {task['status']})")
     
     now = datetime.now(timezone.utc)
@@ -2216,8 +2216,15 @@ async def complete_task(
         actual_hours = round(delta.total_seconds() / 3600, 2)
     
     notes = completion.provider_notes or completion.provider_comments
-    materials = completion.materials_cost or completion.expenses
-    
+    materials = completion.materials_cost or completion.expenses or 0.0
+
+    # Calculate final price: hours × hourly_rate + materials
+    hourly_rate = task.get("hourly_rate") or task.get("provider_hourly_rate") or 0.0
+    labor_cost = round((actual_hours or 0) * hourly_rate, 2)
+    final_price = round(labor_cost + materials, 2)
+    platform_fee = round(final_price * 0.15, 2)
+    provider_payout = round(final_price - platform_fee, 2)
+
     await db.tasks.update_one(
         {"task_id": real_task_id},
         {"$set": {
@@ -2228,6 +2235,10 @@ async def complete_task(
             "expenses": materials,
             "provider_notes": notes,
             "provider_comments": notes,
+            "final_price": final_price,
+            "labor_cost": labor_cost,
+            "platform_fee": platform_fee,
+            "provider_payout": provider_payout,
             "updated_at": now
         }}
     )

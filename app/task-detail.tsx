@@ -39,6 +39,7 @@ const EXEC_ACTIONS: Record<string, { action: string; label: string; color: strin
   assigned:    { action: 'on_the_way', label: 'Виїхав',            color: '#06b6d4', icon: 'car' },
   on_the_way:  { action: 'start',      label: 'Почати роботу',     color: '#f97316', icon: 'construct' },
   started:     { action: 'complete',   label: 'Закінчити роботу',  color: '#22c55e', icon: 'checkmark-done-circle' },
+  hold_placed: { action: 'complete',   label: 'Закінчити роботу',  color: '#22c55e', icon: 'checkmark-done-circle' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -455,25 +456,49 @@ export default function TaskDetail() {
         <View style={s.section}>
           <Text style={s.sectionTitle}>Вартість</Text>
           <View style={s.priceCard}>
-            {price != null && price > 0 ? (
+            {/* Estimated price (before work) */}
+            {!task.final_price && price != null && price > 0 && (
               <View style={s.priceRow}>
                 <Text style={s.priceLabel}>Орієнтовна ціна</Text>
                 <Text style={s.priceGreen}>{price} грн</Text>
               </View>
-            ) : (
-              <Text style={s.noPrice}>Ціна не вказана</Text>
             )}
+            {/* After completion — show full breakdown */}
             {!!task.final_price && (
-              <View style={s.priceRow}>
-                <Text style={s.priceLabel}>Фінальна ціна</Text>
-                <Text style={[s.priceGreen, { fontSize: 22 }]}>{task.final_price} грн</Text>
-              </View>
+              <>
+                {!!task.actual_hours && (
+                  <View style={s.priceRow}>
+                    <Text style={s.priceLabel}>Відпрацьовано</Text>
+                    <Text style={s.priceLabel}>{task.actual_hours} год × {task.hourly_rate || 0} грн/год</Text>
+                  </View>
+                )}
+                {!!task.labor_cost && (
+                  <View style={s.priceRow}>
+                    <Text style={s.priceLabel}>Вартість роботи</Text>
+                    <Text style={s.priceLabel}>{task.labor_cost} грн</Text>
+                  </View>
+                )}
+                {!!task.materials_cost && task.materials_cost > 0 && (
+                  <View style={s.priceRow}>
+                    <Text style={s.priceLabel}>Матеріали</Text>
+                    <Text style={s.priceLabel}>{task.materials_cost} грн</Text>
+                  </View>
+                )}
+                <View style={[s.priceRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 8, paddingTop: 8 }]}>
+                  <Text style={[s.priceLabel, { fontWeight: '700', fontSize: 15 }]}>Загальна сума</Text>
+                  <Text style={[s.priceGreen, { fontSize: 22, fontWeight: '800' }]}>{task.final_price} грн</Text>
+                </View>
+                {/* Provider sees their payout */}
+                {isProvider && isMyTask && !!task.provider_payout && (
+                  <View style={[s.priceRow, { backgroundColor: '#f0fdf4', borderRadius: 8, padding: 8, marginTop: 8 }]}>
+                    <Text style={[s.priceLabel, { color: '#16a34a' }]}>Ваш заробіток (85%)</Text>
+                    <Text style={[s.priceGreen, { color: '#16a34a', fontSize: 18, fontWeight: '700' }]}>{task.provider_payout} грн</Text>
+                  </View>
+                )}
+              </>
             )}
-            {!!task.materials_cost && (
-              <View style={s.priceRow}>
-                <Text style={s.priceLabel}>Матеріали</Text>
-                <Text style={s.priceLabel}>{task.materials_cost} грн</Text>
-              </View>
+            {!task.final_price && !price && (
+              <Text style={s.noPrice}>Ціна буде розрахована після завершення</Text>
             )}
           </View>
         </View>
@@ -724,7 +749,15 @@ export default function TaskDetail() {
                 {task.actual_hours != null && (
                   <View style={s.payRow}>
                     <Text style={s.payLabel}>Відпрацьовано</Text>
-                    <Text style={[s.payVal, { color: '#2563eb' }]}>{task.actual_hours} год</Text>
+                    <Text style={[s.payVal, { color: '#2563eb' }]}>
+                      {task.actual_hours} год × {task.hourly_rate || 0} грн
+                    </Text>
+                  </View>
+                )}
+                {task.labor_cost != null && task.labor_cost > 0 && (
+                  <View style={s.payRow}>
+                    <Text style={s.payLabel}>Вартість роботи</Text>
+                    <Text style={s.payVal}>{task.labor_cost} грн</Text>
                   </View>
                 )}
                 {task.materials_cost != null && task.materials_cost > 0 && (
@@ -734,7 +767,7 @@ export default function TaskDetail() {
                   </View>
                 )}
                 <View style={[s.payRow, s.payTotal]}>
-                  <Text style={s.payTotalLabel}>До оплати</Text>
+                  <Text style={s.payTotalLabel}>Загальна сума</Text>
                   <Text style={s.payTotalVal}>{task.final_price || price || '—'} грн</Text>
                 </View>
               </View>

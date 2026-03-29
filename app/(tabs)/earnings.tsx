@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,9 @@ import { useRouter } from 'expo-router';
 import { api } from '../../utils/api';
 import { useAuthStore } from '../../store/authStore';
 
+const MONTHS_UA = ['Січень','Лютий','Березень','Квітень','Травень','Червень',
+  'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+
 export default function Earnings() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -20,12 +23,13 @@ export default function Earnings() {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null); // 'YYYY-MM' or null = all
 
   const loadData = async () => {
     try {
       const [earningsRes, historyRes] = await Promise.all([
         api.getEarnings(),
-        api.getEarningsHistory(30),
+        api.getEarningsHistory(365),
       ]);
       setEarnings(earningsRes);
       setHistory(historyRes || []);
@@ -41,16 +45,65 @@ export default function Earnings() {
   const onRefresh = () => { setRefreshing(true); loadData(); };
 
   const fmt = (val: number | undefined | null) =>
-    val && val > 0 ? `${val.toFixed(0)} ₴` : '0 ₴';
+    val && val > 0 ? `${Math.round(val)} ₴` : '0 ₴';
 
-  // Derived from history
-  const paidItems = history.filter(i => i.status === 'paid');
-  const pendingItems = history.filter(i => i.status === 'completed_pending_payment');
-  const totalEarned = earnings?.total_earnings || paidItems.reduce((s, i) => s + (i.final_price || 0), 0);
-  const totalTips = earnings?.total_tips || paidItems.reduce((s, i) => s + (i.tip_amount || 0), 0);
-  const totalPending = earnings?.pending_amount || pendingItems.reduce((s, i) => s + (i.final_price || 0), 0);
-  const totalHours = earnings?.total_hours || paidItems.reduce((s, i) => s + (i.actual_hours || 0), 0);
-  const totalJobs = earnings?.total_jobs || paidItems.length;
+  const fmtDate = (iso?: string) => {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+      return d.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch { return '—'; }
+  };
+
+  const getMonthKey = (iso?: string) => {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    } catch { return null; }
+  };
+
+  const paidAll = history.filter(i => i.status === 'paid');
+  const pendingAll = history.filter(i => i.status === 'completed_pending_payment');
+
+  // Build list of months that have paid tasks
+  const availableMonths = useMemo(() => {
+    const keys = new Set<string>();
+    paidAll.forEach(i => {
+      const k = getMonthKey(i.completed_at || i.paid_at);
+      if (k) keys.add(k);
+    });
+    return Array.from(keys).sort().reverse();
+  }, [paidAll]);
+
+  // Filtered items
+  const paidItems = selectedMonth
+    ? paidAll.filter(i => getMonthKey(i.completed_at || i.paid_at) === selectedMonth)
+    : paidAll;
+  const pendingItems = pendingAll;
+
+  // Aggregates for current filter
+  const totalEarned = paidItems.reduce((s, i) => s + (i.final_price || i.provider_payout || 0), 0);
+  const totalTips = paidItems.reduce((s, i) => s + (i.tip_amount || 0), 0);
+  const totalPending = pendingItems.reduce((s, i) => s + (i.final_price || 0), 0);
+  const totalHours = paidItems.reduce((s, i) => s + (i.actual_hours || 0), 0);
+  const totalJobs = paidItems.length;
+
+  // Monthly stats for bar chart
+  const monthlyStats = useMemo(() => {
+    const map: Record<string, { earned: number; jobs: number; tips: number }> = {};
+    paidAll.forEach(i => {
+      const k = getMonthKey(i.completed_at || i.paid_at);
+      if (!k) return;
+      if (!map[k]) map[k] = { earned: 0, jobs: 0, tips: 0 };
+      map[k].earned += i.final_price || i.provider_payout || 0;
+      map[k].jobs += 1;
+      map[k].tips += i.tip_amount || 0;
+    });
+    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0])).slice(-6);
+  }, [paidAll]);
+
+  const maxEarned = Math.max(...monthlyStats.map(([, v]) => v.earned), 1);
 
   if (loading) {
     return <View style={styles.centered}><ActivityIndicator size="large" color="#2563eb" /></View>;
@@ -72,8 +125,13 @@ export default function Earnings() {
           <View style={styles.mainCardTop}>
             <Ionicons name="wallet-outline" size={32} color="#fff" />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.mainCardLabel}>Зароблено всього</Text>
-              <Text style={styles.mainCardValue}>{fmt(totalEarned)}</Text>
+              <Text style={styles.mainCardLabel}>
+                {selectedMonth ? (() => {
+                  const [y, m] = selectedMonth.split('-');
+                  return `${MONTHS_UA[parseInt(m) - 1]} ${y}`;
+                })() : 'Зароблено всього'}
+              </Text>
+              <Text style={styles.mainCardValue}>{fmt(totalEarned + totalTips)}</Text>
             </View>
           </View>
           <View style={styles.mainCardDivider} />
@@ -97,23 +155,25 @@ export default function Earnings() {
         </View>
 
         {/* Pending payout card */}
-        <View style={styles.pendingCard}>
-          <View style={styles.pendingLeft}>
-            <Ionicons name="time-outline" size={28} color="#d97706" />
-            <View style={{ marginLeft: 12 }}>
-              <Text style={styles.pendingLabel}>Очікує виплати</Text>
-              <Text style={styles.pendingSubLabel}>Завдання виконано, оплата в обробці</Text>
+        {totalPending > 0 && (
+          <View style={styles.pendingCard}>
+            <View style={styles.pendingLeft}>
+              <Ionicons name="time-outline" size={28} color="#d97706" />
+              <View style={{ marginLeft: 12 }}>
+                <Text style={styles.pendingLabel}>Очікує виплати</Text>
+                <Text style={styles.pendingSubLabel}>Завдання виконано, оплата в обробці</Text>
+              </View>
             </View>
+            <Text style={styles.pendingValue}>{fmt(totalPending)}</Text>
           </View>
-          <Text style={styles.pendingValue}>{fmt(totalPending)}</Text>
-        </View>
+        )}
 
         {/* Breakdown */}
         <View style={styles.breakdownCard}>
           <Text style={styles.sectionTitle}>Деталі заробітку</Text>
           <View style={styles.breakdownRow}>
             <Text style={styles.breakdownLabel}>Оплата за роботу</Text>
-            <Text style={styles.breakdownValue}>{fmt(totalEarned - totalTips)}</Text>
+            <Text style={styles.breakdownValue}>{fmt(totalEarned)}</Text>
           </View>
           <View style={styles.breakdownRow}>
             <Text style={styles.breakdownLabel}>Чайові від клієнтів</Text>
@@ -121,16 +181,82 @@ export default function Earnings() {
           </View>
           <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 8, paddingTop: 8 }]}>
             <Text style={[styles.breakdownLabel, { fontWeight: '700', color: '#111827' }]}>Загальна сума</Text>
-            <Text style={[styles.breakdownValue, { color: '#10b981', fontWeight: '800' }]}>{fmt(totalEarned)}</Text>
+            <Text style={[styles.breakdownValue, { color: '#10b981', fontWeight: '800' }]}>{fmt(totalEarned + totalTips)}</Text>
           </View>
         </View>
 
+        {/* Monthly bar chart */}
+        {monthlyStats.length > 0 && (
+          <View style={styles.chartCard}>
+            <Text style={styles.sectionTitle}>Статистика по місяцях</Text>
+            <View style={styles.barChart}>
+              {monthlyStats.map(([key, val]) => {
+                const [y, m] = key.split('-');
+                const barH = Math.max(4, Math.round((val.earned / maxEarned) * 80));
+                const isSelected = selectedMonth === key;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={styles.barCol}
+                    onPress={() => setSelectedMonth(isSelected ? null : key)}
+                  >
+                    <Text style={styles.barAmount}>{val.earned > 0 ? `${Math.round(val.earned / 1000)}к` : ''}</Text>
+                    <View style={[styles.bar, { height: barH, backgroundColor: isSelected ? '#2563eb' : '#93c5fd' }]} />
+                    <Text style={[styles.barLabel, isSelected && { color: '#2563eb', fontWeight: '700' }]}>
+                      {MONTHS_UA[parseInt(m) - 1].slice(0, 3)}
+                    </Text>
+                    <Text style={styles.barJobs}>{val.jobs} зав</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {selectedMonth && (
+              <TouchableOpacity style={styles.clearFilter} onPress={() => setSelectedMonth(null)}>
+                <Ionicons name="close-circle" size={16} color="#6b7280" />
+                <Text style={styles.clearFilterText}>Показати всі місяці</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Month filter pills */}
+        {availableMonths.length > 1 && (
+          <View style={styles.monthFilter}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
+              <TouchableOpacity
+                style={[styles.monthPill, !selectedMonth && styles.monthPillActive]}
+                onPress={() => setSelectedMonth(null)}
+              >
+                <Text style={[styles.monthPillText, !selectedMonth && styles.monthPillTextActive]}>Всі</Text>
+              </TouchableOpacity>
+              {availableMonths.map(key => {
+                const [y, m] = key.split('-');
+                const label = `${MONTHS_UA[parseInt(m) - 1]} ${y}`;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.monthPill, selectedMonth === key && styles.monthPillActive]}
+                    onPress={() => setSelectedMonth(selectedMonth === key ? null : key)}
+                  >
+                    <Text style={[styles.monthPillText, selectedMonth === key && styles.monthPillTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
         {/* History */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Історія виплат</Text>
+          <Text style={styles.sectionTitle}>
+            Історія {selectedMonth ? (() => {
+              const [y, m] = selectedMonth.split('-');
+              return `— ${MONTHS_UA[parseInt(m) - 1]} ${y}`;
+            })() : 'виплат'}
+          </Text>
 
-          {/* Pending items first */}
-          {pendingItems.length > 0 && (
+          {/* Pending items first (only when no month filter) */}
+          {!selectedMonth && pendingItems.length > 0 && (
             <>
               <Text style={styles.groupLabel}>⏳ Очікує оплати</Text>
               {pendingItems.map(item => (
@@ -144,9 +270,7 @@ export default function Earnings() {
                   </View>
                   <View style={styles.historyContent}>
                     <Text style={styles.historyTitle}>{item.title}</Text>
-                    <Text style={styles.historyDate}>
-                      {item.completed_at ? new Date(item.completed_at).toLocaleDateString('uk-UA') : '—'}
-                    </Text>
+                    <Text style={styles.historyDate}>{fmtDate(item.completed_at)}</Text>
                     {item.client?.name && <Text style={styles.historyClient}>{item.client.name}</Text>}
                   </View>
                   <View style={styles.historyAmount}>
@@ -161,7 +285,9 @@ export default function Earnings() {
           {/* Paid items */}
           {paidItems.length > 0 ? (
             <>
-              {pendingItems.length > 0 && <Text style={[styles.groupLabel, { marginTop: 12 }]}>✅ Оплачено</Text>}
+              {!selectedMonth && pendingItems.length > 0 && (
+                <Text style={[styles.groupLabel, { marginTop: 12 }]}>✅ Оплачено</Text>
+              )}
               {paidItems.map(item => (
                 <TouchableOpacity
                   key={item.task_id}
@@ -173,16 +299,14 @@ export default function Earnings() {
                   </View>
                   <View style={styles.historyContent}>
                     <Text style={styles.historyTitle}>{item.title}</Text>
-                    <Text style={styles.historyDate}>
-                      {item.completed_at ? new Date(item.completed_at).toLocaleDateString('uk-UA') : '—'}
-                    </Text>
+                    <Text style={styles.historyDate}>{fmtDate(item.completed_at || item.paid_at)}</Text>
                     {item.client?.name && <Text style={styles.historyClient}>{item.client.name}</Text>}
                     {(item.actual_hours || 0) > 0 && (
-                      <Text style={styles.historyHours}>{item.actual_hours} год</Text>
+                      <Text style={styles.historyHours}>{item.actual_hours} год × {item.hourly_rate || 0} ₴/год</Text>
                     )}
                   </View>
                   <View style={styles.historyAmount}>
-                    <Text style={styles.amountValue}>{fmt(item.final_price)}</Text>
+                    <Text style={styles.amountValue}>{fmt(item.final_price || item.provider_payout)}</Text>
                     {(item.tip_amount || 0) > 0 && (
                       <Text style={styles.tipValue}>+{fmt(item.tip_amount)} чай</Text>
                     )}
@@ -190,12 +314,14 @@ export default function Earnings() {
                 </TouchableOpacity>
               ))}
             </>
-          ) : pendingItems.length === 0 ? (
+          ) : (
             <View style={styles.emptyState}>
               <Ionicons name="receipt-outline" size={48} color="#d1d5db" />
-              <Text style={styles.emptyText}>Поки немає завершених завдань</Text>
+              <Text style={styles.emptyText}>
+                {selectedMonth ? 'Немає завдань за цей місяць' : 'Поки немає завершених завдань'}
+              </Text>
             </View>
-          ) : null}
+          )}
         </View>
 
         <View style={{ height: 40 }} />
@@ -245,6 +371,28 @@ const styles = StyleSheet.create({
   breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
   breakdownLabel: { fontSize: 14, color: '#6b7280' },
   breakdownValue: { fontSize: 14, fontWeight: '700', color: '#111827' },
+
+  chartCard: {
+    marginHorizontal: 16, marginBottom: 12, borderRadius: 16,
+    backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', padding: 16,
+  },
+  barChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', height: 110, marginTop: 8 },
+  barCol: { alignItems: 'center', flex: 1 },
+  bar: { width: 28, borderRadius: 6, marginBottom: 4 },
+  barAmount: { fontSize: 9, color: '#6b7280', marginBottom: 2 },
+  barLabel: { fontSize: 11, color: '#6b7280', marginTop: 2 },
+  barJobs: { fontSize: 9, color: '#9ca3af' },
+  clearFilter: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12, alignSelf: 'center' },
+  clearFilterText: { fontSize: 12, color: '#6b7280' },
+
+  monthFilter: { marginBottom: 12 },
+  monthPill: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb',
+  },
+  monthPillActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  monthPillText: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
+  monthPillTextActive: { color: '#fff' },
 
   section: {
     backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 12,
