@@ -2307,14 +2307,86 @@ async def decline_task(
         }}
     )
 
-    # Revert booking to posted status so client can find a new tasker
+    # Set booking to declined so client sees the status, but allow re-posting
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
-            {"$set": {"status": BookingStatus.POSTED, "provider_id": None}}
+            {"$set": {
+                "status": "declined",
+                "provider_id": None,
+                "decline_reason": reason.strip(),
+                "declined_at": datetime.utcnow().isoformat() + "Z",
+            }}
         )
 
     return {"message": "Task declined", "status": TaskStatus.DECLINED, "reason": reason.strip()}
+
+@api_router.get("/admin/tasks")
+async def admin_get_tasks(
+    status: Optional[str] = None,
+    provider_id: Optional[str] = None,
+    client_id: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    current_user: User = Depends(require_admin)
+):
+    """Admin: get all tasks with optional filters"""
+    query: dict = {}
+    if status:
+        query["status"] = status
+    if provider_id:
+        query["provider_id"] = provider_id
+    if client_id:
+        query["client_id"] = client_id
+    if category:
+        query["category"] = category
+    tasks = await db.tasks.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    # Enrich with client and provider names
+    for t in tasks:
+        if t.get("client_id"):
+            c = await db.users.find_one({"user_id": t["client_id"]}, {"_id": 0, "name": 1, "email": 1})
+            t["client"] = c or {}
+        if t.get("provider_id"):
+            p = await db.users.find_one({"user_id": t["provider_id"]}, {"_id": 0, "name": 1, "email": 1})
+            t["provider"] = p or {}
+    total = await db.tasks.count_documents(query)
+    return {"tasks": tasks, "total": total}
+
+@api_router.delete("/admin/tasks/{task_id}")
+async def admin_delete_task(
+    task_id: str,
+    current_user: User = Depends(require_admin)
+):
+    """Admin: delete a task"""
+    result = await db.tasks.delete_one({"task_id": task_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"message": "Task deleted"}
+
+@api_router.patch("/admin/tasks/{task_id}/status")
+async def admin_change_task_status(
+    task_id: str,
+    status: str,
+    actual_hours: Optional[float] = None,
+    final_price: Optional[float] = None,
+    current_user: User = Depends(require_admin)
+):
+    """Admin: change task status, hours, and price"""
+    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    upd: dict = {"status": status}
+    if actual_hours is not None:
+        upd["actual_hours"] = actual_hours
+        rate = task.get("hourly_rate", 0)
+        upd["labor_cost"] = round(actual_hours * rate, 2)
+        if final_price is None:
+            upd["final_price"] = round(actual_hours * rate + task.get("materials_cost", 0), 2)
+    if final_price is not None:
+        upd["final_price"] = final_price
+    await db.tasks.update_one({"task_id": task_id}, {"$set": upd})
+    return {"message": "Updated", "task_id": task_id, "status": status}
 
 @api_router.put("/admin/tasks/{task_id}")
 async def admin_update_task(

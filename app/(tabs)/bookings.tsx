@@ -26,6 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
   paid:                      '#22c55e',
   cancelled_by_client:       '#ef4444',
   cancelled_by_tasker:       '#ef4444',
+  declined:                  '#dc2626',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -45,6 +46,7 @@ const STATUS_LABELS: Record<string, string> = {
   paid:                      'Оплачено ✓',
   cancelled_by_client:       'Скасовано вами',
   cancelled_by_tasker:       'Скасовано виконавцем',
+  declined:                  'Відхилено виконавцем',
 };
 
 const COMPLETED_STATUSES = ['completed_pending_payment', 'paid', 'completed'];

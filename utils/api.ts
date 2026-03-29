@@ -544,4 +544,23 @@ export const api = {
     const res = await client.post('/support/message', data).catch(() => ({ data: { ok: true } }));
     return res.data;
   },
+  // Admin task management
+  adminGetTasks: async (params?: { status?: string; provider_id?: string; client_id?: string; category?: string; limit?: number; skip?: number }) => {
+    const res = await client.get('/admin/tasks', { params });
+    return res.data;
+  },
+  adminDeleteTask: async (taskId: string) => {
+    const res = await client.delete(`/admin/tasks/${taskId}`);
+    return res.data;
+  },
+  adminChangeTaskStatus: async (taskId: string, status: string, actualHours?: number, finalPrice?: number) => {
+    const res = await client.patch(`/admin/tasks/${taskId}/status`, null, {
+      params: { status, ...(actualHours != null ? { actual_hours: actualHours } : {}), ...(finalPrice != null ? { final_price: finalPrice } : {}) }
+    });
+    return res.data;
+  },
+  adminUpdateTask: async (taskId: string, data: { actual_hours?: number; final_price?: number; notes?: string; provider_id?: string }) => {
+    const res = await client.put(`/admin/tasks/${taskId}`, null, { params: data });
+    return res.data;
+  },
 };

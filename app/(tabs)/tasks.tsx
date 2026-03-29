@@ -118,7 +118,19 @@ export default function AvailableTasks() {
     const category = getCategoryInfo(task.category);
     const clientName = task.client?.name || 'Клієнт';
     const clientPhoto = task.client?.photo_url;
-    const price = task.estimated_price;
+    const t = task as any;
+    // Show best available price: final_price > hours×rate > estimated_price
+    const calcPrice = t.final_price
+      ? t.final_price
+      : (t.actual_hours && t.hourly_rate)
+        ? Math.round(t.actual_hours * t.hourly_rate * 100) / 100
+        : t.estimated_price;
+    const price = calcPrice;
+    const priceLabel = t.final_price
+      ? `${t.final_price} грн`
+      : (t.actual_hours && t.hourly_rate)
+        ? `${Math.round(t.actual_hours * t.hourly_rate)} грн (${t.actual_hours}год × ${t.hourly_rate}грн)`
+        : t.estimated_price ? `${t.estimated_price} грн` : null;
     const taskPhotos = task.photos || [];
 
     return (
@@ -195,10 +207,10 @@ export default function AvailableTasks() {
           )}
 
           {/* Price */}
-          {price != null && price > 0 ? (
+          {priceLabel ? (
             <View style={styles.priceChip}>
               <Ionicons name="cash-outline" size={14} color="#10b981" />
-              <Text style={styles.priceValue}>{price} грн</Text>
+              <Text style={styles.priceValue}>{priceLabel}</Text>
             </View>
           ) : (
             <View style={styles.priceChip}>

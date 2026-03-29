@@ -255,14 +255,21 @@ export default function TaskDetail() {
     setDecliningLoading(true);
     try {
       await api.declineTask(taskId, declineReason.trim());
+      // Close modal immediately
       setShowDecline(false);
       setDeclineReason('');
-      Alert.alert('Відхилено', 'Завдання відхилено. Клієнт отримає сповіщення.', [
-        { text: 'ОК', onPress: () => router.replace('/(tabs)/tasks') },
-      ]);
+      if (Platform.OS === 'web') {
+        window.alert('Завдання відхилено. Клієнт отримає сповіщення.');
+        router.replace('/(tabs)/tasks');
+      } else {
+        Alert.alert('Відхилено', 'Завдання відхилено. Клієнт отримає сповіщення.', [
+          { text: 'ОК', onPress: () => router.replace('/(tabs)/tasks') },
+        ]);
+      }
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e.message || 'Помилка';
-      Alert.alert('Помилка', msg);
+      if (Platform.OS === 'web') window.alert('Помилка: ' + msg);
+      else Alert.alert('Помилка', msg);
     } finally {
       setDecliningLoading(false);
     }
@@ -749,55 +756,63 @@ export default function TaskDetail() {
 
             <ScrollView style={s.modalBody}>
               {/* Summary */}
-              <View style={s.paymentSummary}>
-                <View style={s.payRow}>
-                  <Text style={s.payLabel}>Виконавець</Text>
-                  <Text style={s.payVal}>{task.provider?.name || 'Виконавець'}</Text>
-                </View>
-                {task.actual_hours != null && (
-                  <View style={s.payRow}>
-                    <Text style={s.payLabel}>Відпрацьовано</Text>
-                    <Text style={[s.payVal, { color: '#2563eb' }]}>
-                      {task.actual_hours} год × {task.hourly_rate || 0} грн
-                    </Text>
-                  </View>
-                )}
-                {task.labor_cost != null && task.labor_cost > 0 && (
-                  <View style={s.payRow}>
-                    <Text style={s.payLabel}>Вартість роботи</Text>
-                    <Text style={s.payVal}>{task.labor_cost} грн</Text>
-                  </View>
-                )}
-                {task.materials_cost != null && task.materials_cost > 0 && (
-                  <View style={s.payRow}>
-                    <Text style={s.payLabel}>Матеріали</Text>
-                    <Text style={s.payVal}>{task.materials_cost} грн</Text>
-                  </View>
-                )}
-                <View style={[s.payRow, s.payTotal]}>
-                  <Text style={s.payTotalLabel}>Загальна сума</Text>
-                  <Text style={s.payTotalVal}>{task.final_price || price || '—'} грн</Text>
-                </View>
-              </View>
+              {(() => {
+                // Calculate total for client: labor + materials + 15% platform fee
+                const fp = task.final_price;
+                const ah = task.actual_hours;
+                const hr = task.hourly_rate || hourlyRate;
+                const mc = task.materials_cost || 0;
+                const laborBase = fp ? fp : (ah && hr ? Math.round(ah * hr * 100) / 100 : (price || 0));
+                const totalBase = fp || (laborBase + mc);
+                const platformFeeAmt = Math.round(totalBase * 0.15 * 100) / 100;
+                const clientTotal = Math.round((totalBase + platformFeeAmt) * 100) / 100;
+                const providerPayout = Math.round(totalBase * 0.85 * 100) / 100;
+                return (
+                  <>
+                    <View style={s.paymentSummary}>
+                      <View style={s.payRow}>
+                        <Text style={s.payLabel}>Виконавець</Text>
+                        <Text style={s.payVal}>{task.provider?.name || 'Виконавець'}</Text>
+                      </View>
+                      {ah != null && (
+                        <View style={s.payRow}>
+                          <Text style={s.payLabel}>Відпрацьовано</Text>
+                          <Text style={[s.payVal, { color: '#2563eb' }]}>{ah} год × {hr} грн/год = {Math.round(ah * hr)} грн</Text>
+                        </View>
+                      )}
+                      {mc > 0 && (
+                        <View style={s.payRow}>
+                          <Text style={s.payLabel}>Матеріали</Text>
+                          <Text style={s.payVal}>{mc} грн</Text>
+                        </View>
+                      )}
+                      <View style={s.payRow}>
+                        <Text style={s.payLabel}>Комісія сервісу (15%)</Text>
+                        <Text style={[s.payVal, { color: '#ef4444' }]}>+{platformFeeAmt} грн</Text>
+                      </View>
+                      <View style={[s.payRow, s.payTotal]}>
+                        <Text style={s.payTotalLabel}>Сума до оплати</Text>
+                        <Text style={[s.payTotalVal, { color: '#10b981', fontSize: 22 }]}>{clientTotal > 0 ? clientTotal : '—'} грн</Text>
+                      </View>
+                    </View>
 
-              {/* Split info */}
-              <View style={s.splitCard}>
-                <Text style={s.splitTitle}>Розподіл оплати</Text>
-                <View style={s.splitRow}>
-                  <Ionicons name="person-outline" size={16} color="#22c55e" />
-                  <Text style={s.splitLabel}>Виконавцю</Text>
-                  <Text style={[s.splitVal, { color: '#22c55e' }]}>
-                    {task.final_price ? Math.round(task.final_price * 0.85) : '—'} грн
-                  </Text>
-                </View>
-                <View style={s.splitRow}>
-                  <Ionicons name="business-outline" size={16} color="#6b7280" />
-                  <Text style={s.splitLabel}>Комісія платформи (15%)</Text>
-                  <Text style={s.splitVal}>
-                    {task.final_price ? Math.round(task.final_price * 0.15) : '—'} грн
-                  </Text>
-                </View>
-              </View>
+                    {/* Split info */}
+                    <View style={s.splitCard}>
+                      <Text style={s.splitTitle}>Розподіл оплати</Text>
+                      <View style={s.splitRow}>
+                        <Ionicons name="person-outline" size={16} color="#22c55e" />
+                        <Text style={s.splitLabel}>Виконавцю</Text>
+                        <Text style={[s.splitVal, { color: '#22c55e' }]}>{providerPayout} грн</Text>
+                      </View>
+                      <View style={s.splitRow}>
+                        <Ionicons name="business-outline" size={16} color="#6b7280" />
+                        <Text style={s.splitLabel}>Комісія платформи (15%)</Text>
+                        <Text style={s.splitVal}>{platformFeeAmt} грн</Text>
+                      </View>
+                    </View>
+                  </>
+                );
+              })()}
 
               {/* Payment methods */}
               <Text style={[s.inputLabel, { marginTop: 16 }]}>Спосіб оплати</Text>
