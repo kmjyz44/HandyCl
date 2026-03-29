@@ -85,7 +85,9 @@ export default function Bookings() {
   const renderCard = (booking: any) => {
     const statusColor = STATUS_COLORS[booking.status] || '#6b7280';
     const statusLabel = STATUS_LABELS[booking.status] || booking.status;
-    const price = booking.total_price || booking.estimated_price || 0;
+    // Client sees price including 15% platform commission
+    const rawPrice = booking.total_price || booking.estimated_price || 0;
+    const price = rawPrice > 0 ? Math.round(rawPrice * 1.15 * 100) / 100 : 0;
     const title = booking.title || booking.service?.name || 'Послуга';
     const isCompleted = COMPLETED_STATUSES.includes(booking.status);
 

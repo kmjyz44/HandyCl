@@ -297,7 +297,7 @@ export default function Executors() {
                   {executor.pricing?.hourly_rate ? (
                     <View style={styles.priceContainer}>
                       <Text style={styles.priceLabel}>від</Text>
-                      <Text style={styles.price}>${executor.pricing.hourly_rate}</Text>
+                      <Text style={styles.price}>₴{Math.round(executor.pricing.hourly_rate * 1.15)}</Text>
                       <Text style={styles.priceUnit}>/год</Text>
                     </View>
                   ) : null}

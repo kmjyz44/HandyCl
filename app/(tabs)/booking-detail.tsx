@@ -198,7 +198,7 @@ export default function BookingDetail() {
               <View style={styles.infoRow}>
                 <Ionicons name="cash" size={20} color="#6b7280" />
                 <Text style={styles.infoLabel}>Сума:</Text>
-                <Text style={styles.infoValue}>{Number(booking.total_price).toFixed(0)} грн</Text>
+                <Text style={styles.infoValue}>{Math.round(Number(booking.total_price) * 1.15)} грн</Text>
               </View>
             )}
 

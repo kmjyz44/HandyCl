@@ -528,6 +528,38 @@ export const api = {
     return res.data;
   },
 
+  // Create client task (booking) - used by create-task.tsx
+  createClientTask: async (data: {
+    category: string;
+    title: string;
+    description: string;
+    address: string;
+    scheduled_date?: string;
+    scheduled_time?: string;
+    estimated_hours?: number;
+    photos?: string[];
+    allow_offers?: boolean;
+  }) => {
+    const payload = {
+      title: data.title,
+      description: data.description,
+      category: data.category,
+      address: data.address,
+      date: data.scheduled_date,
+      time: data.scheduled_time,
+      estimated_hours: data.estimated_hours,
+      problem_photos: data.photos,
+      allow_offers: data.allow_offers ?? true,
+    };
+    try {
+      const res = await client.post('/bookings', payload);
+      return res.data;
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.response?.data || err?.message || 'Помилка сервера';
+      throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
+  },
+
   // Client invoices
   getClientInvoices: async () => {
     const res = await client.get('/client/invoices');
