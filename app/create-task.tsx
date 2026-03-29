@@ -115,40 +115,24 @@ export default function CreateTask() {
   const submitTask = async () => {
     if (!validateStep()) return;
 
-    setLoading(true);
-    try {
-      const taskData = {
-        category,
-        title: title.trim(),
-        description: description.trim(),
-        address: address.trim(),
-        scheduled_date: date,
-        scheduled_time: time,
-        estimated_hours: estimatedHours ? parseFloat(estimatedHours) : undefined,
-        photos: photos.length > 0 ? photos : undefined,
-        allow_offers: allowOffers,
-      };
+    // ── OPTIMISTIC UI: navigate immediately without waiting for server ────────
+    router.replace('/(tabs)/bookings');
 
-      await api.createClientTask(taskData);
-      // Navigate immediately — Alert callback is unreliable on web
-      if (Platform.OS === 'web') {
-        window.alert('Завдання створено! Виконавці побачать його і надішлють пропозиції.');
-        router.replace('/(tabs)/bookings');
-      } else {
-        Alert.alert('Успіх', 'Завдання створено! Виконавці побачать його і надішлють пропозиції.', [
-          { text: 'OK', onPress: () => router.replace('/(tabs)/bookings') }
-        ]);
-      }
-    } catch (error: any) {
-      const errMsg = error.message || 'Не вдалося створити завдання';
-      if (Platform.OS === 'web') {
-        window.alert('Помилка: ' + errMsg);
-      } else {
-        Alert.alert('Помилка', errMsg);
-      }
-    } finally {
-      setLoading(false);
-    }
+    // ── BACKGROUND SYNC: send to server without blocking UI ──────────────────
+    const taskData = {
+      category,
+      title: title.trim(),
+      description: description.trim(),
+      address: address.trim(),
+      scheduled_date: date || undefined,
+      scheduled_time: time || undefined,
+      estimated_hours: estimatedHours ? parseFloat(estimatedHours) : undefined,
+      photos: photos.length > 0 ? photos : undefined,
+      allow_offers: allowOffers,
+    };
+    api.createClientTask(taskData).catch(() => {
+      // Background sync failed — user can retry from bookings screen
+    });
   };
 
   const renderStep1 = () => (

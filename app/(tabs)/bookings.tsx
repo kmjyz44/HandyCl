@@ -63,23 +63,48 @@ export default function Bookings() {
     try {
       const data = await api.getBookings();
       setBookings(data);
-    } catch (error: any) {
-      Alert.alert('Помилка', error.message || 'Не вдалося завантажити бронювання');
+    } catch {
+      // Silently fail — show cached data or empty state
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => { loadBookings(); }, []);
+  useEffect(() => {
+    // If we already have cached bookings, show them immediately and load in background
+    if (bookings.length > 0) {
+      setLoading(false);
+      loadBookings(); // refresh in background
+    } else {
+      loadBookings();
+    }
+  }, []);
   const onRefresh = () => { setRefreshing(true); loadBookings(); };
 
   const activeBookings = bookings.filter(b => !COMPLETED_STATUSES.includes(b.status));
   const completedBookings = bookings.filter(b => COMPLETED_STATUSES.includes(b.status));
   const displayList = activeTab === 'active' ? activeBookings : completedBookings;
 
+  // Show skeleton cards instead of blank white screen while loading
   if (loading) {
-    return <View style={styles.centered}><ActivityIndicator size="large" color="#2563eb" /></View>;
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Мої замовлення</Text>
+          <Text style={styles.headerSubtitle}>Завантаження...</Text>
+        </View>
+        <View style={{ flex: 1, padding: 16 }}>
+          {[1, 2, 3].map(i => (
+            <View key={i} style={[styles.bookingCard, { padding: 16, marginBottom: 12 }]}>
+              <View style={{ height: 14, width: '40%', backgroundColor: '#e5e7eb', borderRadius: 7, marginBottom: 10 }} />
+              <View style={{ height: 18, width: '70%', backgroundColor: '#f3f4f6', borderRadius: 7, marginBottom: 8 }} />
+              <View style={{ height: 12, width: '55%', backgroundColor: '#f3f4f6', borderRadius: 6 }} />
+            </View>
+          ))}
+        </View>
+      </View>
+    );
   }
 
   const renderCard = (booking: any) => {
