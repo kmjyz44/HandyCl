@@ -1888,7 +1888,7 @@ function ProviderProfile() {
               disabled={savingCard}
               onPress={async () => {
                 if (!cardNumber.trim() || !cardHolder.trim()) {
-                  Alert.alert('Помилка', 'Заповніть номер картки та ім'я власника');
+                  Alert.alert('Помилка', "Заповніть номер картки та ім'я власника");
                   return;
                 }
                 setSavingCard(true);
