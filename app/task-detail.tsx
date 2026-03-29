@@ -284,8 +284,17 @@ export default function TaskDetail() {
 
   const price = task.estimated_price || task.total_price;
   const hourlyRate = task.hourly_rate || 25;
-  const parsedHours = parseFloat(hours) || 0;
-  const laborCost = parsedHours * hourlyRate;
+  // Auto-calculate hours from started_at if not manually entered
+  const autoHours = (() => {
+    if (!task.started_at) return 0;
+    try {
+      const start = new Date(task.started_at.endsWith('Z') ? task.started_at : task.started_at + 'Z');
+      const diff = (Date.now() - start.getTime()) / 3600000;
+      return Math.max(0, Math.round(diff * 100) / 100);
+    } catch { return 0; }
+  })();
+  const parsedHours = parseFloat(hours) || autoHours;
+  const laborCost = Math.round(parsedHours * hourlyRate * 100) / 100;
   const matCost = parseFloat(materials) || 0;
   const totalEarnings = laborCost + matCost;
   const platformFee = Math.round(totalEarnings * 0.15 * 100) / 100;
@@ -659,36 +668,33 @@ export default function TaskDetail() {
                 </View>
               </View>
 
-              {/* Earnings preview */}
-              {parsedHours > 0 && (
-                <View style={s.earningsCard}>
-                  <Text style={s.earningsTitle}>Розрахунок заробітку</Text>
-                  <View style={s.earningsRow}>
-                    <Text style={s.earningsLabel}>Погодинна ставка</Text>
-                    <Text style={s.earningsVal}>{hourlyRate} грн/год</Text>
-                  </View>
-                  <View style={s.earningsRow}>
-                    <Text style={s.earningsLabel}>Праця ({parsedHours} год)</Text>
-                    <Text style={s.earningsVal}>{laborCost} грн</Text>
-                  </View>
-                  {matCost > 0 && (
-                    <View style={s.earningsRow}>
-                      <Text style={s.earningsLabel}>Матеріали</Text>
-                      <Text style={s.earningsVal}>{matCost} грн</Text>
-                    </View>
-                  )}
-                  <View style={[s.earningsRow, s.earningsDivider]}>
-                    <Text style={s.earningsLabel}>Комісія платформи (15%)</Text>
-                    <Text style={[s.earningsVal, { color: '#ef4444' }]}>−{platformFee} грн</Text>
-                  </View>
-                  <View style={s.earningsRow}>
-                    <Text style={[s.earningsLabel, { fontWeight: '700', color: '#111827' }]}>Ваш заробіток</Text>
-                    <Text style={[s.earningsVal, { color: '#22c55e', fontSize: 18, fontWeight: '700' }]}>
-                      {providerEarnings} грн
-                    </Text>
-                  </View>
+              {/* Earnings preview — always visible */}
+              <View style={s.earningsCard}>
+                <Text style={s.earningsTitle}>Розрахунок заробітку</Text>
+                <View style={s.earningsRow}>
+                  <Text style={s.earningsLabel}>Погодинна ставка</Text>
+                  <Text style={s.earningsVal}>{hourlyRate} грн/год</Text>
                 </View>
-              )}
+                <View style={s.earningsRow}>
+                  <Text style={s.earningsLabel}>Праця ({parsedHours.toFixed(2)} год)</Text>
+                  <Text style={s.earningsVal}>{laborCost} грн</Text>
+                </View>
+                {matCost > 0 && (
+                  <View style={s.earningsRow}>
+                    <Text style={s.earningsLabel}>Матеріали</Text>
+                    <Text style={s.earningsVal}>{matCost} грн</Text>
+                  </View>
+                )}
+                <View style={[s.earningsRow, s.earningsDivider]}>
+                  <Text style={s.earningsLabel}>Комісія платформи (15%)</Text>
+                  <Text style={[s.earningsVal, { color: '#ef4444' }]}>−{platformFee} грн</Text>
+                </View>
+                {/* Big highlighted payout */}
+                <View style={s.earningsPayoutBox}>
+                  <Text style={s.earningsPayoutLabel}>Ваш заробіток</Text>
+                  <Text style={s.earningsPayoutValue}>{providerEarnings} грн</Text>
+                </View>
+              </View>
 
               {/* Closing message */}
               <Text style={s.inputLabel}>Повідомлення клієнту</Text>
@@ -1128,6 +1134,12 @@ const s = StyleSheet.create({
   earningsDivider: { borderTopWidth: 1, borderTopColor: '#bbf7d0', marginTop: 6, paddingTop: 10 },
   earningsLabel: { fontSize: 14, color: '#374151' },
   earningsVal:   { fontSize: 14, fontWeight: '600', color: '#111827' },
+  earningsPayoutBox: {
+    marginTop: 14, backgroundColor: '#22c55e', borderRadius: 12, padding: 16,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  earningsPayoutLabel: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  earningsPayoutValue: { fontSize: 28, fontWeight: '900', color: '#fff' },
 
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
   input:      { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12, padding: 14, fontSize: 15, marginBottom: 16 },
