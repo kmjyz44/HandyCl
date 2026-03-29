@@ -130,11 +130,22 @@ export default function CreateTask() {
       };
 
       await api.createClientTask(taskData);
-      Alert.alert('Успіх', 'Завдання створено!', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/bookings') }
-      ]);
+      // Navigate immediately — Alert callback is unreliable on web
+      if (Platform.OS === 'web') {
+        window.alert('Завдання створено! Виконавці побачать його і надішлють пропозиції.');
+        router.replace('/(tabs)/bookings');
+      } else {
+        Alert.alert('Успіх', 'Завдання створено! Виконавці побачать його і надішлють пропозиції.', [
+          { text: 'OK', onPress: () => router.replace('/(tabs)/bookings') }
+        ]);
+      }
     } catch (error: any) {
-      Alert.alert('Помилка', error.message || 'Не вдалося створити завдання');
+      const errMsg = error.message || 'Не вдалося створити завдання';
+      if (Platform.OS === 'web') {
+        window.alert('Помилка: ' + errMsg);
+      } else {
+        Alert.alert('Помилка', errMsg);
+      }
     } finally {
       setLoading(false);
     }

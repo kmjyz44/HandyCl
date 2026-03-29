@@ -8,6 +8,7 @@ const API_URL =
 const client = axios.create({
   baseURL: `${API_URL}/api`,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 30000, // 30 second timeout
 });
 
 client.interceptors.request.use((config) => {
@@ -540,15 +541,24 @@ export const api = {
     photos?: string[];
     allow_offers?: boolean;
   }) => {
+    // Limit photos to avoid payload too large (max 3 photos, each stripped of data: prefix)
+    const safePhotos = data.photos
+      ? data.photos.slice(0, 3).map(p => {
+          // Strip data:image/...;base64, prefix if present
+          const b64 = p.includes(',') ? p.split(',')[1] : p;
+          // Truncate if > 500KB base64 (~375KB binary)
+          return b64.length > 700000 ? b64.slice(0, 700000) : b64;
+        })
+      : undefined;
     const payload = {
       title: data.title,
       description: data.description,
       category: data.category,
       address: data.address,
-      date: data.scheduled_date,
-      time: data.scheduled_time,
+      date: data.scheduled_date || undefined,
+      time: data.scheduled_time || undefined,
       estimated_hours: data.estimated_hours,
-      problem_photos: data.photos,
+      problem_photos: safePhotos,
       allow_offers: data.allow_offers ?? true,
     };
     try {

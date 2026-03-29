@@ -213,8 +213,8 @@ class Booking(BaseModel):
     provider_id: Optional[str] = None
     title: str
     description: str
-    date: str
-    time: str
+    date: Optional[str] = None
+    time: Optional[str] = None
     address: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -251,8 +251,8 @@ class BookingCreate(BaseModel):
     category: Optional[ServiceCategory] = None
     title: str
     description: str
-    date: str
-    time: str
+    date: Optional[str] = None
+    time: Optional[str] = None
     address: str
     city: Optional[str] = None
     latitude: Optional[float] = None
@@ -1681,8 +1681,12 @@ async def get_bookings(current_user: User = Depends(get_current_user)):
     
     # Enrich with service and user info
     for booking in bookings:
-        service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
-        booking["service"] = service
+        # Only look up service if service_id is present (avoid N+1 with None)
+        if booking.get("service_id"):
+            service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
+            booking["service"] = service
+        else:
+            booking["service"] = None
         client = await db.users.find_one({"user_id": booking["client_id"]}, {"_id": 0, "password_hash": 0})
         booking["client"] = client
         if booking.get("provider_id"):
@@ -1708,8 +1712,11 @@ async def get_booking(booking_id: str, current_user: User = Depends(get_current_
             raise HTTPException(status_code=403, detail="Access denied")
     
     # Enrich with all related data
-    service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
-    booking["service"] = service
+    if booking.get("service_id"):
+        service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
+        booking["service"] = service
+    else:
+        booking["service"] = None
     client = await db.users.find_one({"user_id": booking["client_id"]}, {"_id": 0, "password_hash": 0})
     booking["client"] = client
     if booking.get("provider_id"):
