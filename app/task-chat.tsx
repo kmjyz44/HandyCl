@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
+  TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -30,6 +30,29 @@ function fmtTime(iso: string): string {
   } catch { return ''; }
 }
 
+/** Pick image via hidden <input type="file"> on web, returns base64 data URI */
+function pickImageWeb(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) { resolve(null); return; }
+      if (file.size > 5 * 1024 * 1024) {
+        Alert.alert('Файл занадто великий', 'Максимальний розмір фото — 5 МБ');
+        resolve(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  });
+}
+
 export default function TaskChat() {
   const { taskId, taskTitle } = useLocalSearchParams<{ taskId: string; taskTitle: string }>();
   const router = useRouter();
@@ -38,12 +61,12 @@ export default function TaskChat() {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadMessages();
-    // Poll every 3 seconds for new messages
     pollRef.current = setInterval(loadMessages, 3000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [taskId]);
@@ -60,18 +83,31 @@ export default function TaskChat() {
   };
 
   const sendMessage = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() && !pendingImage) return;
     setSending(true);
     const msgText = text.trim();
+    const imgData = pendingImage;
     setText('');
+    setPendingImage(null);
     try {
-      const msg = await api.sendTaskMessage(taskId, msgText);
+      const msg = await api.sendTaskMessage(taskId, msgText, imgData || undefined);
       setMessages(prev => [...prev, msg]);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (e: any) {
-      setText(msgText); // restore on error
+      setText(msgText);
+      setPendingImage(imgData);
+      Alert.alert('Помилка', e?.response?.data?.detail || e.message || 'Не вдалося відправити');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handlePickImage = async () => {
+    if (Platform.OS === 'web') {
+      const img = await pickImageWeb();
+      if (img) setPendingImage(img);
+    } else {
+      Alert.alert('Фото', 'Функція доступна у веб-версії додатку');
     }
   };
 
@@ -107,7 +143,18 @@ export default function TaskChat() {
               </View>
             </View>
           )}
-          <Text style={[s.msgText, isMe && s.msgTextMe]}>{item.text}</Text>
+          {/* Image attachment */}
+          {item.image_url && (
+            <Image
+              source={{ uri: item.image_url }}
+              style={s.msgImage}
+              resizeMode="cover"
+            />
+          )}
+          {/* Text */}
+          {!!item.text && (
+            <Text style={[s.msgText, isMe && s.msgTextMe]}>{item.text}</Text>
+          )}
           <Text style={[s.msgTime, isMe && s.msgTimeMe]}>{fmtTime(item.created_at)}</Text>
         </View>
       </View>
@@ -164,8 +211,24 @@ export default function TaskChat() {
         />
       )}
 
+      {/* Pending image preview */}
+      {pendingImage && (
+        <View style={s.pendingImgRow}>
+          <Image source={{ uri: pendingImage }} style={s.pendingImg} resizeMode="cover" />
+          <TouchableOpacity style={s.pendingImgRemove} onPress={() => setPendingImage(null)}>
+            <Ionicons name="close-circle" size={22} color="#ef4444" />
+          </TouchableOpacity>
+          <Text style={s.pendingImgLabel}>Фото готове до відправки</Text>
+        </View>
+      )}
+
       {/* Input */}
       <View style={s.inputRow}>
+        {/* Photo attach button */}
+        <TouchableOpacity style={s.attachBtn} onPress={handlePickImage}>
+          <Ionicons name="image-outline" size={24} color="#2563eb" />
+        </TouchableOpacity>
+
         <TextInput
           style={s.input}
           value={text}
@@ -178,9 +241,9 @@ export default function TaskChat() {
           returnKeyType="send"
         />
         <TouchableOpacity
-          style={[s.sendBtn, (!text.trim() || sending) && s.sendBtnDisabled]}
+          style={[s.sendBtn, (!text.trim() && !pendingImage || sending) && s.sendBtnDisabled]}
           onPress={sendMessage}
-          disabled={!text.trim() || sending}
+          disabled={(!text.trim() && !pendingImage) || sending}
         >
           {sending
             ? <ActivityIndicator size="small" color="#fff" />
@@ -226,6 +289,7 @@ const s = StyleSheet.create({
   roleBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
   roleBadgeText: { fontSize: 10, fontWeight: '600' },
 
+  msgImage: { width: 200, height: 150, borderRadius: 10, marginBottom: 6 },
   msgText:   { fontSize: 15, color: '#111827', lineHeight: 20 },
   msgTextMe: { color: '#fff' },
   msgTime:   { fontSize: 11, color: '#9ca3af', marginTop: 4, textAlign: 'right' },
@@ -235,10 +299,24 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 16, fontWeight: '600', color: '#9ca3af' },
   emptyHint: { fontSize: 14, color: '#d1d5db' },
 
+  // Pending image preview bar
+  pendingImgRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 12, paddingVertical: 8,
+    backgroundColor: '#eff6ff', borderTopWidth: 1, borderTopColor: '#bfdbfe',
+  },
+  pendingImg: { width: 48, height: 48, borderRadius: 8 },
+  pendingImgRemove: { position: 'absolute', top: 4, left: 44 },
+  pendingImgLabel: { flex: 1, fontSize: 13, color: '#2563eb', fontWeight: '600' },
+
   inputRow: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 10,
+    flexDirection: 'row', alignItems: 'flex-end', gap: 8,
     padding: 12, paddingBottom: 28, backgroundColor: '#fff',
     borderTopWidth: 1, borderTopColor: '#e5e7eb',
+  },
+  attachBtn: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#eff6ff',
+    justifyContent: 'center', alignItems: 'center',
   },
   input: {
     flex: 1, backgroundColor: '#f3f4f6', borderRadius: 22,

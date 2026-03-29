@@ -564,41 +564,43 @@ export default function TaskDetail() {
 
       {/* ── Footer buttons ── */}
       <View style={s.footer}>
-        {/* Chat button always visible */}
+        {/* Chat button */}
         <TouchableOpacity
           style={s.chatFooterBtn}
-          onPress={() => router.push({ pathname: '/task-chat', params: { taskId, taskTitle: task.title } })}
+          onPress={() => router.push(`/chat?taskId=${taskId}&otherUserId=${isProvider ? task.client?.user_id : task.provider?.user_id}`)}
         >
           <Ionicons name="chatbubble-ellipses" size={20} color="#2563eb" />
           <Text style={s.chatFooterText}>Чат</Text>
         </TouchableOpacity>
 
-        {/* Executor action */}
-        {execAction && (
-          <TouchableOpacity
-            style={[s.actionBtn, { backgroundColor: execAction.color, flex: 1 }, actionLoading && s.btnDisabled]}
-            onPress={() => handleAction(execAction.action)}
-            disabled={actionLoading}
-          >
-            {actionLoading
-              ? <ActivityIndicator color="#fff" />
-              : <>
-                  <Ionicons name={execAction.icon as any} size={22} color="#fff" />
-                  <Text style={s.actionBtnText}>{execAction.label}</Text>
-                </>
-            }
-          </TouchableOpacity>
-        )}
-
-        {/* Decline button — visible for provider before accepting (posted/offering) or when assigned */}
-        {isProvider && ['posted','offering','assigned','hold_placed'].includes(status) && (
-          <TouchableOpacity
-            style={[s.declineBtn]}
-            onPress={() => setShowDecline(true)}
-          >
-            <Ionicons name="close-circle-outline" size={20} color="#ef4444" />
-            <Text style={s.declineBtnText}>Відхилити</Text>
-          </TouchableOpacity>
+        {/* Executor action + decline stacked vertically */}
+        {(execAction || (isProvider && ['posted','offering','assigned','hold_placed'].includes(status))) && (
+          <View style={{ flex: 1, gap: 8 }}>
+            {execAction && (
+              <TouchableOpacity
+                style={[s.actionBtn, { backgroundColor: execAction.color }, actionLoading && s.btnDisabled]}
+                onPress={() => handleAction(execAction.action)}
+                disabled={actionLoading}
+              >
+                {actionLoading
+                  ? <ActivityIndicator color="#fff" />
+                  : <>
+                      <Ionicons name={execAction.icon as any} size={22} color="#fff" />
+                      <Text style={s.actionBtnText}>{execAction.label}</Text>
+                    </>
+                }
+              </TouchableOpacity>
+            )}
+            {isProvider && ['posted','offering','assigned','hold_placed'].includes(status) && (
+              <TouchableOpacity
+                style={s.declineBtnFull}
+                onPress={() => setShowDecline(true)}
+              >
+                <Ionicons name="close-circle-outline" size={18} color="#ef4444" />
+                <Text style={s.declineBtnText}>Відхилити завдання</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
         {/* Client payment button */}
@@ -1094,8 +1096,8 @@ const s = StyleSheet.create({
   // ── Footer ──
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', gap: 10,
-    padding: 16, paddingBottom: 32, backgroundColor: '#fff',
+    flexDirection: 'row', gap: 10, alignItems: 'flex-end',
+    padding: 16, paddingBottom: 36, backgroundColor: '#fff',
     borderTopWidth: 1, borderTopColor: '#e5e7eb',
   },
   chatFooterBtn: {
@@ -1196,6 +1198,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: 12, borderWidth: 1.5, borderColor: '#ef4444',
     backgroundColor: '#fff5f5',
+  },
+  declineBtnFull: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 12, borderRadius: 12,
+    borderWidth: 1.5, borderColor: '#ef4444', backgroundColor: '#fff5f5',
   },
   declineBtnText: { fontSize: 14, fontWeight: '700', color: '#ef4444' },
 });

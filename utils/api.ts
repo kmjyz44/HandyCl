@@ -428,8 +428,8 @@ export const api = {
     const res = await client.get(`/tasks/${taskId}/messages`);
     return res.data;
   },
-  sendTaskMessage: async (taskId: string, text: string) => {
-    const res = await client.post(`/tasks/${taskId}/messages`, { text });
+  sendTaskMessage: async (taskId: string, text: string, imageUrl?: string) => {
+    const res = await client.post(`/tasks/${taskId}/messages`, { text, image_url: imageUrl || undefined });
     return res.data;
   },
   // Moderator management

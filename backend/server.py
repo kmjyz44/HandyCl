@@ -366,8 +366,9 @@ class Message(BaseModel):
 
 class MessageCreate(BaseModel):
     to_user_id: Optional[str] = None
-    text: str
+    text: str = ""
     booking_id: Optional[str] = None
+    image_url: Optional[str] = None  # base64 data URI or URL
 
 class Review(BaseModel):
     review_id: str
@@ -2463,6 +2464,7 @@ async def send_task_message(task_id: str, body: MessageCreate, current_user: Use
         "task_id": real_task_id,
         "from_user_id": current_user.user_id,
         "text": body.text,
+        "image_url": body.image_url,
         "read": False,
         "created_at": datetime.now(timezone.utc),
     }
