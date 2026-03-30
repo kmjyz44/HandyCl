@@ -415,44 +415,44 @@ export default function HomeScreen() {
     const tasker = booking.selectedTasker;
     const rate = tasker.profile?.hourly_rate || tasker.hourly_rate || 0;
     const primaryDate = booking.dates.length > 0 ? booking.dates[0] : booking.date;
-    const localId = `local_${Date.now()}`;
-
-    // ── OPTIMISTIC UI: add to store and navigate IMMEDIATELY ──────────────
-    addBooking({
-      booking_id: localId,
-      client_id: user?.user_id || '',
-      provider_id: tasker.user_id || tasker.provider_id,
-      service_id: '',
-      date: primaryDate,
-      time: booking.timeFrom || booking.time,
-      address: `${booking.address}, ${booking.city}`,
-      status: 'assigned',
-      total_price: rate,
-      payment_status: 'pending',
-    });
-    submittingRef.current = false;
-    setBookingSubmitting(false);
-    setStep('success');
-
-    // ── BACKGROUND SYNC: send to server without blocking UI ───────────────
-    api.createBooking({
-      title: booking.skillName,
-      description: booking.taskDescription || booking.skillName,
-      problem_photos: booking.photos.length > 0 ? booking.photos : undefined,
-      provider_id: tasker.user_id || tasker.provider_id,
-      provider_hourly_rate: rate,
-      category: booking.categoryId,
-      address: booking.address,
-      city: booking.city,
-      date: primaryDate,
-      time: booking.timeFrom || booking.time,
-      notes: booking.dates.length > 1
-        ? `Зручні дати: ${booking.dates.join(', ')}. Час: ${booking.timeFrom}–${booking.timeTo}`
-        : booking.timeTo ? `Час: ${booking.timeFrom}–${booking.timeTo}` : undefined,
-      total_price: rate,
-    }).catch(() => {
-      // Background sync failed — booking already shown locally, user can refresh
-    });
+    try {
+      const result = await api.createBooking({
+        title: booking.skillName,
+        description: booking.taskDescription || booking.skillName,
+        problem_photos: booking.photos.length > 0 ? booking.photos : undefined,
+        provider_id: tasker.user_id || tasker.provider_id,
+        provider_hourly_rate: rate,
+        category: booking.categoryId,
+        address: booking.address,
+        city: booking.city,
+        date: primaryDate,
+        time: booking.timeFrom || booking.time,
+        notes: booking.dates.length > 1
+          ? `Зручні дати: ${booking.dates.join(', ')}. Час: ${booking.timeFrom}–${booking.timeTo}`
+          : booking.timeTo ? `Час: ${booking.timeFrom}–${booking.timeTo}` : undefined,
+        total_price: rate,
+      });
+      // Add to local store with real booking_id from server
+      addBooking({
+        booking_id: result?.booking_id || `local_${Date.now()}`,
+        client_id: user?.user_id || '',
+        provider_id: tasker.user_id || tasker.provider_id,
+        service_id: '',
+        date: primaryDate,
+        time: booking.timeFrom || booking.time,
+        address: `${booking.address}, ${booking.city}`,
+        status: 'pending',
+        total_price: rate,
+        payment_status: 'pending',
+      });
+      submittingRef.current = false;
+      setBookingSubmitting(false);
+      setStep('success');
+    } catch (e: any) {
+      Alert.alert('Помилка бронювання', e.message || 'Не вдалося створити бронювання. Спробуйте ще раз.');
+      submittingRef.current = false;
+      setBookingSubmitting(false);
+    }
   };
 
   const filteredCategories = SKILL_CATEGORIES.filter(c =>

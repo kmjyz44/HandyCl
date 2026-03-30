@@ -1671,6 +1671,10 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
 @api_router.get("/bookings")
 async def get_bookings(current_user: User = Depends(get_current_user)):
     import asyncio
+
+    async def none_coro():
+        return None
+
     query = {}
     if current_user.role == UserRole.CLIENT:
         query["client_id"] = current_user.user_id
@@ -1688,12 +1692,12 @@ async def get_bookings(current_user: User = Depends(get_current_user)):
         if booking.get("service_id"):
             tasks_coros.append(db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0}))
         else:
-            tasks_coros.append(asyncio.coroutine(lambda: None)())
+            tasks_coros.append(none_coro())
         tasks_coros.append(db.users.find_one({"user_id": booking["client_id"]}, {"_id": 0, "password_hash": 0}))
         if booking.get("provider_id"):
             tasks_coros.append(db.users.find_one({"user_id": booking["provider_id"]}, {"_id": 0, "password_hash": 0}))
         else:
-            tasks_coros.append(asyncio.coroutine(lambda: None)())
+            tasks_coros.append(none_coro())
         tasks_coros.append(db.tasks.find_one({"booking_id": booking["booking_id"]}, {"_id": 0}))
         results = await asyncio.gather(*tasks_coros, return_exceptions=True)
         booking["service"] = results[0] if not isinstance(results[0], Exception) else None
