@@ -28,6 +28,8 @@ export default function Login() {
       const response = await api.login({ email: email.trim().toLowerCase(), password });
       await setToken(response.session_token);
       setUser(response.user);
+      // Cache user data for offline/slow-server fallback
+      try { localStorage.setItem('cached_user', JSON.stringify(response.user)); } catch {}
       router.replace('/(tabs)');
     } catch (error: any) {
       let msg = error.message || 'Помилка входу';
