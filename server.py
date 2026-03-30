@@ -1670,33 +1670,40 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
 
 @api_router.get("/bookings")
 async def get_bookings(current_user: User = Depends(get_current_user)):
+    import asyncio
     query = {}
     if current_user.role == UserRole.CLIENT:
         query["client_id"] = current_user.user_id
     elif current_user.role == UserRole.PROVIDER:
         query["provider_id"] = current_user.user_id
-    # Admin sees all bookings
-    
-    bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
-    
-    # Enrich with service and user info
-    for booking in bookings:
-        # Only look up service if service_id is present (avoid N+1 with None)
+    # Admin sees all bookings — limit to 20 most recent for speed
+    limit = 20 if current_user.role != UserRole.ADMIN else 50
+
+    bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+
+    # Enrich all bookings in PARALLEL using asyncio.gather (much faster than sequential)
+    async def enrich(booking):
+        tasks_coros = []
+        # Only look up service if service_id is present
         if booking.get("service_id"):
-            service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
-            booking["service"] = service
+            tasks_coros.append(db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0}))
         else:
-            booking["service"] = None
-        client = await db.users.find_one({"user_id": booking["client_id"]}, {"_id": 0, "password_hash": 0})
-        booking["client"] = client
+            tasks_coros.append(asyncio.coroutine(lambda: None)())
+        tasks_coros.append(db.users.find_one({"user_id": booking["client_id"]}, {"_id": 0, "password_hash": 0}))
         if booking.get("provider_id"):
-            provider = await db.users.find_one({"user_id": booking["provider_id"]}, {"_id": 0, "password_hash": 0})
-            booking["provider"] = provider
-        # Get linked task
-        task = await db.tasks.find_one({"booking_id": booking["booking_id"]}, {"_id": 0})
-        booking["task"] = task
-    
-    return bookings
+            tasks_coros.append(db.users.find_one({"user_id": booking["provider_id"]}, {"_id": 0, "password_hash": 0}))
+        else:
+            tasks_coros.append(asyncio.coroutine(lambda: None)())
+        tasks_coros.append(db.tasks.find_one({"booking_id": booking["booking_id"]}, {"_id": 0}))
+        results = await asyncio.gather(*tasks_coros, return_exceptions=True)
+        booking["service"] = results[0] if not isinstance(results[0], Exception) else None
+        booking["client"] = results[1] if not isinstance(results[1], Exception) else None
+        booking["provider"] = results[2] if not isinstance(results[2], Exception) else None
+        booking["task"] = results[3] if not isinstance(results[3], Exception) else None
+        return booking
+
+    enriched = await asyncio.gather(*[enrich(b) for b in bookings], return_exceptions=True)
+    return [b for b in enriched if not isinstance(b, Exception)]
 
 @api_router.get("/bookings/{booking_id}")
 async def get_booking(booking_id: str, current_user: User = Depends(get_current_user)):

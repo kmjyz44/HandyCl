@@ -60,7 +60,7 @@ const SKILL_CATEGORIES = [
 ];
 
 // ─── BOOKING FLOW STEPS ───────────────────────────────────────────────────────
-type BookingStep = 'home' | 'skills' | 'details' | 'address' | 'datetime' | 'taskers' | 'tasker_profile' | 'confirm';
+type BookingStep = 'home' | 'skills' | 'details' | 'address' | 'datetime' | 'taskers' | 'tasker_profile' | 'confirm' | 'success';
 
 interface BookingState {
   categoryId: string;
@@ -432,9 +432,7 @@ export default function HomeScreen() {
     });
     submittingRef.current = false;
     setBookingSubmitting(false);
-    setStep('home');
-    setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null, photos: [] });
-    router.replace('/(tabs)/bookings');
+    setStep('success');
 
     // ── BACKGROUND SYNC: send to server without blocking UI ───────────────
     api.createBooking({
@@ -1252,6 +1250,51 @@ export default function HomeScreen() {
                 <Ionicons name="checkmark-circle" size={20} color="#fff" />
               </>
             )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ── SUCCESS STEP ──────────────────────────────────────────────────────────
+  if (step === 'success') {
+    const tasker = booking.selectedTasker;
+    const taskerName = tasker ? `${tasker.first_name || ''} ${tasker.last_name || ''}`.trim() : '';
+    return (
+      <View style={[s.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <View style={{ alignItems: 'center', gap: 20 }}>
+          <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: '#d1fae5', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="checkmark-circle" size={56} color="#10b981" />
+          </View>
+          <Text style={{ fontSize: 26, fontWeight: '800', color: '#111827', textAlign: 'center' }}>Бронювання підтверджено!</Text>
+          <Text style={{ fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22 }}>
+            {taskerName ? `Виконавець ${taskerName} отримав ваше замовлення.` : 'Ваше замовлення прийнято.'}{`\n`}Очікуйте підтвердження від виконавця.
+          </Text>
+          <View style={{ width: '100%', backgroundColor: '#fff', borderRadius: 16, padding: 20, gap: 10, borderWidth: 1, borderColor: '#e5e7eb' }}>
+            <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>Деталі замовлення</Text>
+            <Text style={{ color: '#6b7280' }}>📋 {booking.skillName || booking.categoryName}</Text>
+            {booking.address ? <Text style={{ color: '#6b7280' }}>📍 {booking.address}, {booking.city}</Text> : null}
+            {booking.date || (booking.dates.length > 0) ? <Text style={{ color: '#6b7280' }}>📅 {booking.dates.length > 0 ? booking.dates[0] : booking.date} о {booking.timeFrom || booking.time}</Text> : null}
+          </View>
+          <TouchableOpacity
+            style={[s.nextBtn, { width: '100%', marginTop: 8 }]}
+            onPress={() => {
+              setStep('home');
+              setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null, photos: [] });
+              router.replace('/(tabs)/bookings');
+            }}
+          >
+            <Text style={s.nextBtnText}>Переглянути мої замовлення</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ paddingVertical: 12 }}
+            onPress={() => {
+              setStep('home');
+              setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null, photos: [] });
+            }}
+          >
+            <Text style={{ color: '#6b7280', fontSize: 14 }}>Повернутися на головну</Text>
           </TouchableOpacity>
         </View>
       </View>

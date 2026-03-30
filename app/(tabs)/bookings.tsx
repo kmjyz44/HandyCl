@@ -59,26 +59,47 @@ export default function Bookings() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
 
-  const loadBookings = async () => {
+  const CACHE_KEY = `bookings_cache_${user?.user_id || 'guest'}`;
+
+  const loadBookings = async (background = false) => {
     try {
-      const data = await api.getBookings();
+      // Race: API vs 8-second timeout
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 8000)
+      );
+      const data = await Promise.race([api.getBookings(), timeoutPromise]);
       setBookings(data);
+      // Cache to localStorage for instant next load
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch {}
     } catch {
       // Silently fail — show cached data or empty state
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!background) {
+        setLoading(false);
+        setRefreshing(false);
+      } else {
+        setRefreshing(false);
+      }
     }
   };
 
   useEffect(() => {
-    // If we already have cached bookings, show them immediately and load in background
-    if (bookings.length > 0) {
-      setLoading(false);
-      loadBookings(); // refresh in background
-    } else {
-      loadBookings();
-    }
+    // 1. Load from localStorage cache INSTANTLY
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setBookings(parsed);
+          setLoading(false);
+          // Refresh from server in background silently
+          loadBookings(true);
+          return;
+        }
+      }
+    } catch {}
+    // 2. No cache — load from server normally
+    loadBookings(false);
   }, []);
   const onRefresh = () => { setRefreshing(true); loadBookings(); };
 
