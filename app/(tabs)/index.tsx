@@ -232,11 +232,7 @@ function ProviderDashboard() {
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-
-  // Providers see their own tasks dashboard, not the client booking flow
-  if (user?.role === 'provider') {
-    return <ProviderDashboard />;
-  }
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURN (Rules of Hooks)
   const { addBooking } = useBookingStore();
   const [step, setStep] = useState<BookingStep>('home');
   const [booking, setBooking] = useState<BookingState>({
@@ -288,6 +284,12 @@ export default function HomeScreen() {
       })
       .catch(() => {}); // silently fail, keep defaults
   }, []);
+
+  // Providers see their own tasks dashboard, not the client booking flow
+  // (placed AFTER all hooks to comply with Rules of Hooks)
+  if (user?.role === 'provider') {
+    return <ProviderDashboard />;
+  }
 
   // ── Helpers ──
   const goBack = () => {

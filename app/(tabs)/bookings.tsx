@@ -108,13 +108,17 @@ export default function Bookings() {
   }
 
   const renderCard = (booking: any) => {
+    // Guard: skip invalid bookings that could crash the render
+    if (!booking || !booking.booking_id) return null;
+
     const statusColor = STATUS_COLORS[booking.status] || '#6b7280';
-    const statusLabel = STATUS_LABELS[booking.status] || booking.status;
+    const statusLabel = STATUS_LABELS[booking.status] || booking.status || 'Невідомо';
     // Client sees price including 15% platform commission
     const rawPrice = booking.total_price || booking.estimated_price || 0;
     const price = rawPrice > 0 ? Math.round(rawPrice * 1.15 * 100) / 100 : 0;
     const title = booking.title || booking.service?.name || 'Послуга';
     const isCompleted = COMPLETED_STATUSES.includes(booking.status);
+    const bookingIdStr = String(booking.booking_id || '');
 
     const handlePress = () => {
       // Use linked task_id if task exists, else use booking_id (task-detail resolves both)
@@ -140,7 +144,7 @@ export default function Bookings() {
             <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
               <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
             </View>
-            <Text style={styles.bookingId}>#{booking.booking_id.slice(-6)}</Text>
+            <Text style={styles.bookingId}>#{bookingIdStr.slice(-6)}</Text>
           </View>
 
           <Text style={styles.bookingTitle} numberOfLines={1}>{title}</Text>
