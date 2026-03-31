@@ -249,6 +249,7 @@ export default function HomeScreen() {
   const [loadingGeo, setLoadingGeo] = useState(false);
   const [userCountry, setUserCountry] = useState<string>('UA'); // default Ukraine
   const [quickCities, setQuickCities] = useState<string[]>(['Київ', 'Харків', 'Одеса', 'Дніпро', 'Львів', 'Запоріжжя']);
+  const [calDayIdx, setCalDayIdx] = useState(0); // for datetime step — must be here (Rules of Hooks)
   const dates = getDates();
 
   // Detect user country via IP on mount
@@ -817,8 +818,7 @@ export default function HomeScreen() {
       return `${String(h).padStart(2, '0')}:${m}`;
     });
 
-    // Selected day index (0=today)
-    const [calDayIdx, setCalDayIdx] = React.useState(0);
+    // Selected day index (0=today) — state is declared at top of component (Rules of Hooks)
     const selectedDateObj = dates[calDayIdx];
     const selectedDateVal = selectedDateObj?.value || '';
     const isDateSelected = booking.dates.includes(selectedDateVal);
