@@ -347,13 +347,8 @@ export default function HomeScreen() {
       });
       setTaskers(Array.isArray(data) ? data : []);
     } catch {
-      // Fallback: load all executors
-      try {
-        const data = await api.getExecutors();
-        setTaskers(Array.isArray(data) ? data : []);
-      } catch {
-        setTaskers([]);
-      }
+      // On error show empty list (do NOT fallback to all executors — would show wrong city)
+      setTaskers([]);
     } finally {
       setLoadingTaskers(false);
     }
@@ -1132,7 +1127,11 @@ export default function HomeScreen() {
             <Text style={s.taskerCount}>{taskers.length} виконавців у {booking.city}</Text>
             {taskers.map((tasker, idx) => {
               const profile = tasker.profile || {};
-              const rate = profile.hourly_rate || tasker.hourly_rate || 25;
+              // Use final_hourly_rate (includes commission) if available, otherwise apply 15% commission
+              const baseRate = profile.hourly_rate || tasker.hourly_rate || 25;
+              const rate = tasker.final_hourly_rate
+                ? Math.round(tasker.final_hourly_rate)
+                : Math.round(baseRate * 1.15);
               const rating = tasker.average_rating || tasker.rating || 0;
               const reviews = tasker.total_reviews || tasker.review_count || 0;
               const displayName = tasker.name || tasker.full_name || tasker.username || 'Виконавець';
@@ -1182,7 +1181,10 @@ export default function HomeScreen() {
   if (step === 'tasker_profile' && booking.selectedTasker) {
     const tasker = booking.selectedTasker;
     const tProfile = tasker.profile || {};
-    const tRate = tProfile.hourly_rate || tasker.hourly_rate || 25;
+    const tBaseRate = tProfile.hourly_rate || tasker.hourly_rate || 25;
+    const tRate = tasker.final_hourly_rate
+      ? Math.round(tasker.final_hourly_rate)
+      : Math.round(tBaseRate * 1.15);
     const tRating = tasker.average_rating || tasker.rating || 0;
     const tReviews = tasker.total_reviews || tasker.review_count || 0;
     const tName = tasker.name || tasker.full_name || tasker.username || 'Виконавець';
@@ -1284,7 +1286,10 @@ export default function HomeScreen() {
   if (step === 'confirm') {
     const tasker = booking.selectedTasker!;
     const cProfile = tasker.profile || {};
-    const cRate = cProfile.hourly_rate || tasker.hourly_rate || 25;
+    const cBaseRate = cProfile.hourly_rate || tasker.hourly_rate || 25;
+    const cRate = tasker.final_hourly_rate
+      ? Math.round(tasker.final_hourly_rate)
+      : Math.round(cBaseRate * 1.15);
     const cRating = tasker.average_rating || tasker.rating || 0;
     const cName = tasker.name || tasker.full_name || tasker.username || 'Виконавець';
     return (

@@ -168,13 +168,8 @@ export const api = {
       }
       return list;
     } catch {
-      // Fallback: load all executors without filtering
-      try {
-        const res = await client.get('/executors');
-        return Array.isArray(res.data) ? res.data : (res.data?.executors || []);
-      } catch {
-        return [];
-      }
+      // On error return empty list (do NOT fallback to all executors — would ignore city filter)
+      return [];
     }
   },
 

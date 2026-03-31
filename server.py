@@ -2587,9 +2587,9 @@ async def get_executors_by_service(
                 if distance_km <= exec_radius_km:
                     location_ok = True
 
-            # 3. If executor has NO location set at all — include them (they haven't configured yet)
-            if not location_ok and not executor_cities and not executor_zones and not exec_lat:
-                location_ok = True
+            # 3. If executor has NO location set at all — skip them (they haven't configured service area)
+            # NOTE: We do NOT include executors without a service area — they must configure their zone
+            # to appear in search results for specific cities.
 
             if not location_ok:
                 continue
