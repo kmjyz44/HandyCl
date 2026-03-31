@@ -250,6 +250,7 @@ export default function HomeScreen() {
   const [userCountry, setUserCountry] = useState<string>('UA'); // default Ukraine
   const [quickCities, setQuickCities] = useState<string[]>(['Київ', 'Харків', 'Одеса', 'Дніпро', 'Львів', 'Запоріжжя']);
   const [calDayIdx, setCalDayIdx] = useState(0); // for datetime step — must be here (Rules of Hooks)
+  const [anyDayTime, setAnyDayTime] = useState(false); // "any day and time" checkbox
   const dates = getDates();
 
   // Detect user country via IP on mount
@@ -416,44 +417,53 @@ export default function HomeScreen() {
     const tasker = booking.selectedTasker;
     const rate = tasker.profile?.hourly_rate || tasker.hourly_rate || 0;
     const primaryDate = booking.dates.length > 0 ? booking.dates[0] : booking.date;
-    try {
-      const result = await api.createBooking({
-        title: booking.skillName,
-        description: booking.taskDescription || booking.skillName,
-        problem_photos: booking.photos.length > 0 ? booking.photos : undefined,
-        provider_id: tasker.user_id || tasker.provider_id,
-        provider_hourly_rate: rate,
-        category: booking.categoryId,
-        address: booking.address,
-        city: booking.city,
-        date: primaryDate,
-        time: booking.timeFrom || booking.time,
-        notes: booking.dates.length > 1
-          ? `Зручні дати: ${booking.dates.join(', ')}. Час: ${booking.timeFrom}–${booking.timeTo}`
-          : booking.timeTo ? `Час: ${booking.timeFrom}–${booking.timeTo}` : undefined,
-        total_price: rate,
-      });
-      // Add to local store with real booking_id from server
-      addBooking({
-        booking_id: result?.booking_id || `local_${Date.now()}`,
-        client_id: user?.user_id || '',
-        provider_id: tasker.user_id || tasker.provider_id,
-        service_id: '',
-        date: primaryDate,
-        time: booking.timeFrom || booking.time,
-        address: `${booking.address}, ${booking.city}`,
-        status: 'pending',
-        total_price: rate,
-        payment_status: 'pending',
-      });
-      submittingRef.current = false;
-      setBookingSubmitting(false);
-      setStep('success');
-    } catch (e: any) {
-      Alert.alert('Помилка бронювання', e.message || 'Не вдалося створити бронювання. Спробуйте ще раз.');
-      submittingRef.current = false;
-      setBookingSubmitting(false);
+
+    // Build notes with date/time info
+    let notes = '';
+    if ((booking as any)._anyDayTime) {
+      notes = 'Підходить будь-який день і час';
+    } else if (booking.dates.length > 1) {
+      notes = `Зручні дати: ${booking.dates.join(', ')}. Час: ${booking.timeFrom}${booking.timeTo ? '–' + booking.timeTo : ''}`;
+    } else if (booking.timeTo) {
+      notes = `Час: ${booking.timeFrom}–${booking.timeTo}`;
     }
+
+    // OPTIMISTIC UI: add to local store immediately and navigate to success
+    const localBookingId = `local_${Date.now()}`;
+    addBooking({
+      booking_id: localBookingId,
+      client_id: user?.user_id || '',
+      provider_id: tasker.user_id || tasker.provider_id,
+      service_id: '',
+      date: primaryDate,
+      time: booking.timeFrom || booking.time,
+      address: `${booking.address}, ${booking.city}`,
+      status: 'pending',
+      total_price: rate,
+      payment_status: 'pending',
+    });
+    submittingRef.current = false;
+    setBookingSubmitting(false);
+    setStep('success');
+
+    // Send request to server in background (fire-and-forget)
+    api.createBooking({
+      title: booking.skillName,
+      description: booking.taskDescription || booking.skillName,
+      problem_photos: booking.photos.length > 0 ? booking.photos : undefined,
+      provider_id: tasker.user_id || tasker.provider_id,
+      provider_hourly_rate: rate,
+      category: booking.categoryId,
+      address: booking.address,
+      city: booking.city,
+      date: primaryDate,
+      time: booking.timeFrom || booking.time,
+      notes: notes || undefined,
+      total_price: rate,
+    }).catch((e: any) => {
+      // Background error — booking was already shown as confirmed locally
+      console.warn('[submitBooking] background error:', e?.message);
+    });
   };
 
   const filteredCategories = SKILL_CATEGORIES.filter(c =>
@@ -831,13 +841,17 @@ export default function HomeScreen() {
       });
     };
 
-    const selectTime = (t: string) => {
+    const selectTimeFrom = (t: string) => {
       // If no date selected yet, auto-select current day
       if (!isDateSelected) toggleCalDate(selectedDateVal);
       setBooking(b => ({ ...b, timeFrom: t, time: t }));
     };
 
-    const canProceed = booking.dates.length > 0 && !!booking.timeFrom;
+    const selectTimeTo = (t: string) => {
+      setBooking(b => ({ ...b, timeTo: t }));
+    };
+
+    const canProceed = anyDayTime || (booking.dates.length > 0 && !!booking.timeFrom);
 
     return (
       <View style={s.container}>
@@ -911,8 +925,82 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Time grid */}
+        {/* Time range selector: from / to */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
+          {/* Two-column header */}
+          <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6, gap: 8 }}>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151' }}>З (початок)</Text>
+              {booking.timeFrom ? (
+                <View style={{ backgroundColor: '#2563eb', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4, marginTop: 4 }}>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{booking.timeFrom}</Text>
+                </View>
+              ) : (
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>не вибрано</Text>
+              )}
+            </View>
+            <View style={{ width: 1, backgroundColor: '#e5e7eb' }} />
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151' }}>До (кінець)</Text>
+              {booking.timeTo ? (
+                <View style={{ backgroundColor: '#059669', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4, marginTop: 4 }}>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{booking.timeTo}</Text>
+                </View>
+              ) : (
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>не вибрано</Text>
+              )}
+            </View>
+          </View>
+          <View style={{ height: 1, backgroundColor: '#e5e7eb', marginHorizontal: 16, marginBottom: 8 }} />
+
+          {/* Two-column time slots */}
+          <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 8 }}>
+            {/* FROM column */}
+            <View style={{ flex: 1 }}>
+              {CAL_TIMES.map((t) => {
+                const isFrom = booking.timeFrom === t;
+                return (
+                  <TouchableOpacity
+                    key={`from-${t}`}
+                    onPress={() => selectTimeFrom(t)}
+                    style={[{
+                      paddingVertical: 10, paddingHorizontal: 8, marginBottom: 4,
+                      borderRadius: 10, alignItems: 'center',
+                      backgroundColor: isFrom ? '#2563eb' : '#f3f4f6',
+                      borderWidth: isFrom ? 0 : 1,
+                      borderColor: '#e5e7eb',
+                    }]}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: isFrom ? '700' : '500', color: isFrom ? '#fff' : '#374151' }}>{t}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {/* TO column */}
+            <View style={{ flex: 1 }}>
+              {CAL_TIMES.filter(t => !booking.timeFrom || t > booking.timeFrom).map((t) => {
+                const isTo = booking.timeTo === t;
+                return (
+                  <TouchableOpacity
+                    key={`to-${t}`}
+                    onPress={() => selectTimeTo(t)}
+                    style={[{
+                      paddingVertical: 10, paddingHorizontal: 8, marginBottom: 4,
+                      borderRadius: 10, alignItems: 'center',
+                      backgroundColor: isTo ? '#059669' : '#f3f4f6',
+                      borderWidth: isTo ? 0 : 1,
+                      borderColor: '#e5e7eb',
+                    }]}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: isTo ? '700' : '500', color: isTo ? '#fff' : '#374151' }}>{t}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* DUMMY PLACEHOLDER to keep old grid code from rendering — replaced above */}
+          <View style={{ display: 'none' }}>
           <View style={{ position: 'relative', marginLeft: 48, marginRight: 16 }}>
             {/* Hour lines */}
             {GRID_HOURS.map(h => (
@@ -932,7 +1020,7 @@ export default function HomeScreen() {
                 return (
                   <TouchableOpacity
                     key={t}
-                    onPress={() => selectTime(t)}
+                    onPress={() => selectTimeFrom(t)}
                     style={[{
                       position: 'absolute', left: 0, right: 0,
                       top: topPos, height: HOUR_HEIGHT / 2,
@@ -954,14 +1042,44 @@ export default function HomeScreen() {
               })}
             </View>
           </View>
+          </View>{/* end display:none */}
         </ScrollView>
 
         {/* Bottom bar */}
         <View style={[s.bottomBar, { paddingTop: 8 }]}>
-          {booking.dates.length > 0 && booking.timeFrom && (
+          {/* Any day/time checkbox */}
+          <TouchableOpacity
+            onPress={() => {
+              setAnyDayTime(v => !v);
+              if (!anyDayTime) {
+                // Clear specific selections when enabling "any"
+                setBooking(b => ({ ...b, dates: [], date: '', timeFrom: '', timeTo: '', time: '' }));
+              }
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, paddingHorizontal: 4 }}
+          >
+            <View style={{
+              width: 22, height: 22, borderRadius: 6, borderWidth: 2,
+              borderColor: anyDayTime ? '#2563eb' : '#d1d5db',
+              backgroundColor: anyDayTime ? '#2563eb' : '#fff',
+              alignItems: 'center', justifyContent: 'center'
+            }}>
+              {anyDayTime && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </View>
+            <Text style={{ fontSize: 14, color: anyDayTime ? '#2563eb' : '#374151', fontWeight: anyDayTime ? '700' : '500' }}>
+              Підходить будь-який день і час
+            </Text>
+          </TouchableOpacity>
+
+          {!anyDayTime && booking.dates.length > 0 && booking.timeFrom && (
             <Text style={{ textAlign: 'center', fontSize: 13, color: '#6b7280', marginBottom: 8 }}>
               📅 {booking.dates.map(v => { const d = dates.find(x => x.value === v); return d ? `${d.dayName} ${d.label}` : v; }).join(', ')}
-              {'  '}⏰ {booking.timeFrom}
+              {'  '}⏰ {booking.timeFrom}{booking.timeTo ? `–${booking.timeTo}` : ''}
+            </Text>
+          )}
+          {anyDayTime && (
+            <Text style={{ textAlign: 'center', fontSize: 13, color: '#2563eb', marginBottom: 8, fontWeight: '600' }}>
+              ✅ Будь-який зручний час
             </Text>
           )}
           <TouchableOpacity
@@ -1185,8 +1303,24 @@ export default function HomeScreen() {
               { icon: 'construct-outline', label: 'Послуга', value: booking.skillName },
               { icon: 'document-text-outline', label: 'Опис', value: booking.taskDescription },
               { icon: 'location-outline', label: 'Адреса', value: `${booking.address}, ${booking.city}` },
-              { icon: 'calendar-outline', label: 'Дата', value: booking.date },
-              { icon: 'time-outline', label: 'Час', value: booking.time },
+              {
+                icon: 'calendar-outline',
+                label: 'Дата',
+                value: anyDayTime
+                  ? 'Будь-який зручний день'
+                  : booking.dates.length > 1
+                    ? booking.dates.join(', ')
+                    : booking.date || booking.dates[0] || 'не вказано'
+              },
+              {
+                icon: 'time-outline',
+                label: 'Час',
+                value: anyDayTime
+                  ? 'Будь-який зручний час'
+                  : booking.timeFrom
+                    ? (booking.timeTo ? `${booking.timeFrom} – ${booking.timeTo}` : booking.timeFrom)
+                    : booking.time || 'не вказано'
+              },
             ].map(row => (
               <View key={row.label} style={s.confirmRow}>
                 <Ionicons name={row.icon as any} size={18} color="#6b7280" style={{ width: 24 }} />
