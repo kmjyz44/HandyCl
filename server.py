@@ -2578,11 +2578,29 @@ async def get_executors_by_service(
                         break
 
             # 2. Check radius if executor has set coordinates and radius
-            if not location_ok and lat is not None and lng is not None and exec_lat and exec_lng and exec_radius_km > 0:
+            # If client has no coordinates but has a city — geocode it first
+            client_lat = lat
+            client_lng = lng
+            if not location_ok and city and (client_lat is None or client_lng is None) and exec_lat and exec_lng and exec_radius_km > 0:
+                try:
+                    async with httpx.AsyncClient() as _hc:
+                        _geo = (await _hc.get(
+                            "https://nominatim.openstreetmap.org/search",
+                            params={"format": "json", "q": city, "limit": "1"},
+                            headers={"User-Agent": "HandyHub/1.0"},
+                            timeout=5.0
+                        )).json()
+                    if _geo:
+                        client_lat = float(_geo[0]["lat"])
+                        client_lng = float(_geo[0]["lon"])
+                except Exception:
+                    pass
+
+            if not location_ok and client_lat is not None and client_lng is not None and exec_lat and exec_lng and exec_radius_km > 0:
                 import math
-                dlat = math.radians(lat - exec_lat)
-                dlng = math.radians(lng - exec_lng)
-                a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(lat)) * math.sin(dlng/2)**2
+                dlat = math.radians(client_lat - exec_lat)
+                dlng = math.radians(client_lng - exec_lng)
+                a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(client_lat)) * math.sin(dlng/2)**2
                 distance_km = 6371 * 2 * math.asin(math.sqrt(a))
                 if distance_km <= exec_radius_km:
                     location_ok = True

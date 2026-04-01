@@ -1617,7 +1617,7 @@ function ProviderProfile() {
                     if (updatedUser) setUser(updatedUser);
                     Alert.alert('Збережено', 'Деталі акаунту оновлено');
                     setEditingAccountDetails(false);
-                    setAccountDetailsVisible(false);
+                    // Keep modal open — button now shows 'Редагувати' again
                   } catch (e: any) {
                     Alert.alert('Помилка', e.message || 'Не вдалося зберегти');
                   } finally { setSaving(false); }

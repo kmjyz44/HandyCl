@@ -477,6 +477,11 @@ export const api = {
     return res.data;
   },
 
+  updateAvailabilitySlot: async (id: string, data: any) => {
+    const res = await client.put(`/availability/${id}`, data);
+    return res.data;
+  },
+
   deleteAvailabilitySlot: async (id: string) => {
     const res = await client.delete(`/availability/${id}`);
     return res.data;
