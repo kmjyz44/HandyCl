@@ -2539,11 +2539,32 @@ async def get_executors_by_service(
 
     result = await db.users.aggregate(pipeline).to_list(1000)
 
+    # ── Pre-loop: geocode client city/address ONCE ──────────────────────
+    # Geocode client location once before the loop (not per-executor)
+    client_lat_global = lat
+    client_lng_global = lng
+    if (city or lat is None) and (client_lat_global is None or client_lng_global is None):
+        geocode_query = city or ""
+        if geocode_query:
+            try:
+                async with httpx.AsyncClient() as _hc:
+                    _geo = (await _hc.get(
+                        "https://nominatim.openstreetmap.org/search",
+                        params={"format": "json", "q": geocode_query, "limit": "1"},
+                        headers={"User-Agent": "HandyHub/1.0"},
+                        timeout=5.0
+                    )).json()
+                if _geo:
+                    client_lat_global = float(_geo[0]["lat"])
+                    client_lng_global = float(_geo[0]["lon"])
+            except Exception:
+                pass
+
     filtered = []
     for executor in result:
         profile = executor.get("profile") or {}
 
-        # ── Skill filter ──────────────────────────────────────────────
+        # ── Skill filter ───────────────────────────────────────────
         if service_name:
             skills = profile.get("skills") or []
             # skills can be list of strings or list of dicts
@@ -2559,12 +2580,31 @@ async def get_executors_by_service(
 
         # ── Location filter ───────────────────────────────────────────
         # Only filter if client provided a city or coordinates
-        if city or (lat is not None and lng is not None):
+        if city or (client_lat_global is not None and client_lng_global is not None):
             executor_cities = [c.lower() for c in (profile.get("service_cities") or [])]
             executor_zones  = [z.lower() for z in (profile.get("service_zones") or [])]
             exec_lat  = profile.get("latitude")
             exec_lng  = profile.get("longitude")
             exec_radius_km = profile.get("service_radius_km") or 0
+
+            # If executor has no coordinates but has a city/zone — geocode executor address
+            if (exec_lat is None or exec_lng is None) and (executor_cities or executor_zones):
+                exec_geocode_query = executor_cities[0] if executor_cities else executor_zones[0]
+                try:
+                    async with httpx.AsyncClient() as _hc:
+                        _egeo = (await _hc.get(
+                            "https://nominatim.openstreetmap.org/search",
+                            params={"format": "json", "q": exec_geocode_query, "limit": "1"},
+                            headers={"User-Agent": "HandyHub/1.0"},
+                            timeout=5.0
+                        )).json()
+                    if _egeo:
+                        exec_lat = float(_egeo[0]["lat"])
+                        exec_lng = float(_egeo[0]["lon"])
+                        if not exec_radius_km:
+                            exec_radius_km = 30  # default 30 km if only city specified
+                except Exception:
+                    pass
 
             location_ok = False
 
@@ -2577,30 +2617,12 @@ async def get_executors_by_service(
                         location_ok = True
                         break
 
-            # 2. Check radius if executor has set coordinates and radius
-            # If client has no coordinates but has a city — geocode it first
-            client_lat = lat
-            client_lng = lng
-            if not location_ok and city and (client_lat is None or client_lng is None) and exec_lat and exec_lng and exec_radius_km > 0:
-                try:
-                    async with httpx.AsyncClient() as _hc:
-                        _geo = (await _hc.get(
-                            "https://nominatim.openstreetmap.org/search",
-                            params={"format": "json", "q": city, "limit": "1"},
-                            headers={"User-Agent": "HandyHub/1.0"},
-                            timeout=5.0
-                        )).json()
-                    if _geo:
-                        client_lat = float(_geo[0]["lat"])
-                        client_lng = float(_geo[0]["lon"])
-                except Exception:
-                    pass
-
-            if not location_ok and client_lat is not None and client_lng is not None and exec_lat and exec_lng and exec_radius_km > 0:
+            # 2. Check radius using pre-geocoded client coordinates
+            if not location_ok and client_lat_global is not None and client_lng_global is not None and exec_lat and exec_lng and exec_radius_km > 0:
                 import math
-                dlat = math.radians(client_lat - exec_lat)
-                dlng = math.radians(client_lng - exec_lng)
-                a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(client_lat)) * math.sin(dlng/2)**2
+                dlat = math.radians(client_lat_global - exec_lat)
+                dlng = math.radians(client_lng_global - exec_lng)
+                a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(client_lat_global)) * math.sin(dlng/2)**2
                 distance_km = 6371 * 2 * math.asin(math.sqrt(a))
                 if distance_km <= exec_radius_km:
                     location_ok = True

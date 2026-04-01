@@ -392,8 +392,10 @@ export default function HomeScreen() {
   const searchAddress = async (query: string) => {
     if (query.length < 3) { setAddressSuggestions([]); return; }
     try {
+      // No countrycodes restriction — support any country (US, UA, etc.)
+      // addressdetails=1 returns structured address (city, town, county) for better city extraction
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=ua&limit=5&accept-language=uk`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&accept-language=uk,en&addressdetails=1`,
         { headers: { 'User-Agent': 'HandyHub/1.0' } }
       );
       const data = await res.json();
@@ -784,8 +786,13 @@ export default function HomeScreen() {
                   onPress={() => {
                     const parts = s2.display_name.split(',');
                     const street = parts[0]?.trim() || s2.display_name;
-                    const city = parts[2]?.trim() || parts[1]?.trim() || '';
-                    setBooking(b => ({ ...b, address: street, city: city || b.city }));
+                    // Try to extract city from address components
+                    const addr = s2.address || {};
+                    const city = addr.city || addr.town || addr.village || addr.county || parts[2]?.trim() || parts[1]?.trim() || '';
+                    // Save lat/lng from Nominatim result so radius search works
+                    const selLat = s2.lat ? parseFloat(s2.lat) : undefined;
+                    const selLng = s2.lon ? parseFloat(s2.lon) : undefined;
+                    setBooking(b => ({ ...b, address: street, city: city || b.city, lat: selLat ?? b.lat, lng: selLng ?? b.lng }));
                     setAddressSuggestions([]);
                   }}
                 >
