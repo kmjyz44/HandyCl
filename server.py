@@ -2742,16 +2742,14 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
-    # Use json_util.dumps + json.loads to convert ALL BSON types (ObjectId, datetime, etc.)
-    # This is the most reliable approach - json_util handles all MongoDB types
-    # Then json.loads converts back to plain Python dicts/lists with no MongoDB types
+    # Use Response with json_util.dumps to bypass FastAPI encoder completely
+    # json_util handles all MongoDB BSON types (ObjectId, datetime, etc.)
+    # Response object bypasses serialize_response/jsonable_encoder in FastAPI routing
     try:
-        serialized = json.loads(json_util.dumps(filtered))
-        # Verify no ObjectId remains
-        import re
-        serialized_str = json.dumps(serialized)
-        print(f"[by-service] Returning {len(serialized)} executors, JSON length: {len(serialized_str)}", flush=True)
-        return serialized
+        json_str = json_util.dumps(filtered)
+        print(f"[by-service] Returning {len(filtered)} executors via Response", flush=True)
+        from fastapi.responses import Response as FastAPIResponse
+        return FastAPIResponse(content=json_str, media_type="application/json")
     except Exception as e:
         print(f"[by-service] Serialization error: {e}", flush=True)
         raise HTTPException(status_code=500, detail=f"Serialization error: {str(e)}")
