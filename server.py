@@ -2502,7 +2502,7 @@ async def get_all_executors(current_user: User = Depends(get_current_user)):
     return result
 
 
-@api_router.get("/executors/by-service")
+@api_router.get("/executors/by-service", response_class=Response)
 async def get_executors_by_service(
     service_name: Optional[str] = None,
     category: Optional[str] = None,
