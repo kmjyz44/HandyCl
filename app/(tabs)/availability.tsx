@@ -120,6 +120,9 @@ export default function Availability() {
   const [formEnd, setFormEnd] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Delete confirmation
+  const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<Slot | null>(null);
+
   // Service area
   const [mapVisible, setMapVisible] = useState(false);
   const [areaLabel, setAreaLabel] = useState('Не вказано');
@@ -208,18 +211,24 @@ export default function Availability() {
   };
 
   const handleDelete = async (slot: Slot) => {
-    const doIt = async () => {
-      try { await api.deleteAvailabilitySlot(slot.slot_id); load(); }
-      catch (err: any) { webAlert('Помилка', err.message || 'Не вдалося видалити'); }
-    };
     if (Platform.OS === 'web') {
-      if (window.confirm(`Видалити слот ${slot.start_time}–${slot.end_time}?`)) doIt();
+      setConfirmDeleteSlot(slot);
     } else {
       Alert.alert('Видалити', `${DAYS_FULL[slot.day_of_week]} ${slot.start_time}–${slot.end_time}`, [
         { text: 'Скасувати', style: 'cancel' },
-        { text: 'Видалити', style: 'destructive', onPress: doIt },
+        { text: 'Видалити', style: 'destructive', onPress: async () => {
+          try { await api.deleteAvailabilitySlot(slot.slot_id); load(); }
+          catch (err: any) { webAlert('Помилка', err.message || 'Не вдалося видалити'); }
+        }},
       ]);
     }
+  };
+
+  const confirmDeleteExecute = async () => {
+    if (!confirmDeleteSlot) return;
+    try { await api.deleteAvailabilitySlot(confirmDeleteSlot.slot_id); load(); }
+    catch (err: any) { webAlert('Помилка', err.message || 'Не вдалося видалити'); }
+    finally { setConfirmDeleteSlot(null); }
   };
 
   // Build 7-day header dates
@@ -384,6 +393,32 @@ export default function Availability() {
                 disabled={!formStart || !formEnd || saving}
               >
                 {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={m.saveText}>{editingSlot ? 'Зберегти' : 'Додати'}</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Confirm Delete Modal ── */}
+      <Modal visible={!!confirmDeleteSlot} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 }}>Видалити слот?</Text>
+            <Text style={{ fontSize: 15, color: '#6b7280', marginBottom: 24 }}>
+              {confirmDeleteSlot ? `${DAYS_FULL[confirmDeleteSlot.day_of_week]}: ${confirmDeleteSlot.start_time} – ${confirmDeleteSlot.end_time}` : ''}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={{ flex: 1, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', alignItems: 'center' }}
+                onPress={() => setConfirmDeleteSlot(null)}
+              >
+                <Text style={{ fontSize: 15, color: '#374151', fontWeight: '600' }}>Скасувати</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, padding: 14, borderRadius: 10, backgroundColor: '#ef4444', alignItems: 'center' }}
+                onPress={confirmDeleteExecute}
+              >
+                <Text style={{ fontSize: 15, color: '#fff', fontWeight: '700' }}>Видалити</Text>
               </TouchableOpacity>
             </View>
           </View>
