@@ -2725,8 +2725,9 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
-    # Convert ObjectId and other BSON types to JSON-serializable types
-    return json.loads(json_util.dumps(filtered))
+    # Use JSONResponse to bypass FastAPI's jsonable_encoder (which can't handle ObjectId)
+    # json_util.dumps converts all BSON types (ObjectId, datetime, etc.) to JSON strings
+    return JSONResponse(content=json.loads(json_util.dumps(filtered)))
 
 
 # Availability Calendar Routes
