@@ -147,6 +147,7 @@ export const api = {
       // Use the full by-service endpoint which supports skill + location + availability filtering
       const queryParams: Record<string, any> = {};
       if (params.skill) queryParams.service_name = params.skill;
+      if (params.category) queryParams.category = params.category;
       if (params.city) queryParams.city = params.city;
       if (params.lat != null) queryParams.lat = params.lat;
       if (params.lng != null) queryParams.lng = params.lng;
