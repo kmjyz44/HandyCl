@@ -17,6 +17,7 @@ from emergentintegrations.payments.stripe.checkout import StripeCheckout, Checko
 from telegram import Bot
 from telegram.constants import ParseMode
 import asyncio
+import math
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -2619,7 +2620,6 @@ async def get_executors_by_service(
 
             # 2. Check radius using pre-geocoded client coordinates
             if not location_ok and client_lat_global is not None and client_lng_global is not None and exec_lat and exec_lng and exec_radius_km > 0:
-                import math
                 dlat = math.radians(client_lat_global - exec_lat)
                 dlng = math.radians(client_lng_global - exec_lng)
                 a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(client_lat_global)) * math.sin(dlng/2)**2
