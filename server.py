@@ -2723,7 +2723,23 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
-    return filtered
+    # Convert ObjectId fields to strings for JSON serialization
+    def serialize_doc(doc):
+        result = {}
+        for k, v in doc.items():
+            if k == "_id":
+                result[k] = str(v)
+            elif hasattr(v, '__class__') and v.__class__.__name__ == 'ObjectId':
+                result[k] = str(v)
+            elif isinstance(v, dict):
+                result[k] = serialize_doc(v)
+            elif isinstance(v, list):
+                result[k] = [serialize_doc(i) if isinstance(i, dict) else (str(i) if hasattr(i, '__class__') and i.__class__.__name__ == 'ObjectId' else i) for i in v]
+            else:
+                result[k] = v
+        return result
+
+    return [serialize_doc(ex) for ex in filtered]
 
 
 # Availability Calendar Routes
