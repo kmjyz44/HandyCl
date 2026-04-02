@@ -1122,6 +1122,20 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
 
+def clean_doc(obj):
+    """Recursively convert MongoDB ObjectId and datetime objects to JSON-serializable types."""
+    from bson import ObjectId
+    if isinstance(obj, list):
+        return [clean_doc(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {k: clean_doc(v) for k, v in obj.items()}
+    elif isinstance(obj, ObjectId):
+        return str(obj)
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    else:
+        return obj
+
 async def get_current_user(authorization: Optional[str] = Header(None), request: Request = None) -> User:
     """Get current user from session token (cookie or header)"""
     session_token = None
@@ -2725,10 +2739,10 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
-    # Use Response (not JSONResponse) to bypass FastAPI's serialize_response/jsonable_encoder
-    # JSONResponse still goes through serialize_response which calls jsonable_encoder on ObjectId
-    # Response with media_type sends raw bytes directly without any encoding
-    return Response(content=json_util.dumps(filtered), media_type="application/json")
+    # Clean all MongoDB ObjectId and datetime objects before returning
+    # FastAPI's serialize_response calls jsonable_encoder which cannot handle ObjectId
+    cleaned = clean_doc(filtered)
+    return cleaned
 
 
 # Availability Calendar Routes
