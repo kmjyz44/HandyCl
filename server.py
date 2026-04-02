@@ -2739,10 +2739,12 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
-    # Clean all MongoDB ObjectId and datetime objects before returning
-    # FastAPI's serialize_response calls jsonable_encoder which cannot handle ObjectId
-    cleaned = clean_doc(filtered)
-    return cleaned
+    # Use json_util.dumps + json.loads to convert ALL BSON types (ObjectId, datetime, etc.)
+    # This is the most reliable approach - json_util handles all MongoDB types
+    # Then json.loads converts back to plain Python dicts/lists with no MongoDB types
+    # clean_doc is used as additional safety net
+    serialized = json.loads(json_util.dumps(filtered))
+    return clean_doc(serialized)
 
 
 # Availability Calendar Routes
