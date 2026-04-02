@@ -2745,11 +2745,11 @@ async def get_executors_by_service(
     # Use Response with json_util.dumps to bypass FastAPI encoder completely
     # json_util handles all MongoDB BSON types (ObjectId, datetime, etc.)
     # Response object bypasses serialize_response/jsonable_encoder in FastAPI routing
+    # Note: Response is imported at the top of the file from fastapi
     try:
         json_str = json_util.dumps(filtered)
         print(f"[by-service] Returning {len(filtered)} executors via Response", flush=True)
-        from fastapi.responses import Response as FastAPIResponse
-        return FastAPIResponse(content=json_str, media_type="application/json")
+        return Response(content=json_str, media_type="application/json")
     except Exception as e:
         print(f"[by-service] Serialization error: {e}", flush=True)
         raise HTTPException(status_code=500, detail=f"Serialization error: {str(e)}")
