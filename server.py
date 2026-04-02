@@ -2512,12 +2512,12 @@ async def get_executors_by_service(
     current_user: User = Depends(get_current_user)
 ):
     """Get executors filtered by service/skill AND location with admin-controlled listing settings"""
-    logging.info(f"[by-service] START: category={category}, city={city}")
+    print(f"[by-service] START: category={category}, city={city}", flush=True)
     settings_doc = await db.settings.find_one({"setting_id": "app_settings"}, {"_id": 0})
-    logging.info(f"[by-service] settings_doc type: {type(settings_doc)}")
+    print(f"[by-service] settings_doc type: {type(settings_doc)}", flush=True)
     settings = Settings(**settings_doc) if settings_doc else Settings()
     commission_percent = settings.admin_commission_percentage if settings.apply_admin_commission else 0.0
-    logging.info(f"[by-service] commission_percent: {commission_percent}")
+    print(f"[by-service] commission_percent: {commission_percent}", flush=True)
 
     pipeline = [
         # Only active, not blocked, not hidden by admin
@@ -2750,10 +2750,10 @@ async def get_executors_by_service(
         # Verify no ObjectId remains
         import re
         serialized_str = json.dumps(serialized)
-        logging.info(f"[by-service] Returning {len(serialized)} executors, JSON length: {len(serialized_str)}")
+        print(f"[by-service] Returning {len(serialized)} executors, JSON length: {len(serialized_str)}", flush=True)
         return serialized
     except Exception as e:
-        logging.error(f"[by-service] Serialization error: {e}")
+        print(f"[by-service] Serialization error: {e}", flush=True)
         raise HTTPException(status_code=500, detail=f"Serialization error: {str(e)}")
 
 
