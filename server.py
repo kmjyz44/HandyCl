@@ -2742,9 +2742,16 @@ async def get_executors_by_service(
     # Use json_util.dumps + json.loads to convert ALL BSON types (ObjectId, datetime, etc.)
     # This is the most reliable approach - json_util handles all MongoDB types
     # Then json.loads converts back to plain Python dicts/lists with no MongoDB types
-    # clean_doc is used as additional safety net
-    serialized = json.loads(json_util.dumps(filtered))
-    return clean_doc(serialized)
+    try:
+        serialized = json.loads(json_util.dumps(filtered))
+        # Verify no ObjectId remains
+        import re
+        serialized_str = json.dumps(serialized)
+        logging.info(f"[by-service] Returning {len(serialized)} executors, JSON length: {len(serialized_str)}")
+        return serialized
+    except Exception as e:
+        logging.error(f"[by-service] Serialization error: {e}")
+        raise HTTPException(status_code=500, detail=f"Serialization error: {str(e)}")
 
 
 # Availability Calendar Routes
