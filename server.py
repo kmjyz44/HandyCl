@@ -2489,6 +2489,7 @@ async def get_all_executors(current_user: User = Depends(get_current_user)):
 @api_router.get("/executors/by-service")
 async def get_executors_by_service(
     service_name: Optional[str] = None,
+    category: Optional[str] = None,
     city: Optional[str] = None,
     lat: Optional[float] = None,
     lng: Optional[float] = None,
@@ -2565,8 +2566,20 @@ async def get_executors_by_service(
     for executor in result:
         profile = executor.get("profile") or {}
 
-        # ── Skill filter ───────────────────────────────────────────
-        if service_name:
+        # ── Skill filter ────────────────────────────────────────────────────────
+        # Category-to-skills mapping (same as frontend SKILL_CATEGORIES)
+        CATEGORY_SKILLS: dict = {
+            'assembly':         ['збірка', 'ikea', 'меблі', 'полиць', 'телевізор', 'монтаж'],
+            'cleaning':         ['прибирання', 'прибирання будинку', 'прибирання офісу', 'миття', 'чищення', 'cleaning', 'clean'],
+            'home_improvements': ['ремонт', 'фарбування', 'плитка', 'підлога', 'гіпсокартон', 'сантехніка', 'електрика', 'plumbing', 'electrical', 'встановлення'],
+            'moving':           ['переїзд', 'доставка', 'пакування', 'перенесення', 'вивіз'],
+            'outdoor':          ['газон', 'сніг', 'садівництво', 'огорожа', 'догляд за газоном', 'прибирання снігу', 'lawn', 'snow'],
+            'personal':         ['доручення', 'шопінг', 'тварини', 'літні', 'errand', 'shopping'],
+            'it_tech':          ['компютер', 'мережа', 'телефон', 'tv', 'дані', 'it', 'tech', 'налаштування'],
+            'events':           ['захід', 'фото', 'бармен', 'кухня'],
+            'other':            ['майстер', 'репетитор', 'переклад', 'водій'],
+        }
+        if service_name or category:
             skills = profile.get("skills") or []
             # skills can be list of strings or list of dicts
             skill_names = []
@@ -2575,11 +2588,32 @@ async def get_executors_by_service(
                     skill_names.append((s.get("label") or s.get("id") or "").lower())
                 else:
                     skill_names.append(str(s).lower())
-            svc_lower = service_name.lower()
-            if not any(svc_lower in s or s in svc_lower for s in skill_names):
+            skill_match = False
+            # 1. Match by specific skill name
+            if service_name:
+                svc_lower = service_name.lower()
+                if any(svc_lower in s or s in svc_lower for s in skill_names):
+                    skill_match = True
+            # 2. Match by category keywords
+            if not skill_match and category:
+                cat_keywords = CATEGORY_SKILLS.get(category, [])
+                for kw in cat_keywords:
+                    if any(kw in s for s in skill_names):
+                        skill_match = True
+                        break
+            # 3. Also check if executor's skills contain any keyword from the category
+            if not skill_match and service_name:
+                # Try to find which category the service_name belongs to
+                for cat_id, keywords in CATEGORY_SKILLS.items():
+                    if any(kw in service_name.lower() for kw in keywords):
+                        cat_keywords = keywords
+                        if any(kw in s for s in skill_names for kw in cat_keywords):
+                            skill_match = True
+                            break
+            if not skill_match:
                 continue
 
-        # ── Location filter ───────────────────────────────────────────
+        # ── Location filter ─────────────────────────────────────────────────────
         # Only filter if client provided a city or coordinates
         if city or (client_lat_global is not None and client_lng_global is not None):
             executor_cities = [c.lower() for c in (profile.get("service_cities") or [])]
