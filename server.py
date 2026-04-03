@@ -7466,6 +7466,7 @@ app.include_router(api_router)
 # Test endpoint for connectivity
 @app.get("/api/test")
 async def test_connection():
+    print("[TEST] test_connection called", flush=True)
     return {
         "status": "ok",
         "message": "Backend is working!",
