@@ -19,7 +19,13 @@ from telegram.constants import ParseMode
 import asyncio
 import math
 import json
-from bson import json_util
+from bson import json_util, ObjectId
+from fastapi.encoders import ENCODERS_BY_TYPE
+
+# Register MongoDB ObjectId as a globally serializable type for FastAPI
+# This ensures ObjectId values are converted to strings automatically
+# regardless of Python version or FastAPI internals
+ENCODERS_BY_TYPE[ObjectId] = str
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
