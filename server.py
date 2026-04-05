@@ -21,11 +21,24 @@ import math
 import json
 from bson import json_util, ObjectId
 from fastapi.encoders import ENCODERS_BY_TYPE
+import fastapi.encoders as _fastapi_encoders
+import fastapi.routing as _fastapi_routing
 
-# Register MongoDB ObjectId as a globally serializable type for FastAPI
-# This ensures ObjectId values are converted to strings automatically
-# regardless of Python version or FastAPI internals
+# Register MongoDB ObjectId in ENCODERS_BY_TYPE (primary approach)
 ENCODERS_BY_TYPE[ObjectId] = str
+
+# Also monkey-patch jsonable_encoder as a fallback to handle ObjectId
+# This is needed because on Python 3.13 the ENCODERS_BY_TYPE check may not work
+_original_jsonable_encoder = _fastapi_encoders.jsonable_encoder
+
+def _safe_jsonable_encoder(obj, *args, **kwargs):
+    """Patched encoder that handles MongoDB ObjectId before passing to FastAPI encoder"""
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    return _original_jsonable_encoder(obj, *args, **kwargs)
+
+_fastapi_encoders.jsonable_encoder = _safe_jsonable_encoder
+_fastapi_routing.jsonable_encoder = _safe_jsonable_encoder
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
