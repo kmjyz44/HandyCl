@@ -2761,17 +2761,11 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
-    # Use Response with json_util.dumps to bypass FastAPI encoder completely
-    # json_util handles all MongoDB BSON types (ObjectId, datetime, etc.)
-    # Response object bypasses serialize_response/jsonable_encoder in FastAPI routing
-    # Note: Response is imported at the top of the file from fastapi
-    try:
-        json_str = json_util.dumps(filtered)
-        print(f"[by-service] Returning {len(filtered)} executors via Response", flush=True)
-        return Response(content=json_str, media_type="application/json")
-    except Exception as e:
-        print(f"[by-service] Serialization error: {e}", flush=True)
-        raise HTTPException(status_code=500, detail=f"Serialization error: {str(e)}")
+    # Use clean_doc to recursively convert all MongoDB BSON types (ObjectId, datetime)
+    # to plain Python types (str, ISO string) before returning to FastAPI
+    # This guarantees FastAPI's jsonable_encoder won't encounter any BSON types
+    print(f"[by-service] Returning {len(filtered)} executors via clean_doc", flush=True)
+    return clean_doc(filtered)
 
 
 # Availability Calendar Routes
