@@ -7497,7 +7497,7 @@ async def test_connection():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": "16e67a9"}
 
 
 # Configure logging
