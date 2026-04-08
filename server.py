@@ -2521,7 +2521,7 @@ async def get_all_executors(current_user: User = Depends(get_current_user)):
     return result
 
 
-@api_router.get("/executors/by-service", response_class=Response)
+@api_router.get("/executors/by-service")
 async def get_executors_by_service(
     service_name: Optional[str] = None,
     category: Optional[str] = None,
@@ -2765,7 +2765,16 @@ async def get_executors_by_service(
     # to plain Python types (str, ISO string) before returning to FastAPI
     # This guarantees FastAPI's jsonable_encoder won't encounter any BSON types
     print(f"[by-service] Returning {len(filtered)} executors via clean_doc", flush=True)
-    return clean_doc(filtered)
+    try:
+        cleaned = clean_doc(filtered)
+        # Use json.dumps + json.loads to ensure ALL types are JSON-serializable
+        # This is the most robust way to handle any remaining BSON types
+        return JSONResponse(content=json.loads(json.dumps(cleaned)))
+    except Exception as _e:
+        import traceback as _tb
+        print(f"[by-service] SERIALIZATION ERROR: {_e}", flush=True)
+        _tb.print_exc()
+        raise HTTPException(status_code=500, detail=f"Serialization error: {str(_e)}")
 
 
 # Availability Calendar Routes
