@@ -16,6 +16,8 @@ import httpx
 from telegram import Bot
 from telegram.constants import ParseMode
 import asyncio
+import json
+from bson import ObjectId
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -3009,7 +3011,7 @@ async def get_executors_by_service(
             },
             "completed_tasks_count": {"$size": "$completed_tasks"}
         }},
-        {"$project": {"_id": 0, "password_hash": 0, "reviews": 0, "completed_tasks": 0, "profile._id": 0}}
+        {"$project": {"_id": 0, "password_hash": 0, "reviews": 0, "completed_tasks": 0, "profile._id": 0, "availability_slots._id": 0}}
     ]
 
     result = await db.users.aggregate(pipeline).to_list(1000)
@@ -3136,7 +3138,19 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
-    return filtered
+    def _clean(obj):
+        """Recursively convert BSON types to JSON-serializable Python types."""
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, dict):
+            return {k: _clean(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_clean(i) for i in obj]
+        return obj
+
+    return JSONResponse(content=json.loads(json.dumps(_clean(filtered))))
 
 
 # Availability Calendar Routes
@@ -3886,7 +3900,7 @@ async def get_all_executors_admin(current_user: User = Depends(require_admin)):
             },
             "completed_tasks_count": {"$size": "$completed_tasks"}
         }},
-        {"$project": {"_id": 0, "password_hash": 0, "reviews": 0, "completed_tasks": 0, "profile._id": 0}},
+        {"$project": {"_id": 0, "password_hash": 0, "reviews": 0, "completed_tasks": 0, "profile._id": 0, "availability_slots._id": 0}},
         {"$sort": {"created_at": -1}}
     ]
     result = await db.users.aggregate(pipeline).to_list(1000)
