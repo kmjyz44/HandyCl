@@ -9,9 +9,11 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../store/authStore';
 import { api } from '../../utils/api';
 
@@ -20,14 +22,19 @@ export default function Profile() {
   const { user, logout, setUser } = useAuthStore();
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   
   // Client specific state
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [savedAddresses, setSavedAddresses] = useState([]);
+  // Provider specific state
+  const [providerStats, setProviderStats] = useState<any>(null);
 
   useEffect(() => {
     if (user?.role === 'client') {
       loadClientData();
+    } else if (user?.role === 'provider') {
+      loadProviderStats();
     }
   }, [user]);
 
@@ -41,6 +48,15 @@ export default function Profile() {
       setSavedAddresses(addrRes.data || []);
     } catch (error) {
       console.error('Error loading client data:', error);
+    }
+  };
+
+  const loadProviderStats = async () => {
+    try {
+      const stats = await api.getMyProviderStats();
+      setProviderStats(stats);
+    } catch (error) {
+      console.error('Error loading provider stats:', error);
     }
   };
 
@@ -63,6 +79,55 @@ export default function Profile() {
     ]);
   };
 
+  const handlePhotoUpload = async () => {
+    try {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Помилка', 'Потрібен дозвіл на доступ до галереї');
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+
+      const asset = result.assets[0];
+
+      // Validate file size (base64 string length * 0.75 ≈ file size in bytes)
+      if (asset.base64 && asset.base64.length * 0.75 > 5 * 1024 * 1024) {
+        Alert.alert('Помилка', 'Фото занадто велике. Максимум 5 МБ.');
+        return;
+      }
+
+      setUploading(true);
+
+      const base64Image = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+
+      await api.updateProfilePhoto(base64Image);
+
+      // Update local user state with new photo
+      setUser({ ...user!, picture: base64Image });
+      Alert.alert('Успіх', 'Фото профілю оновлено!');
+    } catch (error: any) {
+      console.error('Photo upload error:', error);
+      Alert.alert('Помилка', error.message || 'Не вдалося завантажити фото');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.avatarContainer}>
@@ -72,8 +137,12 @@ export default function Profile() {
           ) : (
             <Ionicons name="person" size={40} color="#fff" />
           )}
-          <TouchableOpacity style={styles.cameraBadge} onPress={() => Alert.alert('Фото', 'Завантаження фото буде доступне незабаром')}>
-            <Ionicons name="camera" size={14} color="#fff" />
+          <TouchableOpacity style={styles.cameraBadge} onPress={handlePhotoUpload} disabled={uploading}>
+            {uploading ? (
+              <ActivityIndicator size={14} color="#fff" />
+            ) : (
+              <Ionicons name="camera" size={14} color="#fff" />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -178,6 +247,21 @@ export default function Profile() {
 
   const renderProviderProfile = () => (
     <ScrollView style={styles.content}>
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{providerStats?.stats?.total_tasks ?? 0}</Text>
+          <Text style={styles.statLabel}>Завдань</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{providerStats?.stats?.total_completed_tasks ?? 0}</Text>
+          <Text style={styles.statLabel}>Виконано</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{user?.rating || '5.0'}</Text>
+          <Text style={styles.statLabel}>Рейтинг</Text>
+        </View>
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Профіль виконавця</Text>
         
@@ -394,5 +478,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9ca3af',
     marginVertical: 24,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
   },
 });
