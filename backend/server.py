@@ -20,6 +20,19 @@ import json
 from bson import ObjectId
 
 ROOT_DIR = Path(__file__).parent
+
+
+def clean_bson(obj):
+    """Recursively convert BSON types (ObjectId, datetime) to JSON-serializable Python types."""
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: clean_bson(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [clean_bson(i) for i in obj]
+    return obj
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
@@ -1346,7 +1359,7 @@ async def get_conversations(current_user: User = Depends(get_current_user)):
                 "unread_count": conv["unread_count"]
             })
     
-    return result
+    return JSONResponse(content=clean_bson(result))
 
 @api_router.get("/conversations/{user_id}")
 async def get_conversation_messages(
@@ -2950,7 +2963,7 @@ async def get_all_executors(current_user: User = Depends(get_current_user)):
         if executor.get("average_rating"):
             executor["average_rating"] = round(executor["average_rating"], 2)
     
-    return result
+    return JSONResponse(content=clean_bson(result))
 
 
 @api_router.get("/executors/by-service")
@@ -3138,19 +3151,7 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
-    def _clean(obj):
-        """Recursively convert BSON types to JSON-serializable Python types."""
-        if isinstance(obj, ObjectId):
-            return str(obj)
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        if isinstance(obj, dict):
-            return {k: _clean(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [_clean(i) for i in obj]
-        return obj
-
-    return JSONResponse(content=json.loads(json.dumps(_clean(filtered))))
+    return JSONResponse(content=clean_bson(filtered))
 
 
 # Availability Calendar Routes
@@ -3422,7 +3423,7 @@ async def get_available_executors(
     # Sort by rating descending
     filtered.sort(key=lambda x: x.get("average_rating", 0), reverse=True)
     
-    return {"executors": filtered, "total": len(filtered)}
+    return JSONResponse(content=clean_bson({"executors": filtered, "total": len(filtered)}))
 
 # ==================== TASKER MATCHING & SCORING ALGORITHM ====================
 
@@ -3728,7 +3729,7 @@ async def search_taskers(
     # Limit
     results = results[:limit]
     
-    return {
+    return JSONResponse(content=clean_bson({
         "taskers": results,
         "total": len(results),
         "filters_applied": {
@@ -3737,7 +3738,7 @@ async def search_taskers(
             "verified_only": verified_only,
             "min_rating": min_rating
         }
-    }
+    }))
 
 # Admin Routes
 @api_router.get("/admin/dashboard")
@@ -3907,7 +3908,7 @@ async def get_all_executors_admin(current_user: User = Depends(require_admin)):
     for r in result:
         if r.get("average_rating"):
             r["average_rating"] = round(r["average_rating"], 2)
-    return result
+    return JSONResponse(content=clean_bson(result))
 
 
 # Admin Settings Routes
@@ -4908,7 +4909,7 @@ async def get_my_earnings(current_user: User = Depends(get_current_user)):
     earnings["pending_amount"] = pending_amount
     earnings["_id"] = None
     
-    return earnings
+    return JSONResponse(content=clean_bson(earnings))
 
 @api_router.get("/earnings/history")
 async def get_earnings_history(
@@ -6272,7 +6273,7 @@ async def get_pending_payouts(current_user: User = Depends(require_admin)):
         user = await db.users.find_one({"user_id": item["_id"]}, {"_id": 0, "password_hash": 0, "plain_password": 0})
         item["user"] = user
     
-    return pending
+    return JSONResponse(content=clean_bson(pending))
 
 # ==================== REFUND ENDPOINTS ====================
 
@@ -7453,7 +7454,7 @@ async def admin_photo_storage_stats(current_user: User = Depends(require_admin))
         {"$limit": 10}
     ]).to_list(10)
 
-    return {
+    return JSONResponse(content=clean_bson({
         "total_photos": stats.get("total_photos", 0),
         "total_mb": round(stats.get("total_kb", 0) / 1024, 2),
         "by_uploader_role": role_counts,
@@ -7465,7 +7466,7 @@ async def admin_photo_storage_stats(current_user: User = Depends(require_admin))
         "last_cleanup": settings.photo_cleanup_last_run,
         "top_tasks_by_photos": by_task,
         "storage_path": settings.photo_storage_path,
-    }
+    }))
 
 
 # ─── Background auto-cleanup task (runs hourly, acts on schedule) ─────────────
