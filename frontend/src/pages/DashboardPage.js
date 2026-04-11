@@ -2885,22 +2885,27 @@ function ProfilePanel({ user, onUpdate }) {
     }
 
     setUploading(true);
-    try {
-      // Convert to base64
-      const reader = new FileReader();
-      reader.onload = async () => {
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
         const base64 = reader.result;
         await api.updateProfilePhoto(base64);
         onUpdate();
         alert('Фото оновлено!');
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Error uploading photo:', error);
-      alert('Помилка при завантаженні фото');
-    } finally {
+      } catch (error) {
+        console.error('Error uploading photo:', error);
+        alert('Помилка при завантаженні фото');
+      } finally {
+        setUploading(false);
+      }
+    };
+    reader.onerror = () => {
+      console.error('Error reading file');
+      alert('Помилка при читанні файлу');
       setUploading(false);
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -2974,12 +2979,12 @@ function ProfilePanel({ user, onUpdate }) {
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 bg-blue-50 rounded-lg">
-                <p className="text-2xl font-bold text-blue-600">{providerStats.stats?.total_completed_tasks || 0}</p>
-                <p className="text-sm text-gray-600">Виконано завдань</p>
+                <p className="text-2xl font-bold text-blue-600">{providerStats.stats?.total_tasks || 0}</p>
+                <p className="text-sm text-gray-600">Кількість завдань</p>
               </div>
               <div className="p-4 bg-green-50 rounded-lg">
-                <p className="text-2xl font-bold text-green-600">{providerStats.stats?.total_hours_worked || 0}</p>
-                <p className="text-sm text-gray-600">Годин роботи</p>
+                <p className="text-2xl font-bold text-green-600">{providerStats.stats?.total_completed_tasks || 0}</p>
+                <p className="text-sm text-gray-600">Виконано завдань</p>
               </div>
               <div className="p-4 bg-yellow-50 rounded-lg">
                 <p className="text-2xl font-bold text-yellow-600">${providerStats.stats?.total_earnings || 0}</p>

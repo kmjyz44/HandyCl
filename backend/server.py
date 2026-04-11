@@ -5411,11 +5411,13 @@ async def get_provider_stats(user_id: str):
     # Get profile
     profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
     
-    # Get completed tasks (COMPLETED_PENDING_PAYMENT and PAID are final states)
-    completed_tasks = await db.tasks.find({
-        "provider_id": user_id,
-        "status": {"$in": [TaskStatus.COMPLETED_PENDING_PAYMENT, TaskStatus.PAID]}
+    # Get all tasks for this provider
+    all_tasks = await db.tasks.find({
+        "provider_id": user_id
     }, {"_id": 0}).to_list(1000)
+    
+    # Filter completed tasks
+    completed_tasks = [t for t in all_tasks if t.get("status") in [TaskStatus.COMPLETED_PENDING_PAYMENT, TaskStatus.PAID]]
     
     # Calculate stats
     total_completed = len(completed_tasks)
@@ -5427,15 +5429,14 @@ async def get_provider_stats(user_id: str):
     avg_rating = sum(r["rating"] for r in reviews) / len(reviews) if reviews else 0
     
     # Get archived tasks (cancelled or old completed)
-    archived_tasks = await db.tasks.find({
-        "provider_id": user_id,
-        "status": {"$in": [TaskStatus.CANCELLED_BY_CLIENT, TaskStatus.CANCELLED_BY_TASKER, TaskStatus.PAID]}
-    }, {"_id": 0}).sort("created_at", -1).to_list(50)
+    archived_tasks = [t for t in all_tasks if t.get("status") in [TaskStatus.CANCELLED_BY_CLIENT, TaskStatus.CANCELLED_BY_TASKER, TaskStatus.PAID]]
+    archived_tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
     
     return {
         "user": user,
         "profile": profile,
         "stats": {
+            "total_tasks": len(all_tasks),
             "total_completed_tasks": total_completed,
             "total_hours_worked": round(total_hours, 1),
             "total_earnings": round(total_earnings, 2),
@@ -5453,22 +5454,21 @@ async def get_my_provider_stats(current_user: User = Depends(get_current_user)):
     """Get current provider's own statistics"""
     user_id = current_user.user_id
     profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
-    completed_tasks = await db.tasks.find({
-        "provider_id": user_id,
-        "status": {"$in": ["completed_pending_payment", "paid"]}
+    all_tasks = await db.tasks.find({
+        "provider_id": user_id
     }, {"_id": 0}).to_list(1000)
+    completed_tasks = [t for t in all_tasks if t.get("status") in ["completed_pending_payment", "paid"]]
     total_completed = len(completed_tasks)
     total_earnings = sum(t.get("final_price", 0) or 0 for t in completed_tasks)
     reviews = await db.reviews.find({"provider_id": user_id}, {"_id": 0}).to_list(100)
     avg_rating = round(sum(r["rating"] for r in reviews) / len(reviews), 2) if reviews else 5.0
-    archived_tasks = await db.tasks.find({
-        "provider_id": user_id,
-        "status": {"$in": ["cancelled_by_client", "cancelled_by_tasker", "paid"]}
-    }, {"_id": 0}).sort("created_at", -1).to_list(50)
+    archived_tasks = [t for t in all_tasks if t.get("status") in ["cancelled_by_client", "cancelled_by_tasker", "paid"]]
+    archived_tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
     return {
         "user": {k: v for k, v in current_user.dict().items() if k != "password_hash"},
         "profile": profile,
         "stats": {
+            "total_tasks": len(all_tasks),
             "total_completed_tasks": total_completed,
             "total_earnings": round(total_earnings, 2),
             "average_rating": avg_rating,
@@ -5712,16 +5712,49 @@ async def client_create_booking(
         "notes": data.notes,
         "problem_description": data.problem_description,
         "problem_photos": data.problem_photos,
-        "status": BookingStatus.DRAFT,
+        "status": BookingStatus.ASSIGNED if data.provider_id else BookingStatus.DRAFT,
         "estimated_price": service.get("price"),
-        "total_price": service.get("price", 0),
+        "total_price": data.total_price or service.get("price", 0),
+        "provider_id": data.provider_id,
+        "provider_hourly_rate": data.provider_hourly_rate,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
     
     await db.bookings.insert_one(booking)
     booking.pop("_id", None)
-    
+
+    # If client pre-selected a provider — auto-create task and notify
+    if data.provider_id:
+        task_id = f"task_{uuid.uuid4().hex[:12]}"
+        task_doc = {
+            "task_id": task_id,
+            "booking_id": booking_id,
+            "client_id": current_user.user_id,
+            "provider_id": data.provider_id,
+            "title": service.get("name", "Service Request"),
+            "description": data.problem_description or service.get("description", ""),
+            "address": data.address,
+            "date": data.date,
+            "time": data.time,
+            "status": TaskStatus.ASSIGNED,
+            "provider_hourly_rate": data.provider_hourly_rate,
+            "total_price": data.total_price or service.get("price", 0),
+            "photos": data.problem_photos or [],
+            "scheduled_date": data.date,
+            "scheduled_time": data.time,
+            "created_at": datetime.now(timezone.utc),
+        }
+        await db.tasks.insert_one(task_doc)
+
+        # Send notification to provider
+        provider = await db.users.find_one({"user_id": data.provider_id}, {"_id": 0})
+        if provider and provider.get("telegram_chat_id"):
+            message = f"📋 *Нове завдання!*\n\nПослуга: {service.get('name', 'Послуга')}\nДата: {data.date} о {data.time}\nАдреса: {data.address}\nЦіна: ${data.total_price or service.get('price', 0)}"
+            await send_telegram_notification(provider["telegram_chat_id"], message)
+
+        booking["task_id"] = task_id
+
     return booking
 
 class ClientBookingUpdate(BaseModel):

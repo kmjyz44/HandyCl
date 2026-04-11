@@ -132,8 +132,8 @@ function ProviderHome({ stats, tasks, user, onRefresh }) {
             <p className="text-sm text-green-100">This month</p>
           </div>
           <div>
-            <p className="text-3xl font-bold">{stats?.stats?.total_completed_tasks || 0}</p>
-            <p className="text-sm text-green-100">Tasks done</p>
+            <p className="text-3xl font-bold">{stats?.stats?.total_tasks || 0}</p>
+            <p className="text-sm text-green-100">Tasks</p>
           </div>
         </div>
       </div>
