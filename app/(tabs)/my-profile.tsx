@@ -860,6 +860,15 @@ function ProviderProfile() {
         reviewCount: data.review_count || 0,
         activatedSkillsCount: storedSkills.filter((s: ProviderSkill) => s.status === 'active').length,
       }));
+      // Load provider stats (task count, earnings, etc.)
+      try {
+        const providerStats = await api.getMyProviderStats();
+        setStats(prev => ({
+          ...prev,
+          taskCount: providerStats.total_tasks || 0,
+          monthEarnings: providerStats.total_earnings || 0,
+        }));
+      } catch {}
     } catch {
       setProfile({ user_id: user?.user_id || '', skills: [], portfolio_photos: [], certifications: [], languages: [] });
     } finally {
@@ -896,8 +905,8 @@ function ProviderProfile() {
           const reader = new FileReader();
           reader.onload = async (ev: any) => {
             try {
-              const updatedUser = await api.updateProfile({ picture: ev.target.result });
-              setUser(updatedUser);
+              await api.updateProfilePhoto(ev.target.result);
+              setUser({ ...user!, picture: ev.target.result });
               Alert.alert('Успіх', 'Фото профілю оновлено');
             } catch (err: any) {
               Alert.alert('Помилка', err.message || 'Не вдалося оновити фото');
@@ -918,8 +927,8 @@ function ProviderProfile() {
       setUploadingPhoto(true);
       try {
         const picture = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        const updatedUser = await api.updateProfile({ picture });
-        setUser(updatedUser);
+        await api.updateProfilePhoto(picture);
+        setUser({ ...user!, picture });
         Alert.alert('Успіх', 'Фото профілю оновлено');
       } catch (e: any) { Alert.alert('Помилка', e.message || 'Не вдалося оновити фото'); }
       finally { setUploadingPhoto(false); }

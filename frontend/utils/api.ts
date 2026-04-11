@@ -260,6 +260,27 @@ class API {
       body: JSON.stringify(data),
     });
   }
+
+  updateProfilePhoto(picture: string) {
+    return this.request('/api/users/profile/photo', {
+      method: 'PUT',
+      body: JSON.stringify({ picture }),
+    });
+  }
+
+  // Client profile data
+  getPaymentMethods() {
+    return this.request('/api/users/payment-methods');
+  }
+
+  getSavedAddresses() {
+    return this.request('/api/users/addresses');
+  }
+
+  // Provider stats
+  getMyProviderStats() {
+    return this.request('/api/provider/me/stats');
+  }
 }
 
 export const api = new API();

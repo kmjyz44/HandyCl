@@ -1364,7 +1364,7 @@ function ProviderPerformanceContent({ stats }) {
           </div>
           <div>
             <p className="text-sm text-gray-500">Task count</p>
-            <p className="text-2xl font-bold text-gray-900">{stats?.stats?.total_completed_tasks || 0}</p>
+            <p className="text-2xl font-bold text-gray-900">{stats?.stats?.total_tasks || 0}</p>
           </div>
         </div>
       </div>
@@ -3702,20 +3702,37 @@ function ClientProfileContent({ user, onLogout }) {
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert(t('error_uploading') || 'Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert(t('error_uploading') || 'Max file size is 5MB');
+      return;
+    }
     
     setUploading(true);
     const reader = new FileReader();
     reader.onloadend = async () => {
       try {
-        await api.updateProfile({ picture: reader.result });
+        await api.updateProfilePhoto(reader.result);
         alert(t('photo_updated') || 'Profile photo updated!');
-        window.location.reload(); // Refresh to show new photo
+        window.location.reload();
       } catch (error) {
         console.error('Error uploading photo:', error);
         alert(t('error_uploading') || 'Error uploading photo');
       } finally {
         setUploading(false);
       }
+    };
+    reader.onerror = () => {
+      console.error('Error reading file');
+      alert(t('error_uploading') || 'Error reading file');
+      setUploading(false);
     };
     reader.readAsDataURL(file);
   };

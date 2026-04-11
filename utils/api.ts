@@ -606,4 +606,10 @@ export const api = {
     const res = await client.put(`/admin/tasks/${taskId}`, null, { params: data });
     return res.data;
   },
+
+  // Provider stats
+  getMyProviderStats: async () => {
+    const res = await client.get('/provider/me/stats');
+    return res.data;
+  },
 };
