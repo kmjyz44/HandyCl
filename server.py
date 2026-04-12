@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends, Body
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends, Query
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -17,43 +17,24 @@ from emergentintegrations.payments.stripe.checkout import StripeCheckout, Checko
 from telegram import Bot
 from telegram.constants import ParseMode
 import asyncio
-import math
 import json
-from bson import json_util, ObjectId
-from fastapi.encoders import ENCODERS_BY_TYPE
-import fastapi.encoders as _fastapi_encoders
-import fastapi.routing as _fastapi_routing
-
-# Register MongoDB ObjectId in ENCODERS_BY_TYPE (primary approach)
-ENCODERS_BY_TYPE[ObjectId] = str
-
-# Also monkey-patch jsonable_encoder as a fallback to handle ObjectId
-# This is needed because on Python 3.13 the ENCODERS_BY_TYPE check may not work
-_original_jsonable_encoder = _fastapi_encoders.jsonable_encoder
-
-def _safe_jsonable_encoder(obj, *args, **kwargs):
-    """Patched encoder that handles MongoDB ObjectId before passing to FastAPI encoder"""
-    if isinstance(obj, ObjectId):
-        return str(obj)
-    return _original_jsonable_encoder(obj, *args, **kwargs)
-
-_fastapi_encoders.jsonable_encoder = _safe_jsonable_encoder
-_fastapi_routing.jsonable_encoder = _safe_jsonable_encoder
+from bson import ObjectId
 
 ROOT_DIR = Path(__file__).parent
+
+
+def clean_bson(obj):
+    """Recursively convert BSON types (ObjectId, datetime) to JSON-serializable Python types."""
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: clean_bson(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [clean_bson(i) for i in obj]
+    return obj
 load_dotenv(ROOT_DIR / '.env')
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-api_router = APIRouter(prefix="/api")
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -71,6 +52,7 @@ class UserRole(str, Enum):
     CLIENT = "client"
     PROVIDER = "provider"
     ADMIN = "admin"
+    MODERATOR = "moderator"
 
 class BookingStatus(str, Enum):
     DRAFT = "draft"
@@ -381,11 +363,13 @@ class TaskUpdate(BaseModel):
     end_time: Optional[str] = None
 
 class TaskComplete(BaseModel):
-    actual_hours: float
+    actual_hours: Optional[float] = None   # auto-calculated if omitted
     expenses: Optional[float] = None
-    start_time: str
-    end_time: str
+    materials_cost: Optional[float] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     provider_comments: Optional[str] = None
+    provider_notes: Optional[str] = None   # alias for provider_comments
 
 class Message(BaseModel):
     message_id: str
@@ -397,9 +381,10 @@ class Message(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class MessageCreate(BaseModel):
-    to_user_id: str
-    text: str
+    to_user_id: Optional[str] = None
+    text: str = ""
     booking_id: Optional[str] = None
+    image_url: Optional[str] = None  # base64 data URI or URL
 
 class Review(BaseModel):
     review_id: str
@@ -408,12 +393,13 @@ class Review(BaseModel):
     provider_id: str
     rating: int  # 1-5
     comment: Optional[str] = None
+    tip_amount: Optional[float] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
 class ReviewCreate(BaseModel):
     booking_id: str
     rating: int
     comment: Optional[str] = None
+    tip_amount: Optional[float] = None
 
 class ReviewUpdate(BaseModel):
     rating: Optional[int] = None
@@ -444,6 +430,8 @@ class ExecutorProfile(BaseModel):
     service_radius_km: Optional[float] = None  # Service radius in km
     service_cities: List[str] = []
     service_zip_codes: List[str] = []
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     # Verification status
     verification_status: str = "not_submitted"  # not_submitted, pending, approved, rejected
     is_verified: bool = False
@@ -478,7 +466,8 @@ class ExecutorProfileCreate(BaseModel):
     service_radius_km: Optional[float] = None
     service_cities: List[str] = []
     service_zip_codes: List[str] = []
-
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 class ExecutorProfileUpdate(BaseModel):
     bio: Optional[str] = None
     skills: Optional[List[str]] = None
@@ -498,7 +487,8 @@ class ExecutorProfileUpdate(BaseModel):
     service_radius_km: Optional[float] = None
     service_cities: Optional[List[str]] = None
     service_zip_codes: Optional[List[str]] = None
-
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 # ==================== VERIFICATION & DOCUMENTS ====================
 
 class TaskerDocument(BaseModel):
@@ -702,7 +692,7 @@ class Settings(BaseModel):
     stripe_webhook_secret: Optional[str] = None
     telegram_bot_token: Optional[str] = None
     ai_enabled: bool = False
-    emergent_llm_key: Optional[str] = None
+    
     
     # ===== CLIENT SETTINGS =====
     allow_client_executor_selection: bool = True  # Client can choose tasker
@@ -1141,20 +1131,6 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
 
-def clean_doc(obj):
-    """Recursively convert MongoDB ObjectId and datetime objects to JSON-serializable types."""
-    from bson import ObjectId
-    if isinstance(obj, list):
-        return [clean_doc(item) for item in obj]
-    elif isinstance(obj, dict):
-        return {k: clean_doc(v) for k, v in obj.items()}
-    elif isinstance(obj, ObjectId):
-        return str(obj)
-    elif isinstance(obj, datetime):
-        return obj.isoformat()
-    else:
-        return obj
-
 async def get_current_user(authorization: Optional[str] = Header(None), request: Request = None) -> User:
     """Get current user from session token (cookie or header)"""
     session_token = None
@@ -1384,7 +1360,7 @@ async def get_conversations(current_user: User = Depends(get_current_user)):
                 "unread_count": conv["unread_count"]
             })
     
-    return result
+    return JSONResponse(content=clean_bson(result))
 
 @api_router.get("/conversations/{user_id}")
 async def get_conversation_messages(
@@ -1409,17 +1385,14 @@ async def get_conversation_messages(
     
     return messages
 
-# Aut@api_router.post("/auth/register")
-  
+# Authentication Routes
 @api_router.post("/auth/register")
-async def register(request: Request):
-    import json
-    try:
-        body = await request.body()
-        user_data_dict = json.loads(body)
-        user_data = UserRegister(**user_data_dict)
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+async def register(user_data: UserRegister):
+    # Check if user exists
+    existing_user = await db.users.find_one({"email": user_data.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
     # Create user
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     user = User(
@@ -1447,27 +1420,44 @@ async def register(request: Request):
     }
     await db.user_sessions.insert_one(session_data)
     
-    # Prepare user response without _id and password_hash
-    user_response = user.dict()
-    if "_id" in user_response:
-        del user_response["_id"]
-    if "password_hash" in user_response:
-        del user_response["password_hash"]
+    # Prepare user response - convert to dict and handle datetime serialization
+    user_response = {
+        "user_id": user.user_id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "phone": user.phone,
+        "picture": user.picture,
+        "google_id": user.google_id,
+        "telegram_chat_id": user.telegram_chat_id,
+        "fcm_token": user.fcm_token,
+        "is_blocked": user.is_blocked,
+        "hidden_from_clients": user.hidden_from_clients,
+        "blocked_until": user.blocked_until.isoformat() if user.blocked_until else None,
+        "blocked_reason": user.blocked_reason,
+        "blocked_by": user.blocked_by,
+        "address": user.address,
+        "latitude": user.latitude,
+        "longitude": user.longitude,
+        "stripe_customer_id": user.stripe_customer_id,
+        "stripe_connect_account_id": user.stripe_connect_account_id,
+        "payment_methods": user.payment_methods or [],
+        "saved_addresses": user.saved_addresses or [],
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+    }
     
     return {
         "user": user_response,
         "session_token": session_token
     }
 
-@api_router.post("/auth/login")  
-async def login(request: Request):
-    import json
-    try:
-        body = await request.body()
-        creds_dict = json.loads(body)
-        credentials = UserLogin(**creds_dict)
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+@api_router.post("/auth/login")
+async def login(credentials: UserLogin):
+    # Find user
+    user_doc = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
     # Verify password
     if not user_doc.get("password_hash") or not verify_password(credentials.password, user_doc["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -1494,7 +1484,7 @@ async def google_auth_redirect(request: Request):
     """Redirect to Emergent Google OAuth"""
     # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     redirect_url = f"{str(request.base_url)}auth-callback"
-    auth_url = f"https://auth.emergentagent.com/?redirect={redirect_url}"
+    
     return {"auth_url": auth_url}
 
 @api_router.post("/auth/session")
@@ -1502,7 +1492,7 @@ async def create_session_from_oauth(session_id: str = Header(..., alias="X-Sessi
     """Exchange OAuth session_id for user session"""
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+            
             headers={"X-Session-ID": session_id}
         )
         
@@ -1698,6 +1688,9 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
             "status": "assigned",
             "provider_hourly_rate": booking_data.provider_hourly_rate,
             "total_price": booking_data.total_price or price,
+            "photos": booking_data.problem_photos or [],
+            "scheduled_date": booking_data.date,
+            "scheduled_time": booking_data.time,
             "created_at": datetime.now(timezone.utc),
         }
         await db.tasks.insert_one(task_doc)
@@ -1706,44 +1699,40 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
 
 @api_router.get("/bookings")
 async def get_bookings(current_user: User = Depends(get_current_user)):
-    import asyncio
-
-    async def none_coro():
-        return None
-
     query = {}
     if current_user.role == UserRole.CLIENT:
         query["client_id"] = current_user.user_id
     elif current_user.role == UserRole.PROVIDER:
         query["provider_id"] = current_user.user_id
-    # Admin sees all bookings — limit to 20 most recent for speed
-    limit = 20 if current_user.role != UserRole.ADMIN else 50
+    # Admin sees all bookings
+    
+    bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    # Exclude heavy fields from list view to keep response small & fast
+    # (provider.picture alone can be ~170 KB base64 per booking)
+    _user_list_projection = {"_id": 0, "password_hash": 0, "picture": 0}
 
-    bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
-
-    # Enrich all bookings in PARALLEL using asyncio.gather (much faster than sequential)
-    async def enrich(booking):
-        tasks_coros = []
-        # Only look up service if service_id is present
+    # Enrich with service and user info
+    for booking in bookings:
+        # Only look up service if service_id is set
         if booking.get("service_id"):
-            tasks_coros.append(db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0}))
+            service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
+            booking["service"] = service
         else:
-            tasks_coros.append(none_coro())
-        tasks_coros.append(db.users.find_one({"user_id": booking["client_id"]}, {"_id": 0, "password_hash": 0}))
+            booking["service"] = None
+        client = await db.users.find_one({"user_id": booking["client_id"]}, _user_list_projection)
+        booking["client"] = client
         if booking.get("provider_id"):
-            tasks_coros.append(db.users.find_one({"user_id": booking["provider_id"]}, {"_id": 0, "password_hash": 0}))
-        else:
-            tasks_coros.append(none_coro())
-        tasks_coros.append(db.tasks.find_one({"booking_id": booking["booking_id"]}, {"_id": 0}))
-        results = await asyncio.gather(*tasks_coros, return_exceptions=True)
-        booking["service"] = results[0] if not isinstance(results[0], Exception) else None
-        booking["client"] = results[1] if not isinstance(results[1], Exception) else None
-        booking["provider"] = results[2] if not isinstance(results[2], Exception) else None
-        booking["task"] = results[3] if not isinstance(results[3], Exception) else None
-        return booking
-
-    enriched = await asyncio.gather(*[enrich(b) for b in bookings], return_exceptions=True)
-    return [b for b in enriched if not isinstance(b, Exception)]
+            provider = await db.users.find_one({"user_id": booking["provider_id"]}, _user_list_projection)
+            booking["provider"] = provider
+        # Get linked task (only essential fields for list view)
+        task = await db.tasks.find_one(
+            {"booking_id": booking["booking_id"]},
+            {"_id": 0, "task_id": 1, "status": 1, "title": 1, "provider_id": 1}
+        )
+        booking["task"] = task
+    
+    return JSONResponse(content=clean_bson(bookings))
 
 @api_router.get("/bookings/{booking_id}")
 async def get_booking(booking_id: str, current_user: User = Depends(get_current_user)):
@@ -1779,7 +1768,7 @@ async def get_booking(booking_id: str, current_user: User = Depends(get_current_
     task = await db.tasks.find_one({"booking_id": booking_id}, {"_id": 0})
     booking["task"] = task
     
-    return booking
+    return JSONResponse(content=clean_bson(booking))
 
 @api_router.put("/bookings/{booking_id}")
 async def update_booking(booking_id: str, status: BookingStatus, provider_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
@@ -1967,22 +1956,56 @@ async def get_tasks(current_user: User = Depends(get_current_user)):
 @api_router.get("/tasks/{task_id}")
 async def get_task(task_id: str, current_user: User = Depends(get_current_user)):
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
     
-    # Check access
-    if current_user.role == UserRole.PROVIDER and task["provider_id"] != current_user.user_id:
+    # Fallback 1: task was created from a booking — look up by booking_id in tasks
+    if not task:
+        task = await db.tasks.find_one({"booking_id": task_id}, {"_id": 0})
+    
+    # Fallback 2: look up in bookings collection (task_id may be a booking_id, not yet accepted)
+    if not task:
+        booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
+        if booking:
+            task = dict(booking)
+            task["task_id"] = booking["booking_id"]
+            task["scheduled_date"] = booking.get("date", "")
+            task["scheduled_time"] = booking.get("time", "")
+            task["estimated_price"] = booking.get("total_price") or booking.get("estimated_price")
+            task["photos"] = booking.get("problem_photos") or []
+            task["allow_offers"] = booking.get("allow_offers", True)
+            task["source"] = "booking"
+        else:
+            raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Check access — for open bookings (no provider yet), any provider can view
+    provider_id = task.get("provider_id")
+    if current_user.role == UserRole.PROVIDER and provider_id and provider_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     if current_user.role == UserRole.CLIENT and task.get("client_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Enrich with related info
+    if task.get("client_id"):
+        client_doc = await db.users.find_one({"user_id": task["client_id"]}, {"_id": 0, "password_hash": 0})
+        task["client"] = client_doc
     if task.get("provider_id"):
         provider = await db.users.find_one({"user_id": task["provider_id"]}, {"_id": 0, "password_hash": 0})
         task["provider"] = provider
-    if task.get("booking_id"):
+    if task.get("booking_id") and task.get("source") != "booking":
         booking = await db.bookings.find_one({"booking_id": task["booking_id"]}, {"_id": 0})
         task["booking"] = booking
+        # Enrich photos from booking if task doesn't have them
+        if booking:
+            booking_photos = booking.get("problem_photos") or booking.get("photos") or []
+            task_photos = task.get("photos") or []
+            # Merge photos, avoiding duplicates
+            all_photos = list(dict.fromkeys(task_photos + booking_photos))
+            task["photos"] = all_photos
+            task["problem_photos"] = all_photos
+            # Also enrich description if missing
+            if not task.get("description") and booking.get("problem_description"):
+                task["description"] = booking["problem_description"]
+            if not task.get("address") and booking.get("address"):
+                task["address"] = booking["address"]
     
     return task
 
@@ -2040,32 +2063,125 @@ async def update_task(
 
 @api_router.post("/tasks/{task_id}/accept")
 async def accept_task(task_id: str, current_user: User = Depends(get_current_user)):
-    """Executor accepts the task"""
+    """Executor accepts the task — works for both tasks collection and bookings collection"""
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can accept tasks")
     
+    # Try tasks collection first
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
-    if not task:
+    
+    if task:
+        # Classic task flow
+        if task.get("provider_id") and task["provider_id"] != current_user.user_id:
+            raise HTTPException(status_code=403, detail="This task is not assigned to you")
+        if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.POSTED, TaskStatus.OFFERING]:
+            raise HTTPException(status_code=400, detail="Task cannot be accepted in current status")
+        now = datetime.now(timezone.utc)
+        await db.tasks.update_one(
+            {"task_id": task_id},
+            {"$set": {
+                "status": TaskStatus.ASSIGNED,
+                "provider_id": current_user.user_id,
+                "accepted_at": now,
+                "updated_at": now
+            }}
+        )
+        if task.get("booking_id"):
+            await db.bookings.update_one(
+                {"booking_id": task["booking_id"]},
+                {"$set": {"status": BookingStatus.ASSIGNED, "provider_id": current_user.user_id, "accepted_at": now}}
+            )
+        return {"message": "Task accepted", "status": TaskStatus.ASSIGNED}
+    
+    # Fallback: try bookings collection
+    booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
+    if not booking:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if task["provider_id"] != current_user.user_id:
-        raise HTTPException(status_code=403, detail="This task is not assigned to you")
+    if booking.get("provider_id") and booking["provider_id"] != current_user.user_id:
+        raise HTTPException(status_code=403, detail="This booking is already taken")
     
-    if task["status"] != TaskStatus.ASSIGNED:
-        raise HTTPException(status_code=400, detail="Task cannot be accepted in current status")
+    if booking["status"] not in ["posted", "offering"]:
+        raise HTTPException(status_code=400, detail="Booking cannot be accepted in current status")
     
-    await db.tasks.update_one(
-        {"task_id": task_id},
-        {"$set": {"status": TaskStatus.ACCEPTED}}
+    # Assign provider to booking
+    now = datetime.now(timezone.utc)
+    await db.bookings.update_one(
+        {"booking_id": task_id},
+        {"$set": {
+            "status": BookingStatus.ASSIGNED,
+            "provider_id": current_user.user_id,
+            "accepted_at": now,
+            "updated_at": now
+        }}
     )
     
+    # Create a task entry so subsequent status changes work
+    new_task_id = f"task_{task_id[8:]}" if task_id.startswith("booking_") else f"task_{task_id}"
+    task_doc = {
+        "task_id": new_task_id,
+        "booking_id": task_id,
+        "client_id": booking.get("client_id"),
+        "provider_id": current_user.user_id,
+        "title": booking.get("title", ""),
+        "description": booking.get("description", ""),
+        "address": booking.get("address", ""),
+        "city": booking.get("city"),
+        "latitude": booking.get("latitude"),
+        "longitude": booking.get("longitude"),
+        "category": booking.get("category"),
+        "status": TaskStatus.ASSIGNED,
+        "scheduled_date": booking.get("date", ""),
+        "scheduled_time": booking.get("time", ""),
+        "estimated_price": booking.get("total_price") or booking.get("estimated_price"),
+        "total_price": booking.get("total_price", 0),
+        "photos": booking.get("problem_photos") or [],
+        "allow_offers": booking.get("allow_offers", True),
+        "accepted_at": now,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.tasks.insert_one(task_doc)
+    
+    return {"message": "Booking accepted", "status": BookingStatus.ASSIGNED, "task_id": new_task_id, "new_task_id": new_task_id}
+
+
+async def _resolve_task(task_id: str):
+    """Find task in tasks collection, falling back to booking_id lookup."""
+    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    if task:
+        return task
+    # Maybe task_id is actually a booking_id — look up the task created from it
+    task = await db.tasks.find_one({"booking_id": task_id}, {"_id": 0})
+    if task:
+        return task
+    return None
+
+@api_router.post("/tasks/{task_id}/on-the-way")
+async def task_on_the_way(task_id: str, current_user: User = Depends(get_current_user)):
+    """Executor marks they are on the way"""
+    if current_user.role != UserRole.PROVIDER:
+        raise HTTPException(status_code=403, detail="Only providers can update task status")
+    
+    task = await _resolve_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task["task_id"]
+    
+    if task.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="This task is not assigned to you")
+    
+    now = datetime.now(timezone.utc)
+    await db.tasks.update_one(
+        {"task_id": real_task_id},
+        {"$set": {"status": TaskStatus.ON_THE_WAY, "on_the_way_at": now, "updated_at": now}}
+    )
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
-            {"$set": {"status": BookingStatus.ACCEPTED}}
+            {"$set": {"status": BookingStatus.ON_THE_WAY, "on_the_way_at": now}}
         )
-    
-    return {"message": "Task accepted", "status": TaskStatus.ACCEPTED}
+    return {"message": "Status updated: On the way", "status": TaskStatus.ON_THE_WAY, "task_id": real_task_id}
 
 @api_router.post("/tasks/{task_id}/start")
 async def start_task(task_id: str, current_user: User = Depends(get_current_user)):
@@ -2073,31 +2189,34 @@ async def start_task(task_id: str, current_user: User = Depends(get_current_user
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can start tasks")
     
-    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    task = await _resolve_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task["task_id"]
     
-    if task["provider_id"] != current_user.user_id:
+    if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
-    if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.ACCEPTED]:
+    if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.ON_THE_WAY]:
         raise HTTPException(status_code=400, detail="Task cannot be started in current status")
     
+    now = datetime.now(timezone.utc)
     await db.tasks.update_one(
-        {"task_id": task_id},
+        {"task_id": real_task_id},
         {"$set": {
-            "status": TaskStatus.IN_PROGRESS,
-            "started_at": datetime.now(timezone.utc)
+            "status": TaskStatus.STARTED,
+            "started_at": now,
+            "updated_at": now
         }}
     )
     
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
-            {"$set": {"status": BookingStatus.IN_PROGRESS}}
+            {"$set": {"status": BookingStatus.STARTED, "started_at": now}}
         )
     
-    return {"message": "Task started", "status": TaskStatus.IN_PROGRESS}
+    return {"message": "Task started", "status": TaskStatus.STARTED, "task_id": real_task_id}
 
 @api_router.post("/tasks/{task_id}/complete")
 async def complete_task(
@@ -2109,73 +2228,195 @@ async def complete_task(
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can complete tasks")
     
-    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    task = await _resolve_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task["task_id"]
     
-    if task["provider_id"] != current_user.user_id:
+    if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
     
-    if task["status"] != TaskStatus.IN_PROGRESS:
-        raise HTTPException(status_code=400, detail="Task must be in progress to complete")
+    if task["status"] not in [TaskStatus.STARTED, TaskStatus.ON_THE_WAY, TaskStatus.ASSIGNED, TaskStatus.HOLD_PLACED, "on_the_way", "started", "assigned"]:
+        raise HTTPException(status_code=400, detail=f"Task must be in progress to complete (current: {task['status']})")
     
+    now = datetime.now(timezone.utc)
+    # Auto-calculate actual hours from started_at if not provided
+    actual_hours = completion.actual_hours
+    if not actual_hours and task.get("started_at"):
+        delta = now - task["started_at"].replace(tzinfo=timezone.utc) if task["started_at"].tzinfo is None else now - task["started_at"]
+        actual_hours = round(delta.total_seconds() / 3600, 2)
+    
+    notes = completion.provider_notes or completion.provider_comments
+    materials = completion.materials_cost or completion.expenses or 0.0
+
+    # Calculate final price: hours × hourly_rate + materials
+    hourly_rate = task.get("hourly_rate") or task.get("provider_hourly_rate") or 0.0
+    labor_cost = round((actual_hours or 0) * hourly_rate, 2)
+    final_price = round(labor_cost + materials, 2)
+    platform_fee = round(final_price * 0.15, 2)
+    provider_payout = round(final_price - platform_fee, 2)
+
     await db.tasks.update_one(
-        {"task_id": task_id},
+        {"task_id": real_task_id},
         {"$set": {
-            "status": TaskStatus.COMPLETED,
-            "completed_at": datetime.now(timezone.utc),
-            "actual_hours": completion.actual_hours,
-            "expenses": completion.expenses,
-            "start_time": completion.start_time,
-            "end_time": completion.end_time,
-            "provider_comments": completion.provider_comments
+            "status": TaskStatus.COMPLETED_PENDING_PAYMENT,
+            "completed_at": now,
+            "actual_hours": actual_hours,
+            "materials_cost": materials,
+            "expenses": materials,
+            "provider_notes": notes,
+            "provider_comments": notes,
+            "final_price": final_price,
+            "labor_cost": labor_cost,
+            "platform_fee": platform_fee,
+            "provider_payout": provider_payout,
+            "updated_at": now
         }}
     )
     
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
-            {"$set": {"status": BookingStatus.COMPLETED}}
+            {"$set": {
+                "status": BookingStatus.COMPLETED_PENDING_PAYMENT,
+                "completed_at": now,
+                "actual_hours": actual_hours
+            }}
         )
     
-    return {"message": "Task completed", "status": TaskStatus.COMPLETED}
+    # Send notification to client about payment required
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        notif = {
+            "notification_id": str(uuid.uuid4()),
+            "user_id": client_id,
+            "type": "payment_required",
+            "title": "Оплата за завдання",
+            "message": f"Виконавець завершив роботу. Відпрацьовано: {actual_hours} год. Будь ласка, оплатіть рахунок.",
+            "task_id": real_task_id,
+            "booking_id": task.get("booking_id"),
+            "is_read": False,
+            "created_at": now
+        }
+        await db.notifications.insert_one(notif)
+    
+    return {"message": "Task completed", "status": TaskStatus.COMPLETED_PENDING_PAYMENT, "actual_hours": actual_hours}
 
 @api_router.post("/tasks/{task_id}/decline")
 async def decline_task(
-    task_id: str, 
-    reason: Optional[str] = None,
+    task_id: str,
+    reason: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Executor declines the task"""
+    """Executor declines the task before or after accepting"""
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can decline tasks")
-    
+
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    
-    if task["provider_id"] != current_user.user_id:
+
+    # Allow decline if assigned to this provider OR if task is posted/offering (provider browsing)
+    if task.get("provider_id") and task["provider_id"] != current_user.user_id:
         raise HTTPException(status_code=403, detail="This task is not assigned to you")
-    
-    if task["status"] != TaskStatus.ASSIGNED:
-        raise HTTPException(status_code=400, detail="Only assigned tasks can be declined")
-    
+
+    declinable = [TaskStatus.ASSIGNED, TaskStatus.POSTED, TaskStatus.OFFERING, "hold_placed"]
+    if task["status"] not in declinable:
+        raise HTTPException(status_code=400, detail="Task cannot be declined at this stage")
+
+    if not reason or not reason.strip():
+        raise HTTPException(status_code=422, detail="Reason for declining is required")
+
     await db.tasks.update_one(
         {"task_id": task_id},
         {"$set": {
             "status": TaskStatus.DECLINED,
-            "provider_comments": reason
+            "provider_comments": reason.strip(),
+            "declined_at": datetime.utcnow().isoformat() + "Z",
+            "declined_by": current_user.user_id,
         }}
     )
-    
-    # Revert booking to posted status (waiting for new tasker)
+
+    # Set booking to declined so client sees the status, but allow re-posting
     if task.get("booking_id"):
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
-            {"$set": {"status": BookingStatus.POSTED, "provider_id": None}}
+            {"$set": {
+                "status": "declined",
+                "provider_id": None,
+                "decline_reason": reason.strip(),
+                "declined_at": datetime.utcnow().isoformat() + "Z",
+            }}
         )
-    
-    return {"message": "Task declined", "status": TaskStatus.DECLINED}
+
+    return {"message": "Task declined", "status": TaskStatus.DECLINED, "reason": reason.strip()}
+
+@api_router.get("/admin/tasks")
+async def admin_get_tasks(
+    status: Optional[str] = None,
+    provider_id: Optional[str] = None,
+    client_id: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    current_user: User = Depends(require_admin)
+):
+    """Admin: get all tasks with optional filters"""
+    query: dict = {}
+    if status:
+        query["status"] = status
+    if provider_id:
+        query["provider_id"] = provider_id
+    if client_id:
+        query["client_id"] = client_id
+    if category:
+        query["category"] = category
+    tasks = await db.tasks.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    # Enrich with client and provider names
+    for t in tasks:
+        if t.get("client_id"):
+            c = await db.users.find_one({"user_id": t["client_id"]}, {"_id": 0, "name": 1, "email": 1})
+            t["client"] = c or {}
+        if t.get("provider_id"):
+            p = await db.users.find_one({"user_id": t["provider_id"]}, {"_id": 0, "name": 1, "email": 1})
+            t["provider"] = p or {}
+    total = await db.tasks.count_documents(query)
+    return {"tasks": tasks, "total": total}
+
+@api_router.delete("/admin/tasks/{task_id}")
+async def admin_delete_task(
+    task_id: str,
+    current_user: User = Depends(require_admin)
+):
+    """Admin: delete a task"""
+    result = await db.tasks.delete_one({"task_id": task_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"message": "Task deleted"}
+
+@api_router.patch("/admin/tasks/{task_id}/status")
+async def admin_change_task_status(
+    task_id: str,
+    status: str,
+    actual_hours: Optional[float] = None,
+    final_price: Optional[float] = None,
+    current_user: User = Depends(require_admin)
+):
+    """Admin: change task status, hours, and price"""
+    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    upd: dict = {"status": status}
+    if actual_hours is not None:
+        upd["actual_hours"] = actual_hours
+        rate = task.get("hourly_rate", 0)
+        upd["labor_cost"] = round(actual_hours * rate, 2)
+        if final_price is None:
+            upd["final_price"] = round(actual_hours * rate + task.get("materials_cost", 0), 2)
+    if final_price is not None:
+        upd["final_price"] = final_price
+    await db.tasks.update_one({"task_id": task_id}, {"$set": upd})
+    return {"message": "Updated", "task_id": task_id, "status": status}
 
 @api_router.put("/admin/tasks/{task_id}")
 async def admin_update_task(
@@ -2269,36 +2510,243 @@ async def mark_message_read(message_id: str, current_user: User = Depends(get_cu
     )
     return {"message": "Message marked as read"}
 
+
+@api_router.get("/tasks/{task_id}/messages")
+async def get_task_messages(task_id: str, current_user: User = Depends(get_current_user)):
+    """Get all messages for a task (group chat)"""
+    # Resolve task to check access
+    task = await _resolve_task(task_id)
+    if not task:
+        # Try bookings
+        booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(status_code=404, detail="Task not found")
+        task = booking
+    
+    # Access check: client, provider, admin, moderator
+    is_admin = current_user.role in [UserRole.ADMIN, UserRole.MODERATOR]
+    is_client = task.get("client_id") == current_user.user_id
+    is_provider = task.get("provider_id") == current_user.user_id
+    if not (is_admin or is_client or is_provider):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    messages = await db.messages.find(
+        {"task_id": {"$in": [task_id, task.get("task_id", task_id)]}},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(500)
+    
+    # Enrich with sender info
+    for msg in messages:
+        sender = await db.users.find_one({"user_id": msg["from_user_id"]}, {"_id": 0, "password_hash": 0})
+        if sender:
+            msg["sender"] = {"name": sender.get("name",""), "role": sender.get("role",""), "picture": sender.get("picture")}
+    
+    return messages
+
+@api_router.post("/tasks/{task_id}/messages")
+async def send_task_message(task_id: str, body: MessageCreate, current_user: User = Depends(get_current_user)):
+    """Send a message in task group chat"""
+    task = await _resolve_task(task_id)
+    if not task:
+        booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(status_code=404, detail="Task not found")
+        task = booking
+    
+    real_task_id = task.get("task_id", task_id)
+    is_admin = current_user.role in [UserRole.ADMIN, UserRole.MODERATOR]
+    is_client = task.get("client_id") == current_user.user_id
+    is_provider = task.get("provider_id") == current_user.user_id
+    if not (is_admin or is_client or is_provider):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+    msg = {
+        "message_id": msg_id,
+        "task_id": real_task_id,
+        "from_user_id": current_user.user_id,
+        "text": body.text,
+        "image_url": body.image_url,
+        "read": False,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.messages.insert_one(msg)
+    msg.pop("_id", None)
+    
+    # Enrich with sender
+    msg["sender"] = {"name": current_user.name, "role": current_user.role, "picture": getattr(current_user, "picture", None)}
+    return msg
+
+@api_router.post("/tasks/{task_id}/pay")
+async def pay_task(task_id: str, payment_data: dict, current_user: User = Depends(get_current_user)):
+    """Client pays for completed task"""
+    task = await _resolve_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task["task_id"]
+    
+    if task.get("client_id") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only the client can pay")
+    
+    if task["status"] != TaskStatus.COMPLETED_PENDING_PAYMENT:
+        raise HTTPException(status_code=400, detail="Task is not awaiting payment")
+    
+    now = datetime.now(timezone.utc)
+    payment_method = payment_data.get("payment_method", "unknown")
+    
+    await db.tasks.update_one(
+        {"task_id": real_task_id},
+        {"$set": {
+            "status": TaskStatus.PAID,
+            "paid_at": now,
+            "payment_method": payment_method,
+            "updated_at": now
+        }}
+    )
+    if task.get("booking_id"):
+        await db.bookings.update_one(
+            {"booking_id": task["booking_id"]},
+            {"$set": {"status": BookingStatus.PAID, "paid_at": now, "payment_method": payment_method}}
+        )
+    
+    return {"message": "Payment confirmed", "status": "paid", "paid_at": now.isoformat()}
+
+
+# ─── Moderator Management ──────────────────────────────────────────────────────
+AVAILABLE_MODULES = [
+    "tasks", "bookings", "users", "payments", "reviews",
+    "messages", "services", "analytics", "settings"
+]
+
+@api_router.post("/admin/users/{user_id}/set-moderator")
+async def set_moderator(user_id: str, current_user: User = Depends(get_current_user)):
+    """Admin promotes a user to moderator role"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin can manage moderators")
+    
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "role": UserRole.MODERATOR,
+            "moderator_modules": AVAILABLE_MODULES,  # full access by default
+            "promoted_to_moderator_at": datetime.now(timezone.utc),
+            "promoted_by": current_user.user_id
+        }}
+    )
+    return {"message": "User promoted to moderator", "modules": AVAILABLE_MODULES}
+
+@api_router.post("/admin/users/{user_id}/remove-moderator")
+async def remove_moderator(user_id: str, current_user: User = Depends(get_current_user)):
+    """Admin removes moderator role"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin can manage moderators")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"role": UserRole.CLIENT, "moderator_modules": []}}
+    )
+    return {"message": "Moderator role removed"}
+
+@api_router.put("/admin/users/{user_id}/moderator-modules")
+async def update_moderator_modules(
+    user_id: str,
+    modules: List[str],
+    current_user: User = Depends(get_current_user)
+):
+    """Admin updates which modules a moderator can access"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin can manage moderators")
+    
+    invalid = [m for m in modules if m not in AVAILABLE_MODULES]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Invalid modules: {invalid}")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"moderator_modules": modules, "updated_at": datetime.now(timezone.utc)}}
+    )
+    return {"message": "Modules updated", "modules": modules}
+
+@api_router.get("/admin/moderators")
+async def get_moderators(current_user: User = Depends(get_current_user)):
+    """Get all moderators with their module access"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin can view moderators")
+    
+    mods = await db.users.find(
+        {"role": UserRole.MODERATOR},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(100)
+    return mods
+
+@api_router.get("/admin/available-modules")
+async def get_available_modules(current_user: User = Depends(get_current_user)):
+    """Get list of all available modules"""
+    if current_user.role not in [UserRole.ADMIN, UserRole.MODERATOR]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return {"modules": AVAILABLE_MODULES}
+
 # Review Routes
 @api_router.post("/reviews")
 async def create_review(review_data: ReviewCreate, current_user: User = Depends(get_current_user)):
-    # Get booking
+    # Get booking — try by booking_id first, then by task_id (task may have been created from booking)
     booking = await db.bookings.find_one({"booking_id": review_data.booking_id}, {"_id": 0})
     if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
+        # Maybe review_data.booking_id is actually a task_id — look up the task and get its booking_id
+        task_doc = await db.tasks.find_one({"task_id": review_data.booking_id}, {"_id": 0})
+        if task_doc and task_doc.get("booking_id"):
+            booking = await db.bookings.find_one({"booking_id": task_doc["booking_id"]}, {"_id": 0})
+        if not booking:
+            # Last resort: treat task as a virtual booking
+            if task_doc:
+                booking = task_doc
+                booking["booking_id"] = task_doc["task_id"]
+            else:
+                raise HTTPException(status_code=404, detail="Booking not found")
     
-    if booking["client_id"] != current_user.user_id:
+    if booking.get("client_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Only the client can review")
     
     if not booking.get("provider_id"):
         raise HTTPException(status_code=400, detail="No provider assigned to this booking")
     
     # Check if already reviewed
-    existing_review = await db.reviews.find_one({"booking_id": review_data.booking_id})
+    existing_review = await db.reviews.find_one({"booking_id": booking["booking_id"]})
     if existing_review:
         raise HTTPException(status_code=400, detail="Booking already reviewed")
     
     review_id = f"review_{uuid.uuid4().hex[:12]}"
     review = Review(
         review_id=review_id,
-        booking_id=review_data.booking_id,
+        booking_id=booking["booking_id"],
         client_id=current_user.user_id,
         provider_id=booking["provider_id"],
         rating=review_data.rating,
-        comment=review_data.comment
+        comment=review_data.comment,
+        tip_amount=review_data.tip_amount
     )
     
     await db.reviews.insert_one(review.dict())
+    
+    # If tip provided, update task and booking with tip_amount
+    if review_data.tip_amount and review_data.tip_amount > 0:
+        now = datetime.now(timezone.utc)
+        await db.bookings.update_one(
+            {"booking_id": booking["booking_id"]},
+            {"$set": {"tip_amount": review_data.tip_amount, "updated_at": now}}
+        )
+        # Also update the linked task if any
+        task_to_update = await db.tasks.find_one({"booking_id": booking["booking_id"]}, {"_id": 0})
+        if task_to_update:
+            await db.tasks.update_one(
+                {"task_id": task_to_update["task_id"]},
+                {"$set": {"tip_amount": review_data.tip_amount, "updated_at": now}}
+            )
+    
     return review.dict()
 
 @api_router.get("/reviews/provider/{provider_id}")
@@ -2393,8 +2841,16 @@ async def get_executor_profile(user_id: str):
     reviews = await db.reviews.find({"provider_id": user_id}, {"_id": 0}).to_list(100)
     avg_rating = sum(r["rating"] for r in reviews) / len(reviews) if reviews else 0
     
+    # Merge user lat/lng into profile if profile doesn't have them
+    merged_lat = profile.get("latitude") or (user.get("latitude") if user else None)
+    merged_lng = profile.get("longitude") or (user.get("longitude") if user else None)
+    merged_radius = profile.get("service_radius_km")
+    
     return {
         **profile,
+        "latitude": merged_lat,
+        "longitude": merged_lng,
+        "service_radius_km": merged_radius,
         "user": user,
         "average_rating": round(avg_rating, 2),
         "total_reviews": len(reviews)
@@ -2518,25 +2974,21 @@ async def get_all_executors(current_user: User = Depends(get_current_user)):
         if executor.get("average_rating"):
             executor["average_rating"] = round(executor["average_rating"], 2)
     
-    return result
+    return JSONResponse(content=clean_bson(result))
 
 
 @api_router.get("/executors/by-service")
 async def get_executors_by_service(
     service_name: Optional[str] = None,
-    category: Optional[str] = None,
     city: Optional[str] = None,
     lat: Optional[float] = None,
     lng: Optional[float] = None,
     current_user: User = Depends(get_current_user)
 ):
     """Get executors filtered by service/skill AND location with admin-controlled listing settings"""
-    print(f"[by-service] START: category={category}, city={city}", flush=True)
     settings_doc = await db.settings.find_one({"setting_id": "app_settings"}, {"_id": 0})
-    print(f"[by-service] settings_doc type: {type(settings_doc)}", flush=True)
     settings = Settings(**settings_doc) if settings_doc else Settings()
     commission_percent = settings.admin_commission_percentage if settings.apply_admin_commission else 0.0
-    print(f"[by-service] commission_percent: {commission_percent}", flush=True)
 
     pipeline = [
         # Only active, not blocked, not hidden by admin
@@ -2562,6 +3014,15 @@ async def get_executors_by_service(
             ]}}}],
             "as": "completed_tasks"
         }},
+        {"$lookup": {
+            "from": "availability_slots",
+            "let": {"uid": "$user_id"},
+            "pipeline": [{"$match": {"$expr": {"$and": [
+                {"$eq": ["$user_id", "$$uid"]},
+                {"$eq": ["$is_active", True]}
+            ]}}}],
+            "as": "availability_slots"
+        }},
         {"$addFields": {
             "profile": {"$arrayElemAt": ["$profile", 0]},
             "total_reviews": {"$size": "$reviews"},
@@ -2574,50 +3035,17 @@ async def get_executors_by_service(
             },
             "completed_tasks_count": {"$size": "$completed_tasks"}
         }},
-        {"$project": {"_id": 0, "password_hash": 0, "reviews": 0, "completed_tasks": 0, "profile._id": 0}}
+        {"$project": {"_id": 0, "password_hash": 0, "reviews": 0, "completed_tasks": 0, "profile._id": 0, "availability_slots._id": 0}}
     ]
 
     result = await db.users.aggregate(pipeline).to_list(1000)
-
-    # ── Pre-loop: geocode client city/address ONCE ──────────────────────
-    # Geocode client location once before the loop (not per-executor)
-    client_lat_global = lat
-    client_lng_global = lng
-    if (city or lat is None) and (client_lat_global is None or client_lng_global is None):
-        geocode_query = city or ""
-        if geocode_query:
-            try:
-                async with httpx.AsyncClient() as _hc:
-                    _geo = (await _hc.get(
-                        "https://nominatim.openstreetmap.org/search",
-                        params={"format": "json", "q": geocode_query, "limit": "1"},
-                        headers={"User-Agent": "HandyHub/1.0"},
-                        timeout=5.0
-                    )).json()
-                if _geo:
-                    client_lat_global = float(_geo[0]["lat"])
-                    client_lng_global = float(_geo[0]["lon"])
-            except Exception:
-                pass
 
     filtered = []
     for executor in result:
         profile = executor.get("profile") or {}
 
-        # ── Skill filter ────────────────────────────────────────────────────────
-        # Category-to-skills mapping (same as frontend SKILL_CATEGORIES)
-        CATEGORY_SKILLS: dict = {
-            'assembly':         ['збірка', 'ikea', 'меблі', 'полиць', 'телевізор', 'монтаж'],
-            'cleaning':         ['прибирання', 'прибирання будинку', 'прибирання офісу', 'миття', 'чищення', 'cleaning', 'clean'],
-            'home_improvements': ['ремонт', 'фарбування', 'плитка', 'підлога', 'гіпсокартон', 'сантехніка', 'електрика', 'plumbing', 'electrical', 'встановлення'],
-            'moving':           ['переїзд', 'доставка', 'пакування', 'перенесення', 'вивіз'],
-            'outdoor':          ['газон', 'сніг', 'садівництво', 'огорожа', 'догляд за газоном', 'прибирання снігу', 'lawn', 'snow'],
-            'personal':         ['доручення', 'шопінг', 'тварини', 'літні', 'errand', 'shopping'],
-            'it_tech':          ['компютер', 'мережа', 'телефон', 'tv', 'дані', 'it', 'tech', 'налаштування'],
-            'events':           ['захід', 'фото', 'бармен', 'кухня'],
-            'other':            ['майстер', 'репетитор', 'переклад', 'водій'],
-        }
-        if service_name or category:
+        # ── Skill filter ──────────────────────────────────────────────
+        if service_name:
             skills = profile.get("skills") or []
             # skills can be list of strings or list of dicts
             skill_names = []
@@ -2626,58 +3054,19 @@ async def get_executors_by_service(
                     skill_names.append((s.get("label") or s.get("id") or "").lower())
                 else:
                     skill_names.append(str(s).lower())
-            skill_match = False
-            # 1. Match by specific skill name
-            if service_name:
-                svc_lower = service_name.lower()
-                if any(svc_lower in s or s in svc_lower for s in skill_names):
-                    skill_match = True
-            # 2. Match by category keywords
-            if not skill_match and category:
-                cat_keywords = CATEGORY_SKILLS.get(category, [])
-                for kw in cat_keywords:
-                    if any(kw in s for s in skill_names):
-                        skill_match = True
-                        break
-            # 3. Also check if executor's skills contain any keyword from the category
-            if not skill_match and service_name:
-                # Try to find which category the service_name belongs to
-                for cat_id, keywords in CATEGORY_SKILLS.items():
-                    if any(kw in service_name.lower() for kw in keywords):
-                        cat_keywords = keywords
-                        if any(kw in s for s in skill_names for kw in cat_keywords):
-                            skill_match = True
-                            break
-            if not skill_match:
+            svc_lower = service_name.lower()
+            if not any(svc_lower in s or s in svc_lower for s in skill_names):
                 continue
 
-        # ── Location filter ─────────────────────────────────────────────────────
+        # ── Location filter ───────────────────────────────────────────
         # Only filter if client provided a city or coordinates
-        if city or (client_lat_global is not None and client_lng_global is not None):
+        if city or (lat is not None and lng is not None):
             executor_cities = [c.lower() for c in (profile.get("service_cities") or [])]
             executor_zones  = [z.lower() for z in (profile.get("service_zones") or [])]
-            exec_lat  = profile.get("latitude")
-            exec_lng  = profile.get("longitude")
-            exec_radius_km = profile.get("service_radius_km") or 0
-
-            # If executor has no coordinates but has a city/zone — geocode executor address
-            if (exec_lat is None or exec_lng is None) and (executor_cities or executor_zones):
-                exec_geocode_query = executor_cities[0] if executor_cities else executor_zones[0]
-                try:
-                    async with httpx.AsyncClient() as _hc:
-                        _egeo = (await _hc.get(
-                            "https://nominatim.openstreetmap.org/search",
-                            params={"format": "json", "q": exec_geocode_query, "limit": "1"},
-                            headers={"User-Agent": "HandyHub/1.0"},
-                            timeout=5.0
-                        )).json()
-                    if _egeo:
-                        exec_lat = float(_egeo[0]["lat"])
-                        exec_lng = float(_egeo[0]["lon"])
-                        if not exec_radius_km:
-                            exec_radius_km = 30  # default 30 km if only city specified
-                except Exception:
-                    pass
+            # Also try user-level lat/lng as fallback (saved via map)
+            exec_lat  = profile.get("latitude") or executor.get("latitude")
+            exec_lng  = profile.get("longitude") or executor.get("longitude")
+            exec_radius_km = profile.get("service_radius_km") or executor.get("service_radius_km") or 0
 
             location_ok = False
 
@@ -2689,19 +3078,31 @@ async def get_executors_by_service(
                     if city_lower in ec or ec in city_lower:
                         location_ok = True
                         break
+                # Also check user-level city field
+                if not location_ok:
+                    user_city = (executor.get("city") or "").lower().strip()
+                    if user_city and (city_lower in user_city or user_city in city_lower):
+                        location_ok = True
 
-            # 2. Check radius using pre-geocoded client coordinates
-            if not location_ok and client_lat_global is not None and client_lng_global is not None and exec_lat and exec_lng and exec_radius_km > 0:
-                dlat = math.radians(client_lat_global - exec_lat)
-                dlng = math.radians(client_lng_global - exec_lng)
-                a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(client_lat_global)) * math.sin(dlng/2)**2
-                distance_km = 6371 * 2 * math.asin(math.sqrt(a))
-                if distance_km <= exec_radius_km:
-                    location_ok = True
+            # 2. Check radius if executor has set coordinates and radius
+            import math
+            if not location_ok and exec_lat and exec_lng and exec_radius_km > 0:
+                # If client provided coordinates, use them; otherwise geocode city
+                client_lat, client_lng = lat, lng
+                if client_lat is None and city:
+                    # We can't geocode here, but we already checked city names above
+                    pass
+                if client_lat is not None and client_lng is not None:
+                    dlat = math.radians(client_lat - exec_lat)
+                    dlng = math.radians(client_lng - exec_lng)
+                    a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(client_lat)) * math.sin(dlng/2)**2
+                    distance_km = 6371 * 2 * math.asin(math.sqrt(a))
+                    if distance_km <= exec_radius_km:
+                        location_ok = True
 
-            # 3. If executor has NO location set at all — skip them (they haven't configured service area)
-            # NOTE: We do NOT include executors without a service area — they must configure their zone
-            # to appear in search results for specific cities.
+            # 3. If executor has NO location set at all — include them (they haven't configured yet)
+            if not location_ok and not executor_cities and not executor_zones and not exec_lat:
+                location_ok = True
 
             if not location_ok:
                 continue
@@ -2761,20 +3162,7 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
-    # Use clean_doc to recursively convert all MongoDB BSON types (ObjectId, datetime)
-    # to plain Python types (str, ISO string) before returning to FastAPI
-    # This guarantees FastAPI's jsonable_encoder won't encounter any BSON types
-    print(f"[by-service] Returning {len(filtered)} executors via clean_doc", flush=True)
-    try:
-        cleaned = clean_doc(filtered)
-        # Use json.dumps + json.loads to ensure ALL types are JSON-serializable
-        # This is the most robust way to handle any remaining BSON types
-        return JSONResponse(content=json.loads(json.dumps(cleaned)))
-    except Exception as _e:
-        import traceback as _tb
-        print(f"[by-service] SERIALIZATION ERROR: {_e}", flush=True)
-        _tb.print_exc()
-        raise HTTPException(status_code=500, detail=f"Serialization error: {str(_e)}")
+    return JSONResponse(content=clean_bson(filtered))
 
 
 # Availability Calendar Routes
@@ -3046,7 +3434,7 @@ async def get_available_executors(
     # Sort by rating descending
     filtered.sort(key=lambda x: x.get("average_rating", 0), reverse=True)
     
-    return {"executors": filtered, "total": len(filtered)}
+    return JSONResponse(content=clean_bson({"executors": filtered, "total": len(filtered)}))
 
 # ==================== TASKER MATCHING & SCORING ALGORITHM ====================
 
@@ -3352,7 +3740,7 @@ async def search_taskers(
     # Limit
     results = results[:limit]
     
-    return {
+    return JSONResponse(content=clean_bson({
         "taskers": results,
         "total": len(results),
         "filters_applied": {
@@ -3361,7 +3749,7 @@ async def search_taskers(
             "verified_only": verified_only,
             "min_rating": min_rating
         }
-    }
+    }))
 
 # Admin Routes
 @api_router.get("/admin/dashboard")
@@ -3524,14 +3912,14 @@ async def get_all_executors_admin(current_user: User = Depends(require_admin)):
             },
             "completed_tasks_count": {"$size": "$completed_tasks"}
         }},
-        {"$project": {"_id": 0, "password_hash": 0, "reviews": 0, "completed_tasks": 0, "profile._id": 0}},
+        {"$project": {"_id": 0, "password_hash": 0, "reviews": 0, "completed_tasks": 0, "profile._id": 0, "availability_slots._id": 0}},
         {"$sort": {"created_at": -1}}
     ]
     result = await db.users.aggregate(pipeline).to_list(1000)
     for r in result:
         if r.get("average_rating"):
             r["average_rating"] = round(r["average_rating"], 2)
-    return result
+    return JSONResponse(content=clean_bson(result))
 
 
 # Admin Settings Routes
@@ -4085,7 +4473,9 @@ async def get_escrow_status(
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
+    full_name: Optional[str] = None  # alias for name
     phone: Optional[str] = None
+    address: Optional[str] = None
     telegram_chat_id: Optional[str] = None
     picture: Optional[str] = None
 
@@ -4096,10 +4486,15 @@ async def update_profile(
     current_user: User = Depends(get_current_user)
 ):
     update_data = {}
-    if profile_data.name:
-        update_data["name"] = profile_data.name
+    # Accept both 'name' and 'full_name'
+    new_name = profile_data.full_name or profile_data.name
+    if new_name:
+        update_data["name"] = new_name
+        update_data["full_name"] = new_name
     if profile_data.phone:
         update_data["phone"] = profile_data.phone
+    if profile_data.address is not None:
+        update_data["address"] = profile_data.address
     if profile_data.telegram_chat_id:
         update_data["telegram_chat_id"] = profile_data.telegram_chat_id
     if profile_data.picture is not None:
@@ -4525,7 +4920,7 @@ async def get_my_earnings(current_user: User = Depends(get_current_user)):
     earnings["pending_amount"] = pending_amount
     earnings["_id"] = None
     
-    return earnings
+    return JSONResponse(content=clean_bson(earnings))
 
 @api_router.get("/earnings/history")
 async def get_earnings_history(
@@ -4631,26 +5026,52 @@ async def get_available_tasks(
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only taskers can view available tasks")
     
-    # Get tasker profile for skills matching (reserved for future use)
-    _profile = await db.executor_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
-    
-    query = {"status": {"$in": [TaskStatus.POSTED, TaskStatus.OFFERING]}}
+    result = []
+
+    # 1. Tasks from tasks collection - only truly open tasks (posted/offering with no provider)
+    task_query: dict = {
+        "status": {"$in": ["posted", "offering"]},
+        "$or": [{"provider_id": {"$exists": False}}, {"provider_id": None}, {"provider_id": ""}]
+    }
     if category:
-        query["category"] = category
-    
-    tasks = await db.tasks.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
-    
-    for task in tasks:
-        client = await db.users.find_one({"user_id": task["client_id"]}, {"_id": 0, "password_hash": 0})
+        task_query["category"] = category
+    tasks_docs = await db.tasks.find(task_query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for task in tasks_docs:
+        client = await db.users.find_one({"user_id": task.get("client_id")}, {"_id": 0, "password_hash": 0})
         task["client"] = client
-        # Check if tasker already sent offer
         existing_offer = await db.offers.find_one({
-            "booking_id": task["task_id"],
+            "booking_id": task.get("task_id"),
             "tasker_id": current_user.user_id
         })
         task["my_offer"] = existing_offer
-    
-    return tasks
+        task["source"] = "task"
+        result.append(task)
+
+    # 2. Bookings from bookings collection with status posted/offering (no provider assigned yet)
+    booking_query: dict = {
+        "status": {"$in": ["posted", "offering"]},
+        "provider_id": {"$in": [None, ""]}
+    }
+    if category:
+        booking_query["category"] = category
+    bookings_docs = await db.bookings.find(booking_query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    existing_task_booking_ids = {t.get("booking_id") for t in tasks_docs}
+    for bk in bookings_docs:
+        if bk.get("booking_id") in existing_task_booking_ids:
+            continue  # already included via tasks collection
+        client = await db.users.find_one({"user_id": bk.get("client_id")}, {"_id": 0, "password_hash": 0})
+        bk["client"] = client
+        bk["task_id"] = bk["booking_id"]  # alias so frontend works
+        bk["scheduled_date"] = bk.get("date", "")
+        bk["scheduled_time"] = bk.get("time", "")
+        bk["estimated_price"] = bk.get("total_price") or bk.get("estimated_price")
+        bk["allow_offers"] = bk.get("allow_offers", True)
+        bk["photos"] = bk.get("problem_photos") or []
+        bk["my_offer"] = None
+        bk["source"] = "booking"
+        result.append(bk)
+
+    return result
 
 @api_router.post("/tasker/tasks/{task_id}/accept")
 async def tasker_accept_task(task_id: str, current_user: User = Depends(get_current_user)):
@@ -4668,12 +5089,17 @@ async def tasker_accept_task(task_id: str, current_user: User = Depends(get_curr
     if task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Task is not assigned to you")
     
+    now = datetime.now(timezone.utc)
     await db.tasks.update_one(
         {"task_id": task_id},
-        {"$set": {"status": TaskStatus.HOLD_PLACED, "updated_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": TaskStatus.ASSIGNED, "accepted_at": now, "updated_at": now}}
     )
-    
-    return {"message": "Task accepted, waiting for payment hold"}
+    if task.get("booking_id"):
+        await db.bookings.update_one(
+            {"booking_id": task["booking_id"]},
+            {"$set": {"status": BookingStatus.ASSIGNED, "accepted_at": now}}
+        )
+    return {"message": "Task accepted"}
 
 @api_router.post("/tasker/tasks/{task_id}/on-the-way")
 async def tasker_on_the_way(task_id: str, current_user: User = Depends(get_current_user)):
@@ -4685,11 +5111,16 @@ async def tasker_on_the_way(task_id: str, current_user: User = Depends(get_curre
     if not task or task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
+    now = datetime.now(timezone.utc)
     await db.tasks.update_one(
         {"task_id": task_id},
-        {"$set": {"status": TaskStatus.ON_THE_WAY, "updated_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": TaskStatus.ON_THE_WAY, "on_the_way_at": now, "updated_at": now}}
     )
-    
+    if task.get("booking_id"):
+        await db.bookings.update_one(
+            {"booking_id": task["booking_id"]},
+            {"$set": {"status": BookingStatus.ON_THE_WAY, "on_the_way_at": now}}
+        )
     return {"message": "Status updated: On the way"}
 
 @api_router.post("/tasker/tasks/{task_id}/start")
@@ -4702,18 +5133,24 @@ async def tasker_start_task(task_id: str, current_user: User = Depends(get_curre
     if not task or task.get("provider_id") != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    if task["status"] not in [TaskStatus.HOLD_PLACED, TaskStatus.ON_THE_WAY]:
+    if task["status"] not in [TaskStatus.HOLD_PLACED, TaskStatus.ON_THE_WAY, TaskStatus.ASSIGNED]:
         raise HTTPException(status_code=400, detail="Cannot start task in current status")
     
+    now = datetime.now(timezone.utc)
     await db.tasks.update_one(
         {"task_id": task_id},
         {"$set": {
             "status": TaskStatus.STARTED,
-            "actual_start_time": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc)
+            "started_at": now,
+            "actual_start_time": now,
+            "updated_at": now
         }}
     )
-    
+    if task.get("booking_id"):
+        await db.bookings.update_one(
+            {"booking_id": task["booking_id"]},
+            {"$set": {"status": BookingStatus.STARTED, "started_at": now}}
+        )
     return {"message": "Task started"}
 
 @api_router.post("/tasker/tasks/{task_id}/complete")
@@ -4974,6 +5411,37 @@ async def add_gallery_item(
     return updated_service
 
 # ==================== PROVIDER STATISTICS & PROFILE ====================
+# IMPORTANT: /provider/me/stats MUST be defined BEFORE /provider/{user_id}/stats
+# so FastAPI does not capture "me" as a user_id path parameter.
+
+@api_router.get("/provider/me/stats")
+async def get_my_provider_stats(current_user: User = Depends(get_current_user)):
+    """Get current provider's own statistics"""
+    user_id = current_user.user_id
+    profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
+    all_tasks = await db.tasks.find({
+        "provider_id": user_id
+    }, {"_id": 0}).to_list(1000)
+    completed_tasks = [t for t in all_tasks if t.get("status") in ["completed_pending_payment", "paid"]]
+    total_completed = len(completed_tasks)
+    total_earnings = sum(t.get("final_price", 0) or 0 for t in completed_tasks)
+    reviews = await db.reviews.find({"provider_id": user_id}, {"_id": 0}).to_list(100)
+    avg_rating = round(sum(r["rating"] for r in reviews) / len(reviews), 2) if reviews else 5.0
+    archived_tasks = [t for t in all_tasks if t.get("status") in ["cancelled_by_client", "cancelled_by_tasker", "paid"]]
+    archived_tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+    return JSONResponse(content=clean_bson({
+        "user": {k: v for k, v in current_user.dict().items() if k != "password_hash"},
+        "profile": profile,
+        "stats": {
+            "total_tasks": len(all_tasks),
+            "total_completed_tasks": total_completed,
+            "total_earnings": round(total_earnings, 2),
+            "average_rating": avg_rating,
+            "total_reviews": len(reviews)
+        },
+        "reviews": reviews[:10],
+        "archived_tasks": archived_tasks[:20]
+    }))
 
 @api_router.get("/provider/{user_id}/stats")
 async def get_provider_stats(user_id: str):
@@ -4986,11 +5454,13 @@ async def get_provider_stats(user_id: str):
     # Get profile
     profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
     
-    # Get completed tasks (COMPLETED_PENDING_PAYMENT and PAID are final states)
-    completed_tasks = await db.tasks.find({
-        "provider_id": user_id,
-        "status": {"$in": [TaskStatus.COMPLETED_PENDING_PAYMENT, TaskStatus.PAID]}
+    # Get all tasks for this provider
+    all_tasks = await db.tasks.find({
+        "provider_id": user_id
     }, {"_id": 0}).to_list(1000)
+    
+    # Filter completed tasks
+    completed_tasks = [t for t in all_tasks if t.get("status") in [TaskStatus.COMPLETED_PENDING_PAYMENT, TaskStatus.PAID]]
     
     # Calculate stats
     total_completed = len(completed_tasks)
@@ -5002,56 +5472,23 @@ async def get_provider_stats(user_id: str):
     avg_rating = sum(r["rating"] for r in reviews) / len(reviews) if reviews else 0
     
     # Get archived tasks (cancelled or old completed)
-    archived_tasks = await db.tasks.find({
-        "provider_id": user_id,
-        "status": {"$in": [TaskStatus.CANCELLED_BY_CLIENT, TaskStatus.CANCELLED_BY_TASKER, TaskStatus.PAID]}
-    }, {"_id": 0}).sort("created_at", -1).to_list(50)
+    archived_tasks = [t for t in all_tasks if t.get("status") in [TaskStatus.CANCELLED_BY_CLIENT, TaskStatus.CANCELLED_BY_TASKER, TaskStatus.PAID]]
+    archived_tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
     
-    return {
+    return JSONResponse(content=clean_bson({
         "user": user,
         "profile": profile,
         "stats": {
+            "total_tasks": len(all_tasks),
             "total_completed_tasks": total_completed,
             "total_hours_worked": round(total_hours, 1),
             "total_earnings": round(total_earnings, 2),
             "average_rating": round(avg_rating, 2),
             "total_reviews": len(reviews)
         },
-        "reviews": reviews[:10],  # Last 10 reviews
-        "archived_tasks": archived_tasks[:20]  # Last 20 archived
-    }
-
-# ==================== PROVIDER SELF STATS ====================
-
-@api_router.get("/provider/me/stats")
-async def get_my_provider_stats(current_user: User = Depends(get_current_user)):
-    """Get current provider's own statistics"""
-    user_id = current_user.user_id
-    profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
-    completed_tasks = await db.tasks.find({
-        "provider_id": user_id,
-        "status": {"$in": ["completed_pending_payment", "paid"]}
-    }, {"_id": 0}).to_list(1000)
-    total_completed = len(completed_tasks)
-    total_earnings = sum(t.get("final_price", 0) or 0 for t in completed_tasks)
-    reviews = await db.reviews.find({"provider_id": user_id}, {"_id": 0}).to_list(100)
-    avg_rating = round(sum(r["rating"] for r in reviews) / len(reviews), 2) if reviews else 5.0
-    archived_tasks = await db.tasks.find({
-        "provider_id": user_id,
-        "status": {"$in": ["cancelled_by_client", "cancelled_by_tasker", "paid"]}
-    }, {"_id": 0}).sort("created_at", -1).to_list(50)
-    return {
-        "user": {k: v for k, v in current_user.dict().items() if k != "password_hash"},
-        "profile": profile,
-        "stats": {
-            "total_completed_tasks": total_completed,
-            "total_earnings": round(total_earnings, 2),
-            "average_rating": avg_rating,
-            "total_reviews": len(reviews)
-        },
         "reviews": reviews[:10],
         "archived_tasks": archived_tasks[:20]
-    }
+    }))
 
 # ==================== USER PROFILE PHOTO ====================
 
@@ -5287,16 +5724,49 @@ async def client_create_booking(
         "notes": data.notes,
         "problem_description": data.problem_description,
         "problem_photos": data.problem_photos,
-        "status": BookingStatus.DRAFT,
+        "status": BookingStatus.ASSIGNED if data.provider_id else BookingStatus.DRAFT,
         "estimated_price": service.get("price"),
-        "total_price": service.get("price", 0),
+        "total_price": data.total_price or service.get("price", 0),
+        "provider_id": data.provider_id,
+        "provider_hourly_rate": data.provider_hourly_rate,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
     
     await db.bookings.insert_one(booking)
     booking.pop("_id", None)
-    
+
+    # If client pre-selected a provider — auto-create task and notify
+    if data.provider_id:
+        task_id = f"task_{uuid.uuid4().hex[:12]}"
+        task_doc = {
+            "task_id": task_id,
+            "booking_id": booking_id,
+            "client_id": current_user.user_id,
+            "provider_id": data.provider_id,
+            "title": service.get("name", "Service Request"),
+            "description": data.problem_description or service.get("description", ""),
+            "address": data.address,
+            "date": data.date,
+            "time": data.time,
+            "status": TaskStatus.ASSIGNED,
+            "provider_hourly_rate": data.provider_hourly_rate,
+            "total_price": data.total_price or service.get("price", 0),
+            "photos": data.problem_photos or [],
+            "scheduled_date": data.date,
+            "scheduled_time": data.time,
+            "created_at": datetime.now(timezone.utc),
+        }
+        await db.tasks.insert_one(task_doc)
+
+        # Send notification to provider
+        provider = await db.users.find_one({"user_id": data.provider_id}, {"_id": 0})
+        if provider and provider.get("telegram_chat_id"):
+            message = f"📋 *Нове завдання!*\n\nПослуга: {service.get('name', 'Послуга')}\nДата: {data.date} о {data.time}\nАдреса: {data.address}\nЦіна: ${data.total_price or service.get('price', 0)}"
+            await send_telegram_notification(provider["telegram_chat_id"], message)
+
+        booking["task_id"] = task_id
+
     return booking
 
 class ClientBookingUpdate(BaseModel):
@@ -5847,7 +6317,7 @@ async def get_pending_payouts(current_user: User = Depends(require_admin)):
         user = await db.users.find_one({"user_id": item["_id"]}, {"_id": 0, "password_hash": 0, "plain_password": 0})
         item["user"] = user
     
-    return pending
+    return JSONResponse(content=clean_bson(pending))
 
 # ==================== REFUND ENDPOINTS ====================
 
@@ -7028,7 +7498,7 @@ async def admin_photo_storage_stats(current_user: User = Depends(require_admin))
         {"$limit": 10}
     ]).to_list(10)
 
-    return {
+    return JSONResponse(content=clean_bson({
         "total_photos": stats.get("total_photos", 0),
         "total_mb": round(stats.get("total_kb", 0) / 1024, 2),
         "by_uploader_role": role_counts,
@@ -7040,7 +7510,7 @@ async def admin_photo_storage_stats(current_user: User = Depends(require_admin))
         "last_cleanup": settings.photo_cleanup_last_run,
         "top_tasks_by_photos": by_task,
         "storage_path": settings.photo_storage_path,
-    }
+    }))
 
 
 # ─── Background auto-cleanup task (runs hourly, acts on schedule) ─────────────
@@ -7482,13 +7952,43 @@ async def delete_faq(
         raise HTTPException(status_code=404, detail="FAQ not found")
     return {"message": "FAQ deleted"}
 
+# ── Self-service account management ──────────────────────────────────────────
+
+@api_router.delete("/users/me")
+async def delete_my_account(current_user: User = Depends(get_current_user)):
+    """User deletes their own account"""
+    user_id = current_user.user_id
+    await db.users.delete_one({"user_id": user_id})
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.bookings.delete_many({"$or": [{"client_id": user_id}, {"provider_id": user_id}]})
+    await db.tasks.delete_many({"provider_id": user_id})
+    await db.reviews.delete_many({"$or": [{"client_id": user_id}, {"provider_id": user_id}]})
+    await db.executor_profiles.delete_one({"user_id": user_id})
+    return {"message": "Account deleted"}
+
+
+class SupportMessage(BaseModel):
+    email: str
+    message: str
+
+
+@api_router.post("/support/message")
+async def send_support_message(data: SupportMessage):
+    """Store support message"""
+    await db.support_messages.insert_one({
+        "email": data.email,
+        "message": data.message,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
 # Test endpoint for connectivity
 @app.get("/api/test")
 async def test_connection():
-    print("[TEST] test_connection called", flush=True)
     return {
         "status": "ok",
         "message": "Backend is working!",
@@ -7497,8 +7997,15 @@ async def test_connection():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "version": "16e67a9"}
+    return {"status": "healthy"}
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Configure logging
 logging.basicConfig(
@@ -7511,6 +8018,56 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     """Start background tasks on app startup."""
     asyncio.create_task(_auto_cleanup_loop())
+    asyncio.create_task(_create_seed_accounts())
+
+async def _create_seed_accounts():
+    """Create default seed accounts (admin, provider, client) if they don't exist."""
+    await asyncio.sleep(2)  # Wait for DB connection to be ready
+    
+    seed_users = [
+        {
+            "email": "admin@handyhub.com",
+            "password": "Admin2024!",
+            "name": "Адміністратор",
+            "role": UserRole.ADMIN,
+            "phone": "+380000000001",
+        },
+        {
+            "email": "provider@handyhub.com",
+            "password": "Provider2024!",
+            "name": "Тестовий Виконавець",
+            "role": UserRole.PROVIDER,
+            "phone": "+380000000002",
+        },
+        {
+            "email": "client@handyhub.com",
+            "password": "Client2024!",
+            "name": "Тестовий Клієнт",
+            "role": UserRole.CLIENT,
+            "phone": "+380000000003",
+        },
+    ]
+    
+    for seed in seed_users:
+        existing = await db.users.find_one({"email": seed["email"]})
+        if not existing:
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            user = User(
+                user_id=user_id,
+                email=seed["email"],
+                name=seed["name"],
+                role=seed["role"],
+                phone=seed["phone"],
+                password_hash=hash_password(seed["password"])
+            )
+            user_dict = user.dict()
+            user_dict["plain_password"] = seed["password"]
+            await db.users.insert_one(user_dict)
+            print(f"[SEED] Created {seed['role']} account: {seed['email']}")
+        else:
+            print(f"[SEED] Account already exists: {seed['email']}")
+    
+    print("[SEED] Seed accounts check complete.")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
