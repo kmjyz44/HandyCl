@@ -863,10 +863,11 @@ function ProviderProfile() {
       // Load provider stats (task count, earnings, etc.)
       try {
         const providerStats = await api.getMyProviderStats();
+        const s = providerStats.stats || providerStats;
         setStats(prev => ({
           ...prev,
-          taskCount: providerStats.total_tasks || 0,
-          monthEarnings: providerStats.total_earnings || 0,
+          taskCount: s.total_tasks || 0,
+          monthEarnings: s.total_earnings || 0,
         }));
       } catch {}
     } catch {
