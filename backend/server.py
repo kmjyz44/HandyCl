@@ -1707,6 +1707,10 @@ async def get_bookings(current_user: User = Depends(get_current_user)):
     
     bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
     
+    # Exclude heavy fields from list view to keep response small & fast
+    # (provider.picture alone can be ~170 KB base64 per booking)
+    _user_list_projection = {"_id": 0, "password_hash": 0, "picture": 0}
+
     # Enrich with service and user info
     for booking in bookings:
         # Only look up service if service_id is set
@@ -1715,13 +1719,16 @@ async def get_bookings(current_user: User = Depends(get_current_user)):
             booking["service"] = service
         else:
             booking["service"] = None
-        client = await db.users.find_one({"user_id": booking["client_id"]}, {"_id": 0, "password_hash": 0})
+        client = await db.users.find_one({"user_id": booking["client_id"]}, _user_list_projection)
         booking["client"] = client
         if booking.get("provider_id"):
-            provider = await db.users.find_one({"user_id": booking["provider_id"]}, {"_id": 0, "password_hash": 0})
+            provider = await db.users.find_one({"user_id": booking["provider_id"]}, _user_list_projection)
             booking["provider"] = provider
-        # Get linked task
-        task = await db.tasks.find_one({"booking_id": booking["booking_id"]}, {"_id": 0})
+        # Get linked task (only essential fields for list view)
+        task = await db.tasks.find_one(
+            {"booking_id": booking["booking_id"]},
+            {"_id": 0, "task_id": 1, "status": 1, "title": 1, "provider_id": 1}
+        )
         booking["task"] = task
     
     return JSONResponse(content=clean_bson(bookings))
