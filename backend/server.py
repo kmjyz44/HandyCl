@@ -1724,7 +1724,7 @@ async def get_bookings(current_user: User = Depends(get_current_user)):
         task = await db.tasks.find_one({"booking_id": booking["booking_id"]}, {"_id": 0})
         booking["task"] = task
     
-    return bookings
+    return JSONResponse(content=clean_bson(bookings))
 
 @api_router.get("/bookings/{booking_id}")
 async def get_booking(booking_id: str, current_user: User = Depends(get_current_user)):
@@ -1740,8 +1740,11 @@ async def get_booking(booking_id: str, current_user: User = Depends(get_current_
             raise HTTPException(status_code=403, detail="Access denied")
     
     # Enrich with all related data
-    service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
-    booking["service"] = service
+    if booking.get("service_id"):
+        service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
+        booking["service"] = service
+    else:
+        booking["service"] = None
     client = await db.users.find_one({"user_id": booking["client_id"]}, {"_id": 0, "password_hash": 0})
     booking["client"] = client
     if booking.get("provider_id"):
@@ -1757,7 +1760,7 @@ async def get_booking(booking_id: str, current_user: User = Depends(get_current_
     task = await db.tasks.find_one({"booking_id": booking_id}, {"_id": 0})
     booking["task"] = task
     
-    return booking
+    return JSONResponse(content=clean_bson(booking))
 
 @api_router.put("/bookings/{booking_id}")
 async def update_booking(booking_id: str, status: BookingStatus, provider_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
@@ -5400,6 +5403,37 @@ async def add_gallery_item(
     return updated_service
 
 # ==================== PROVIDER STATISTICS & PROFILE ====================
+# IMPORTANT: /provider/me/stats MUST be defined BEFORE /provider/{user_id}/stats
+# so FastAPI does not capture "me" as a user_id path parameter.
+
+@api_router.get("/provider/me/stats")
+async def get_my_provider_stats(current_user: User = Depends(get_current_user)):
+    """Get current provider's own statistics"""
+    user_id = current_user.user_id
+    profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
+    all_tasks = await db.tasks.find({
+        "provider_id": user_id
+    }, {"_id": 0}).to_list(1000)
+    completed_tasks = [t for t in all_tasks if t.get("status") in ["completed_pending_payment", "paid"]]
+    total_completed = len(completed_tasks)
+    total_earnings = sum(t.get("final_price", 0) or 0 for t in completed_tasks)
+    reviews = await db.reviews.find({"provider_id": user_id}, {"_id": 0}).to_list(100)
+    avg_rating = round(sum(r["rating"] for r in reviews) / len(reviews), 2) if reviews else 5.0
+    archived_tasks = [t for t in all_tasks if t.get("status") in ["cancelled_by_client", "cancelled_by_tasker", "paid"]]
+    archived_tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+    return JSONResponse(content=clean_bson({
+        "user": {k: v for k, v in current_user.dict().items() if k != "password_hash"},
+        "profile": profile,
+        "stats": {
+            "total_tasks": len(all_tasks),
+            "total_completed_tasks": total_completed,
+            "total_earnings": round(total_earnings, 2),
+            "average_rating": avg_rating,
+            "total_reviews": len(reviews)
+        },
+        "reviews": reviews[:10],
+        "archived_tasks": archived_tasks[:20]
+    }))
 
 @api_router.get("/provider/{user_id}/stats")
 async def get_provider_stats(user_id: str):
@@ -5433,7 +5467,7 @@ async def get_provider_stats(user_id: str):
     archived_tasks = [t for t in all_tasks if t.get("status") in [TaskStatus.CANCELLED_BY_CLIENT, TaskStatus.CANCELLED_BY_TASKER, TaskStatus.PAID]]
     archived_tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
     
-    return {
+    return JSONResponse(content=clean_bson({
         "user": user,
         "profile": profile,
         "stats": {
@@ -5444,40 +5478,9 @@ async def get_provider_stats(user_id: str):
             "average_rating": round(avg_rating, 2),
             "total_reviews": len(reviews)
         },
-        "reviews": reviews[:10],  # Last 10 reviews
-        "archived_tasks": archived_tasks[:20]  # Last 20 archived
-    }
-
-# ==================== PROVIDER SELF STATS ====================
-
-@api_router.get("/provider/me/stats")
-async def get_my_provider_stats(current_user: User = Depends(get_current_user)):
-    """Get current provider's own statistics"""
-    user_id = current_user.user_id
-    profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
-    all_tasks = await db.tasks.find({
-        "provider_id": user_id
-    }, {"_id": 0}).to_list(1000)
-    completed_tasks = [t for t in all_tasks if t.get("status") in ["completed_pending_payment", "paid"]]
-    total_completed = len(completed_tasks)
-    total_earnings = sum(t.get("final_price", 0) or 0 for t in completed_tasks)
-    reviews = await db.reviews.find({"provider_id": user_id}, {"_id": 0}).to_list(100)
-    avg_rating = round(sum(r["rating"] for r in reviews) / len(reviews), 2) if reviews else 5.0
-    archived_tasks = [t for t in all_tasks if t.get("status") in ["cancelled_by_client", "cancelled_by_tasker", "paid"]]
-    archived_tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
-    return {
-        "user": {k: v for k, v in current_user.dict().items() if k != "password_hash"},
-        "profile": profile,
-        "stats": {
-            "total_tasks": len(all_tasks),
-            "total_completed_tasks": total_completed,
-            "total_earnings": round(total_earnings, 2),
-            "average_rating": avg_rating,
-            "total_reviews": len(reviews)
-        },
         "reviews": reviews[:10],
         "archived_tasks": archived_tasks[:20]
-    }
+    }))
 
 # ==================== USER PROFILE PHOTO ====================
 
