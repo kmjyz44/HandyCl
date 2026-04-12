@@ -1706,10 +1706,12 @@ async def get_bookings(current_user: User = Depends(get_current_user)):
         query["provider_id"] = current_user.user_id
     # Admin sees all bookings
     
-    bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    # Exclude heavy base64 fields from list view to keep response small & fast
+    # (problem_photos alone can be ~3.5 MB per booking)
+    _booking_list_projection = {"_id": 0, "problem_photos": 0}
+    bookings = await db.bookings.find(query, _booking_list_projection).sort("created_at", -1).to_list(100)
     
-    # Exclude heavy fields from list view to keep response small & fast
-    # (provider.picture alone can be ~170 KB base64 per booking)
+    # Also exclude user pictures (~170 KB each)
     _user_list_projection = {"_id": 0, "password_hash": 0, "picture": 0}
 
     # Enrich with service and user info
