@@ -1694,7 +1694,8 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
         }
         await db.tasks.insert_one(task_doc)
 
-    return booking_dict
+    booking_dict.pop("_id", None)
+    return JSONResponse(content=clean_bson(booking_dict))
 
 @api_router.get("/bookings")
 async def get_bookings(current_user: User = Depends(get_current_user)):
