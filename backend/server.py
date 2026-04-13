@@ -1710,28 +1710,35 @@ async def get_bookings(current_user: User = Depends(get_current_user)):
     _booking_list_projection = {"_id": 0, "problem_photos": 0}
     bookings = await db.bookings.find(query, _booking_list_projection).sort("created_at", -1).to_list(100)
     
-    # Also exclude user pictures (~170 KB each)
-    _user_list_projection = {"_id": 0, "password_hash": 0, "picture": 0}
+    if not bookings:
+        return JSONResponse(content=[])
 
-    # Enrich with service and user info
+    # Batch-fetch related data to avoid N+1 queries
+    # Collect all unique IDs
+    service_ids = list({b["service_id"] for b in bookings if b.get("service_id")})
+    user_ids = list({b["client_id"] for b in bookings} | {b["provider_id"] for b in bookings if b.get("provider_id")})
+    booking_ids = [b["booking_id"] for b in bookings]
+
+    # Batch queries (3 queries instead of N*4)
+    _user_list_projection = {"_id": 0, "password_hash": 0, "picture": 0}
+    services_list = await db.services.find({"service_id": {"$in": service_ids}}, {"_id": 0}).to_list(len(service_ids)) if service_ids else []
+    users_list = await db.users.find({"user_id": {"$in": user_ids}}, _user_list_projection).to_list(len(user_ids))
+    tasks_list = await db.tasks.find(
+        {"booking_id": {"$in": booking_ids}},
+        {"_id": 0, "task_id": 1, "status": 1, "title": 1, "provider_id": 1, "booking_id": 1}
+    ).to_list(len(booking_ids))
+
+    # Build lookup maps
+    services_map = {s["service_id"]: s for s in services_list}
+    users_map = {u["user_id"]: u for u in users_list}
+    tasks_map = {t["booking_id"]: t for t in tasks_list}
+
+    # Enrich bookings from maps (no more DB calls)
     for booking in bookings:
-        # Only look up service if service_id is set
-        if booking.get("service_id"):
-            service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
-            booking["service"] = service
-        else:
-            booking["service"] = None
-        client = await db.users.find_one({"user_id": booking["client_id"]}, _user_list_projection)
-        booking["client"] = client
-        if booking.get("provider_id"):
-            provider = await db.users.find_one({"user_id": booking["provider_id"]}, _user_list_projection)
-            booking["provider"] = provider
-        # Get linked task (only essential fields for list view)
-        task = await db.tasks.find_one(
-            {"booking_id": booking["booking_id"]},
-            {"_id": 0, "task_id": 1, "status": 1, "title": 1, "provider_id": 1}
-        )
-        booking["task"] = task
+        booking["service"] = services_map.get(booking.get("service_id"))
+        booking["client"] = users_map.get(booking.get("client_id"))
+        booking["provider"] = users_map.get(booking.get("provider_id"))
+        booking["task"] = tasks_map.get(booking["booking_id"])
     
     return JSONResponse(content=clean_bson(bookings))
 
@@ -2920,9 +2927,12 @@ async def get_provider_tasks_with_prices(current_user: User = Depends(get_curren
         task["commission_amount"] = round(commission_amount, 2)
         task["provider_earnings"] = round(provider_earnings, 2)
         
-        # Get booking info
+        # Get booking info (exclude heavy base64 fields like problem_photos)
         if task.get("booking_id"):
-            booking = await db.bookings.find_one({"booking_id": task["booking_id"]}, {"_id": 0})
+            booking = await db.bookings.find_one(
+                {"booking_id": task["booking_id"]},
+                {"_id": 0, "problem_photos": 0}
+            )
             if booking:
                 task["booking"] = booking
     
