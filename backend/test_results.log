@@ -1,0 +1,4 @@
+ImportError while loading conftest '/app/backend/tests/conftest.py'.
+tests/conftest.py:2: in <module>
+    import requests
+E   ModuleNotFoundError: No module named 'requests'
