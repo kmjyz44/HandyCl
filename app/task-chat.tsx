@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert,
@@ -28,6 +28,40 @@ function fmtTime(iso: string): string {
     const p = (n: number) => String(n).padStart(2, '0');
     return `${p(d.getHours())}:${p(d.getMinutes())}`;
   } catch { return ''; }
+}
+
+/** Play a short notification beep using Web Audio API */
+function playNotificationSound() {
+  if (typeof window === 'undefined') return;
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+    gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.3);
+  } catch {}
+}
+
+/** Show a browser push notification */
+function showBrowserNotification(title: string, body: string) {
+  if (typeof window === 'undefined') return;
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/favicon.ico' });
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') {
+        new Notification(title, { body, icon: '/favicon.ico' });
+      }
+    });
+  }
 }
 
 /** Pick image via hidden <input type="file"> on web, returns base64 data URI */
@@ -64,23 +98,61 @@ export default function TaskChat() {
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevMsgCountRef = useRef<number>(0);
+  const isFirstLoadRef = useRef(true);
 
+  // Request browser notification permission on mount
   useEffect(() => {
-    loadMessages();
-    pollRef.current = setInterval(loadMessages, 3000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [taskId]);
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     try {
       const data = await api.getTaskMessages(taskId);
-      setMessages(data);
+      const msgList = Array.isArray(data) ? data : (data?.messages ?? []);
+      setMessages(msgList);
+
+      // Detect new messages from others (not first load)
+      if (!isFirstLoadRef.current) {
+        const newCount = msgList.length;
+        const prevCount = prevMsgCountRef.current;
+        if (newCount > prevCount) {
+          // Check if any new messages are from others
+          const newMsgs = msgList.slice(prevCount);
+          const othersNewMsgs = newMsgs.filter((m: any) => m.from_user_id !== user?.user_id);
+          if (othersNewMsgs.length > 0) {
+            const lastNew = othersNewMsgs[othersNewMsgs.length - 1];
+            const senderName = lastNew.sender?.name || 'Новe повідомлення';
+            playNotificationSound();
+            showBrowserNotification(
+              senderName,
+              lastNew.text || (lastNew.image_url ? '📷 Фото' : 'Нове повідомлення')
+            );
+          }
+        }
+      }
+
+      prevMsgCountRef.current = msgList.length;
+      isFirstLoadRef.current = false;
+
+      // Mark messages as read
+      if (msgList.length > 0) {
+        api.markTaskMessagesRead(taskId).catch(() => {});
+      }
     } catch (e) {
       // silent
     } finally {
       setLoading(false);
     }
-  };
+  }, [taskId, user?.user_id]);
+
+  useEffect(() => {
+    loadMessages();
+    pollRef.current = setInterval(loadMessages, 3000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [loadMessages]);
 
   const sendMessage = async () => {
     if (!text.trim() && !pendingImage) return;
@@ -91,7 +163,11 @@ export default function TaskChat() {
     setPendingImage(null);
     try {
       const msg = await api.sendTaskMessage(taskId, msgText, imgData || undefined);
-      setMessages(prev => [...prev, msg]);
+      setMessages(prev => {
+        const updated = [...prev, msg];
+        prevMsgCountRef.current = updated.length;
+        return updated;
+      });
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (e: any) {
       setText(msgText);
@@ -155,7 +231,17 @@ export default function TaskChat() {
           {!!item.text && (
             <Text style={[s.msgText, isMe && s.msgTextMe]}>{item.text}</Text>
           )}
-          <Text style={[s.msgTime, isMe && s.msgTimeMe]}>{fmtTime(item.created_at)}</Text>
+          <View style={s.msgFooter}>
+            <Text style={[s.msgTime, isMe && s.msgTimeMe]}>{fmtTime(item.created_at)}</Text>
+            {isMe && (
+              <Ionicons
+                name={item.read ? 'checkmark-done' : 'checkmark'}
+                size={14}
+                color={item.read ? '#93c5fd' : 'rgba(255,255,255,0.5)'}
+                style={{ marginLeft: 4 }}
+              />
+            )}
+          </View>
         </View>
       </View>
     );
@@ -292,7 +378,8 @@ const s = StyleSheet.create({
   msgImage: { width: 200, height: 150, borderRadius: 10, marginBottom: 6 },
   msgText:   { fontSize: 15, color: '#111827', lineHeight: 20 },
   msgTextMe: { color: '#fff' },
-  msgTime:   { fontSize: 11, color: '#9ca3af', marginTop: 4, textAlign: 'right' },
+  msgFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
+  msgTime:   { fontSize: 11, color: '#9ca3af' },
   msgTimeMe: { color: 'rgba(255,255,255,0.7)' },
 
   emptyBox:  { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 8 },

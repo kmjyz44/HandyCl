@@ -2586,6 +2586,39 @@ async def send_task_message(task_id: str, body: MessageCreate, current_user: Use
     msg["sender"] = {"name": current_user.name, "role": current_user.role, "picture": getattr(current_user, "picture", None)}
     return msg
 
+@api_router.get("/messages/unread-count")
+async def get_unread_messages_count(current_user: User = Depends(get_current_user)):
+    """Get total count of unread task messages for current user"""
+    uid = current_user.user_id
+    # Find all tasks where user is client or provider
+    tasks_cursor = db.tasks.find(
+        {"$or": [{"client_id": uid}, {"provider_id": uid}]},
+        {"task_id": 1, "_id": 0}
+    )
+    task_ids = [t["task_id"] async for t in tasks_cursor]
+    if not task_ids:
+        return {"unread_count": 0}
+    count = await db.messages.count_documents({
+        "task_id": {"$in": task_ids},
+        "from_user_id": {"$ne": uid},
+        "read": False
+    })
+    return {"unread_count": count}
+
+@api_router.post("/tasks/{task_id}/messages/read")
+async def mark_task_messages_read(task_id: str, current_user: User = Depends(get_current_user)):
+    """Mark all messages in a task as read for current user"""
+    task = await _resolve_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task.get("task_id", task_id)
+    uid = current_user.user_id
+    await db.messages.update_many(
+        {"task_id": real_task_id, "from_user_id": {"$ne": uid}, "read": False},
+        {"$set": {"read": True}}
+    )
+    return {"ok": True}
+
 @api_router.post("/tasks/{task_id}/pay")
 async def pay_task(task_id: str, payment_data: dict, current_user: User = Depends(get_current_user)):
     """Client pays for completed task"""

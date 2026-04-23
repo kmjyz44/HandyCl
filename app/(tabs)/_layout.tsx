@@ -1,13 +1,49 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Text } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
+import { api } from '../../utils/api';
+
+function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <View style={{
+      position: 'absolute',
+      top: -4,
+      right: -8,
+      backgroundColor: '#ef4444',
+      borderRadius: 10,
+      minWidth: 18,
+      height: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 4,
+    }}>
+      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
+        {count > 99 ? '99+' : count}
+      </Text>
+    </View>
+  );
+}
 
 export default function TabsLayout() {
   const token = useAuthStore((state) => state.token);
   const user = useAuthStore((state) => state.user);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Poll for unread messages every 15 seconds
+  useEffect(() => {
+    if (!token || !user) return;
+    const fetchUnread = async () => {
+      const count = await api.getUnreadMessagesCount();
+      setUnreadCount(count);
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => clearInterval(interval);
+  }, [token, user]);
 
   // If still loading initial auth state, show loading indicator
   if (isLoading) {
@@ -23,8 +59,6 @@ export default function TabsLayout() {
     return <Redirect href="/login" />;
   }
 
-  // If token exists but user data not loaded yet, let app/index.tsx handle it
-  // This should rarely happen if app/index.tsx is working correctly
   if (!user) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -40,7 +74,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Головна',
           href: role === 'client' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
@@ -51,7 +85,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="executors"
         options={{
-          title: 'Executors',
+          title: 'Виконавці',
           href: role === 'client' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
@@ -62,7 +96,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="bookings"
         options={{
-          title: 'Bookings',
+          title: 'Замовлення',
           href: role === 'client' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar-outline" size={size} color={color} />
@@ -73,7 +107,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="tasks"
         options={{
-          title: 'Tasks',
+          title: 'Завдання',
           href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list-outline" size={size} color={color} />
@@ -84,7 +118,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="service-area"
         options={{
-          title: 'Location',
+          title: 'Локація',
           href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="location-outline" size={size} color={color} />
@@ -95,7 +129,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="availability"
         options={{
-          title: 'Availability',
+          title: 'Графік',
           href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="time-outline" size={size} color={color} />
@@ -106,11 +140,27 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="earnings"
         options={{
-          title: 'Earnings',
+          title: 'Заробіток',
           href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="wallet-outline" size={size} color={color} />
           ),
+        }}
+      />
+
+      {/* Messages tab — visible for clients and providers with unread badge */}
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: 'Чат',
+          href: (role === 'client' || role === 'provider') ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <View>
+              <Ionicons name="chatbubbles-outline" size={size} color={color} />
+              <UnreadBadge count={unreadCount} />
+            </View>
+          ),
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
         }}
       />
 
@@ -161,7 +211,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="my-profile"
         options={{
-          title: 'Profile',
+          title: 'Профіль',
           href: role === 'client' || role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
@@ -170,28 +220,16 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen
-        name="messages"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
         name="booking-detail"
-        options={{
-          href: null,
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="service-detail"
-        options={{
-          href: null,
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="settings"
-        options={{
-          href: null,
-        }}
+        options={{ href: null }}
       />
     </Tabs>
   );

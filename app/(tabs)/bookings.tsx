@@ -107,6 +107,18 @@ export default function Bookings() {
   const completedBookings = bookings.filter(b => COMPLETED_STATUSES.includes(b.status));
   const displayList = activeTab === 'active' ? activeBookings : completedBookings;
 
+  // Overdue payment reminder: tasks with status 'completed_pending_payment' older than 1 day
+  const now = Date.now();
+  const overduePayments = user?.role === 'client'
+    ? bookings.filter(b => {
+        if (b.status !== 'completed_pending_payment') return false;
+        const completedAt = b.completed_at || b.updated_at || b.created_at;
+        if (!completedAt) return false;
+        const msAgo = now - new Date(completedAt).getTime();
+        return msAgo > 24 * 60 * 60 * 1000; // more than 1 day
+      })
+    : [];
+
   // Show skeleton cards instead of blank white screen while loading
   if (loading) {
     return (
@@ -276,6 +288,29 @@ export default function Bookings() {
         </TouchableOpacity>
       </View>
 
+      {/* Overdue payment reminder banner */}
+      {overduePayments.length > 0 && (
+        <View style={styles.overduePayBanner}>
+          <Ionicons name="alert-circle" size={22} color="#b45309" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.overduePayTitle}>
+              {overduePayments.length === 1
+                ? 'Є несплачене завдання!'
+                : `${overduePayments.length} несплачених завдань!`}
+            </Text>
+            <Text style={styles.overduePayText}>
+              Будь ласка, оплатіть виконані завдання. Виконавець чекає на оплату більше доби.
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setActiveTab('completed')}
+            style={styles.overduePayBtn}
+          >
+            <Text style={styles.overduePayBtnText}>Переглянути</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <ScrollView
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -349,6 +384,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   browseButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  overduePayBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fef3c7',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+    margin: 12,
+    marginBottom: 0,
+    padding: 14,
+    borderRadius: 12,
+  },
+  overduePayTitle: { fontSize: 14, fontWeight: '700', color: '#92400e', marginBottom: 2 },
+  overduePayText: { fontSize: 12, color: '#78350f', lineHeight: 17 },
+  overduePayBtn: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  overduePayBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   bookingCard: {
     backgroundColor: '#fff',
     marginBottom: 12,

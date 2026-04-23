@@ -612,4 +612,21 @@ export const api = {
     const res = await client.get('/provider/me/stats');
     return res.data;
   },
+
+  // Unread messages count (for tab badge)
+  getUnreadMessagesCount: async (): Promise<number> => {
+    try {
+      const res = await client.get('/messages/unread-count');
+      return res.data?.unread_count ?? 0;
+    } catch {
+      return 0;
+    }
+  },
+
+  // Mark all messages in a task as read
+  markTaskMessagesRead: async (taskId: string): Promise<void> => {
+    try {
+      await client.post(`/tasks/${taskId}/messages/read`);
+    } catch {}
+  },
 };
