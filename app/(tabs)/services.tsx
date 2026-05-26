@@ -45,6 +45,7 @@ export default function Services() {
   const [catDescription, setCatDescription] = useState('');
   const [catCommission, setCatCommission] = useState('');
   const [catIcon, setCatIcon] = useState('');
+  const [catImageBase64, setCatImageBase64] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -158,12 +159,14 @@ export default function Services() {
       setCatDescription(category.description || '');
       setCatCommission((category.commission_rate || 0).toString());
       setCatIcon(category.icon || '');
+      setCatImageBase64(category.image || '');
     } else {
       setEditingCategory(null);
       setCatName('');
       setCatDescription('');
       setCatCommission('15');
       setCatIcon('');
+      setCatImageBase64('');
     }
     setCategoryModalVisible(true);
   };
@@ -180,6 +183,7 @@ export default function Services() {
         description: catDescription,
         commission_rate: parseFloat(catCommission),
         icon: catIcon,
+        image: catImageBase64 || undefined,
       };
 
       if (editingCategory) {
@@ -222,6 +226,7 @@ export default function Services() {
     if (!result.canceled && result.assets[0].base64) {
       const base64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
       if (type === 'service') setServiceImageBase64(base64);
+      else setCatImageBase64(base64);
     }
   };
 
@@ -359,6 +364,18 @@ export default function Services() {
 
             <Text style={styles.label}>Description</Text>
             <TextInput style={[styles.input, { height: 80 }]} value={catDescription} onChangeText={setCatDescription} multiline />
+
+            <Text style={styles.label}>Category Image</Text>
+            <TouchableOpacity style={styles.imagePicker} onPress={() => pickImage('category')}>
+              {catImageBase64 ? (
+                <Image source={{ uri: catImageBase64 }} style={styles.previewImage} />
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Ionicons name="camera" size={32} color="#9ca3af" />
+                  <Text style={styles.placeholderText}>Upload Category Image</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCategory}>
               <Text style={styles.saveBtnText}>Save Category</Text>

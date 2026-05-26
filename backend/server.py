@@ -4887,7 +4887,9 @@ async def create_category(
     name: str,
     description: Optional[str] = None,
     icon: Optional[str] = None,
+    image: Optional[str] = None,
     parent_id: Optional[str] = None,
+    commission_rate: float = 0.0,
     current_user: User = Depends(require_admin)
 ):
     """Admin creates category"""
@@ -4897,8 +4899,9 @@ async def create_category(
         "name": name,
         "description": description,
         "icon": icon,
+        "image": image,
         "parent_id": parent_id,
-        "commission_rate": 0.0,  # Default commission rate
+        "commission_rate": commission_rate,
         "is_active": True,
         "created_at": datetime.now(timezone.utc)
     }
@@ -4911,6 +4914,7 @@ async def update_category(
     name: Optional[str] = None,
     description: Optional[str] = None,
     icon: Optional[str] = None,
+    image: Optional[str] = None,
     commission_rate: Optional[float] = None,
     is_active: Optional[bool] = None,
     current_user: User = Depends(require_admin)
@@ -4923,6 +4927,8 @@ async def update_category(
         update_data["description"] = description
     if icon:
         update_data["icon"] = icon
+    if image:
+        update_data["image"] = image
     if is_active is not None:
         update_data["is_active"] = is_active
     if commission_rate is not None:

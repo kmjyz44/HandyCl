@@ -133,12 +133,12 @@ export const api = {
     return res.data;
   },
 
-  createCategory: async (data: any) => {
+  createCategory: async (data: { name: string; description?: string; icon?: string; image?: string; parent_id?: string; commission_rate?: number }) => {
     const res = await client.post('/admin/categories', null, { params: data });
     return res.data;
   },
 
-  updateCategory: async (id: string, data: any) => {
+  updateCategory: async (id: string, data: { name?: string; description?: string; icon?: string; image?: string; commission_rate?: number; is_active?: boolean }) => {
     const res = await client.put(`/admin/categories/${id}`, null, { params: data });
     return res.data;
   },
