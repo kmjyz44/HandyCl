@@ -416,4 +416,29 @@ const styles = StyleSheet.create({
   pickerContainer: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, marginBottom: 20, overflow: 'hidden' },
   saveBtn: { backgroundColor: '#2563eb', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   saveBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  imagePicker: {
+    height: 150,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    backgroundColor: '#f9fafb',
+    overflow: 'hidden',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+  },
+  placeholderText: {
+    marginTop: 8,
+    color: '#9ca3af',
+    fontSize: 14,
+  },
 });

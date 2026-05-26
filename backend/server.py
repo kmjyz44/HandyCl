@@ -4882,26 +4882,37 @@ async def get_categories():
         return [{"id": cat.value, "name": cat.value.replace("_", " ").title()} for cat in ServiceCategory]
     return categories
 
+class CategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    image: Optional[str] = None
+    parent_id: Optional[str] = None
+    commission_rate: float = 0.0
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    image: Optional[str] = None
+    commission_rate: Optional[float] = None
+    is_active: Optional[bool] = None
+
 @api_router.post("/admin/categories")
 async def create_category(
-    name: str,
-    description: Optional[str] = None,
-    icon: Optional[str] = None,
-    image: Optional[str] = None,
-    parent_id: Optional[str] = None,
-    commission_rate: float = 0.0,
+    category_data: CategoryCreate,
     current_user: User = Depends(require_admin)
 ):
     """Admin creates category"""
     cat_id = f"cat_{uuid.uuid4().hex[:8]}"
     category = {
         "category_id": cat_id,
-        "name": name,
-        "description": description,
-        "icon": icon,
-        "image": image,
-        "parent_id": parent_id,
-        "commission_rate": commission_rate,
+        "name": category_data.name,
+        "description": category_data.description,
+        "icon": category_data.icon,
+        "image": category_data.image,
+        "parent_id": category_data.parent_id,
+        "commission_rate": category_data.commission_rate,
         "is_active": True,
         "created_at": datetime.now(timezone.utc)
     }
@@ -4911,29 +4922,12 @@ async def create_category(
 @api_router.put("/admin/categories/{category_id}")
 async def update_category(
     category_id: str,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    icon: Optional[str] = None,
-    image: Optional[str] = None,
-    commission_rate: Optional[float] = None,
-    is_active: Optional[bool] = None,
+    category_data: CategoryUpdate,
     current_user: User = Depends(require_admin)
 ):
     """Admin updates category"""
-    update_data = {}
-    if name:
-        update_data["name"] = name
-    if description:
-        update_data["description"] = description
-    if icon:
-        update_data["icon"] = icon
-    if image:
-        update_data["image"] = image
-    if is_active is not None:
-        update_data["is_active"] = is_active
-    if commission_rate is not None:
-        update_data["commission_rate"] = commission_rate
-
+    update_data = {k: v for k, v in category_data.dict(exclude_unset=True).items() if v is not None}
+    
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
 
