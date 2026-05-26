@@ -849,6 +849,10 @@ class SettingsUpdate(BaseModel):
     stripe_secret_key: Optional[str] = None
     zelle_instructions: Optional[str] = None
     venmo_instructions: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_account_holder: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_routing_number: Optional[str] = None
 
     # Firebase Push Notifications
     firebase_server_key: Optional[str] = None
@@ -4894,6 +4898,7 @@ async def create_category(
         "description": description,
         "icon": icon,
         "parent_id": parent_id,
+        "commission_rate": 0.0,  # Default commission rate
         "is_active": True,
         "created_at": datetime.now(timezone.utc)
     }
@@ -4906,6 +4911,7 @@ async def update_category(
     name: Optional[str] = None,
     description: Optional[str] = None,
     icon: Optional[str] = None,
+    commission_rate: Optional[float] = None,
     is_active: Optional[bool] = None,
     current_user: User = Depends(require_admin)
 ):
@@ -4919,6 +4925,8 @@ async def update_category(
         update_data["icon"] = icon
     if is_active is not None:
         update_data["is_active"] = is_active
+    if commission_rate is not None:
+        update_data["commission_rate"] = commission_rate
 
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")

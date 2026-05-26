@@ -20,193 +20,212 @@ import * as ImagePicker from 'expo-image-picker';
 import { useServiceStore } from '../../store/serviceStore';
 import { api } from '../../utils/api';
 
-const CATEGORIES = [
-  { value: 'handyman_plumbing', label: 'Plumbing' },
-  { value: 'handyman_electrical', label: 'Electrical' },
-  { value: 'handyman_carpentry', label: 'Carpentry' },
-  { value: 'handyman_painting', label: 'Painting' },
-  { value: 'cleaning_regular', label: 'Regular Cleaning' },
-  { value: 'cleaning_deep', label: 'Deep Cleaning' },
-  { value: 'cleaning_move_out', label: 'Move Out Cleaning' },
-];
-
 export default function Services() {
   const { services, setServices } = useServiceStore();
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<'services' | 'categories'>('services');
+  
+  // Service Modal state
+  const [serviceModalVisible, setServiceModalVisible] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
+  const [serviceName, setServiceName] = useState('');
+  const [serviceCategory, setServiceCategory] = useState('');
+  const [serviceDescription, setServiceDescription] = useState('');
+  const [servicePrice, setServicePrice] = useState('');
+  const [serviceDuration, setServiceDuration] = useState('');
+  const [serviceAvailable, setServiceAvailable] = useState(true);
+  const [serviceImageBase64, setServiceImageBase64] = useState('');
 
-  // Form state
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('handyman_plumbing');
-  const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('');
-  const [duration, setDuration] = useState('');
-  const [available, setAvailable] = useState(true);
-  const [imageBase64, setImageBase64] = useState('');
+  // Category Modal state
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [catName, setCatName] = useState('');
+  const [catDescription, setCatDescription] = useState('');
+  const [catCommission, setCatCommission] = useState('');
+  const [catIcon, setCatIcon] = useState('');
 
-  // Request permissions on mount
   useEffect(() => {
     (async () => {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please allow access to your photos to upload service images');
+        Alert.alert('Permission needed', 'Please allow access to your photos to upload images');
       }
     })();
+    loadData();
   }, []);
 
-  const loadServices = async () => {
+  const loadData = async () => {
     try {
-      const data = await api.getServices();
-      setServices(data);
+      setLoading(true);
+      const [servicesData, categoriesData] = await Promise.all([
+        api.getServices(),
+        api.getCategories()
+      ]);
+      setServices(servicesData);
+      setCategories(categoriesData);
+      if (categoriesData.length > 0 && !serviceCategory) {
+        setServiceCategory(categoriesData[0].category_id || categoriesData[0].id);
+      }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load services');
+      Alert.alert('Error', error.message || 'Failed to load data');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    loadServices();
-  }, []);
-
   const onRefresh = () => {
     setRefreshing(true);
-    loadServices();
+    loadData();
   };
 
-  const openModal = (service?: any) => {
+  // Service Handlers
+  const openServiceModal = (service?: any) => {
     if (service) {
       setEditingService(service);
-      setName(service.name);
-      setCategory(service.category);
-      setDescription(service.description);
-      setPrice(service.price.toString());
-      setDuration(service.duration.toString());
-      setAvailable(service.available);
-      setImageBase64(service.image || '');
+      setServiceName(service.name);
+      setServiceCategory(service.category);
+      setServiceDescription(service.description);
+      setServicePrice(service.price.toString());
+      setServiceDuration(service.duration.toString());
+      setServiceAvailable(service.available);
+      setServiceImageBase64(service.image || '');
     } else {
-      resetForm();
+      setEditingService(null);
+      setServiceName('');
+      setServiceCategory(categories[0]?.category_id || categories[0]?.id || '');
+      setServiceDescription('');
+      setServicePrice('');
+      setServiceDuration('');
+      setServiceAvailable(true);
+      setServiceImageBase64('');
     }
-    setModalVisible(true);
+    setServiceModalVisible(true);
   };
 
-  const resetForm = () => {
-    setEditingService(null);
-    setName('');
-    setCategory('handyman_plumbing');
-    setDescription('');
-    setPrice('');
-    setDuration('');
-    setAvailable(true);
-    setImageBase64('');
-  };
-
-  const pickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 0.7,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets[0].base64) {
-        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        setImageBase64(base64Image);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
-    }
-  };
-
-  const takePhoto = async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission needed', 'Please allow camera access to take photos');
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 0.7,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets[0].base64) {
-        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        setImageBase64(base64Image);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to take photo');
-    }
-  };
-
-  const showImageOptions = () => {
-    Alert.alert('Add Service Image', 'Choose an option', [
-      { text: 'Take Photo', onPress: takePhoto },
-      { text: 'Choose from Library', onPress: pickImage },
-      { text: 'Remove Image', onPress: () => setImageBase64(''), style: 'destructive' },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  const handleSave = async () => {
-    if (!name || !description || !price || !duration) {
+  const handleSaveService = async () => {
+    if (!serviceName || !serviceDescription || !servicePrice || !serviceDuration) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
     try {
-      const serviceData = {
-        name,
-        category,
-        description,
-        price: parseFloat(price),
-        duration: parseInt(duration),
-        available,
-        image: imageBase64 || undefined,
+      const data = {
+        name: serviceName,
+        category: serviceCategory,
+        description: serviceDescription,
+        price: parseFloat(servicePrice),
+        duration: parseInt(serviceDuration),
+        available: serviceAvailable,
+        image: serviceImageBase64 || undefined,
       };
 
       if (editingService) {
-        await api.updateService(editingService.service_id, serviceData);
+        await api.updateService(editingService.service_id, data);
       } else {
-        await api.createService(serviceData);
+        await api.createService(data);
       }
 
-      setModalVisible(false);
-      loadServices();
+      setServiceModalVisible(false);
+      loadData();
       Alert.alert('Success', `Service ${editingService ? 'updated' : 'created'} successfully`);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to save service');
     }
   };
 
-  const handleDelete = async (serviceId: string) => {
-    Alert.alert('Delete Service', 'Are you sure you want to delete this service?', [
+  const handleDeleteService = async (id: string) => {
+    Alert.alert('Delete Service', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await api.deleteService(serviceId);
-            loadServices();
-            Alert.alert('Success', 'Service deleted');
-          } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to delete service');
-          }
-        },
-      },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await api.deleteService(id);
+          loadData();
+        } catch (error: any) {
+          Alert.alert('Error', error.message);
+        }
+      }}
     ]);
   };
 
-  if (loading) {
+  // Category Handlers
+  const openCategoryModal = (category?: any) => {
+    if (category) {
+      setEditingCategory(category);
+      setCatName(category.name);
+      setCatDescription(category.description || '');
+      setCatCommission((category.commission_rate || 0).toString());
+      setCatIcon(category.icon || '');
+    } else {
+      setEditingCategory(null);
+      setCatName('');
+      setCatDescription('');
+      setCatCommission('15');
+      setCatIcon('');
+    }
+    setCategoryModalVisible(true);
+  };
+
+  const handleSaveCategory = async () => {
+    if (!catName) {
+      Alert.alert('Error', 'Category name is required');
+      return;
+    }
+
+    try {
+      const data = {
+        name: catName,
+        description: catDescription,
+        commission_rate: parseFloat(catCommission),
+        icon: catIcon,
+      };
+
+      if (editingCategory) {
+        await api.updateCategory(editingCategory.category_id || editingCategory.id, data);
+      } else {
+        await api.createCategory(data);
+      }
+
+      setCategoryModalVisible(false);
+      loadData();
+      Alert.alert('Success', `Category ${editingCategory ? 'updated' : 'created'} successfully`);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to save category');
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    Alert.alert('Delete Category', 'Are you sure? This might affect services in this category.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await api.deleteCategory(id);
+          loadData();
+        } catch (error: any) {
+          Alert.alert('Error', error.message);
+        }
+      }}
+    ]);
+  };
+
+  const pickImage = async (type: 'service' | 'category') => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      const base64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      if (type === 'service') setServiceImageBase64(base64);
+    }
+  };
+
+  if (loading && !refreshing) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2563eb" />
@@ -217,9 +236,27 @@ export default function Services() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Services</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => openModal()}>
+        <Text style={styles.headerTitle}>Admin Panel</Text>
+        <TouchableOpacity 
+          style={styles.addButton} 
+          onPress={() => activeTab === 'services' ? openServiceModal() : openCategoryModal()}
+        >
           <Ionicons name="add" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.tabBar}>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'services' && styles.activeTab]} 
+          onPress={() => setActiveTab('services')}
+        >
+          <Text style={[styles.tabText, activeTab === 'services' && styles.activeTabText]}>Services</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'categories' && styles.activeTab]} 
+          onPress={() => setActiveTab('categories')}
+        >
+          <Text style={[styles.tabText, activeTab === 'categories' && styles.activeTabText]}>Categories</Text>
         </TouchableOpacity>
       </View>
 
@@ -227,174 +264,106 @@ export default function Services() {
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {services.map((service) => (
-          <View key={service.service_id} style={styles.serviceCard}>
-            {service.image && (
-              <Image source={{ uri: service.image }} style={styles.serviceCardImage} resizeMode="cover" />
-            )}
-
-            <View style={styles.serviceHeader}>
-              <Text style={styles.serviceName}>{service.name}</Text>
-              <View
-                style={[
-                  styles.availableBadge,
-                  { backgroundColor: service.available ? '#d1fae5' : '#fee2e2' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.availableText,
-                    { color: service.available ? '#10b981' : '#ef4444' },
-                  ]}
-                >
-                  {service.available ? 'Available' : 'Unavailable'}
-                </Text>
+        {activeTab === 'services' ? (
+          services.map((service) => (
+            <View key={service.service_id} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{service.name}</Text>
+                <Text style={styles.priceText}>${service.price}</Text>
+              </View>
+              <Text style={styles.cardSub}>{service.category}</Text>
+              <View style={styles.cardActions}>
+                <TouchableOpacity onPress={() => openServiceModal(service)} style={styles.actionBtn}>
+                  <Ionicons name="pencil" size={20} color="#2563eb" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDeleteService(service.service_id)} style={styles.actionBtn}>
+                  <Ionicons name="trash" size={20} color="#ef4444" />
+                </TouchableOpacity>
               </View>
             </View>
-
-            <Text style={styles.category}>{service.category.replace('_', ' ')}</Text>
-            <Text style={styles.description} numberOfLines={2}>
-              {service.description}
-            </Text>
-
-            <View style={styles.serviceFooter}>
-              <View style={styles.infoRow}>
-                <Ionicons name="cash" size={16} color="#6b7280" />
-                <Text style={styles.infoText}>${service.price.toFixed(2)}</Text>
+          ))
+        ) : (
+          categories.map((cat) => (
+            <View key={cat.category_id || cat.id} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{cat.name}</Text>
+                <Text style={styles.commissionText}>{cat.commission_rate || 0}% Fee</Text>
               </View>
-              <View style={styles.infoRow}>
-                <Ionicons name="time" size={16} color="#6b7280" />
-                <Text style={styles.infoText}>{service.duration} min</Text>
+              <Text style={styles.cardSub}>{cat.description || 'No description'}</Text>
+              <View style={styles.cardActions}>
+                <TouchableOpacity onPress={() => openCategoryModal(cat)} style={styles.actionBtn}>
+                  <Ionicons name="pencil" size={20} color="#2563eb" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDeleteCategory(cat.category_id || cat.id)} style={styles.actionBtn}>
+                  <Ionicons name="trash" size={20} color="#ef4444" />
+                </TouchableOpacity>
               </View>
             </View>
-
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.editButton]}
-                onPress={() => openModal(service)}
-              >
-                <Ionicons name="pencil" size={18} color="#2563eb" />
-                <Text style={[styles.actionText, { color: '#2563eb' }]}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.deleteButton]}
-                onPress={() => handleDelete(service.service_id)}
-              >
-                <Ionicons name="trash" size={18} color="#ef4444" />
-                <Text style={[styles.actionText, { color: '#ef4444' }]}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
+          ))
+        )}
       </ScrollView>
 
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingService ? 'Edit Service' : 'New Service'}
-              </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.form}>
-              <Text style={styles.label}>Service Name</Text>
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g., Home Plumbing Repair"
-              />
-
-              <Text style={styles.label}>Category</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={category}
-                  onValueChange={setCategory}
-                  style={styles.picker}
-                >
-                  {CATEGORIES.map((cat) => (
-                    <Picker.Item key={cat.value} label={cat.label} value={cat.value} />
-                  ))}
-                </Picker>
-              </View>
-
-              <Text style={styles.label}>Service Image</Text>
-              {imageBase64 ? (
-                <View style={styles.imagePreviewContainer}>
-                  <Image source={{ uri: imageBase64 }} style={styles.imagePreview} resizeMode="cover" />
-                  <TouchableOpacity style={styles.changeImageButton} onPress={showImageOptions}>
-                    <Ionicons name="camera" size={20} color="#fff" />
-                    <Text style={styles.changeImageText}>Change Image</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity style={styles.uploadButton} onPress={showImageOptions}>
-                  <Ionicons name="camera-outline" size={32} color="#6b7280" />
-                  <Text style={styles.uploadText}>Add Service Image</Text>
-                  <Text style={styles.uploadHint}>Take a photo or choose from library</Text>
-                </TouchableOpacity>
-              )}
-
-              <Text style={styles.label}>Description</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Describe the service..."
-                multiline
-                numberOfLines={4}
-              />
-
-              <Text style={styles.label}>Price ($)</Text>
-              <TextInput
-                style={styles.input}
-                value={price}
-                onChangeText={setPrice}
-                placeholder="0.00"
-                keyboardType="decimal-pad"
-              />
-
-              <Text style={styles.label}>Duration (minutes)</Text>
-              <TextInput
-                style={styles.input}
-                value={duration}
-                onChangeText={setDuration}
-                placeholder="60"
-                keyboardType="number-pad"
-              />
-
-              <TouchableOpacity
-                style={styles.checkboxRow}
-                onPress={() => setAvailable(!available)}
-              >
-                <Ionicons
-                  name={available ? 'checkbox' : 'square-outline'}
-                  size={24}
-                  color="#2563eb"
-                />
-                <Text style={styles.checkboxLabel}>Available for booking</Text>
-              </TouchableOpacity>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.button, styles.saveButton]} onPress={handleSave}>
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
+      {/* Service Modal */}
+      <Modal visible={serviceModalVisible} animationType="slide">
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{editingService ? 'Edit Service' : 'New Service'}</Text>
+            <TouchableOpacity onPress={() => setServiceModalVisible(false)}>
+              <Ionicons name="close" size={24} color="#000" />
+            </TouchableOpacity>
           </View>
+          <ScrollView style={styles.form}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput style={styles.input} value={serviceName} onChangeText={setServiceName} />
+            
+            <Text style={styles.label}>Category</Text>
+            <View style={styles.pickerContainer}>
+              <Picker selectedValue={serviceCategory} onValueChange={setServiceCategory}>
+                {categories.map(c => (
+                  <Picker.Item key={c.category_id || c.id} label={c.name} value={c.category_id || c.id} />
+                ))}
+              </Picker>
+            </View>
+
+            <Text style={styles.label}>Price ($)</Text>
+            <TextInput style={styles.input} value={servicePrice} onChangeText={setServicePrice} keyboardType="numeric" />
+
+            <Text style={styles.label}>Duration (min)</Text>
+            <TextInput style={styles.input} value={serviceDuration} onChangeText={setServiceDuration} keyboardType="numeric" />
+
+            <Text style={styles.label}>Description</Text>
+            <TextInput style={[styles.input, { height: 80 }]} value={serviceDescription} onChangeText={setServiceDescription} multiline />
+
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveService}>
+              <Text style={styles.saveBtnText}>Save Service</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Category Modal */}
+      <Modal visible={categoryModalVisible} animationType="slide">
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{editingCategory ? 'Edit Category' : 'New Category'}</Text>
+            <TouchableOpacity onPress={() => setCategoryModalVisible(false)}>
+              <Ionicons name="close" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.form}>
+            <Text style={styles.label}>Category Name</Text>
+            <TextInput style={styles.input} value={catName} onChangeText={setCatName} />
+
+            <Text style={styles.label}>Commission Rate (%)</Text>
+            <TextInput style={styles.input} value={catCommission} onChangeText={setCatCommission} keyboardType="numeric" />
+
+            <Text style={styles.label}>Description</Text>
+            <TextInput style={[styles.input, { height: 80 }]} value={catDescription} onChangeText={setCatDescription} multiline />
+
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCategory}>
+              <Text style={styles.saveBtnText}>Save Category</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </View>
@@ -402,273 +371,32 @@ export default function Services() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  addButton: {
-    backgroundColor: '#2563eb',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-  },
-  serviceCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    overflow: 'hidden',
-  },
-  serviceCardImage: {
-    width: '100%',
-    height: 160,
-    marginBottom: 12,
-  },
-  serviceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 16,
-  },
-  serviceName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-  },
-  availableBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  availableText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  category: {
-    fontSize: 12,
-    color: '#6b7280',
-    textTransform: 'capitalize',
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 12,
-  },
-  serviceFooter: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 10,
-    borderRadius: 8,
-    gap: 6,
-    borderWidth: 1,
-  },
-  editButton: {
-    borderColor: '#bfdbfe',
-    backgroundColor: '#eff6ff',
-  },
-  deleteButton: {
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-  },
-  actionText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  form: {
-    padding: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-    backgroundColor: '#f9fafb',
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    marginBottom: 16,
-    backgroundColor: '#f9fafb',
-  },
-  picker: {
-    height: 50,
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  checkboxLabel: {
-    fontSize: 16,
-    color: '#374151',
-  },
-  uploadButton: {
-    backgroundColor: '#f9fafb',
-    borderWidth: 2,
-    borderColor: '#d1d5db',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  uploadText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 12,
-  },
-  uploadHint: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 4,
-  },
-  imagePreviewContainer: {
-    marginBottom: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  imagePreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-  },
-  changeImageButton: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    flexDirection: 'row',
-    backgroundColor: 'rgba(37, 99, 235, 0.9)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignItems: 'center',
-    gap: 6,
-  },
-  changeImageText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  button: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#f3f4f6',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  saveButton: {
-    backgroundColor: '#2563eb',
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#f3f4f6' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, backgroundColor: '#fff' },
+  headerTitle: { fontSize: 24, fontWeight: 'bold' },
+  addButton: { backgroundColor: '#2563eb', padding: 10, borderRadius: 25 },
+  tabBar: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  tab: { flex: 1, padding: 15, alignItems: 'center' },
+  activeTab: { borderBottomWidth: 2, borderBottomColor: '#2563eb' },
+  tabText: { color: '#6b7280', fontWeight: '600' },
+  activeTabText: { color: '#2563eb' },
+  content: { padding: 15 },
+  card: { backgroundColor: '#fff', padding: 15, borderRadius: 10, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  cardTitle: { fontSize: 18, fontWeight: 'bold' },
+  cardSub: { color: '#6b7280', marginBottom: 10 },
+  cardActions: { flexDirection: 'row', justifyContent: 'flex-end' },
+  actionBtn: { marginLeft: 20 },
+  priceText: { color: '#059669', fontWeight: 'bold' },
+  commissionText: { color: '#d97706', fontWeight: 'bold' },
+  modalContainer: { flex: 1, backgroundColor: '#fff' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, paddingTop: 60, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold' },
+  form: { padding: 20 },
+  label: { fontSize: 16, fontWeight: '600', marginBottom: 5, color: '#374151' },
+  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, marginBottom: 20, fontSize: 16 },
+  pickerContainer: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, marginBottom: 20, overflow: 'hidden' },
+  saveBtn: { backgroundColor: '#2563eb', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  saveBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });

@@ -128,6 +128,26 @@ export const api = {
     return res.data;
   },
 
+  getCategories: async () => {
+    const res = await client.get('/categories');
+    return res.data;
+  },
+
+  createCategory: async (data: any) => {
+    const res = await client.post('/admin/categories', null, { params: data });
+    return res.data;
+  },
+
+  updateCategory: async (id: string, data: any) => {
+    const res = await client.put(`/admin/categories/${id}`, null, { params: data });
+    return res.data;
+  },
+
+  deleteCategory: async (id: string) => {
+    const res = await client.delete(`/admin/categories/${id}`);
+    return res.data;
+  },
+
   // Executors
   getExecutors: async () => {
     const res = await client.get('/executors');
@@ -507,6 +527,16 @@ export const api = {
   // Admin
   getAdminDashboard: async () => {
     const res = await client.get('/admin/dashboard');
+    return res.data;
+  },
+
+  getSettings: async () => {
+    const res = await client.get('/admin/settings');
+    return res.data;
+  },
+
+  updateSettings: async (data: any) => {
+    const res = await client.put('/admin/settings', data);
     return res.data;
   },
 

@@ -185,6 +185,17 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen
+        name="payment-settings"
+        options={{
+          title: 'Payment',
+          href: role === 'admin' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="card-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
