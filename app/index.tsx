@@ -16,9 +16,9 @@ export default function Index() {
         return;
       }
 
-      // If no token, redirect to login
+      // If no token, redirect to tabs (landing page)
       if (!token) {
-        router.replace('/login');
+        router.replace('/(tabs)');
         setAuthChecked(true);
         return;
       }
@@ -34,7 +34,7 @@ export default function Index() {
         await setToken(null);
         setUser(null);
         setAuthChecked(true);
-        router.replace('/login');
+        router.replace('/(tabs)');
       }
     };
 
