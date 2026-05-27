@@ -148,6 +148,22 @@ export const api = {
     return res.data;
   },
 
+  // Services (Admin)
+  createService: async (data: any) => {
+    const res = await client.post('/services', data);
+    return res.data;
+  },
+
+  updateService: async (id: string, data: any) => {
+    const res = await client.put(`/services/${id}`, data);
+    return res.data;
+  },
+
+  deleteService: async (id: string) => {
+    const res = await client.delete(`/services/${id}`);
+    return res.data;
+  },
+
   // Executors
   getExecutors: async () => {
     const res = await client.get('/executors');

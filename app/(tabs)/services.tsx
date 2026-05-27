@@ -113,9 +113,28 @@ export default function Services() {
     }
 
     try {
+      // Ensure we send a valid ServiceCategory enum value
+      // If serviceCategory is a custom category ID (cat_xxx), we need to map it or use a default
+      let finalCategory = serviceCategory;
+      if (serviceCategory.startsWith('cat_')) {
+        const catObj = categories.find(c => c.category_id === serviceCategory);
+        // Map custom category name to enum if possible, or fallback to OTHER
+        const nameLower = catObj?.name?.toLowerCase() || '';
+        if (nameLower.includes('plumb')) finalCategory = 'handyman_plumbing';
+        else if (nameLower.includes('electr')) finalCategory = 'handyman_electrical';
+        else if (nameLower.includes('carpent')) finalCategory = 'handyman_carpentry';
+        else if (nameLower.includes('paint')) finalCategory = 'handyman_painting';
+        else if (nameLower.includes('assemb')) finalCategory = 'handyman_assembly';
+        else if (nameLower.includes('mount')) finalCategory = 'handyman_mounting';
+        else if (nameLower.includes('clean')) finalCategory = 'cleaning_regular';
+        else if (nameLower.includes('mov')) finalCategory = 'moving_local';
+        else if (nameLower.includes('garden')) finalCategory = 'gardening';
+        else finalCategory = 'other';
+      }
+
       const data = {
         name: serviceName,
-        category: serviceCategory,
+        category: finalCategory,
         description: serviceDescription,
         price: parseFloat(servicePrice),
         duration: parseInt(serviceDuration),
@@ -338,6 +357,18 @@ export default function Services() {
 
             <Text style={styles.label}>Description</Text>
             <TextInput style={[styles.input, { height: 80 }]} value={serviceDescription} onChangeText={setServiceDescription} multiline />
+
+            <Text style={styles.label}>Service Image</Text>
+            <TouchableOpacity style={styles.imagePicker} onPress={() => pickImage('service')}>
+              {serviceImageBase64 ? (
+                <Image source={{ uri: serviceImageBase64 }} style={styles.previewImage} />
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Ionicons name="camera" size={32} color="#9ca3af" />
+                  <Text style={styles.placeholderText}>Upload Service Image</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveService}>
               <Text style={styles.saveBtnText}>Save Service</Text>
