@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 // Backend URL - configured in app.json extra.backendUrl
 const API_URL = Constants.expoConfig?.extra?.backendUrl ||
                 process.env.EXPO_PUBLIC_BACKEND_URL ||
-                'https://handyhub-preview-1.preview.emergentagent.com';
+                'https://backend-production-a461.up.railway.app';
 
 console.log('API_URL configured:', API_URL);
 
@@ -84,6 +84,31 @@ class API {
     return this.request('/api/auth/session', {
       method: 'POST',
       headers: { 'X-Session-ID': sessionId },
+    });
+  }
+
+  // Categories (Admin)
+  getCategories() {
+    return this.request('/api/admin/categories');
+  }
+
+  createCategory(data: any) {
+    return this.request('/api/admin/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateCategory(id: string, data: any) {
+    return this.request(`/api/admin/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  deleteCategory(id: string) {
+    return this.request(`/api/admin/categories/${id}`, {
+      method: 'DELETE',
     });
   }
 
