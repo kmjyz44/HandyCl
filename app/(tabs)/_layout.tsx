@@ -55,14 +55,23 @@ export default function TabsLayout() {
   }
 
   const role = user?.role || 'guest';
+  const isGuest = role === 'guest';
 
   return (
-    <Tabs screenOptions={{ headerShown: false }}>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        // Hide the bottom tab bar entirely for unauthenticated visitors so
+        // the landing page looks like a public marketing page (no provider
+        // tabs like "Завдання"/"Заробіток" leaking through).
+        tabBarStyle: isGuest ? { display: 'none' } : undefined,
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Головна',
-          href: (role === 'client' || role === 'guest') ? undefined : null,
+          href: (role === 'client' || isGuest) ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
           ),
@@ -73,7 +82,7 @@ export default function TabsLayout() {
         name="executors"
         options={{
           title: 'Виконавці',
-          href: (role === 'client' || role === 'guest') ? undefined : null,
+          href: role === 'client' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
           ),
@@ -84,7 +93,7 @@ export default function TabsLayout() {
         name="bookings"
         options={{
           title: 'Замовлення',
-          href: (role === 'client' || role === 'guest') ? undefined : null,
+          href: role === 'client' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar-outline" size={size} color={color} />
           ),
@@ -95,7 +104,7 @@ export default function TabsLayout() {
         name="tasks"
         options={{
           title: 'Завдання',
-          href: (role === 'provider' || role === 'guest') ? undefined : null,
+          href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list-outline" size={size} color={color} />
           ),
@@ -106,7 +115,7 @@ export default function TabsLayout() {
         name="service-area"
         options={{
           title: 'Локація',
-          href: (role === 'provider' || role === 'guest') ? undefined : null,
+          href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="location-outline" size={size} color={color} />
           ),
@@ -117,7 +126,7 @@ export default function TabsLayout() {
         name="availability"
         options={{
           title: 'Графік',
-          href: (role === 'provider' || role === 'guest') ? undefined : null,
+          href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="time-outline" size={size} color={color} />
           ),
@@ -128,7 +137,7 @@ export default function TabsLayout() {
         name="earnings"
         options={{
           title: 'Заробіток',
-          href: (role === 'provider' || role === 'guest') ? undefined : null,
+          href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="wallet-outline" size={size} color={color} />
           ),

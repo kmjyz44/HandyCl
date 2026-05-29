@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   Modal,
   TextInput,
   KeyboardAvoidingView,
@@ -19,6 +18,7 @@ import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useServiceStore } from '../../store/serviceStore';
 import { api } from '../../utils/api';
+import { showAlert, showConfirm } from '../../utils/alert';
 
 export default function Services() {
   const { services, setServices } = useServiceStore();
@@ -50,9 +50,11 @@ export default function Services() {
 
   useEffect(() => {
     (async () => {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please allow access to your photos to upload images');
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          showAlert('Permission needed', 'Please allow access to your photos to upload images');
+        }
       }
     })();
     loadData();
@@ -71,7 +73,7 @@ export default function Services() {
         setServiceCategory(categoriesData[0].category_id || categoriesData[0].id);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load data');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to load data');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -109,7 +111,7 @@ export default function Services() {
 
   const handleSaveService = async () => {
     if (!serviceName || !serviceDescription || !servicePrice || !serviceDuration) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showAlert('Error', 'Please fill in all fields');
       return;
     }
 
@@ -132,24 +134,21 @@ export default function Services() {
 
       setServiceModalVisible(false);
       loadData();
-      Alert.alert('Success', `Service ${editingService ? 'updated' : 'created'} successfully`);
+      showAlert('Success', `Service ${editingService ? 'updated' : 'created'} successfully`);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save service');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to save service');
     }
   };
 
   const handleDeleteService = async (id: string) => {
-    Alert.alert('Delete Service', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        try {
-          await api.deleteService(id);
-          loadData();
-        } catch (error: any) {
-          Alert.alert('Error', error.message);
-        }
-      }}
-    ]);
+    showConfirm('Delete Service', 'Are you sure?', async () => {
+      try {
+        await api.deleteService(id);
+        loadData();
+      } catch (error: any) {
+        showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to delete');
+      }
+    }, 'Delete', 'Cancel');
   };
 
   // Category Handlers
@@ -180,7 +179,7 @@ export default function Services() {
 
   const handleSaveCategory = async () => {
     if (!catName) {
-      Alert.alert('Error', 'Category name is required');
+      showAlert('Error', 'Category name is required');
       return;
     }
 
@@ -205,24 +204,27 @@ export default function Services() {
 
       setCategoryModalVisible(false);
       loadData();
-      Alert.alert('Success', `Category ${editingCategory ? 'updated' : 'created'} successfully`);
+      showAlert('Success', `Category ${editingCategory ? 'updated' : 'created'} successfully`);
     } catch (error: any) {
-      Alert.alert('Error', error?.response?.data?.detail || error.message || 'Failed to save category');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to save category');
     }
   };
 
   const handleDeleteCategory = async (id: string) => {
-    Alert.alert('Delete Category', 'Are you sure? This might affect services in this category.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+    showConfirm(
+      'Delete Category',
+      'Are you sure? This might affect services in this category.',
+      async () => {
         try {
           await api.deleteCategory(id);
           loadData();
         } catch (error: any) {
-          Alert.alert('Error', error.message);
+          showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to delete');
         }
-      }}
-    ]);
+      },
+      'Delete',
+      'Cancel'
+    );
   };
 
   const pickImage = async (type: 'service' | 'category') => {
