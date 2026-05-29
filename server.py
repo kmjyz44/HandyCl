@@ -8135,6 +8135,115 @@ async def startup_event():
     """Start background tasks on app startup."""
     asyncio.create_task(_auto_cleanup_loop())
     asyncio.create_task(_create_seed_accounts())
+    asyncio.create_task(_seed_default_categories())
+
+
+async def _seed_default_categories():
+    """Seed the built-in service categories on first startup so admins can edit
+    them (commission %, recommended price, cover image, etc.).
+
+    Idempotent: a category is only inserted if no category with the same
+    `category_id` already exists. Safe to run on every startup.
+    """
+    await asyncio.sleep(3)  # give DB connection time to come up
+
+    DEFAULT_CATEGORIES = [
+        {
+            "category_id": "assembly",
+            "name": "Збірка меблів",
+            "description": "Збірка меблів IKEA, офісних меблів, ліжок, шаф, монтаж полиць та техніки",
+            "icon": "cube-outline",
+            "commission_rate": 15.0,
+            "recommended_price": 30.0,
+        },
+        {
+            "category_id": "cleaning",
+            "name": "Прибирання",
+            "description": "Прибирання будинку, генеральне, офісне, миття вікон, чищення килимів",
+            "icon": "sparkles-outline",
+            "commission_rate": 15.0,
+            "recommended_price": 25.0,
+        },
+        {
+            "category_id": "home_improvements",
+            "name": "Ремонт будинку",
+            "description": "Встановлення техніки, ремонт дверей, фарбування, плитка, сантехніка, електрика",
+            "icon": "hammer-outline",
+            "commission_rate": 15.0,
+            "recommended_price": 40.0,
+        },
+        {
+            "category_id": "moving",
+            "name": "Переїзд та доставка",
+            "description": "Допомога з переїздом, пакування, перенесення меблів, доставка, вивіз сміття",
+            "icon": "car-outline",
+            "commission_rate": 15.0,
+            "recommended_price": 35.0,
+        },
+        {
+            "category_id": "outdoor",
+            "name": "Зовнішні роботи",
+            "description": "Догляд за газоном, прибирання снігу, садівництво, миття під тиском, встановлення огорожі",
+            "icon": "leaf-outline",
+            "commission_rate": 15.0,
+            "recommended_price": 30.0,
+        },
+        {
+            "category_id": "personal",
+            "name": "Особиста допомога",
+            "description": "Доручення, шопінг-асистент, догляд за тваринами, допомога літнім людям",
+            "icon": "person-outline",
+            "commission_rate": 15.0,
+            "recommended_price": 20.0,
+        },
+        {
+            "category_id": "it_tech",
+            "name": "IT та техніка",
+            "description": "Налаштування комп'ютера, Smart TV, ремонт телефонів, мережі, відновлення даних",
+            "icon": "laptop-outline",
+            "commission_rate": 15.0,
+            "recommended_price": 35.0,
+        },
+        {
+            "category_id": "events",
+            "name": "Заходи та свята",
+            "description": "Організація заходів, фотографія, допомога на кухні, бармен",
+            "icon": "balloon-outline",
+            "commission_rate": 15.0,
+            "recommended_price": 30.0,
+        },
+        {
+            "category_id": "other",
+            "name": "Інше",
+            "description": "Майстер на всі руки, репетиторство, переклад, водій",
+            "icon": "ellipsis-horizontal-outline",
+            "commission_rate": 15.0,
+            "recommended_price": 25.0,
+        },
+    ]
+
+    try:
+        created = 0
+        for c in DEFAULT_CATEGORIES:
+            existing = await db.categories.find_one({"category_id": c["category_id"]})
+            if existing:
+                continue
+            doc = {
+                **c,
+                "image": None,
+                "parent_id": None,
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc),
+                "is_default": True,
+            }
+            await db.categories.insert_one(doc)
+            created += 1
+        if created:
+            print(f"[SEED] Seeded {created} default categories.")
+        else:
+            print("[SEED] Default categories already present.")
+    except Exception as e:
+        print(f"[SEED] Failed to seed default categories: {e}")
 
 async def _create_seed_accounts():
     """Create default seed accounts (admin, provider, client) if they don't exist."""

@@ -470,33 +470,57 @@ export default function HomeScreen() {
 
   // ── RENDER STEPS ──────────────────────────────────────────────────────────
 
-  // STEP: HOME — category grid
+  // STEP: HOME — category grid (landing for guests, dashboard-like for authed clients)
   if (step === 'home') {
+    const isGuest = !user;
     return (
       <View style={s.container}>
-        {/* Header */}
-        <View style={s.header}>
-          <View>
-            <Text style={s.greeting}>Привіт, {user?.full_name?.split(' ')[0] || user?.username || 'Клієнт'} 👋</Text>
-            <Text style={s.headerSub}>Що потрібно зробити сьогодні?</Text>
-          </View>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/my-profile')}>
-            {user?.picture ? (
-              <Image source={{ uri: user.picture }} style={s.headerAvatar} />
-            ) : (
-              <View style={[s.headerAvatar, { backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }]}>
-                <Ionicons name="person" size={20} color="#fff" />
+        {/* Header — landing hero for guests, personalised greeting for clients */}
+        {isGuest ? (
+          <View style={s.heroHeader}>
+            <View style={s.heroTopRow}>
+              <View style={s.heroBrand}>
+                <View style={s.heroLogo}>
+                  <Ionicons name="construct" size={20} color="#fff" />
+                </View>
+                <Text style={s.heroBrandText}>HandyHub</Text>
               </View>
-            )}
-          </TouchableOpacity>
-        </View>
+              <View style={s.heroAuthBtns}>
+                <TouchableOpacity onPress={() => router.push('/login')} style={s.heroLoginBtn}>
+                  <Text style={s.heroLoginBtnText}>Увійти</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => router.push('/register')} style={s.heroSignupBtn}>
+                  <Text style={s.heroSignupBtnText}>Реєстрація</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <Text style={s.heroTitle}>Знайдіть надійного майстра поряд</Text>
+            <Text style={s.heroSubtitle}>Замовляйте послуги в кілька кліків. Реєстрація не обов'язкова.</Text>
+          </View>
+        ) : (
+          <View style={s.header}>
+            <View>
+              <Text style={s.greeting}>Привіт, {user?.full_name?.split(' ')[0] || user?.username || 'Клієнт'} 👋</Text>
+              <Text style={s.headerSub}>Що потрібно зробити сьогодні?</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/my-profile')}>
+              {user?.picture ? (
+                <Image source={{ uri: user.picture }} style={s.headerAvatar} />
+              ) : (
+                <View style={[s.headerAvatar, { backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name="person" size={20} color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Search */}
         <View style={s.searchBox}>
           <Ionicons name="search-outline" size={20} color="#9ca3af" />
           <TextInput
             style={s.searchInput}
-            placeholder="Пошук послуги..."
+            placeholder={isGuest ? 'Що потрібно зробити? (наприклад: збірка меблів)' : 'Пошук послуги...'}
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholderTextColor="#9ca3af"
@@ -543,6 +567,40 @@ export default function HomeScreen() {
               <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
             </TouchableOpacity>
           ))}
+
+          {/* How it works — landing only */}
+          {isGuest ? (
+            <View style={s.howItWorks}>
+              <Text style={[s.sectionTitle, { marginTop: 24, marginBottom: 12 }]}>Як це працює</Text>
+              <View style={s.stepRow}>
+                <View style={[s.stepCircle, { backgroundColor: '#eff6ff' }]}>
+                  <Text style={[s.stepNum, { color: '#2563eb' }]}>1</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.stepTitleSm}>Опишіть завдання</Text>
+                  <Text style={s.stepDesc}>Оберіть категорію та коротко опишіть, що треба зробити.</Text>
+                </View>
+              </View>
+              <View style={s.stepRow}>
+                <View style={[s.stepCircle, { backgroundColor: '#f0fdf4' }]}>
+                  <Text style={[s.stepNum, { color: '#16a34a' }]}>2</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.stepTitleSm}>Оберіть виконавця</Text>
+                  <Text style={s.stepDesc}>Перегляньте профілі, рейтинги та ціни — оберіть кращого.</Text>
+                </View>
+              </View>
+              <View style={s.stepRow}>
+                <View style={[s.stepCircle, { backgroundColor: '#fef3c7' }]}>
+                  <Text style={[s.stepNum, { color: '#d97706' }]}>3</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.stepTitleSm}>Замовте без реєстрації</Text>
+                  <Text style={s.stepDesc}>Підтвердіть бронювання — рахунок створиться автоматично.</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
         </ScrollView>
       </View>
     );
@@ -1558,4 +1616,26 @@ const s = StyleSheet.create({
   photoRemoveBtn: { position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 10 },
   photoAddBtn: { width: 80, height: 80, borderRadius: 12, borderWidth: 2, borderColor: '#bfdbfe', borderStyle: 'dashed', backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', gap: 4 },
   photoAddText: { fontSize: 11, color: '#2563eb', fontWeight: '600' },
+
+  // Landing hero (guest)
+  heroHeader: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 24 },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+  heroBrand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroLogo: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  heroBrandText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  heroAuthBtns: { flexDirection: 'row', gap: 8 },
+  heroLoginBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  heroLoginBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  heroSignupBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: '#fff' },
+  heroSignupBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
+  heroTitle: { color: '#fff', fontSize: 24, fontWeight: '800', lineHeight: 30, marginBottom: 6 },
+  heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20 },
+
+  // How it works section (landing)
+  howItWorks: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginTop: 8, borderWidth: 1, borderColor: '#f3f4f6' },
+  stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  stepCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  stepNum: { fontSize: 16, fontWeight: '800' },
+  stepTitleSm: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 2 },
+  stepDesc: { fontSize: 13, color: '#6b7280', lineHeight: 18 },
 });
