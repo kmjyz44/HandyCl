@@ -17,6 +17,17 @@
 - `app/(tabs)/services.tsx` — Expo admin panel with Services + Categories tabs
 - `utils/api.ts` — Axios API client used by the Expo admin app
 
+## What's been implemented (2026-01, iteration 2)
+- Backend now seeds 9 built-in categories (Збірка меблів, Прибирання, Ремонт будинку,
+  Переїзд та доставка, Зовнішні роботи, Особиста допомога, IT та техніка,
+  Заходи та свята, Інше) into MongoDB on first startup with default
+  `commission_rate=15%` and `recommended_price` per category — admins now see
+  the existing categories in `/api/admin/categories` and can edit them.
+- Guest landing hero on the home page: HandyHub brand, slogan
+  "Знайдіть надійного майстра поряд", Login/Register buttons, and a
+  "Як це працює" 1-2-3 explanation that booking works without registration.
+- Authenticated clients still get the personalised greeting.
+
 ## What's been implemented (2026-01)
 ### Backend (`server.py` + `backend/server.py`)
 - `POST /api/admin/categories` — accepts JSON body; supports large base64 cover image
