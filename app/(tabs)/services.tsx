@@ -44,6 +44,7 @@ export default function Services() {
   const [catName, setCatName] = useState('');
   const [catDescription, setCatDescription] = useState('');
   const [catCommission, setCatCommission] = useState('');
+  const [catRecommendedPrice, setCatRecommendedPrice] = useState('');
   const [catIcon, setCatIcon] = useState('');
   const [catImageBase64, setCatImageBase64] = useState('');
 
@@ -62,7 +63,7 @@ export default function Services() {
       setLoading(true);
       const [servicesData, categoriesData] = await Promise.all([
         api.getServices(),
-        api.getCategories()
+        api.adminGetCategories().catch(() => api.getCategories())
       ]);
       setServices(servicesData);
       setCategories(categoriesData);
@@ -157,7 +158,12 @@ export default function Services() {
       setEditingCategory(category);
       setCatName(category.name);
       setCatDescription(category.description || '');
-      setCatCommission((category.commission_rate || 0).toString());
+      setCatCommission((category.commission_rate ?? 0).toString());
+      setCatRecommendedPrice(
+        category.recommended_price !== null && category.recommended_price !== undefined
+          ? category.recommended_price.toString()
+          : ''
+      );
       setCatIcon(category.icon || '');
       setCatImageBase64(category.image || '');
     } else {
@@ -165,6 +171,7 @@ export default function Services() {
       setCatName('');
       setCatDescription('');
       setCatCommission('15');
+      setCatRecommendedPrice('');
       setCatIcon('');
       setCatImageBase64('');
     }
@@ -178,10 +185,14 @@ export default function Services() {
     }
 
     try {
-      const data = {
+      const commissionVal = parseFloat(catCommission);
+      const recommendedVal = catRecommendedPrice.trim() === '' ? null : parseFloat(catRecommendedPrice);
+
+      const data: any = {
         name: catName,
         description: catDescription,
-        commission_rate: parseFloat(catCommission),
+        commission_rate: isNaN(commissionVal) ? 0 : commissionVal,
+        recommended_price: recommendedVal !== null && isNaN(recommendedVal as number) ? null : recommendedVal,
         icon: catIcon,
         image: catImageBase64 || undefined,
       };
@@ -196,7 +207,7 @@ export default function Services() {
       loadData();
       Alert.alert('Success', `Category ${editingCategory ? 'updated' : 'created'} successfully`);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save category');
+      Alert.alert('Error', error?.response?.data?.detail || error.message || 'Failed to save category');
     }
   };
 
@@ -290,11 +301,22 @@ export default function Services() {
         ) : (
           categories.map((cat) => (
             <View key={cat.category_id || cat.id} style={styles.card}>
+              {cat.image ? (
+                <Image source={{ uri: cat.image }} style={styles.cardCover} />
+              ) : null}
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>{cat.name}</Text>
-                <Text style={styles.commissionText}>{cat.commission_rate || 0}% Fee</Text>
+                <Text style={styles.commissionText}>{cat.commission_rate ?? 0}% Fee</Text>
               </View>
+              {cat.recommended_price !== null && cat.recommended_price !== undefined ? (
+                <Text style={styles.recommendedPriceText}>
+                  Recommended: ${cat.recommended_price}
+                </Text>
+              ) : null}
               <Text style={styles.cardSub}>{cat.description || 'No description'}</Text>
+              {cat.is_active === false ? (
+                <Text style={styles.inactiveBadge}>Inactive</Text>
+              ) : null}
               <View style={styles.cardActions}>
                 <TouchableOpacity onPress={() => openCategoryModal(cat)} style={styles.actionBtn}>
                   <Ionicons name="pencil" size={20} color="#2563eb" />
@@ -357,22 +379,54 @@ export default function Services() {
           </View>
           <ScrollView style={styles.form}>
             <Text style={styles.label}>Category Name</Text>
-            <TextInput style={styles.input} value={catName} onChangeText={setCatName} />
+            <TextInput
+              style={styles.input}
+              value={catName}
+              onChangeText={setCatName}
+              placeholder="e.g. Cleaning"
+            />
 
-            <Text style={styles.label}>Commission Rate (%)</Text>
-            <TextInput style={styles.input} value={catCommission} onChangeText={setCatCommission} keyboardType="numeric" />
+            <Text style={styles.label}>Platform Commission (%)</Text>
+            <TextInput
+              style={styles.input}
+              value={catCommission}
+              onChangeText={setCatCommission}
+              keyboardType="numeric"
+              placeholder="e.g. 15"
+            />
+            <Text style={styles.helperText}>
+              Percent platform takes from each completed job in this category.
+            </Text>
+
+            <Text style={styles.label}>Recommended Price for Executor ($)</Text>
+            <TextInput
+              style={styles.input}
+              value={catRecommendedPrice}
+              onChangeText={setCatRecommendedPrice}
+              keyboardType="numeric"
+              placeholder="Optional — e.g. 50"
+            />
+            <Text style={styles.helperText}>
+              Suggested base price shown to executors when they price a job in this category.
+            </Text>
 
             <Text style={styles.label}>Description</Text>
-            <TextInput style={[styles.input, { height: 80 }]} value={catDescription} onChangeText={setCatDescription} multiline />
+            <TextInput
+              style={[styles.input, { height: 80 }]}
+              value={catDescription}
+              onChangeText={setCatDescription}
+              multiline
+              placeholder="Short description"
+            />
 
-            <Text style={styles.label}>Category Image</Text>
+            <Text style={styles.label}>Category Cover Image</Text>
             <TouchableOpacity style={styles.imagePicker} onPress={() => pickImage('category')}>
               {catImageBase64 ? (
                 <Image source={{ uri: catImageBase64 }} style={styles.previewImage} />
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <Ionicons name="camera" size={32} color="#9ca3af" />
-                  <Text style={styles.placeholderText}>Upload Category Image</Text>
+                  <Text style={styles.placeholderText}>Upload Cover Image</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -412,8 +466,16 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold' },
   form: { padding: 20 },
   label: { fontSize: 16, fontWeight: '600', marginBottom: 5, color: '#374151' },
-  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, marginBottom: 20, fontSize: 16 },
+  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, marginBottom: 8, fontSize: 16 },
+  helperText: { fontSize: 12, color: '#6b7280', marginBottom: 16, marginTop: -4 },
   pickerContainer: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, marginBottom: 20, overflow: 'hidden' },
-  saveBtn: { backgroundColor: '#2563eb', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  saveBtn: { backgroundColor: '#2563eb', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10, marginBottom: 40 },
   saveBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  cardCover: { width: '100%', height: 140, borderRadius: 8, marginBottom: 10, backgroundColor: '#e5e7eb' },
+  recommendedPriceText: { color: '#2563eb', fontWeight: '600', marginBottom: 4 },
+  inactiveBadge: { alignSelf: 'flex-start', backgroundColor: '#fee2e2', color: '#b91c1c', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, fontSize: 12, fontWeight: '600', marginBottom: 6, overflow: 'hidden' },
+  imagePicker: { borderWidth: 1, borderColor: '#d1d5db', borderStyle: 'dashed', borderRadius: 8, marginBottom: 20, overflow: 'hidden', minHeight: 120 },
+  imagePlaceholder: { padding: 30, alignItems: 'center', justifyContent: 'center' },
+  placeholderText: { color: '#9ca3af', marginTop: 8, fontSize: 14 },
+  previewImage: { width: '100%', height: 180, resizeMode: 'cover' },
 });

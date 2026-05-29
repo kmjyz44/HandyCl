@@ -133,18 +133,23 @@ export const api = {
     return res.data;
   },
 
-  createCategory: async (data: { name: string; description?: string; icon?: string; image?: string; parent_id?: string; commission_rate?: number }) => {
-    const res = await client.post('/admin/categories', null, { params: data });
+  adminGetCategories: async () => {
+    const res = await client.get('/admin/categories');
     return res.data;
   },
 
-  updateCategory: async (id: string, data: { name?: string; description?: string; icon?: string; image?: string; commission_rate?: number; is_active?: boolean }) => {
-    const res = await client.put(`/admin/categories/${id}`, null, { params: data });
+  createCategory: async (data: { name: string; description?: string; icon?: string; image?: string; parent_id?: string; commission_rate?: number; recommended_price?: number }) => {
+    const res = await client.post('/admin/categories', data);
     return res.data;
   },
 
-  deleteCategory: async (id: string) => {
-    const res = await client.delete(`/admin/categories/${id}`);
+  updateCategory: async (id: string, data: { name?: string; description?: string; icon?: string; image?: string; commission_rate?: number; recommended_price?: number; is_active?: boolean }) => {
+    const res = await client.put(`/admin/categories/${id}`, data);
+    return res.data;
+  },
+
+  deleteCategory: async (id: string, hard: boolean = false) => {
+    const res = await client.delete(`/admin/categories/${id}`, { params: { hard } });
     return res.data;
   },
 

@@ -4873,72 +4873,133 @@ async def validate_promo_code(code: str, amount: float, current_user: User = Dep
 
 # ==================== CATEGORIES ENDPOINTS ====================
 
+class CategoryCreateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    image: Optional[str] = None  # base64 data URL for cover photo
+    parent_id: Optional[str] = None
+    commission_rate: Optional[float] = 0.0  # platform commission %
+    recommended_price: Optional[float] = None  # recommended price for executor
+
+class CategoryUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    image: Optional[str] = None
+    parent_id: Optional[str] = None
+    commission_rate: Optional[float] = None
+    recommended_price: Optional[float] = None
+    is_active: Optional[bool] = None
+
+
 @api_router.get("/categories")
 async def get_categories():
-    """Get all service categories"""
+    """Get all active service categories (public)"""
     categories = await db.categories.find({"is_active": True}, {"_id": 0}).to_list(100)
     if not categories:
         # Return enum values if no custom categories
         return [{"id": cat.value, "name": cat.value.replace("_", " ").title()} for cat in ServiceCategory]
     return categories
 
-@api_router.post("/admin/categories")
-async def create_category(
-    name: str,
-    description: Optional[str] = None,
-    icon: Optional[str] = None,
-    image: Optional[str] = None,
-    parent_id: Optional[str] = None,
-    commission_rate: float = 0.0,
+
+@api_router.get("/admin/categories")
+async def admin_get_categories(
+    include_inactive: bool = True,
     current_user: User = Depends(require_admin)
 ):
-    """Admin creates category"""
+    """Admin: get all categories including inactive ones."""
+    query = {} if include_inactive else {"is_active": True}
+    categories = await db.categories.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return categories
+
+
+@api_router.post("/admin/categories")
+async def create_category(
+    payload: CategoryCreateRequest,
+    current_user: User = Depends(require_admin)
+):
+    """Admin creates a category. Accepts JSON body (supports base64 image)."""
     cat_id = f"cat_{uuid.uuid4().hex[:8]}"
     category = {
         "category_id": cat_id,
-        "name": name,
-        "description": description,
-        "icon": icon,
-        "image": image,
-        "parent_id": parent_id,
-        "commission_rate": commission_rate,
+        "name": payload.name,
+        "description": payload.description,
+        "icon": payload.icon,
+        "image": payload.image,
+        "parent_id": payload.parent_id,
+        "commission_rate": float(payload.commission_rate or 0.0),
+        "recommended_price": float(payload.recommended_price) if payload.recommended_price is not None else None,
         "is_active": True,
         "created_at": datetime.now(timezone.utc)
     }
     await db.categories.insert_one(category)
+    category.pop("_id", None)
     return category
+
 
 @api_router.put("/admin/categories/{category_id}")
 async def update_category(
     category_id: str,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    icon: Optional[str] = None,
-    image: Optional[str] = None,
-    commission_rate: Optional[float] = None,
-    is_active: Optional[bool] = None,
+    payload: CategoryUpdateRequest,
     current_user: User = Depends(require_admin)
 ):
-    """Admin updates category"""
+    """Admin updates a category. Accepts JSON body (supports base64 image)."""
+    existing = await db.categories.find_one({"category_id": category_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Category not found")
+
     update_data = {}
-    if name:
-        update_data["name"] = name
-    if description:
-        update_data["description"] = description
-    if icon:
-        update_data["icon"] = icon
-    if image:
-        update_data["image"] = image
-    if is_active is not None:
-        update_data["is_active"] = is_active
-    if commission_rate is not None:
-        update_data["commission_rate"] = commission_rate
+    data = payload.model_dump(exclude_unset=True)
+
+    if "name" in data and data["name"] is not None:
+        update_data["name"] = data["name"]
+    if "description" in data:
+        update_data["description"] = data["description"]
+    if "icon" in data:
+        update_data["icon"] = data["icon"]
+    if "image" in data:
+        update_data["image"] = data["image"]
+    if "parent_id" in data:
+        update_data["parent_id"] = data["parent_id"]
+    if "commission_rate" in data and data["commission_rate"] is not None:
+        update_data["commission_rate"] = float(data["commission_rate"])
+    if "recommended_price" in data:
+        update_data["recommended_price"] = (
+            float(data["recommended_price"]) if data["recommended_price"] is not None else None
+        )
+    if "is_active" in data and data["is_active"] is not None:
+        update_data["is_active"] = bool(data["is_active"])
 
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
 
+    update_data["updated_at"] = datetime.now(timezone.utc)
     await db.categories.update_one({"category_id": category_id}, {"$set": update_data})
-    return {"message": "Category updated"}
+    updated = await db.categories.find_one({"category_id": category_id}, {"_id": 0})
+    return updated or {"message": "Category updated"}
+
+
+@api_router.delete("/admin/categories/{category_id}")
+async def delete_category(
+    category_id: str,
+    hard: bool = False,
+    current_user: User = Depends(require_admin)
+):
+    """Admin deletes a category. Default: soft-delete (is_active=False). Pass ?hard=true to remove from DB."""
+    existing = await db.categories.find_one({"category_id": category_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    if hard:
+        await db.categories.delete_one({"category_id": category_id})
+        return {"message": "Category deleted", "category_id": category_id, "hard": True}
+
+    await db.categories.update_one(
+        {"category_id": category_id},
+        {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc)}}
+    )
+    return {"message": "Category deactivated", "category_id": category_id, "hard": False}
 
 # ==================== TASKER EARNINGS ENDPOINTS ====================
 
