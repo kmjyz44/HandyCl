@@ -47,6 +47,9 @@ export default function Services() {
   const [catRecommendedPrice, setCatRecommendedPrice] = useState('');
   const [catIcon, setCatIcon] = useState('');
   const [catImageBase64, setCatImageBase64] = useState('');
+  const [catSaving, setCatSaving] = useState(false);
+  const [catFormError, setCatFormError] = useState<string | null>(null);
+  const [catFormSuccess, setCatFormSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -153,6 +156,8 @@ export default function Services() {
 
   // Category Handlers
   const openCategoryModal = (category?: any) => {
+    setCatFormError(null);
+    setCatFormSuccess(null);
     if (category) {
       setEditingCategory(category);
       setCatName(category.name);
@@ -178,20 +183,37 @@ export default function Services() {
   };
 
   const handleSaveCategory = async () => {
-    if (!catName) {
-      showAlert('Error', 'Category name is required');
+    setCatFormError(null);
+    setCatFormSuccess(null);
+
+    if (!catName || !catName.trim()) {
+      setCatFormError('Назва категорії обов\u2019язкова');
       return;
     }
 
-    try {
-      const commissionVal = parseFloat(catCommission);
-      const recommendedVal = catRecommendedPrice.trim() === '' ? null : parseFloat(catRecommendedPrice);
+    const commissionVal = parseFloat(catCommission);
+    if (isNaN(commissionVal) || commissionVal < 0 || commissionVal > 100) {
+      setCatFormError('Комісія повинна бути числом від 0 до 100');
+      return;
+    }
 
+    const recommendedRaw = catRecommendedPrice.trim();
+    let recommendedVal: number | null = null;
+    if (recommendedRaw !== '') {
+      recommendedVal = parseFloat(recommendedRaw);
+      if (isNaN(recommendedVal) || recommendedVal < 0) {
+        setCatFormError('Рекомендована ціна повинна бути числом ≥ 0');
+        return;
+      }
+    }
+
+    setCatSaving(true);
+    try {
       const data: any = {
-        name: catName,
+        name: catName.trim(),
         description: catDescription,
-        commission_rate: isNaN(commissionVal) ? 0 : commissionVal,
-        recommended_price: recommendedVal !== null && isNaN(recommendedVal as number) ? null : recommendedVal,
+        commission_rate: commissionVal,
+        recommended_price: recommendedVal,
         icon: catIcon,
         image: catImageBase64 || undefined,
       };
@@ -202,11 +224,18 @@ export default function Services() {
         await api.createCategory(data);
       }
 
-      setCategoryModalVisible(false);
-      loadData();
-      showAlert('Success', `Category ${editingCategory ? 'updated' : 'created'} successfully`);
+      setCatFormSuccess(editingCategory ? 'Категорію збережено' : 'Категорію створено');
+      await loadData();
+      // Close after short delay so user sees success message
+      setTimeout(() => {
+        setCategoryModalVisible(false);
+        setCatFormSuccess(null);
+      }, 700);
     } catch (error: any) {
-      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to save category');
+      const detail = error?.response?.data?.detail || error?.message || 'Не вдалося зберегти категорію';
+      setCatFormError(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    } finally {
+      setCatSaving(false);
     }
   };
 
@@ -433,9 +462,29 @@ export default function Services() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCategory}>
-              <Text style={styles.saveBtnText}>Save Category</Text>
+            <TouchableOpacity
+              style={[styles.saveBtn, catSaving && { opacity: 0.6 }]}
+              onPress={handleSaveCategory}
+              disabled={catSaving}
+              data-testid="save-category-btn"
+            >
+              <Text style={styles.saveBtnText}>
+                {catSaving ? 'Збереження…' : 'Save Category'}
+              </Text>
             </TouchableOpacity>
+
+            {catFormError ? (
+              <View style={styles.inlineError} data-testid="cat-form-error">
+                <Ionicons name="alert-circle" size={18} color="#b91c1c" />
+                <Text style={styles.inlineErrorText}>{catFormError}</Text>
+              </View>
+            ) : null}
+            {catFormSuccess ? (
+              <View style={styles.inlineSuccess} data-testid="cat-form-success">
+                <Ionicons name="checkmark-circle" size={18} color="#15803d" />
+                <Text style={styles.inlineSuccessText}>{catFormSuccess}</Text>
+              </View>
+            ) : null}
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
@@ -480,4 +529,8 @@ const styles = StyleSheet.create({
   imagePlaceholder: { padding: 30, alignItems: 'center', justifyContent: 'center' },
   placeholderText: { color: '#9ca3af', marginTop: 8, fontSize: 14 },
   previewImage: { width: '100%', height: 180, resizeMode: 'cover' },
+  inlineError: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fee2e2', borderColor: '#fecaca', borderWidth: 1, padding: 10, borderRadius: 8, marginTop: 12, gap: 8 },
+  inlineErrorText: { color: '#b91c1c', flex: 1, fontSize: 14, fontWeight: '500' },
+  inlineSuccess: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#dcfce7', borderColor: '#bbf7d0', borderWidth: 1, padding: 10, borderRadius: 8, marginTop: 12, gap: 8 },
+  inlineSuccessText: { color: '#15803d', flex: 1, fontSize: 14, fontWeight: '500' },
 });
