@@ -8,7 +8,7 @@ const API_URL =
 const client = axios.create({
   baseURL: `${API_URL}/api`,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30000, // 30 second timeout
+  timeout: 60000, // 60s — base64 image uploads can take longer on slow mobile networks
 });
 
 client.interceptors.request.use((config) => {

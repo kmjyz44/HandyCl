@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useServiceStore } from '../../store/serviceStore';
 import { api } from '../../utils/api';
 import { showAlert, showConfirm } from '../../utils/alert';
+import { compressBase64Image } from '../../utils/imageCompress';
 
 export default function Services() {
   const { services, setServices } = useServiceStore();
@@ -215,7 +216,9 @@ export default function Services() {
         commission_rate: commissionVal,
         recommended_price: recommendedVal,
         icon: catIcon,
-        image: catImageBase64 || undefined,
+        // Explicit null so the backend clears the image when the admin
+        // removed it; empty string would otherwise be coerced and ignored.
+        image: catImageBase64 ? catImageBase64 : null,
       };
 
       if (editingCategory) {
@@ -256,19 +259,34 @@ export default function Services() {
     );
   };
 
+  const handleToggleCategoryActive = async (cat: any) => {
+    const id = cat.category_id || cat.id;
+    const nextActive = cat.is_active === false ? true : false;
+    try {
+      await api.updateCategory(id, { is_active: nextActive });
+      loadData();
+    } catch (error: any) {
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to toggle');
+    }
+  };
+
   const pickImage = async (type: 'service' | 'category') => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 9],
+      allowsEditing: Platform.OS !== 'web',
+      aspect: [1, 1],
       quality: 0.7,
       base64: true,
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      const base64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      if (type === 'service') setServiceImageBase64(base64);
-      else setCatImageBase64(base64);
+      const raw = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      // Aggressively compress on web — phone cameras produce 5–10 MB photos
+      // which trip the 30 s axios timeout when sent as base64. 1024 px / 0.8
+      // JPEG ≈ 150–300 KB.
+      const compressed = await compressBase64Image(raw, 1024, 0.8);
+      if (type === 'service') setServiceImageBase64(compressed);
+      else setCatImageBase64(compressed);
     }
   };
 
@@ -349,6 +367,20 @@ export default function Services() {
                 <Text style={styles.inactiveBadge}>Inactive</Text>
               ) : null}
               <View style={styles.cardActions}>
+                <TouchableOpacity
+                  onPress={() => handleToggleCategoryActive(cat)}
+                  style={[styles.actionBtn, { flexDirection: 'row', gap: 4, paddingHorizontal: 8 }]}
+                  data-testid={`cat-toggle-${cat.category_id || cat.id}`}
+                >
+                  <Ionicons
+                    name={cat.is_active === false ? 'play-circle' : 'pause-circle'}
+                    size={20}
+                    color={cat.is_active === false ? '#16a34a' : '#d97706'}
+                  />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: cat.is_active === false ? '#16a34a' : '#d97706' }}>
+                    {cat.is_active === false ? 'Activate' : 'Deactivate'}
+                  </Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => openCategoryModal(cat)} style={styles.actionBtn}>
                   <Ionicons name="pencil" size={20} color="#2563eb" />
                 </TouchableOpacity>
@@ -461,6 +493,16 @@ export default function Services() {
                 </View>
               )}
             </TouchableOpacity>
+            {catImageBase64 ? (
+              <TouchableOpacity
+                style={styles.removeImageBtn}
+                onPress={() => setCatImageBase64('')}
+                data-testid="remove-cat-image-btn"
+              >
+                <Ionicons name="trash-outline" size={16} color="#b91c1c" />
+                <Text style={styles.removeImageBtnText}>Remove image</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.saveBtn, catSaving && { opacity: 0.6 }]}
@@ -529,6 +571,8 @@ const styles = StyleSheet.create({
   imagePlaceholder: { padding: 30, alignItems: 'center', justifyContent: 'center' },
   placeholderText: { color: '#9ca3af', marginTop: 8, fontSize: 14 },
   previewImage: { width: '100%', height: 180, resizeMode: 'cover' },
+  removeImageBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6, backgroundColor: '#fee2e2', marginTop: -10, marginBottom: 16 },
+  removeImageBtnText: { color: '#b91c1c', fontWeight: '600', fontSize: 13 },
   inlineError: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fee2e2', borderColor: '#fecaca', borderWidth: 1, padding: 10, borderRadius: 8, marginTop: 12, gap: 8 },
   inlineErrorText: { color: '#b91c1c', flex: 1, fontSize: 14, fontWeight: '500' },
   inlineSuccess: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#dcfce7', borderColor: '#bbf7d0', borderWidth: 1, padding: 10, borderRadius: 8, marginTop: 12, gap: 8 },

@@ -14,16 +14,18 @@ import { api } from '../../utils/api';
 
 // High-quality stable Unsplash photos used when a category has no admin-uploaded
 // cover image. Keyed by category id so the home grid always looks complete.
+// Each URL embeds a topical search query so the photo always matches the
+// category theme even if Unsplash rotates the result.
 const FALLBACK_COVERS: Record<string, string> = {
-  assembly:          'https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=800&q=80&auto=format&fit=crop',
-  cleaning:          'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80&auto=format&fit=crop',
-  home_improvements: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=800&q=80&auto=format&fit=crop',
-  moving:            'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80&auto=format&fit=crop',
-  outdoor:           'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80&auto=format&fit=crop',
-  personal:          'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=800&q=80&auto=format&fit=crop',
-  it_tech:           'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80&auto=format&fit=crop',
-  events:            'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&q=80&auto=format&fit=crop',
-  other:             'https://images.unsplash.com/photo-1581092334651-ddf26d9a09d0?w=800&q=80&auto=format&fit=crop',
+  assembly:          'https://source.unsplash.com/featured/600x600/?furniture-assembly,ikea',
+  cleaning:          'https://source.unsplash.com/featured/600x600/?cleaning,housekeeping',
+  home_improvements: 'https://source.unsplash.com/featured/600x600/?home-renovation,tools',
+  moving:            'https://source.unsplash.com/featured/600x600/?moving-boxes,relocation',
+  outdoor:           'https://source.unsplash.com/featured/600x600/?gardening,lawn',
+  personal:          'https://source.unsplash.com/featured/600x600/?personal-assistant,helping',
+  it_tech:           'https://source.unsplash.com/featured/600x600/?computer-repair,tech-support',
+  events:            'https://source.unsplash.com/featured/600x600/?party-event,celebration',
+  other:             'https://source.unsplash.com/featured/600x600/?service,handyman',
 };
 
 const SKILL_CATEGORIES = [
@@ -341,7 +343,13 @@ export default function HomeScreen() {
 
   const selectCategory = (cat: typeof SKILL_CATEGORIES[0]) => {
     setBooking(b => ({ ...b, categoryId: cat.id, categoryName: cat.name, skillName: '' }));
-    setStep('skills');
+    // Admin-created categories don't have predefined sub-skills — skip the
+    // skills step and go straight to "describe your task".
+    if (!cat.skills || cat.skills.length === 0) {
+      setStep('details');
+    } else {
+      setStep('skills');
+    }
   };
 
   const selectSkill = (skill: string) => {
@@ -500,9 +508,28 @@ export default function HomeScreen() {
     });
   };
 
-  const filteredCategories = SKILL_CATEGORIES.filter(c =>
+  // Merged list: hardcoded SKILL_CATEGORIES + admin-created DB-only ones.
+  // Admin-created categories don't have predefined skills; we surface them
+  // with a fallback icon and empty skills so the client can still book them.
+  const mergedCategories = React.useMemo(() => {
+    const builtinIds = new Set(SKILL_CATEGORIES.map(c => c.id));
+    const dbOnly = dbCategories
+      .filter((c: any) => c.is_active !== false)
+      .filter((c: any) => !builtinIds.has(c.category_id || c.id))
+      .map((c: any) => ({
+        id: c.category_id || c.id,
+        name: c.name || 'Категорія',
+        icon: 'apps-outline' as const,
+        color: '#475569',
+        bg: '#f1f5f9',
+        skills: [], // admin-created categories use generic "Describe your task" flow
+      }));
+    return [...SKILL_CATEGORIES, ...dbOnly];
+  }, [dbCategories]);
+
+  const filteredCategories = mergedCategories.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()))
+    c.skills.some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   // ── RENDER STEPS ──────────────────────────────────────────────────────────
