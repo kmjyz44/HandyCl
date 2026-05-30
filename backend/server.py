@@ -5954,6 +5954,51 @@ async def client_submit_booking(
 
 # ==================== COMMISSION SYSTEM ENDPOINTS ====================
 
+async def compute_client_pricing(executor_rate: float, category_id: Optional[str] = None) -> Dict[str, Any]:
+    """Apply the category's commission as a markup on top of the executor's price.
+
+    Business rules (admin spec):
+      • Executor sets their own price X (their net earnings).
+      • Admin sets commission_rate (%) per category.
+      • Client sees X * (1 + commission_rate/100).
+      • Platform earns the commission_amount; executor receives their full X.
+    """
+    try:
+        rate = float(executor_rate or 0)
+    except Exception:
+        rate = 0.0
+
+    commission_rate = 0.0
+    category_doc = None
+    if category_id:
+        category_doc = await db.categories.find_one(
+            {"category_id": category_id},
+            {"_id": 0, "commission_rate": 1, "name": 1}
+        )
+        if category_doc and category_doc.get("commission_rate") is not None:
+            commission_rate = float(category_doc["commission_rate"])
+
+    commission_amount = round(rate * (commission_rate / 100.0), 2)
+    client_total = round(rate + commission_amount, 2)
+
+    return {
+        "executor_rate": round(rate, 2),
+        "commission_rate": round(commission_rate, 2),
+        "commission_amount": commission_amount,
+        "client_total": client_total,
+        "executor_take": round(rate, 2),
+        "platform_take": commission_amount,
+        "category_id": category_id,
+        "category_name": category_doc.get("name") if category_doc else None,
+    }
+
+
+@api_router.get("/pricing-preview")
+async def pricing_preview(executor_rate: float, category_id: Optional[str] = None):
+    """Public price-preview endpoint. Returns marked-up total + split."""
+    return await compute_client_pricing(executor_rate, category_id)
+
+
 async def calculate_commission(booking_id: str, base_price: float) -> Dict[str, Any]:
     """Calculate commission based on rules hierarchy"""
     booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})

@@ -11,6 +11,21 @@ import { useBookingStore } from '../../store/bookingStore';
 import { api } from '../../utils/api';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
+
+// High-quality stable Unsplash photos used when a category has no admin-uploaded
+// cover image. Keyed by category id so the home grid always looks complete.
+const FALLBACK_COVERS: Record<string, string> = {
+  assembly:          'https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=800&q=80&auto=format&fit=crop',
+  cleaning:          'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80&auto=format&fit=crop',
+  home_improvements: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=800&q=80&auto=format&fit=crop',
+  moving:            'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80&auto=format&fit=crop',
+  outdoor:           'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80&auto=format&fit=crop',
+  personal:          'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=800&q=80&auto=format&fit=crop',
+  it_tech:           'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80&auto=format&fit=crop',
+  events:            'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&q=80&auto=format&fit=crop',
+  other:             'https://images.unsplash.com/photo-1581092334651-ddf26d9a09d0?w=800&q=80&auto=format&fit=crop',
+};
+
 const SKILL_CATEGORIES = [
   {
     id: 'assembly', name: 'Збірка меблів', icon: 'cube-outline' as const,
@@ -560,7 +575,7 @@ export default function HomeScreen() {
           <View style={s.grid}>
             {filteredCategories.map(cat => {
               const dbCat = dbCatById[cat.id];
-              const coverImage = dbCat?.image;
+              const coverImage = dbCat?.image || FALLBACK_COVERS[cat.id];
               const displayName = dbCat?.name || cat.name;
               if (coverImage) {
                 // Premium card: real photo with gradient overlay + label

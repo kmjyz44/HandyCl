@@ -5825,6 +5825,16 @@ async def client_create_booking(
 
     booking_id = f"booking_{uuid.uuid4().hex[:12]}"
 
+    # Apply per-category commission markup. The executor's rate stays the
+    # same (service.price); client_total = service.price * (1 + commission/100)
+    executor_rate = float(data.provider_hourly_rate or service.get("price") or 0)
+    pricing = await compute_client_pricing(executor_rate, service.get("category"))
+
+    # If frontend already passed a total_price (e.g. pre-computed), prefer it
+    # only when it matches our computed client_total within rounding; otherwise
+    # the backend is the source of truth to prevent client-side tampering.
+    client_total = pricing["client_total"]
+
     booking = {
         "booking_id": booking_id,
         "client_id": current_user.user_id,
@@ -5842,7 +5852,14 @@ async def client_create_booking(
         "problem_photos": data.problem_photos,
         "status": BookingStatus.ASSIGNED if data.provider_id else BookingStatus.DRAFT,
         "estimated_price": service.get("price"),
-        "total_price": data.total_price or service.get("price", 0),
+        "total_price": client_total,
+        # Pricing breakdown snapshot (so changes to category commission later
+        # don't retroactively alter past bookings)
+        "executor_rate": pricing["executor_rate"],
+        "commission_rate_snapshot": pricing["commission_rate"],
+        "commission_amount": pricing["commission_amount"],
+        "platform_take": pricing["platform_take"],
+        "executor_take": pricing["executor_take"],
         "provider_id": data.provider_id,
         "provider_hourly_rate": data.provider_hourly_rate,
         "created_at": datetime.now(timezone.utc),
@@ -5867,7 +5884,10 @@ async def client_create_booking(
             "time": data.time,
             "status": TaskStatus.ASSIGNED,
             "provider_hourly_rate": data.provider_hourly_rate,
-            "total_price": data.total_price or service.get("price", 0),
+            "total_price": client_total,
+            "executor_take": pricing["executor_take"],
+            "platform_take": pricing["platform_take"],
+            "commission_rate_snapshot": pricing["commission_rate"],
             "photos": data.problem_photos or [],
             "scheduled_date": data.date,
             "scheduled_time": data.time,
@@ -5878,7 +5898,7 @@ async def client_create_booking(
         # Send notification to provider
         provider = await db.users.find_one({"user_id": data.provider_id}, {"_id": 0})
         if provider and provider.get("telegram_chat_id"):
-            message = f"📋 *Нове завдання!*\n\nПослуга: {service.get('name', 'Послуга')}\nДата: {data.date} о {data.time}\nАдреса: {data.address}\nЦіна: ${data.total_price or service.get('price', 0)}"
+            message = f"📋 *Нове завдання!*\n\nПослуга: {service.get('name', 'Послуга')}\nДата: {data.date} о {data.time}\nАдреса: {data.address}\nВаша ставка: ${pricing['executor_take']}"
             await send_telegram_notification(provider["telegram_chat_id"], message)
 
         booking["task_id"] = task_id
@@ -5949,6 +5969,59 @@ async def client_submit_booking(
     return {"message": "Booking submitted", "status": BookingStatus.POSTED}
 
 # ==================== COMMISSION SYSTEM ENDPOINTS ====================
+
+async def compute_client_pricing(executor_rate: float, category_id: Optional[str] = None) -> Dict[str, Any]:
+    """Apply the category's commission as a markup on top of the executor's price.
+
+    Business rules (admin spec):
+      • Executor sets their own price X (their net earnings).
+      • Admin sets commission_rate (%) per category.
+      • Client sees X * (1 + commission_rate/100).
+      • Platform earns the commission_amount; executor receives their full X.
+
+    Returns a breakdown dict suitable for storage on the booking document or
+    returning to the client for price preview.
+    """
+    try:
+        rate = float(executor_rate or 0)
+    except Exception:
+        rate = 0.0
+
+    commission_rate = 0.0
+    category_doc = None
+    if category_id:
+        category_doc = await db.categories.find_one(
+            {"category_id": category_id},
+            {"_id": 0, "commission_rate": 1, "name": 1}
+        )
+        if category_doc and category_doc.get("commission_rate") is not None:
+            commission_rate = float(category_doc["commission_rate"])
+
+    commission_amount = round(rate * (commission_rate / 100.0), 2)
+    client_total = round(rate + commission_amount, 2)
+
+    return {
+        "executor_rate": round(rate, 2),
+        "commission_rate": round(commission_rate, 2),
+        "commission_amount": commission_amount,
+        "client_total": client_total,
+        "executor_take": round(rate, 2),
+        "platform_take": commission_amount,
+        "category_id": category_id,
+        "category_name": category_doc.get("name") if category_doc else None,
+    }
+
+
+@api_router.get("/pricing-preview")
+async def pricing_preview(executor_rate: float, category_id: Optional[str] = None):
+    """Public price-preview endpoint.
+
+    Returns the marked-up client total and the platform/executor split based on
+    the category's commission_rate. Used by the booking flow on the frontend
+    so the client sees the final amount they will be charged.
+    """
+    return await compute_client_pricing(executor_rate, category_id)
+
 
 async def calculate_commission(booking_id: str, base_price: float) -> Dict[str, Any]:
     """Calculate commission based on rules hierarchy"""
