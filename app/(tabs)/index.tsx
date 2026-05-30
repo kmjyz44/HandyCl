@@ -287,6 +287,28 @@ export default function HomeScreen() {
       .catch(() => {}); // silently fail, keep defaults
   }, []);
 
+  // Load DB categories so admin-uploaded cover images and overrides show up
+  // on the home grid. Falls back gracefully to the hardcoded SKILL_CATEGORIES
+  // when the request fails or returns the enum-style list.
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
+  React.useEffect(() => {
+    api.getCategories()
+      .then((data: any[]) => {
+        if (Array.isArray(data)) setDbCategories(data);
+      })
+      .catch(() => { /* keep defaults */ });
+  }, []);
+
+  // Build a map: category_id -> { image, name override, recommended_price }
+  const dbCatById: Record<string, any> = React.useMemo(() => {
+    const m: Record<string, any> = {};
+    for (const c of dbCategories) {
+      const key = c.category_id || c.id;
+      if (key) m[key] = c;
+    }
+    return m;
+  }, [dbCategories]);
+
   // Providers see their own tasks dashboard, not the client booking flow
   // (placed AFTER all hooks to comply with Rules of Hooks)
   if (user?.role === 'provider') {
@@ -536,15 +558,42 @@ export default function HomeScreen() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <Text style={s.sectionTitle}>Оберіть категорію</Text>
           <View style={s.grid}>
-            {filteredCategories.map(cat => (
-              <TouchableOpacity key={cat.id} style={[s.catCard, { backgroundColor: cat.bg }]} onPress={() => selectCategory(cat)}>
-                <View style={[s.catIcon, { backgroundColor: cat.color + '22' }]}>
-                  <Ionicons name={cat.icon} size={28} color={cat.color} />
-                </View>
-                <Text style={[s.catName, { color: cat.color }]}>{cat.name}</Text>
-                <Text style={s.catCount}>{cat.skills.length} послуг</Text>
-              </TouchableOpacity>
-            ))}
+            {filteredCategories.map(cat => {
+              const dbCat = dbCatById[cat.id];
+              const coverImage = dbCat?.image;
+              const displayName = dbCat?.name || cat.name;
+              if (coverImage) {
+                // Premium card: real photo with gradient overlay + label
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={s.catCardPhoto}
+                    onPress={() => selectCategory(cat)}
+                    activeOpacity={0.85}
+                  >
+                    <Image source={{ uri: coverImage }} style={s.catCardPhotoImg} />
+                    <View style={s.catCardPhotoOverlay} />
+                    <View style={s.catCardPhotoBadge}>
+                      <Ionicons name={cat.icon} size={16} color={cat.color} />
+                    </View>
+                    <View style={s.catCardPhotoTextWrap}>
+                      <Text style={s.catCardPhotoName} numberOfLines={2}>{displayName}</Text>
+                      <Text style={s.catCardPhotoCount}>{cat.skills.length} послуг</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }
+              // Fallback: clean icon card
+              return (
+                <TouchableOpacity key={cat.id} style={[s.catCard, { backgroundColor: cat.bg }]} onPress={() => selectCategory(cat)}>
+                  <View style={[s.catIcon, { backgroundColor: cat.color + '22' }]}>
+                    <Ionicons name={cat.icon} size={28} color={cat.color} />
+                  </View>
+                  <Text style={[s.catName, { color: cat.color }]}>{displayName}</Text>
+                  <Text style={s.catCount}>{cat.skills.length} послуг</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* Popular tasks */}
@@ -1520,10 +1569,10 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, color: '#111827' },
   sectionTitle: { fontSize: 17, fontWeight: '700', color: '#111827', marginBottom: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  catCard: { width: '47%', borderRadius: 16, padding: 16, alignItems: 'flex-start', gap: 8 },
-  catIcon: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  catName: { fontSize: 14, fontWeight: '700' },
-  catCount: { fontSize: 12, color: '#6b7280' },
+  catCard: { width: '47%', aspectRatio: 1, borderRadius: 16, padding: 16, justifyContent: 'space-between', gap: 8, borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)' },
+  catIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  catName: { fontSize: 15, fontWeight: '700', lineHeight: 18 },
+  catCount: { fontSize: 12, color: '#6b7280', fontWeight: '500' },
   popularRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#f3f4f6', gap: 12 },
   popularEmoji: { fontSize: 24 },
   popularName: { fontSize: 15, fontWeight: '600', color: '#111827' },
@@ -1616,6 +1665,63 @@ const s = StyleSheet.create({
   photoRemoveBtn: { position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 10 },
   photoAddBtn: { width: 80, height: 80, borderRadius: 12, borderWidth: 2, borderColor: '#bfdbfe', borderStyle: 'dashed', backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', gap: 4 },
   photoAddText: { fontSize: 11, color: '#2563eb', fontWeight: '600' },
+
+  // Premium photo-cover category card
+  catCardPhoto: {
+    width: '48%',
+    aspectRatio: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+    position: 'relative',
+    backgroundColor: '#e5e7eb',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+  catCardPhotoImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  catCardPhotoOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  catCardPhotoBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catCardPhotoTextWrap: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+  },
+  catCardPhotoName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 20,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowRadius: 4,
+  },
+  catCardPhotoCount: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
 
   // Landing hero (guest)
   heroHeader: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 24 },
