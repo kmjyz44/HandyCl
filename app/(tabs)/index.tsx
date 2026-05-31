@@ -12,20 +12,20 @@ import { api } from '../../utils/api';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
 
-// High-quality stable Unsplash photos used when a category has no admin-uploaded
-// cover image. Keyed by category id so the home grid always looks complete.
-// Each URL embeds a topical search query so the photo always matches the
-// category theme even if Unsplash rotates the result.
+// High-quality direct Unsplash photo URLs (the legacy source.unsplash.com
+// proxy was deprecated by Unsplash in 2024 — it now returns 503, which is
+// why the home grid showed blank grey cards). These IDs are publicly hosted
+// images that 200 from the images.unsplash.com CDN.
 const FALLBACK_COVERS: Record<string, string> = {
-  assembly:          'https://source.unsplash.com/featured/600x600/?furniture-assembly,ikea',
-  cleaning:          'https://source.unsplash.com/featured/600x600/?cleaning,housekeeping',
-  home_improvements: 'https://source.unsplash.com/featured/600x600/?home-renovation,tools',
-  moving:            'https://source.unsplash.com/featured/600x600/?moving-boxes,relocation',
-  outdoor:           'https://source.unsplash.com/featured/600x600/?gardening,lawn',
-  personal:          'https://source.unsplash.com/featured/600x600/?personal-assistant,helping',
-  it_tech:           'https://source.unsplash.com/featured/600x600/?computer-repair,tech-support',
-  events:            'https://source.unsplash.com/featured/600x600/?party-event,celebration',
-  other:             'https://source.unsplash.com/featured/600x600/?service,handyman',
+  assembly:          'https://images.unsplash.com/photo-1503602642458-232111445657?w=800&q=80&auto=format&fit=crop',
+  cleaning:          'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80&auto=format&fit=crop',
+  home_improvements: 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=800&q=80&auto=format&fit=crop',
+  moving:            'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80&auto=format&fit=crop',
+  outdoor:           'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80&auto=format&fit=crop',
+  personal:          'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=800&q=80&auto=format&fit=crop',
+  it_tech:           'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80&auto=format&fit=crop',
+  events:            'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&q=80&auto=format&fit=crop',
+  other:             'https://images.unsplash.com/photo-1581092334651-ddf26d9a09d0?w=800&q=80&auto=format&fit=crop',
 };
 
 const SKILL_CATEGORIES = [
