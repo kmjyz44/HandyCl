@@ -1202,6 +1202,17 @@ async def get_current_user(authorization: Optional[str] = Header(None), request:
 
     return user
 
+async def get_current_user_optional(
+    authorization: Optional[str] = Header(None),
+    request: Request = None,
+) -> Optional[User]:
+    """Return the current user if a valid session is present, otherwise None."""
+    try:
+        return await get_current_user(authorization=authorization, request=request)
+    except HTTPException:
+        return None
+
+
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -3032,9 +3043,13 @@ async def get_executors_by_service(
     city: Optional[str] = None,
     lat: Optional[float] = None,
     lng: Optional[float] = None,
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Get executors filtered by service/skill AND location with admin-controlled listing settings"""
+    """Get executors filtered by service/skill AND location.
+
+    Public endpoint — guests can browse executors from the landing page
+    booking flow. Auth is optional for future personalization.
+    """
     settings_doc = await db.settings.find_one({"setting_id": "app_settings"}, {"_id": 0})
     settings = Settings(**settings_doc) if settings_doc else Settings()
     commission_percent = settings.admin_commission_percentage if settings.apply_admin_commission else 0.0
