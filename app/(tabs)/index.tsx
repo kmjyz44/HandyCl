@@ -270,6 +270,21 @@ export default function HomeScreen() {
   const [anyDayTime, setAnyDayTime] = useState(false); // "any day and time" checkbox
   const dates = getDates();
 
+  // Resume an in-progress booking after the guest registered/logged in
+  React.useEffect(() => {
+    if (!user) return;
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('pending_booking_draft') : null;
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft && draft.selectedTasker) {
+        setBooking(draft);
+        setStep('confirm');
+      }
+      window.localStorage.removeItem('pending_booking_draft');
+    } catch { /* ignore */ }
+  }, [user?.user_id]);
+
   // Detect user country via IP on mount
   React.useEffect(() => {
     fetch('https://ipapi.co/json/')
@@ -453,6 +468,33 @@ export default function HomeScreen() {
   const submitBooking = async () => {
     // Double-tap guard: ref is synchronous, state controls UI
     if (!booking.selectedTasker || submittingRef.current) return;
+
+    // Gate: an unauthenticated guest cannot publish a task — the executor
+    // would have no way to contact them and the order would never appear
+    // in anyone's list. Send them to /register with a return-to flag so
+    // they come back to this confirm step after sign-up and we publish then.
+    if (!user) {
+      try {
+        // Persist the in-flight booking so it survives the navigation
+        const draft = {
+          ...booking,
+          // selectedTasker is heavy — store only what's needed to resume
+          selectedTasker: {
+            user_id: booking.selectedTasker.user_id,
+            provider_id: (booking.selectedTasker as any).provider_id,
+            name: booking.selectedTasker.name,
+            hourly_rate: booking.selectedTasker.profile?.hourly_rate || (booking.selectedTasker as any).hourly_rate || 0,
+            profile: { hourly_rate: booking.selectedTasker.profile?.hourly_rate || 0 },
+          },
+        };
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('pending_booking_draft', JSON.stringify(draft));
+        }
+      } catch { /* ignore */ }
+      router.push('/register?next=/(tabs)&resume=booking');
+      return;
+    }
+
     submittingRef.current = true;
     setBookingSubmitting(true);
 
@@ -1535,14 +1577,28 @@ export default function HomeScreen() {
             <Text style={s.priceSummaryNote}>Фінальна ціна узгоджується з виконавцем</Text>
             <Text style={s.priceSummaryRate}>{cRate} ₴/год</Text>
           </View>
+
+          {!user ? (
+            <View style={s.registerBanner}>
+              <Ionicons name="information-circle" size={22} color="#1d4ed8" />
+              <View style={{ flex: 1 }}>
+                <Text style={s.registerBannerTitle}>Потрібна реєстрація</Text>
+                <Text style={s.registerBannerText}>
+                  Щоб виконавець прийняв ваше завдання та зв'язався з вами, створіть акаунт. Це займе менше хвилини — після реєстрації ми автоматично завершимо бронювання.
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </ScrollView>
 
         <View style={s.bottomBar}>
           <TouchableOpacity style={s.nextBtn} onPress={submitBooking} disabled={booking_submitting}>
             {booking_submitting ? <ActivityIndicator color="#fff" /> : (
               <>
-                <Text style={s.nextBtnText}>Підтвердити бронювання</Text>
-                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={s.nextBtnText}>
+                  {user ? 'Підтвердити бронювання' : 'Зареєструватись і завершити'}
+                </Text>
+                <Ionicons name={user ? 'checkmark-circle' : 'log-in'} size={20} color="#fff" />
               </>
             )}
           </TouchableOpacity>
@@ -1786,4 +1842,8 @@ const s = StyleSheet.create({
   stepNum: { fontSize: 16, fontWeight: '800' },
   stepTitleSm: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 2 },
   stepDesc: { fontSize: 13, color: '#6b7280', lineHeight: 18 },
+
+  registerBanner: { flexDirection: 'row', gap: 10, backgroundColor: '#dbeafe', borderColor: '#bfdbfe', borderWidth: 1, padding: 14, borderRadius: 12, marginTop: 12, alignItems: 'flex-start' },
+  registerBannerTitle: { fontSize: 15, fontWeight: '700', color: '#1d4ed8', marginBottom: 4 },
+  registerBannerText: { fontSize: 13, color: '#1e40af', lineHeight: 18 },
 });

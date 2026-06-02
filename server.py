@@ -3209,9 +3209,10 @@ async def get_executors_by_service(
         if not settings.executor_show_new and tasks_done == 0:
             continue
 
-        # ── Commission ────────────────────────────────────────────────
-        if base_rate and commission_percent > 0:
-            final_rate = round(base_rate * (1 + commission_percent / 100), 2)
+        # ── Commission (Variant B: commission is % of client total) ──
+        # client_rate = base_rate / (1 - commission/100); platform = client - base.
+        if base_rate and 0 < commission_percent < 100:
+            final_rate = round(base_rate / (1 - commission_percent / 100.0), 2)
         else:
             final_rate = base_rate
 
@@ -6143,16 +6144,18 @@ async def client_submit_booking(
 # ==================== COMMISSION SYSTEM ENDPOINTS ====================
 
 async def compute_client_pricing(executor_rate: float, category_id: Optional[str] = None) -> Dict[str, Any]:
-    """Apply the category's commission as a markup on top of the executor's price.
+    """Apply the category's commission as a percentage of the client's total.
 
-    Business rules (admin spec):
-      • Executor sets their own price X (their net earnings).
+    Business rules (admin spec, Variant B):
+      • Executor sets their own price X (their net earnings, what they receive).
       • Admin sets commission_rate (%) per category.
-      • Client sees X * (1 + commission_rate/100).
-      • Platform earns the commission_amount; executor receives their full X.
-
-    Returns a breakdown dict suitable for storage on the booking document or
-    returning to the client for price preview.
+      • commission_rate is the SHARE OF THE CLIENT TOTAL that goes to the
+        platform — so for 50% commission, platform and executor each receive
+        half of what the client paid.
+      • client_total = executor_rate / (1 - commission_rate/100)
+      • For 50%: executor=20, client=40, platform=20.
+      • For 15%: executor=20, client=23.53, platform=3.53.
+      • commission_rate of 100% would divide by zero; capped at 99%.
     """
     try:
         rate = float(executor_rate or 0)
@@ -6169,8 +6172,16 @@ async def compute_client_pricing(executor_rate: float, category_id: Optional[str
         if category_doc and category_doc.get("commission_rate") is not None:
             commission_rate = float(category_doc["commission_rate"])
 
-    commission_amount = round(rate * (commission_rate / 100.0), 2)
-    client_total = round(rate + commission_amount, 2)
+    if commission_rate >= 100:
+        commission_rate = 99.0  # cap to avoid div-by-zero
+    if commission_rate < 0:
+        commission_rate = 0.0
+
+    if commission_rate > 0 and rate > 0:
+        client_total = round(rate / (1 - commission_rate / 100.0), 2)
+    else:
+        client_total = round(rate, 2)
+    commission_amount = round(client_total - rate, 2)
 
     return {
         "executor_rate": round(rate, 2),
