@@ -3172,11 +3172,9 @@ async def get_executors_by_service(
                 location_ok = True
 
             if not location_ok:
-                # Don't drop the executor — mark them as out-of-area instead.
-                # This way the client always sees available executors and can
-                # decide if distance is acceptable, rather than getting an
-                # empty list when no provider has set a matching service zone.
-                executor["out_of_area"] = True
+                # Strict filter: do not show executors whose service area
+                # does not cover the client's location.
+                continue
 
         # ── Admin listing filters ──────────────────────────────────────
         rating = round(executor.get("average_rating") or 0, 2)
@@ -5082,6 +5080,60 @@ async def cleanup_oversized_category_images(
             )
             cleared.append({"category_id": d["category_id"], "name": d.get("name"), "size_kb": round(len(img) / 1024, 1)})
     return {"cleared": cleared, "count": len(cleared), "threshold_kb": max_kb}
+
+
+class ProviderLocationUpdate(BaseModel):
+    user_id: str
+    city: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    service_radius_km: Optional[float] = None
+    service_cities: Optional[List[str]] = None
+
+
+@api_router.post("/admin/providers/{user_id}/set-location")
+async def admin_set_provider_location(
+    user_id: str,
+    payload: ProviderLocationUpdate,
+    current_user: User = Depends(require_admin)
+):
+    """Admin: manually set a provider's service-area location.
+
+    Used to fix providers whose profile has stale/default coordinates
+    (e.g. Chicago defaults instead of Kyiv) so that geo-filtered search
+    correctly returns them for nearby clients.
+    """
+    user = await db.users.find_one({"user_id": user_id, "role": "provider"}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Provider not found")
+
+    profile_update: Dict[str, Any] = {}
+    user_update: Dict[str, Any] = {}
+    if payload.city is not None:
+        profile_update["city"] = payload.city
+        user_update["city"] = payload.city
+    if payload.latitude is not None:
+        profile_update["latitude"] = float(payload.latitude)
+        user_update["latitude"] = float(payload.latitude)
+    if payload.longitude is not None:
+        profile_update["longitude"] = float(payload.longitude)
+        user_update["longitude"] = float(payload.longitude)
+    if payload.service_radius_km is not None:
+        profile_update["service_radius_km"] = float(payload.service_radius_km)
+    if payload.service_cities is not None:
+        profile_update["service_cities"] = list(payload.service_cities)
+
+    if profile_update:
+        profile_update["updated_at"] = datetime.now(timezone.utc)
+        await db.executor_profiles.update_one(
+            {"user_id": user_id},
+            {"$set": profile_update},
+            upsert=True,
+        )
+    if user_update:
+        await db.users.update_one({"user_id": user_id}, {"$set": user_update})
+
+    return {"ok": True, "user_id": user_id, "applied": profile_update}
 
 
 @api_router.delete("/admin/categories/{category_id}")
