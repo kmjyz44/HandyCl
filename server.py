@@ -57,7 +57,9 @@ class BookingStatus(str, Enum):
     DRAFT = "draft"
     POSTED = "posted"  # Task posted, waiting for tasker
     OFFERING = "offering"  # Taskers sending offers
-    ASSIGNED = "assigned"  # Tasker assigned
+    PENDING_ACCEPTANCE = "pending_acceptance"  # Assigned to a specific tasker awaiting their Accept/Decline
+    DECLINED = "declined"  # Tasker declined; client must reassign
+    ASSIGNED = "assigned"  # Tasker explicitly accepted
     HOLD_PLACED = "hold_placed"  # Payment hold successful
     ON_THE_WAY = "on_the_way"  # Tasker on the way
     STARTED = "started"  # Job started
@@ -71,6 +73,8 @@ class TaskStatus(str, Enum):
     DRAFT = "draft"
     POSTED = "posted"
     OFFERING = "offering"
+    PENDING_ACCEPTANCE = "pending_acceptance"
+    DECLINED = "declined"
     ASSIGNED = "assigned"
     HOLD_PLACED = "hold_placed"
     ON_THE_WAY = "on_the_way"
@@ -2099,7 +2103,7 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
         # Classic task flow
         if task.get("provider_id") and task["provider_id"] != current_user.user_id:
             raise HTTPException(status_code=403, detail="This task is not assigned to you")
-        if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.POSTED, TaskStatus.OFFERING]:
+        if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.POSTED, TaskStatus.OFFERING, TaskStatus.PENDING_ACCEPTANCE]:
             raise HTTPException(status_code=400, detail="Task cannot be accepted in current status")
         now = datetime.now(timezone.utc)
         await db.tasks.update_one(
@@ -6023,7 +6027,7 @@ async def client_create_booking(
         "notes": data.notes,
         "problem_description": data.problem_description,
         "problem_photos": data.problem_photos,
-        "status": BookingStatus.ASSIGNED if data.provider_id else BookingStatus.DRAFT,
+        "status": BookingStatus.PENDING_ACCEPTANCE if data.provider_id else BookingStatus.DRAFT,
         "estimated_price": service.get("price"),
         "total_price": client_total,
         # Pricing breakdown snapshot (so changes to category commission later
@@ -6055,7 +6059,7 @@ async def client_create_booking(
             "address": data.address,
             "date": data.date,
             "time": data.time,
-            "status": TaskStatus.ASSIGNED,
+            "status": TaskStatus.PENDING_ACCEPTANCE,
             "provider_hourly_rate": data.provider_hourly_rate,
             "total_price": client_total,
             "executor_take": pricing["executor_take"],
@@ -6206,11 +6210,177 @@ async def pricing_preview(executor_rate: float, category_id: Optional[str] = Non
     return await compute_client_pricing(executor_rate, category_id)
 
 
+# ==================== TASK ACCEPT / DECLINE (provider workflow) ============
+
+async def _update_booking_and_task_status(booking_id: str, new_status: str, extra: Dict[str, Any] = None):
+    """Helper: update both the booking and matching task with same status + timestamp."""
+    update = {"status": new_status, "updated_at": datetime.now(timezone.utc)}
+    if extra:
+        update.update(extra)
+    await db.bookings.update_one({"booking_id": booking_id}, {"$set": update})
+    await db.tasks.update_one({"booking_id": booking_id}, {"$set": update})
+
+
+@api_router.post("/bookings/{booking_id}/accept")
+async def provider_accept_booking(booking_id: str, current_user: User = Depends(get_current_user)):
+    """Provider accepts a pending booking. Sets status -> ASSIGNED."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers can accept bookings")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="This booking is not assigned to you")
+    if booking.get("status") not in (BookingStatus.PENDING_ACCEPTANCE.value, "pending_acceptance"):
+        raise HTTPException(status_code=400, detail=f"Cannot accept from status {booking.get('status')}")
+    await _update_booking_and_task_status(booking_id, BookingStatus.ASSIGNED.value, {"accepted_at": datetime.now(timezone.utc)})
+    return {"ok": True, "booking_id": booking_id, "status": "assigned"}
+
+
+@api_router.post("/bookings/{booking_id}/decline")
+async def provider_decline_booking(
+    booking_id: str,
+    reason: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+):
+    """Provider declines a pending booking. Sets status -> DECLINED + clears provider_id so client can reassign."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers can decline bookings")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="This booking is not assigned to you")
+    extra = {
+        "declined_at": datetime.now(timezone.utc),
+        "declined_by": current_user.user_id,
+        "decline_reason": reason,
+        "previous_provider_id": current_user.user_id,
+        "provider_id": None,  # free the booking up
+    }
+    await _update_booking_and_task_status(booking_id, BookingStatus.DECLINED.value, extra)
+    return {"ok": True, "booking_id": booking_id, "status": "declined"}
+
+
+@api_router.post("/bookings/{booking_id}/en-route")
+async def provider_mark_en_route(booking_id: str, current_user: User = Depends(get_current_user)):
+    """Provider marks themselves as on the way. Requires status=ASSIGNED."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking or booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("status") not in (BookingStatus.ASSIGNED.value, "assigned"):
+        raise HTTPException(status_code=400, detail=f"Cannot mark en-route from status {booking.get('status')}")
+    await _update_booking_and_task_status(booking_id, BookingStatus.ON_THE_WAY.value)
+    return {"ok": True, "booking_id": booking_id, "status": "on_the_way"}
+
+
+@api_router.post("/bookings/{booking_id}/start")
+async def provider_start_work(booking_id: str, current_user: User = Depends(get_current_user)):
+    """Provider starts the work. Requires status=ON_THE_WAY (or ASSIGNED)."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking or booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("status") not in (BookingStatus.ON_THE_WAY.value, BookingStatus.ASSIGNED.value, "on_the_way", "assigned"):
+        raise HTTPException(status_code=400, detail=f"Cannot start from status {booking.get('status')}")
+    await _update_booking_and_task_status(booking_id, BookingStatus.STARTED.value, {"started_at": datetime.now(timezone.utc)})
+    return {"ok": True, "booking_id": booking_id, "status": "started"}
+
+
+@api_router.post("/bookings/{booking_id}/complete")
+async def provider_complete_work(booking_id: str, current_user: User = Depends(get_current_user)):
+    """Provider marks the work as completed."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking or booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("status") not in (BookingStatus.STARTED.value, "started"):
+        raise HTTPException(status_code=400, detail=f"Cannot complete from status {booking.get('status')}")
+    await _update_booking_and_task_status(booking_id, BookingStatus.COMPLETED_PENDING_PAYMENT.value, {"completed_at": datetime.now(timezone.utc)})
+    return {"ok": True, "booking_id": booking_id, "status": "completed_pending_payment"}
+
+
+# ==================== ADMIN INTEGRATION-KEYS ROUTES ========================
+
+class IntegrationKeysUpdate(BaseModel):
+    sendgrid_api_key: Optional[str] = None
+    sendgrid_from_email: Optional[str] = None
+    stripe_secret_key: Optional[str] = None
+    stripe_publishable_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    twilio_account_sid: Optional[str] = None
+    twilio_auth_token: Optional[str] = None
+    twilio_from_phone: Optional[str] = None
+    vapid_public_key: Optional[str] = None
+    vapid_private_key: Optional[str] = None
+    vapid_subject_email: Optional[str] = None
+    telegram_bot_token: Optional[str] = None
+    # admin-controlled feature toggles
+    enable_email_notifications: Optional[bool] = None
+    enable_sms_notifications: Optional[bool] = None
+    enable_push_notifications: Optional[bool] = None
+    enable_telegram_notifications: Optional[bool] = None
+    enable_stripe_payments: Optional[bool] = None
+
+
+def _mask(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    if len(value) <= 8:
+        return "•" * len(value)
+    return value[:4] + "•" * 8 + value[-4:]
+
+
+@api_router.get("/admin/integration-keys")
+async def get_integration_keys(current_user: User = Depends(require_admin)):
+    """Admin: return masked integration keys + feature toggles."""
+    doc = await db.integration_keys.find_one({"setting_id": "integration_keys"}, {"_id": 0}) or {}
+    out = {}
+    secret_fields = {
+        "sendgrid_api_key", "stripe_secret_key", "stripe_webhook_secret",
+        "twilio_auth_token", "vapid_private_key", "telegram_bot_token",
+    }
+    for k in IntegrationKeysUpdate.model_fields.keys():
+        v = doc.get(k)
+        if k in secret_fields and isinstance(v, str):
+            out[k] = _mask(v)
+            out[k + "_set"] = bool(v)
+        else:
+            out[k] = v
+    return out
+
+
+@api_router.put("/admin/integration-keys")
+async def set_integration_keys(payload: IntegrationKeysUpdate, current_user: User = Depends(require_admin)):
+    """Admin: update integration keys & feature toggles. Empty-string fields are ignored
+    so admins can clear with explicit null but not accidentally with blank input."""
+    data = payload.model_dump(exclude_unset=True)
+    update = {}
+    for k, v in data.items():
+        if v == "":
+            continue  # skip empties — must set None explicitly to clear
+        update[k] = v
+    if not update:
+        return {"ok": True, "updated": []}
+    update["updated_at"] = datetime.now(timezone.utc)
+    update["updated_by"] = current_user.user_id
+    await db.integration_keys.update_one(
+        {"setting_id": "integration_keys"},
+        {"$set": update, "$setOnInsert": {"setting_id": "integration_keys", "created_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    return {"ok": True, "updated": list(update.keys())}
+
+
+# ==================== END NEW BLOCK ===================
+
 async def calculate_commission(booking_id: str, base_price: float) -> Dict[str, Any]:
     """Calculate commission based on rules hierarchy"""
-    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
-
-    # Get settings for default commission
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})    # Get settings for default commission
     settings = await get_settings()
     default_commission_percent = settings.admin_commission_percentage
     service_fee = settings.fixed_booking_fee

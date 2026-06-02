@@ -13,7 +13,9 @@ const STATUS_CFG: Record<string, { label: string; color: string; icon: string }>
   draft:                     { label: 'Чернетка',            color: '#9ca3af', icon: 'document-outline' },
   posted:                    { label: 'Очікує виконавця',    color: '#3b82f6', icon: 'time-outline' },
   offering:                  { label: 'Приймає пропозиції',  color: '#8b5cf6', icon: 'chatbubbles-outline' },
+  pending_acceptance:        { label: 'Очікує прийняття',    color: '#a855f7', icon: 'hourglass-outline' },
   assigned:                  { label: 'Прийнято',            color: '#f59e0b', icon: 'checkmark-circle-outline' },
+  declined:                  { label: 'Відхилено виконавцем', color: '#dc2626', icon: 'close-circle-outline' },
   on_the_way:                { label: 'Виконавець в дорозі', color: '#06b6d4', icon: 'car-outline' },
   started:                   { label: 'Виконується',         color: '#f97316', icon: 'construct-outline' },
   completed_pending_payment: { label: 'Завершено — очікує оплати', color: '#22c55e', icon: 'checkmark-done-circle-outline' },
@@ -30,16 +32,17 @@ const STEPS = [
   { key: 'completed_pending_payment', label: 'Закінчив',    icon: 'checkmark-done-circle', color: '#22c55e', tsField: 'completed_at' },
 ];
 
-const STEP_ORDER = ['posted','offering','assigned','on_the_way','started','completed_pending_payment','paid'];
+const STEP_ORDER = ['posted','offering','pending_acceptance','assigned','on_the_way','started','completed_pending_payment','paid'];
 
 // ─── Executor action buttons ──────────────────────────────────────────────────
 const EXEC_ACTIONS: Record<string, { action: string; label: string; color: string; icon: string }> = {
-  posted:      { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb', icon: 'checkmark-circle' },
-  offering:    { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb', icon: 'checkmark-circle' },
-  assigned:    { action: 'on_the_way', label: 'Виїхав',            color: '#06b6d4', icon: 'car' },
-  on_the_way:  { action: 'start',      label: 'Почати роботу',     color: '#f97316', icon: 'construct' },
-  started:     { action: 'complete',   label: 'Закінчити роботу',  color: '#22c55e', icon: 'checkmark-done-circle' },
-  hold_placed: { action: 'complete',   label: 'Закінчити роботу',  color: '#22c55e', icon: 'checkmark-done-circle' },
+  posted:              { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb', icon: 'checkmark-circle' },
+  offering:            { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb', icon: 'checkmark-circle' },
+  pending_acceptance:  { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb', icon: 'checkmark-circle' },
+  assigned:            { action: 'on_the_way', label: 'Виїхав',            color: '#06b6d4', icon: 'car' },
+  on_the_way:          { action: 'start',      label: 'Почати роботу',     color: '#f97316', icon: 'construct' },
+  started:             { action: 'complete',   label: 'Закінчити роботу',  color: '#22c55e', icon: 'checkmark-done-circle' },
+  hold_placed:         { action: 'complete',   label: 'Закінчити роботу',  color: '#22c55e', icon: 'checkmark-done-circle' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
