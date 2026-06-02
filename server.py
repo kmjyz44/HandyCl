@@ -216,7 +216,8 @@ class Booking(BaseModel):
     booking_id: str
     client_id: str
     service_id: Optional[str] = None
-    category: Optional[ServiceCategory] = None
+    # Accept any string — admin-defined categories use custom IDs.
+    category: Optional[str] = None
     provider_id: Optional[str] = None
     title: str
     description: str
@@ -255,7 +256,9 @@ class Booking(BaseModel):
 
 class BookingCreate(BaseModel):
     service_id: Optional[str] = None
-    category: Optional[ServiceCategory] = None
+    # Accept any string — modern admin-created categories use custom IDs
+    # like 'assembly', 'cleaning' (not the legacy ServiceCategory enum).
+    category: Optional[str] = None
     title: str
     description: str
     date: Optional[str] = None
