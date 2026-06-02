@@ -1669,7 +1669,10 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
         estimated_hours=booking_data.estimated_hours,
         allow_offers=booking_data.allow_offers,
         total_price=price,
-        status=BookingStatus.POSTED
+        # If client picked a specific provider, the booking starts in
+        # pending_acceptance — provider must Accept before the client
+        # sees it as "Прийнято". Without a provider it remains POSTED.
+        status=(BookingStatus.PENDING_ACCEPTANCE if booking_data.provider_id else BookingStatus.POSTED)
     )
 
     booking_dict = booking.dict()
@@ -1688,8 +1691,32 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
 
     await db.bookings.insert_one(booking_dict)
 
-    # If client pre-selected a provider — auto-create task and notify
+    # If client pre-selected a provider — apply commission, create task in
+    # pending_acceptance, and notify
     if booking_data.provider_id:
+        # Apply per-category commission so the booking's total_price equals
+        # the marked-up client_total (executor_rate / (1 - commission/100))
+        executor_rate = float(booking_data.provider_hourly_rate or price or 0)
+        pricing = await compute_client_pricing(executor_rate, booking_data.category)
+        client_total = pricing["client_total"]
+
+        # Persist the snapshot on the booking
+        await db.bookings.update_one(
+            {"booking_id": booking_id},
+            {"$set": {
+                "total_price": client_total,
+                "executor_rate": pricing["executor_rate"],
+                "commission_rate_snapshot": pricing["commission_rate"],
+                "commission_amount": pricing["commission_amount"],
+                "platform_take": pricing["platform_take"],
+                "executor_take": pricing["executor_take"],
+            }}
+        )
+        booking_dict["total_price"] = client_total
+        booking_dict["executor_take"] = pricing["executor_take"]
+        booking_dict["platform_take"] = pricing["platform_take"]
+        booking_dict["commission_rate_snapshot"] = pricing["commission_rate"]
+
         task_id = f"task_{uuid.uuid4().hex[:12]}"
         task_doc = {
             "task_id": task_id,
@@ -1704,9 +1731,13 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
             "longitude": booking_data.longitude,
             "date": booking_data.date,
             "time": booking_data.time,
-            "status": "assigned",
+            # PENDING_ACCEPTANCE so the provider must explicitly Accept
+            "status": "pending_acceptance",
             "provider_hourly_rate": booking_data.provider_hourly_rate,
-            "total_price": booking_data.total_price or price,
+            "total_price": client_total,
+            "executor_take": pricing["executor_take"],
+            "platform_take": pricing["platform_take"],
+            "commission_rate_snapshot": pricing["commission_rate"],
             "photos": booking_data.problem_photos or [],
             "scheduled_date": booking_data.date,
             "scheduled_time": booking_data.time,

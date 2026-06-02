@@ -1591,12 +1591,6 @@ export default function HomeScreen() {
             </View>
           )}
 
-          <View style={s.priceSummary}>
-            <Text style={s.priceSummaryTitle}>Орієнтовна вартість</Text>
-            <Text style={s.priceSummaryNote}>Фінальна ціна узгоджується з виконавцем</Text>
-            <Text style={s.priceSummaryRate}>{cRate} ₴/год</Text>
-          </View>
-
           {!user ? (
             <View style={s.registerBanner}>
               <Ionicons name="information-circle" size={22} color="#1d4ed8" />

@@ -481,13 +481,6 @@ export default function TaskDetail() {
         <View style={s.section}>
           <Text style={s.sectionTitle}>Вартість</Text>
           <View style={s.priceCard}>
-            {/* Estimated price (before work) */}
-            {!task.final_price && price != null && price > 0 && (
-              <View style={s.priceRow}>
-                <Text style={s.priceLabel}>Орієнтовна ціна</Text>
-                <Text style={s.priceGreen}>{price} грн</Text>
-              </View>
-            )}
             {/* After completion — show full breakdown */}
             {!!task.final_price && (
               <>
