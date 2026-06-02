@@ -271,6 +271,7 @@ export default function HomeScreen() {
   const dates = getDates();
 
   // Resume an in-progress booking after the guest registered/logged in
+  const [resumingBooking, setResumingBooking] = useState(false);
   React.useEffect(() => {
     if (!user) return;
     try {
@@ -280,10 +281,25 @@ export default function HomeScreen() {
       if (draft && draft.selectedTasker) {
         setBooking(draft);
         setStep('confirm');
+        setResumingBooking(true);
+        window.localStorage.removeItem('pending_booking_draft');
       }
-      window.localStorage.removeItem('pending_booking_draft');
     } catch { /* ignore */ }
   }, [user?.user_id]);
+
+  // After resume, auto-submit the booking so the registered user immediately
+  // gets the order in their list — they don't need to click confirm twice.
+  React.useEffect(() => {
+    if (!resumingBooking) return;
+    if (!user) return;
+    if (!booking.selectedTasker) return;
+    const t = setTimeout(() => {
+      setResumingBooking(false);
+      submitBooking();
+    }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumingBooking, user?.user_id, booking.selectedTasker]);
 
   // Detect user country via IP on mount
   React.useEffect(() => {
@@ -475,20 +491,9 @@ export default function HomeScreen() {
     // they come back to this confirm step after sign-up and we publish then.
     if (!user) {
       try {
-        // Persist the in-flight booking so it survives the navigation
-        const draft = {
-          ...booking,
-          // selectedTasker is heavy — store only what's needed to resume
-          selectedTasker: {
-            user_id: booking.selectedTasker.user_id,
-            provider_id: (booking.selectedTasker as any).provider_id,
-            name: booking.selectedTasker.name,
-            hourly_rate: booking.selectedTasker.profile?.hourly_rate || (booking.selectedTasker as any).hourly_rate || 0,
-            profile: { hourly_rate: booking.selectedTasker.profile?.hourly_rate || 0 },
-          },
-        };
+        // Persist the full booking — auto-submit will need every field
         if (typeof window !== 'undefined') {
-          window.localStorage.setItem('pending_booking_draft', JSON.stringify(draft));
+          window.localStorage.setItem('pending_booking_draft', JSON.stringify(booking));
         }
       } catch { /* ignore */ }
       router.push('/register?next=/(tabs)&resume=booking');
@@ -1482,6 +1487,20 @@ export default function HomeScreen() {
 
   // STEP: CONFIRM
   if (step === 'confirm') {
+    // Loading overlay while auto-submitting a resumed booking after register
+    if (resumingBooking) {
+      return (
+        <View style={[s.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+          <View style={{ alignItems: 'center', gap: 16 }}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Завершуємо ваше бронювання…</Text>
+            <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', maxWidth: 280 }}>
+              Дякуємо за реєстрацію! Передаємо завдання виконавцю.
+            </Text>
+          </View>
+        </View>
+      );
+    }
     const tasker = booking.selectedTasker!;
     const cProfile = tasker.profile || {};
     const cBaseRate = cProfile.hourly_rate || tasker.hourly_rate || 25;

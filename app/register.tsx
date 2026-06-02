@@ -35,7 +35,15 @@ export default function Register() {
       const response = await api.register({ email, password, name, phone, role });
       await setToken(response.session_token);
       setUser(response.user);
-      router.replace('/(tabs)');
+      // If we have a pending booking draft (guest interrupted booking flow),
+      // route them straight to the home tab so the resume effect can fire
+      // and auto-submit the booking instead of the user wondering where it went.
+      const hasPendingBooking = typeof window !== 'undefined' && !!window.localStorage.getItem('pending_booking_draft');
+      if (hasPendingBooking) {
+        router.replace('/(tabs)/');
+      } else {
+        router.replace('/(tabs)');
+      }
     } catch (error: any) {
       let msg = error.message || 'Помилка реєстрації';
       if (msg.includes('already registered')) msg = 'Цей email вже зареєстрований.';

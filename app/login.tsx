@@ -30,7 +30,9 @@ export default function Login() {
       setUser(response.user);
       // Cache user data for offline/slow-server fallback
       try { localStorage.setItem('cached_user', JSON.stringify(response.user)); } catch {}
-      router.replace('/(tabs)');
+      // Route to home tab so a pending guest booking draft can auto-resume.
+      const hasPendingBooking = typeof window !== 'undefined' && !!window.localStorage.getItem('pending_booking_draft');
+      router.replace(hasPendingBooking ? '/(tabs)/' : '/(tabs)');
     } catch (error: any) {
       let msg = error.message || 'Помилка входу';
       if (msg.includes('Invalid credentials')) msg = 'Невірний email або пароль.';
