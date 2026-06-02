@@ -14,6 +14,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useServiceStore } from '../../store/serviceStore';
@@ -312,12 +313,21 @@ export default function Services() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Admin Panel</Text>
-        <TouchableOpacity 
-          style={styles.addButton} 
-          onPress={() => activeTab === 'services' ? openServiceModal() : openCategoryModal()}
-        >
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: '#6b7280' }]}
+            onPress={() => router.push('/admin-integrations')}
+            data-testid="open-admin-integrations-btn"
+          >
+            <Ionicons name="key" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => activeTab === 'services' ? openServiceModal() : openCategoryModal()}
+          >
+            <Ionicons name="add" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.tabBar}>

@@ -144,8 +144,17 @@ export const api = {
   },
 
   adminGetCategoryOne: async (id: string) => {
-    // Full payload incl. base64 image — used by edit modal
     const res = await client.get(`/admin/categories/${id}`);
+    return res.data;
+  },
+
+  adminGetIntegrationKeys: async () => {
+    const res = await client.get('/admin/integration-keys');
+    return res.data;
+  },
+
+  adminUpdateIntegrationKeys: async (data: Record<string, any>) => {
+    const res = await client.put('/admin/integration-keys', data);
     return res.data;
   },
 
