@@ -3169,7 +3169,7 @@ async def get_executors_by_service(
                 location_ok = True
 
             if not location_ok:
-                continue
+                executor["out_of_area"] = True
 
         # ── Admin listing filters ──────────────────────────────────────
         rating = round(executor.get("average_rating") or 0, 2)

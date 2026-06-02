@@ -3172,7 +3172,11 @@ async def get_executors_by_service(
                 location_ok = True
 
             if not location_ok:
-                continue
+                # Don't drop the executor — mark them as out-of-area instead.
+                # This way the client always sees available executors and can
+                # decide if distance is acceptable, rather than getting an
+                # empty list when no provider has set a matching service zone.
+                executor["out_of_area"] = True
 
         # ── Admin listing filters ──────────────────────────────────────
         rating = round(executor.get("average_rating") or 0, 2)
