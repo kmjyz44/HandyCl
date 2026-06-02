@@ -3040,19 +3040,27 @@ async def get_all_executors(current_user: User = Depends(get_current_user)):
 @api_router.get("/executors/by-service")
 async def get_executors_by_service(
     service_name: Optional[str] = None,
+    category: Optional[str] = None,
     city: Optional[str] = None,
     lat: Optional[float] = None,
     lng: Optional[float] = None,
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Get executors filtered by service/skill AND location.
-
-    Public endpoint — guests can browse executors from the landing page
-    booking flow. Auth is optional for future personalization.
-    """
+    """Get executors filtered by service/skill AND location."""
     settings_doc = await db.settings.find_one({"setting_id": "app_settings"}, {"_id": 0})
     settings = Settings(**settings_doc) if settings_doc else Settings()
-    commission_percent = settings.admin_commission_percentage if settings.apply_admin_commission else 0.0
+
+    # Per-category commission_rate takes priority over the legacy global one
+    commission_percent = 0.0
+    if category:
+        cat_doc = await db.categories.find_one(
+            {"category_id": category},
+            {"_id": 0, "commission_rate": 1},
+        )
+        if cat_doc and cat_doc.get("commission_rate") is not None:
+            commission_percent = float(cat_doc["commission_rate"])
+    if commission_percent == 0.0 and settings.apply_admin_commission:
+        commission_percent = settings.admin_commission_percentage or 0.0
 
     pipeline = [
         # Only active, not blocked, not hidden by admin
