@@ -4909,24 +4909,58 @@ class CategoryUpdateRequest(BaseModel):
 
 
 @api_router.get("/categories")
-async def get_categories():
-    """Get all active service categories (public)"""
-    categories = await db.categories.find({"is_active": True}, {"_id": 0}).to_list(100)
+async def get_categories(include_image: bool = False):
+    """Get all active service categories (public). Image excluded by default."""
+    projection = {"_id": 0} if include_image else {"_id": 0, "image": 0}
+    categories = await db.categories.find({"is_active": True}, projection).to_list(100)
     if not categories:
-        # Return enum values if no custom categories
         return [{"id": cat.value, "name": cat.value.replace("_", " ").title()} for cat in ServiceCategory]
+    if not include_image:
+        ids_with_image = await db.categories.find(
+            {"is_active": True, "image": {"$ne": None, "$exists": True}},
+            {"_id": 0, "category_id": 1},
+        ).to_list(100)
+        with_image_ids = {x["category_id"] for x in ids_with_image if x.get("category_id")}
+        for c in categories:
+            c["has_image"] = (c.get("category_id") in with_image_ids)
     return categories
+
+
+@api_router.get("/categories/{category_id}")
+async def get_category_one(category_id: str):
+    c = await db.categories.find_one({"category_id": category_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return c
 
 
 @api_router.get("/admin/categories")
 async def admin_get_categories(
     include_inactive: bool = True,
+    include_image: bool = False,
     current_user: User = Depends(require_admin)
 ):
-    """Admin: get all categories including inactive ones."""
+    """Admin: get all categories. Image excluded by default for performance."""
     query = {} if include_inactive else {"is_active": True}
-    categories = await db.categories.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    projection = {"_id": 0} if include_image else {"_id": 0, "image": 0}
+    categories = await db.categories.find(query, projection).sort("created_at", -1).to_list(500)
+    if not include_image:
+        ids_with_image = await db.categories.find(
+            {"image": {"$ne": None, "$exists": True}},
+            {"_id": 0, "category_id": 1},
+        ).to_list(500)
+        with_image_ids = {x["category_id"] for x in ids_with_image if x.get("category_id")}
+        for c in categories:
+            c["has_image"] = (c.get("category_id") in with_image_ids)
     return categories
+
+
+@api_router.get("/admin/categories/{category_id}")
+async def admin_get_category_one(category_id: str, current_user: User = Depends(require_admin)):
+    c = await db.categories.find_one({"category_id": category_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return c
 
 
 @api_router.post("/admin/categories")
@@ -4993,6 +5027,29 @@ async def update_category(
     await db.categories.update_one({"category_id": category_id}, {"$set": update_data})
     updated = await db.categories.find_one({"category_id": category_id}, {"_id": 0})
     return updated or {"message": "Category updated"}
+
+
+@api_router.post("/admin/categories/cleanup-oversized-images")
+async def cleanup_oversized_category_images(
+    max_kb: int = 500,
+    current_user: User = Depends(require_admin)
+):
+    """Clear cover image from categories whose image exceeds `max_kb` KB."""
+    threshold_bytes = max_kb * 1024
+    docs = await db.categories.find(
+        {"image": {"$ne": None, "$exists": True}},
+        {"_id": 0, "category_id": 1, "image": 1, "name": 1},
+    ).to_list(500)
+    cleared = []
+    for d in docs:
+        img = d.get("image") or ""
+        if len(img) > threshold_bytes:
+            await db.categories.update_one(
+                {"category_id": d["category_id"]},
+                {"$set": {"image": None, "updated_at": datetime.now(timezone.utc)}},
+            )
+            cleared.append({"category_id": d["category_id"], "name": d.get("name"), "size_kb": round(len(img) / 1024, 1)})
+    return {"cleared": cleared, "count": len(cleared), "threshold_kb": max_kb}
 
 
 @api_router.delete("/admin/categories/{category_id}")

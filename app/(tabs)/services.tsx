@@ -156,21 +156,31 @@ export default function Services() {
   };
 
   // Category Handlers
-  const openCategoryModal = (category?: any) => {
+  const openCategoryModal = async (category?: any) => {
     setCatFormError(null);
     setCatFormSuccess(null);
     if (category) {
-      setEditingCategory(category);
-      setCatName(category.name);
-      setCatDescription(category.description || '');
-      setCatCommission((category.commission_rate ?? 0).toString());
+      const id = category.category_id || category.id;
+      // List response excludes the heavy base64 image — fetch full doc on edit.
+      let full = category;
+      if (id && category.has_image && !category.image) {
+        try {
+          full = await api.adminGetCategoryOne(id);
+        } catch {
+          full = category; // best-effort
+        }
+      }
+      setEditingCategory(full);
+      setCatName(full.name);
+      setCatDescription(full.description || '');
+      setCatCommission((full.commission_rate ?? 0).toString());
       setCatRecommendedPrice(
-        category.recommended_price !== null && category.recommended_price !== undefined
-          ? category.recommended_price.toString()
+        full.recommended_price !== null && full.recommended_price !== undefined
+          ? full.recommended_price.toString()
           : ''
       );
-      setCatIcon(category.icon || '');
-      setCatImageBase64(category.image || '');
+      setCatIcon(full.icon || '');
+      setCatImageBase64(full.image || '');
     } else {
       setEditingCategory(null);
       setCatName('');

@@ -133,8 +133,19 @@ export const api = {
     return res.data;
   },
 
+  getCategoryOne: async (id: string) => {
+    const res = await client.get(`/categories/${id}`);
+    return res.data;
+  },
+
   adminGetCategories: async () => {
     const res = await client.get('/admin/categories');
+    return res.data;
+  },
+
+  adminGetCategoryOne: async (id: string) => {
+    // Full payload incl. base64 image — used by edit modal
+    const res = await client.get(`/admin/categories/${id}`);
     return res.data;
   },
 
