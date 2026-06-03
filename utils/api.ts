@@ -484,6 +484,15 @@ export const api = {
     const res = await client.post(`/tasks/${id}/pay`, data);
     return res.data;
   },
+  startStripeCheckout: async (bookingId: string) => {
+    // Returns { url, session_id } — caller redirects browser to `url`
+    const res = await client.post('/payments/checkout', { booking_id: bookingId });
+    return res.data;
+  },
+  getPaymentStatus: async (sessionId: string) => {
+    const res = await client.get(`/payments/status/${sessionId}`);
+    return res.data;
+  },
   getTaskMessages: async (taskId: string) => {
     const res = await client.get(`/tasks/${taskId}/messages`);
     return res.data;

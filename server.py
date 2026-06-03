@@ -4472,9 +4472,53 @@ async def update_app_settings(settings_data: SettingsUpdate, current_user: User 
 
     return {"message": "Settings updated successfully"}
 
+async def _get_stripe_secret_key() -> Optional[str]:
+    """Resolve Stripe secret key from (1) admin Integration Keys, (2) legacy settings, (3) env."""
+    keys = await _get_integration_keys()
+    k = keys.get("stripe_secret_key")
+    if k:
+        return k
+    try:
+        st = await get_settings()
+        if getattr(st, "stripe_api_key", None):
+            return st.stripe_api_key
+    except Exception:
+        pass
+    return os.environ.get("STRIPE_API_KEY") or os.environ.get("STRIPE_SECRET_KEY")
+
+
+def _normalize_frontend_origin(request: Request) -> str:
+    """Pick where to send the user after Stripe checkout. Prefer the Origin/Referer
+    header from the calling browser (e.g. https://handycl.netlify.app) so we don't
+    redirect to the Railway backend host."""
+    origin = request.headers.get("origin") or ""
+    if origin and origin.startswith("http"):
+        return origin.rstrip("/")
+    ref = request.headers.get("referer") or ""
+    if ref.startswith("http"):
+        # strip path
+        from urllib.parse import urlparse
+        u = urlparse(ref)
+        return f"{u.scheme}://{u.netloc}"
+    # last-resort fallback (will point to backend; rarely correct but better than nothing)
+    return str(request.base_url).rstrip("/")
+
+
 # Payment Routes
 @api_router.post("/payments/checkout")
-async def create_checkout_session(booking_id: str, request: Request, current_user: User = Depends(get_current_user)):
+async def create_checkout_session(
+    request: Request,
+    booking_id: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a Stripe Checkout session for the given booking.
+    Accepts booking_id as a query param OR in JSON body {"booking_id": "..."}."""
+    if payload and not booking_id:
+        booking_id = payload.get("booking_id")
+    if not booking_id:
+        raise HTTPException(status_code=422, detail="booking_id is required")
+
     # Get booking
     booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
     if not booking:
@@ -4483,28 +4527,38 @@ async def create_checkout_session(booking_id: str, request: Request, current_use
     if booking["client_id"] != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Get settings
-    settings = await get_settings()
-    if not settings.stripe_api_key:
-        raise HTTPException(status_code=500, detail="Stripe not configured")
+    # Resolve Stripe secret key (Integration Keys -> legacy settings -> env)
+    api_key = await _get_stripe_secret_key()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Stripe не налаштовано — додай Secret Key в Адмін → Інтеграції")
 
-    # Create checkout session
-    host_url = str(request.base_url).rstrip('/')
+    # Compute final amount client should pay (commission already snapshotted on booking)
+    amount = booking.get("total_price") or booking.get("client_total") or 0
+    if not amount or amount <= 0:
+        raise HTTPException(status_code=400, detail="Invalid booking amount")
+
+    # Default currency: UAH (Ukraine market). Override via integration_keys.stripe_currency.
+    keys = await _get_integration_keys()
+    currency = (keys.get("stripe_currency") or "uah").lower()
+
+    # Build Stripe Checkout session
+    host_url = str(request.base_url).rstrip("/")
+    frontend_url = _normalize_frontend_origin(request)
     webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=settings.stripe_api_key, webhook_url=webhook_url)
+    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url=webhook_url)
 
-    success_url = f"{host_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{host_url}/payment-cancelled"
+    success_url = f"{frontend_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{frontend_url}/payment-cancelled"
 
     checkout_request = CheckoutSessionRequest(
-        amount=booking["total_price"],
-        currency="usd",
+        amount=float(amount),
+        currency=currency,
         success_url=success_url,
         cancel_url=cancel_url,
         metadata={
             "booking_id": booking_id,
-            "user_id": current_user.user_id
-        }
+            "user_id": current_user.user_id,
+        },
     )
 
     session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
@@ -4539,13 +4593,13 @@ async def get_payment_status(session_id: str, current_user: User = Depends(get_c
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    # Get settings
-    settings = await get_settings()
-    if not settings.stripe_api_key:
+    # Resolve Stripe secret key from Integration Keys → legacy settings → env
+    api_key = await _get_stripe_secret_key()
+    if not api_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
 
     # Check status with Stripe
-    stripe_checkout = StripeCheckout(api_key=settings.stripe_api_key, webhook_url="")
+    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url="")
 
     status_response: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
 
@@ -4577,11 +4631,11 @@ async def stripe_webhook(request: Request):
     body = await request.body()
     signature = request.headers.get("Stripe-Signature")
 
-    settings = await get_settings()
-    if not settings.stripe_api_key:
+    api_key = await _get_stripe_secret_key()
+    if not api_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
 
-    stripe_checkout = StripeCheckout(api_key=settings.stripe_api_key, webhook_url="")
+    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url="")
 
     try:
         webhook_response = await stripe_checkout.handle_webhook(body, signature)
@@ -6604,6 +6658,7 @@ class IntegrationKeysUpdate(BaseModel):
     stripe_secret_key: Optional[str] = None
     stripe_publishable_key: Optional[str] = None
     stripe_webhook_secret: Optional[str] = None
+    stripe_currency: Optional[str] = None  # uah, usd, eur — default uah
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
     twilio_from_phone: Optional[str] = None

@@ -1897,14 +1897,68 @@ function ProviderProfile() {
               style={[styles.btn, styles.btnSave, savingCard && { opacity: 0.6 }]}
               disabled={savingCard}
               onPress={async () => {
-                if (!cardNumber.trim() || !cardHolder.trim()) {
-                  Alert.alert('Помилка', "Заповніть номер картки та ім'я власника");
+                // Validation
+                const digits = cardNumber.replace(/\s+/g, '');
+                if (!cardHolder.trim() || cardHolder.trim().length < 2) {
+                  Alert.alert('Помилка', "Введіть ім'я власника картки");
                   return;
+                }
+                if (!/^\d{12,19}$/.test(digits)) {
+                  Alert.alert('Помилка', 'Номер картки має містити 12–19 цифр');
+                  return;
+                }
+                // Luhn check
+                let sum = 0;
+                for (let i = 0; i < digits.length; i++) {
+                  let d = parseInt(digits[digits.length - 1 - i], 10);
+                  if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; }
+                  sum += d;
+                }
+                if (sum % 10 !== 0) {
+                  Alert.alert('Помилка', 'Невірний номер картки (не пройшов перевірку Luhn)');
+                  return;
+                }
+                // Expiry validation MM/YY or MM/YYYY
+                const m = cardExpiry.match(/^(\d{2})\s*\/\s*(\d{2}|\d{4})$/);
+                if (!m) {
+                  Alert.alert('Помилка', 'Термін дії у форматі MM/YY (наприклад 05/28)');
+                  return;
+                }
+                const mm = parseInt(m[1], 10);
+                let yy = parseInt(m[2], 10);
+                if (yy < 100) yy += 2000;
+                if (mm < 1 || mm > 12) { Alert.alert('Помилка', 'Невірний місяць'); return; }
+                const now = new Date();
+                const exp = new Date(yy, mm - 1, 1);
+                if (exp < new Date(now.getFullYear(), now.getMonth(), 1)) {
+                  Alert.alert('Помилка', 'Картка прострочена'); return;
+                }
+                // IBAN validation (optional, but if provided — check)
+                const iban = cardIban.replace(/\s+/g, '').toUpperCase();
+                if (iban) {
+                  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban)) {
+                    Alert.alert('Помилка', 'Невірний формат IBAN'); return;
+                  }
+                  // IBAN mod-97 check
+                  const rearranged = iban.slice(4) + iban.slice(0, 4);
+                  const num = rearranged.split('').map((c: string) => {
+                    const code = c.charCodeAt(0);
+                    return code >= 65 ? (code - 55).toString() : c;
+                  }).join('');
+                  let rem = 0;
+                  for (const ch of num) rem = (rem * 10 + parseInt(ch, 10)) % 97;
+                  if (rem !== 1) { Alert.alert('Помилка', 'Невірна контрольна сума IBAN'); return; }
                 }
                 setSavingCard(true);
                 try {
                   await api.updateExecutorProfile({
-                    payment_card: { card_number: cardNumber, expiry: cardExpiry, card_holder: cardHolder, iban: cardIban }
+                    payment_card: {
+                      card_number: digits,
+                      card_last4: digits.slice(-4),
+                      expiry: cardExpiry.trim(),
+                      card_holder: cardHolder.trim(),
+                      iban: iban || null
+                    }
                   });
                   Alert.alert('Збережено', 'Платіжні реквізити оновлено');
                   setPaymentCardVisible(false);

@@ -75,13 +75,14 @@ function calcDuration(start?: string | null, end?: string | null): string {
 
 // ─── Payment methods by country ───────────────────────────────────────────────
 const UA_METHODS = [
+  { id: 'stripe',      label: 'Картка (Stripe — тестова)', icon: 'card', color: '#635bff' },
   { id: 'monobank',    label: 'Monobank',    icon: 'card', color: '#1a1a2e' },
   { id: 'privatbank',  label: 'ПриватБанк',  icon: 'card', color: '#007bff' },
   { id: 'cash',        label: 'Готівка',     icon: 'cash', color: '#22c55e' },
   { id: 'other_ua',    label: 'Інший банк',  icon: 'wallet', color: '#6b7280' },
 ];
 const US_METHODS = [
-  { id: 'card',   label: 'Credit/Debit Card', icon: 'card',   color: '#2563eb' },
+  { id: 'stripe', label: 'Credit/Debit Card (Stripe)', icon: 'card',   color: '#635bff' },
   { id: 'zelle',  label: 'Zelle',             icon: 'flash',  color: '#6d28d9' },
   { id: 'venmo',  label: 'Venmo',             icon: 'logo-venmo', color: '#008cff' },
   { id: 'cash',   label: 'Cash',              icon: 'cash',   color: '#22c55e' },
@@ -204,6 +205,28 @@ export default function TaskDetail() {
 
   const submitPayment = async () => {
     if (!selectedMethod) { Alert.alert('Оберіть спосіб оплати'); return; }
+    // Stripe path: create a Checkout session and redirect the browser
+    if (selectedMethod === 'stripe') {
+      setActionLoading(true);
+      try {
+        const bookingId = task?.booking_id || taskId;
+        const r = await api.startStripeCheckout(bookingId);
+        if (!r?.url) throw new Error('Stripe: не отримано URL для оплати');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.location.href = r.url;
+        } else {
+          const { Linking } = await import('react-native');
+          await Linking.openURL(r.url);
+        }
+        return;
+      } catch (e: any) {
+        const msg = e?.response?.data?.detail || e?.message || 'Не вдалося розпочати оплату через Stripe';
+        Alert.alert('Помилка оплати', msg);
+        return;
+      } finally {
+        setActionLoading(false);
+      }
+    }
     setActionLoading(true);
     try {
       await api.payTask(taskId, { payment_method: selectedMethod });
