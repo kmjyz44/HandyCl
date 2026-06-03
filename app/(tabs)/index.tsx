@@ -268,6 +268,20 @@ export default function HomeScreen() {
   const [quickCities, setQuickCities] = useState<string[]>(['Київ', 'Харків', 'Одеса', 'Дніпро', 'Львів', 'Запоріжжя']);
   const [calDayIdx, setCalDayIdx] = useState(0); // for datetime step — must be here (Rules of Hooks)
   const [anyDayTime, setAnyDayTime] = useState(false); // "any day and time" checkbox
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  React.useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    const fetch = async () => {
+      try {
+        const r = await api.getUnreadNotificationCount();
+        if (alive) setUnreadNotifs(r?.unread_count || 0);
+      } catch {}
+    };
+    fetch();
+    const id = setInterval(fetch, 15000);
+    return () => { alive = false; clearInterval(id); };
+  }, [user]);
   const dates = getDates();
 
   // Resume an in-progress booking after the guest registered/logged in
@@ -614,15 +628,36 @@ export default function HomeScreen() {
               <Text style={s.greeting}>Привіт, {user?.full_name?.split(' ')[0] || user?.username || 'Клієнт'} 👋</Text>
               <Text style={s.headerSub}>Що потрібно зробити сьогодні?</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/my-profile')}>
-              {user?.picture ? (
-                <Image source={{ uri: user.picture }} style={s.headerAvatar} />
-              ) : (
-                <View style={[s.headerAvatar, { backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons name="person" size={20} color="#fff" />
-                </View>
-              )}
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => router.push('/notifications' as any)}
+                data-testid="open-notifications-btn"
+                style={{ position: 'relative' }}
+              >
+                <Ionicons name="notifications-outline" size={26} color="#111827" />
+                {unreadNotifs > 0 && (
+                  <View style={{
+                    position: 'absolute', top: -2, right: -4,
+                    backgroundColor: '#ef4444', borderRadius: 10,
+                    minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center',
+                    paddingHorizontal: 4,
+                  }}>
+                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+                      {unreadNotifs > 99 ? '99+' : unreadNotifs}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/my-profile')}>
+                {user?.picture ? (
+                  <Image source={{ uri: user.picture }} style={s.headerAvatar} />
+                ) : (
+                  <View style={[s.headerAvatar, { backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }]}>
+                    <Ionicons name="person" size={20} color="#fff" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 

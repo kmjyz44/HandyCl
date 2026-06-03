@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends, Query, Body
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -18,6 +18,15 @@ from telegram.constants import ParseMode
 import asyncio
 import json
 from bson import ObjectId
+
+# Web push (best-effort import — never block server boot if missing)
+try:
+    from pywebpush import webpush, WebPushException
+    _PUSH_AVAILABLE = True
+except ImportError:
+    _PUSH_AVAILABLE = False
+    webpush = None
+    WebPushException = Exception
 
 ROOT_DIR = Path(__file__).parent
 
@@ -1363,6 +1372,62 @@ async def _send_sms_twilio(to_phone: str, body: str) -> bool:
         return False
 
 
+async def _send_web_push_one(subscription: Dict[str, Any], payload: Dict[str, Any], vapid_priv: str, vapid_subject: str) -> bool:
+    """Send a single web push. Returns True on success."""
+    if not _PUSH_AVAILABLE:
+        return False
+    try:
+        # pywebpush is synchronous — run in a thread so we don't block the loop
+        await asyncio.to_thread(
+            webpush,
+            subscription_info={
+                "endpoint": subscription["endpoint"],
+                "keys": {"p256dh": subscription["p256dh"], "auth": subscription["auth"]},
+            },
+            data=json.dumps(payload),
+            vapid_private_key=vapid_priv,
+            vapid_claims={"sub": vapid_subject if vapid_subject.startswith("mailto:") else f"mailto:{vapid_subject}"},
+        )
+        return True
+    except WebPushException as e:
+        # 404/410 = subscription expired/invalid → caller should delete it
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        logger.info("WebPush failed (status=%s) for %s: %s", status, subscription.get("endpoint", "")[:50], e)
+        if status in (404, 410):
+            try:
+                await db.push_subscriptions.delete_one({"endpoint": subscription["endpoint"]})
+            except Exception:
+                pass
+        return False
+    except Exception as e:
+        logger.warning("WebPush unexpected error: %s", e)
+        return False
+
+
+async def _send_web_push(user_id: str, title: str, body: str, url: Optional[str] = None) -> int:
+    """Send web push to all of a user's subscribed devices. Returns count sent."""
+    if not _PUSH_AVAILABLE:
+        return 0
+    keys = await _get_integration_keys()
+    if not keys.get("enable_push_notifications", True):
+        return 0
+    vapid_priv = keys.get("vapid_private_key")
+    vapid_subject = keys.get("vapid_subject_email") or "admin@handyhub.com"
+    if not vapid_priv:
+        logger.info("VAPID private key not set — skipping push for %s", user_id)
+        return 0
+    subs = await db.push_subscriptions.find({"user_id": user_id}, {"_id": 0}).to_list(50)
+    if not subs:
+        return 0
+    payload = {"title": title, "body": body, "url": url or "/", "ts": int(datetime.now(timezone.utc).timestamp() * 1000)}
+    sent = 0
+    for s in subs:
+        ok = await _send_web_push_one(s, payload, vapid_priv, vapid_subject)
+        if ok:
+            sent += 1
+    return sent
+
+
 async def notify_user(
     user_id: str,
     notification_type: str,
@@ -1374,7 +1439,7 @@ async def notify_user(
 ):
     """Multi-channel notification: in-app + email + SMS (best-effort).
     `channels` defaults to ['inapp', 'email', 'sms']. Fails silently per channel."""
-    channels = channels or ["inapp", "email", "sms"]
+    channels = channels or ["inapp", "email", "sms", "push"]
     # 1. In-app (always)
     if "inapp" in channels:
         try:
@@ -1393,6 +1458,12 @@ async def notify_user(
                 asyncio.create_task(_send_email_sendgrid(user_doc["email"], title, message))
             if "sms" in channels and user_doc.get("phone"):
                 asyncio.create_task(_send_sms_twilio(user_doc["phone"], f"{title}: {message}"))
+    # Web push — fire-and-forget; routes notification to /notifications by default
+    if "push" in channels:
+        push_url = None
+        if related_type == "booking" and related_id:
+            push_url = f"/task-detail?id={related_id}"
+        asyncio.create_task(_send_web_push(user_id, title, message, push_url))
 
 
 # ==================== NOTIFICATION ROUTES ====================
@@ -6554,6 +6625,70 @@ def _mask(value: Optional[str]) -> Optional[str]:
     if len(value) <= 8:
         return "•" * len(value)
     return value[:4] + "•" * 8 + value[-4:]
+
+
+@api_router.get("/push/vapid-public-key")
+async def get_vapid_public_key():
+    """Public endpoint — browsers fetch this to subscribe to push.
+    Returns the VAPID public key set by admin in Integration Keys."""
+    doc = await db.integration_keys.find_one({"setting_id": "integration_keys"}, {"_id": 0}) or {}
+    pub = doc.get("vapid_public_key")
+    if not pub:
+        raise HTTPException(status_code=503, detail="Push notifications not configured")
+    return {"public_key": pub}
+
+
+@api_router.post("/push/subscribe")
+async def push_subscribe(
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Browser registers its PushSubscription. Idempotent by endpoint."""
+    endpoint = payload.get("endpoint")
+    keys = payload.get("keys") or {}
+    p256dh = keys.get("p256dh")
+    auth = keys.get("auth")
+    if not endpoint or not p256dh or not auth:
+        raise HTTPException(status_code=422, detail="endpoint, keys.p256dh, keys.auth are required")
+    doc = {
+        "user_id": current_user.user_id,
+        "endpoint": endpoint,
+        "p256dh": p256dh,
+        "auth": auth,
+        "user_agent": payload.get("user_agent"),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    await db.push_subscriptions.update_one(
+        {"endpoint": endpoint},
+        {"$set": doc, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api_router.delete("/push/subscribe")
+async def push_unsubscribe(
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user)
+):
+    endpoint = payload.get("endpoint")
+    if not endpoint:
+        raise HTTPException(status_code=422, detail="endpoint is required")
+    await db.push_subscriptions.delete_one({"endpoint": endpoint, "user_id": current_user.user_id})
+    return {"ok": True}
+
+
+@api_router.post("/push/test")
+async def push_test_self(current_user: User = Depends(get_current_user)):
+    """Send a test push to the current user — useful for diagnosing setup."""
+    sent = await _send_web_push(
+        current_user.user_id,
+        "HandyHub — тест",
+        "Якщо ти бачиш це — push працює ✅",
+        "/",
+    )
+    subs = await db.push_subscriptions.count_documents({"user_id": current_user.user_id})
+    return {"sent": sent, "subscriptions": subs}
 
 
 @api_router.get("/admin/integration-keys")

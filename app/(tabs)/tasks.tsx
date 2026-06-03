@@ -67,6 +67,19 @@ export default function AvailableTasks() {
   const params = useLocalSearchParams<{ tab?: string }>();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [myTasks, setMyTasks] = useState<Task[]>([]);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const fetch = async () => {
+      try {
+        const r = await api.getUnreadNotificationCount();
+        if (alive) setUnreadNotifs(r?.unread_count || 0);
+      } catch {}
+    };
+    fetch();
+    const id = setInterval(fetch, 15000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const COMPLETED_STATUSES = ['completed_pending_payment', 'paid', 'completed'];
@@ -258,6 +271,25 @@ export default function AvailableTasks() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Завдання</Text>
+        <TouchableOpacity
+          onPress={() => router.push('/notifications' as any)}
+          data-testid="open-notifications-btn-tasks"
+          style={{ position: 'absolute', right: 16, top: 16 }}
+        >
+          <Ionicons name="notifications-outline" size={26} color="#111827" />
+          {unreadNotifs > 0 && (
+            <View style={{
+              position: 'absolute', top: -2, right: -4,
+              backgroundColor: '#ef4444', borderRadius: 10,
+              minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center',
+              paddingHorizontal: 4,
+            }}>
+              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+                {unreadNotifs > 99 ? '99+' : unreadNotifs}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* Tabs */}

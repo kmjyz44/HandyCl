@@ -437,6 +437,24 @@ export const api = {
     return res.data;
   },
 
+  // Web Push (browser only)
+  getVapidPublicKey: async () => {
+    const res = await client.get('/push/vapid-public-key');
+    return res.data;
+  },
+  subscribeWebPush: async (data: any) => {
+    const res = await client.post('/push/subscribe', data);
+    return res.data;
+  },
+  unsubscribeWebPush: async (data: any) => {
+    const res = await client.delete('/push/subscribe', { data });
+    return res.data;
+  },
+  testPush: async () => {
+    const res = await client.post('/push/test');
+    return res.data;
+  },
+
   // Tasks
   getProviderTasks: async () => {
     const res = await client.get('/provider/tasks');

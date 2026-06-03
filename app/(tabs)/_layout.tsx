@@ -37,8 +37,10 @@ export default function TabsLayout() {
   useEffect(() => {
     if (!token || !user) return;
     const fetchUnread = async () => {
-      const count = await api.getUnreadMessagesCount();
-      setUnreadCount(count);
+      try {
+        const count = await api.getUnreadMessagesCount();
+        setUnreadCount(count);
+      } catch {}
     };
     fetchUnread();
     const interval = setInterval(fetchUnread, 15000);
