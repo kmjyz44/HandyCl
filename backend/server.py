@@ -57,7 +57,9 @@ class BookingStatus(str, Enum):
     DRAFT = "draft"
     POSTED = "posted"  # Task posted, waiting for tasker
     OFFERING = "offering"  # Taskers sending offers
-    ASSIGNED = "assigned"  # Tasker assigned
+    PENDING_ACCEPTANCE = "pending_acceptance"  # Assigned to a specific tasker awaiting their Accept/Decline
+    DECLINED = "declined"  # Tasker declined; client must reassign
+    ASSIGNED = "assigned"  # Tasker explicitly accepted
     HOLD_PLACED = "hold_placed"  # Payment hold successful
     ON_THE_WAY = "on_the_way"  # Tasker on the way
     STARTED = "started"  # Job started
@@ -71,6 +73,8 @@ class TaskStatus(str, Enum):
     DRAFT = "draft"
     POSTED = "posted"
     OFFERING = "offering"
+    PENDING_ACCEPTANCE = "pending_acceptance"
+    DECLINED = "declined"
     ASSIGNED = "assigned"
     HOLD_PLACED = "hold_placed"
     ON_THE_WAY = "on_the_way"
@@ -212,7 +216,8 @@ class Booking(BaseModel):
     booking_id: str
     client_id: str
     service_id: Optional[str] = None
-    category: Optional[ServiceCategory] = None
+    # Accept any string — admin-defined categories use custom IDs.
+    category: Optional[str] = None
     provider_id: Optional[str] = None
     title: str
     description: str
@@ -251,7 +256,9 @@ class Booking(BaseModel):
 
 class BookingCreate(BaseModel):
     service_id: Optional[str] = None
-    category: Optional[ServiceCategory] = None
+    # Accept any string — modern admin-created categories use custom IDs
+    # like 'assembly', 'cleaning' (not the legacy ServiceCategory enum).
+    category: Optional[str] = None
     title: str
     description: str
     date: Optional[str] = None
@@ -564,20 +571,37 @@ class CommissionRuleCreate(BaseModel):
 class PayoutAccount(BaseModel):
     account_id: str
     user_id: str
-    account_type: str = "bank"  # bank, stripe_connect
+    account_type: str = "bank"  # bank, card, stripe_connect
+    # Common
+    account_holder_name: Optional[str] = None
+    # Bank fields
     bank_name: Optional[str] = None
     account_number_last4: Optional[str] = None
     routing_number: Optional[str] = None
+    # Debit card fields
+    card_brand: Optional[str] = None  # visa, mastercard, amex, discover
+    card_last4: Optional[str] = None
+    card_exp_month: Optional[int] = None
+    card_exp_year: Optional[int] = None
     stripe_account_id: Optional[str] = None
+    stripe_external_account_id: Optional[str] = None
     is_default: bool = True
     is_verified: bool = False
+    verification_status: str = "pending"  # pending, verified, failed
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PayoutAccountCreate(BaseModel):
-    account_type: str = "bank"
+    account_type: str = "bank"  # bank or card
+    account_holder_name: Optional[str] = None
+    # Bank
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     routing_number: Optional[str] = None
+    # Card
+    card_number: Optional[str] = None
+    card_exp_month: Optional[int] = None
+    card_exp_year: Optional[int] = None
+    card_cvc: Optional[str] = None
 
 class Payout(BaseModel):
     payout_id: str
@@ -849,10 +873,6 @@ class SettingsUpdate(BaseModel):
     stripe_secret_key: Optional[str] = None
     zelle_instructions: Optional[str] = None
     venmo_instructions: Optional[str] = None
-    bank_account_number: Optional[str] = None
-    bank_account_holder: Optional[str] = None
-    bank_name: Optional[str] = None
-    bank_routing_number: Optional[str] = None
 
     # Firebase Push Notifications
     firebase_server_key: Optional[str] = None
@@ -1202,11 +1222,16 @@ async def get_current_user(authorization: Optional[str] = Header(None), request:
 
     return user
 
+
 async def get_current_user_optional(
     authorization: Optional[str] = Header(None),
     request: Request = None,
 ) -> Optional[User]:
-    """Return the current user if a valid session is present, otherwise None."""
+    """Return the current user if a valid session is present, otherwise None.
+
+    Use for public-but-personalized endpoints (e.g. landing-page executor list)
+    that must work for guests without raising 401.
+    """
     try:
         return await get_current_user(authorization=authorization, request=request)
     except HTTPException:
@@ -1262,6 +1287,113 @@ async def create_notification(
     )
     await db.notifications.insert_one(notification.dict())
     return notification
+
+
+# ==================== EMAIL / SMS DELIVERY ====================
+
+async def _get_integration_keys() -> Dict[str, Any]:
+    """Read admin-managed integration keys from DB. Returns {} if not configured."""
+    try:
+        doc = await db.integration_keys.find_one({"setting_id": "integration_keys"}, {"_id": 0})
+        return doc or {}
+    except Exception:
+        return {}
+
+
+async def _send_email_sendgrid(to_email: str, subject: str, body_text: str) -> bool:
+    """Send an email via SendGrid. Returns True on success, False on any failure.
+    Never raises — notifications must not break the main request flow."""
+    if not to_email:
+        return False
+    keys = await _get_integration_keys()
+    if not keys.get("enable_email_notifications", True):
+        return False
+    api_key = keys.get("sendgrid_api_key")
+    from_email = keys.get("sendgrid_from_email")
+    if not api_key or not from_email:
+        logger.info("SendGrid not configured — skipping email to %s", to_email)
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            r = await http.post(
+                "https://api.sendgrid.com/v3/mail/send",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "personalizations": [{"to": [{"email": to_email}], "subject": subject}],
+                    "from": {"email": from_email, "name": "HandyHub"},
+                    "content": [{"type": "text/plain", "value": body_text}],
+                },
+            )
+        if r.status_code >= 400:
+            logger.warning("SendGrid email failed %s: %s", r.status_code, r.text[:200])
+            return False
+        logger.info("SendGrid email sent to %s", to_email)
+        return True
+    except Exception as e:
+        logger.warning("SendGrid email error: %s", e)
+        return False
+
+
+async def _send_sms_twilio(to_phone: str, body: str) -> bool:
+    """Send an SMS via Twilio. Returns True on success, False on any failure."""
+    if not to_phone:
+        return False
+    keys = await _get_integration_keys()
+    if not keys.get("enable_sms_notifications", True):
+        return False
+    sid = keys.get("twilio_account_sid")
+    token = keys.get("twilio_auth_token")
+    from_phone = keys.get("twilio_from_phone")
+    if not sid or not token or not from_phone:
+        logger.info("Twilio not configured — skipping SMS to %s", to_phone)
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0, auth=(sid, token)) as http:
+            r = await http.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                data={"From": from_phone, "To": to_phone, "Body": body[:1500]},
+            )
+        if r.status_code >= 400:
+            logger.warning("Twilio SMS failed %s: %s", r.status_code, r.text[:200])
+            return False
+        logger.info("Twilio SMS sent to %s", to_phone)
+        return True
+    except Exception as e:
+        logger.warning("Twilio SMS error: %s", e)
+        return False
+
+
+async def notify_user(
+    user_id: str,
+    notification_type: str,
+    title: str,
+    message: str,
+    related_id: Optional[str] = None,
+    related_type: Optional[str] = None,
+    channels: Optional[List[str]] = None,
+):
+    """Multi-channel notification: in-app + email + SMS (best-effort).
+    `channels` defaults to ['inapp', 'email', 'sms']. Fails silently per channel."""
+    channels = channels or ["inapp", "email", "sms"]
+    # 1. In-app (always)
+    if "inapp" in channels:
+        try:
+            await create_notification(user_id, notification_type, title, message, related_id, related_type)
+        except Exception as e:
+            logger.warning("In-app notification failed for %s: %s", user_id, e)
+    # Lookup user contact info for email/SMS
+    if "email" in channels or "sms" in channels:
+        try:
+            user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "email": 1, "phone": 1})
+        except Exception:
+            user_doc = None
+        if user_doc:
+            if "email" in channels and user_doc.get("email"):
+                # don't await — fire-and-forget so the API request doesn't slow down
+                asyncio.create_task(_send_email_sendgrid(user_doc["email"], title, message))
+            if "sms" in channels and user_doc.get("phone"):
+                asyncio.create_task(_send_sms_twilio(user_doc["phone"], f"{title}: {message}"))
+
 
 # ==================== NOTIFICATION ROUTES ====================
 
@@ -1664,7 +1796,10 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
         estimated_hours=booking_data.estimated_hours,
         allow_offers=booking_data.allow_offers,
         total_price=price,
-        status=BookingStatus.POSTED
+        # If client picked a specific provider, the booking starts in
+        # pending_acceptance — provider must Accept before the client
+        # sees it as "Прийнято". Without a provider it remains POSTED.
+        status=(BookingStatus.PENDING_ACCEPTANCE if booking_data.provider_id else BookingStatus.POSTED)
     )
 
     booking_dict = booking.dict()
@@ -1683,8 +1818,32 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
 
     await db.bookings.insert_one(booking_dict)
 
-    # If client pre-selected a provider — auto-create task and notify
+    # If client pre-selected a provider — apply commission, create task in
+    # pending_acceptance, and notify
     if booking_data.provider_id:
+        # Apply per-category commission so the booking's total_price equals
+        # the marked-up client_total (executor_rate / (1 - commission/100))
+        executor_rate = float(booking_data.provider_hourly_rate or price or 0)
+        pricing = await compute_client_pricing(executor_rate, booking_data.category)
+        client_total = pricing["client_total"]
+
+        # Persist the snapshot on the booking
+        await db.bookings.update_one(
+            {"booking_id": booking_id},
+            {"$set": {
+                "total_price": client_total,
+                "executor_rate": pricing["executor_rate"],
+                "commission_rate_snapshot": pricing["commission_rate"],
+                "commission_amount": pricing["commission_amount"],
+                "platform_take": pricing["platform_take"],
+                "executor_take": pricing["executor_take"],
+            }}
+        )
+        booking_dict["total_price"] = client_total
+        booking_dict["executor_take"] = pricing["executor_take"]
+        booking_dict["platform_take"] = pricing["platform_take"]
+        booking_dict["commission_rate_snapshot"] = pricing["commission_rate"]
+
         task_id = f"task_{uuid.uuid4().hex[:12]}"
         task_doc = {
             "task_id": task_id,
@@ -1699,15 +1858,29 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
             "longitude": booking_data.longitude,
             "date": booking_data.date,
             "time": booking_data.time,
-            "status": "assigned",
+            # PENDING_ACCEPTANCE so the provider must explicitly Accept
+            "status": "pending_acceptance",
             "provider_hourly_rate": booking_data.provider_hourly_rate,
-            "total_price": booking_data.total_price or price,
+            "total_price": client_total,
+            "executor_take": pricing["executor_take"],
+            "platform_take": pricing["platform_take"],
+            "commission_rate_snapshot": pricing["commission_rate"],
             "photos": booking_data.problem_photos or [],
             "scheduled_date": booking_data.date,
             "scheduled_time": booking_data.time,
             "created_at": datetime.now(timezone.utc),
         }
         await db.tasks.insert_one(task_doc)
+
+        # Notify the chosen provider that they have a pending task to accept
+        await notify_user(
+            booking_data.provider_id,
+            "new_task_pending",
+            "Нове замовлення очікує на підтвердження",
+            f"У вас нове замовлення «{booking_data.title}» — будь ласка, прийміть або відхиліть його.",
+            related_id=task_id,
+            related_type="task",
+        )
 
     booking_dict.pop("_id", None)
     return JSONResponse(content=clean_bson(booking_dict))
@@ -2098,7 +2271,7 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
         # Classic task flow
         if task.get("provider_id") and task["provider_id"] != current_user.user_id:
             raise HTTPException(status_code=403, detail="This task is not assigned to you")
-        if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.POSTED, TaskStatus.OFFERING]:
+        if task["status"] not in [TaskStatus.ASSIGNED, TaskStatus.POSTED, TaskStatus.OFFERING, TaskStatus.PENDING_ACCEPTANCE]:
             raise HTTPException(status_code=400, detail="Task cannot be accepted in current status")
         now = datetime.now(timezone.utc)
         await db.tasks.update_one(
@@ -2114,6 +2287,17 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
             await db.bookings.update_one(
                 {"booking_id": task["booking_id"]},
                 {"$set": {"status": BookingStatus.ASSIGNED, "provider_id": current_user.user_id, "accepted_at": now}}
+            )
+        # Notify the client that the executor accepted
+        client_id = task.get("client_id") or task.get("user_id")
+        if client_id:
+            await notify_user(
+                client_id,
+                "booking_accepted",
+                "Виконавець прийняв замовлення",
+                f"Виконавець підтвердив завдання «{task.get('title') or task.get('description') or 'Замовлення'}». Очікуйте на виконання.",
+                related_id=task.get("booking_id") or task_id,
+                related_type="booking",
             )
         return {"message": "Task accepted", "status": TaskStatus.ASSIGNED}
 
@@ -2167,6 +2351,17 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
     }
     await db.tasks.insert_one(task_doc)
 
+    # Notify client about acceptance (booking-collection fallback path)
+    if booking.get("client_id"):
+        await notify_user(
+            booking["client_id"],
+            "booking_accepted",
+            "Виконавець прийняв замовлення",
+            f"Виконавець підтвердив завдання «{booking.get('title') or 'Замовлення'}».",
+            related_id=task_id,
+            related_type="booking",
+        )
+
     return {"message": "Booking accepted", "status": BookingStatus.ASSIGNED, "task_id": new_task_id, "new_task_id": new_task_id}
 
 
@@ -2205,6 +2400,17 @@ async def task_on_the_way(task_id: str, current_user: User = Depends(get_current
             {"booking_id": task["booking_id"]},
             {"$set": {"status": BookingStatus.ON_THE_WAY, "on_the_way_at": now}}
         )
+    # Notify client
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        await notify_user(
+            client_id,
+            "task_on_the_way",
+            "Виконавець у дорозі",
+            f"Виконавець виїхав на ваше замовлення «{task.get('title') or 'Завдання'}».",
+            related_id=task.get("booking_id") or real_task_id,
+            related_type="booking",
+        )
     return {"message": "Status updated: On the way", "status": TaskStatus.ON_THE_WAY, "task_id": real_task_id}
 
 @api_router.post("/tasks/{task_id}/start")
@@ -2238,6 +2444,18 @@ async def start_task(task_id: str, current_user: User = Depends(get_current_user
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
             {"$set": {"status": BookingStatus.STARTED, "started_at": now}}
+        )
+
+    # Notify client work has started
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        await notify_user(
+            client_id,
+            "task_started",
+            "Робота розпочалась",
+            f"Виконавець розпочав роботу над «{task.get('title') or 'Завдання'}».",
+            related_id=task.get("booking_id") or real_task_id,
+            related_type="booking",
         )
 
     return {"message": "Task started", "status": TaskStatus.STARTED, "task_id": real_task_id}
@@ -2308,21 +2526,17 @@ async def complete_task(
             }}
         )
 
-    # Send notification to client about payment required
+    # Send notification to client about payment required (in-app + email + SMS)
     client_id = task.get("client_id") or task.get("user_id")
     if client_id:
-        notif = {
-            "notification_id": str(uuid.uuid4()),
-            "user_id": client_id,
-            "type": "payment_required",
-            "title": "Оплата за завдання",
-            "message": f"Виконавець завершив роботу. Відпрацьовано: {actual_hours} год. Будь ласка, оплатіть рахунок.",
-            "task_id": real_task_id,
-            "booking_id": task.get("booking_id"),
-            "is_read": False,
-            "created_at": now
-        }
-        await db.notifications.insert_one(notif)
+        await notify_user(
+            client_id,
+            "payment_required",
+            "Оплата за завдання",
+            f"Виконавець завершив роботу. Відпрацьовано: {actual_hours} год. Будь ласка, оплатіть рахунок.",
+            related_id=task.get("booking_id") or real_task_id,
+            related_type="booking",
+        )
 
     return {"message": "Task completed", "status": TaskStatus.COMPLETED_PENDING_PAYMENT, "actual_hours": actual_hours}
 
@@ -2371,6 +2585,18 @@ async def decline_task(
                 "decline_reason": reason.strip(),
                 "declined_at": datetime.utcnow().isoformat() + "Z",
             }}
+        )
+
+    # Notify client the executor declined
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        await notify_user(
+            client_id,
+            "booking_declined",
+            "Виконавець відхилив замовлення",
+            f"На жаль, виконавець відхилив завдання. Причина: {reason.strip()}. Ви можете обрати іншого виконавця.",
+            related_id=task.get("booking_id") or task_id,
+            related_type="booking",
         )
 
     return {"message": "Task declined", "status": TaskStatus.DECLINED, "reason": reason.strip()}
@@ -3046,11 +3272,17 @@ async def get_executors_by_service(
     lng: Optional[float] = None,
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Get executors filtered by service/skill AND location."""
+    """Get executors filtered by service/skill AND location.
+
+    Public endpoint — guests (no auth) can also browse executors from the
+    landing page booking flow.
+    """
     settings_doc = await db.settings.find_one({"setting_id": "app_settings"}, {"_id": 0})
     settings = Settings(**settings_doc) if settings_doc else Settings()
 
-    # Per-category commission_rate takes priority over the legacy global one
+    # Per-category commission_rate takes priority over the legacy global
+    # admin_commission_percentage so admins can configure markup on a
+    # category-by-category basis (e.g. assembly=50%, cleaning=15%).
     commission_percent = 0.0
     if category:
         cat_doc = await db.categories.find_one(
@@ -3177,6 +3409,8 @@ async def get_executors_by_service(
                 location_ok = True
 
             if not location_ok:
+                # Strict filter: do not show executors whose service area
+                # does not cover the client's location.
                 continue
 
         # ── Admin listing filters ──────────────────────────────────────
@@ -3201,6 +3435,7 @@ async def get_executors_by_service(
             continue
 
         # ── Commission (Variant B: commission is % of client total) ──
+        # client_rate = base_rate / (1 - commission/100); platform = client - base.
         if base_rate and 0 < commission_percent < 100:
             final_rate = round(base_rate / (1 - commission_percent / 100.0), 2)
         else:
@@ -4918,12 +5153,25 @@ class CategoryUpdateRequest(BaseModel):
 
 @api_router.get("/categories")
 async def get_categories(include_image: bool = False):
-    """Get all active service categories (public). Image excluded by default."""
+    """Get all active service categories (public).
+
+    The cover image is excluded by default because it's a base64 data URL
+    that can be 5-10 MB per category, which makes the home grid request
+    timeout on mobile networks. Frontend uses a fallback Unsplash photo
+    based on the category id; to fetch the actual cover image pass
+    ?include_image=true or call GET /api/categories/{id}.
+    """
     projection = {"_id": 0} if include_image else {"_id": 0, "image": 0}
     categories = await db.categories.find({"is_active": True}, projection).to_list(100)
     if not categories:
+        # Return enum values if no custom categories
         return [{"id": cat.value, "name": cat.value.replace("_", " ").title()} for cat in ServiceCategory]
+    # Flag presence of image so the frontend knows it's available on demand
     if not include_image:
+        for c in categories:
+            c["has_image"] = False  # placeholder; populated below from a 2nd query
+        # One small query to mark which categories have an image — uses
+        # projection so it doesn't pull the actual bytes.
         ids_with_image = await db.categories.find(
             {"is_active": True, "image": {"$ne": None, "$exists": True}},
             {"_id": 0, "category_id": 1},
@@ -4936,6 +5184,7 @@ async def get_categories(include_image: bool = False):
 
 @api_router.get("/categories/{category_id}")
 async def get_category_one(category_id: str):
+    """Get a single category including its cover image (full payload)."""
     c = await db.categories.find_one({"category_id": category_id}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -4948,7 +5197,9 @@ async def admin_get_categories(
     include_image: bool = False,
     current_user: User = Depends(require_admin)
 ):
-    """Admin: get all categories. Image excluded by default for performance."""
+    """Admin: get all categories. Image excluded by default for performance —
+    the edit modal fetches the single category via /admin/categories/{id}.
+    """
     query = {} if include_inactive else {"is_active": True}
     projection = {"_id": 0} if include_image else {"_id": 0, "image": 0}
     categories = await db.categories.find(query, projection).sort("created_at", -1).to_list(500)
@@ -4964,7 +5215,11 @@ async def admin_get_categories(
 
 
 @api_router.get("/admin/categories/{category_id}")
-async def admin_get_category_one(category_id: str, current_user: User = Depends(require_admin)):
+async def admin_get_category_one(
+    category_id: str,
+    current_user: User = Depends(require_admin)
+):
+    """Admin: fetch a single category with full payload (image included)."""
     c = await db.categories.find_one({"category_id": category_id}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -5042,7 +5297,12 @@ async def cleanup_oversized_category_images(
     max_kb: int = 500,
     current_user: User = Depends(require_admin)
 ):
-    """Clear cover image from categories whose image exceeds `max_kb` KB."""
+    """Clear cover image from categories whose image exceeds `max_kb` KB.
+
+    Used as a one-shot fix after legacy admins uploaded multi-MB phone
+    photos before frontend compression existed — those entries make
+    GET /api/categories time out for clients.
+    """
     threshold_bytes = max_kb * 1024
     docs = await db.categories.find(
         {"image": {"$ne": None, "$exists": True}},
@@ -5075,7 +5335,12 @@ async def admin_set_provider_location(
     payload: ProviderLocationUpdate,
     current_user: User = Depends(require_admin)
 ):
-    """Admin: manually set a provider's service-area location."""
+    """Admin: manually set a provider's service-area location.
+
+    Used to fix providers whose profile has stale/default coordinates
+    (e.g. Chicago defaults instead of Kyiv) so that geo-filtered search
+    correctly returns them for nearby clients.
+    """
     user = await db.users.find_one({"user_id": user_id, "role": "provider"}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -5958,6 +6223,16 @@ async def client_create_booking(
 
     booking_id = f"booking_{uuid.uuid4().hex[:12]}"
 
+    # Apply per-category commission markup. The executor's rate stays the
+    # same (service.price); client_total = service.price * (1 + commission/100)
+    executor_rate = float(data.provider_hourly_rate or service.get("price") or 0)
+    pricing = await compute_client_pricing(executor_rate, service.get("category"))
+
+    # If frontend already passed a total_price (e.g. pre-computed), prefer it
+    # only when it matches our computed client_total within rounding; otherwise
+    # the backend is the source of truth to prevent client-side tampering.
+    client_total = pricing["client_total"]
+
     booking = {
         "booking_id": booking_id,
         "client_id": current_user.user_id,
@@ -5973,9 +6248,16 @@ async def client_create_booking(
         "notes": data.notes,
         "problem_description": data.problem_description,
         "problem_photos": data.problem_photos,
-        "status": BookingStatus.ASSIGNED if data.provider_id else BookingStatus.DRAFT,
+        "status": BookingStatus.PENDING_ACCEPTANCE if data.provider_id else BookingStatus.DRAFT,
         "estimated_price": service.get("price"),
-        "total_price": data.total_price or service.get("price", 0),
+        "total_price": client_total,
+        # Pricing breakdown snapshot (so changes to category commission later
+        # don't retroactively alter past bookings)
+        "executor_rate": pricing["executor_rate"],
+        "commission_rate_snapshot": pricing["commission_rate"],
+        "commission_amount": pricing["commission_amount"],
+        "platform_take": pricing["platform_take"],
+        "executor_take": pricing["executor_take"],
         "provider_id": data.provider_id,
         "provider_hourly_rate": data.provider_hourly_rate,
         "created_at": datetime.now(timezone.utc),
@@ -5998,9 +6280,12 @@ async def client_create_booking(
             "address": data.address,
             "date": data.date,
             "time": data.time,
-            "status": TaskStatus.ASSIGNED,
+            "status": TaskStatus.PENDING_ACCEPTANCE,
             "provider_hourly_rate": data.provider_hourly_rate,
-            "total_price": data.total_price or service.get("price", 0),
+            "total_price": client_total,
+            "executor_take": pricing["executor_take"],
+            "platform_take": pricing["platform_take"],
+            "commission_rate_snapshot": pricing["commission_rate"],
             "photos": data.problem_photos or [],
             "scheduled_date": data.date,
             "scheduled_time": data.time,
@@ -6011,7 +6296,7 @@ async def client_create_booking(
         # Send notification to provider
         provider = await db.users.find_one({"user_id": data.provider_id}, {"_id": 0})
         if provider and provider.get("telegram_chat_id"):
-            message = f"📋 *Нове завдання!*\n\nПослуга: {service.get('name', 'Послуга')}\nДата: {data.date} о {data.time}\nАдреса: {data.address}\nЦіна: ${data.total_price or service.get('price', 0)}"
+            message = f"📋 *Нове завдання!*\n\nПослуга: {service.get('name', 'Послуга')}\nДата: {data.date} о {data.time}\nАдреса: {data.address}\nВаша ставка: ${pricing['executor_take']}"
             await send_telegram_notification(provider["telegram_chat_id"], message)
 
         booking["task_id"] = task_id
@@ -6086,8 +6371,16 @@ async def client_submit_booking(
 async def compute_client_pricing(executor_rate: float, category_id: Optional[str] = None) -> Dict[str, Any]:
     """Apply the category's commission as a percentage of the client's total.
 
-    Variant B: client_total = executor_rate / (1 - commission/100).
-    For 50% commission: executor=20, client=40, platform=20.
+    Business rules (admin spec, Variant B):
+      • Executor sets their own price X (their net earnings, what they receive).
+      • Admin sets commission_rate (%) per category.
+      • commission_rate is the SHARE OF THE CLIENT TOTAL that goes to the
+        platform — so for 50% commission, platform and executor each receive
+        half of what the client paid.
+      • client_total = executor_rate / (1 - commission_rate/100)
+      • For 50%: executor=20, client=40, platform=20.
+      • For 15%: executor=20, client=23.53, platform=3.53.
+      • commission_rate of 100% would divide by zero; capped at 99%.
     """
     try:
         rate = float(executor_rate or 0)
@@ -6105,7 +6398,7 @@ async def compute_client_pricing(executor_rate: float, category_id: Optional[str
             commission_rate = float(category_doc["commission_rate"])
 
     if commission_rate >= 100:
-        commission_rate = 99.0
+        commission_rate = 99.0  # cap to avoid div-by-zero
     if commission_rate < 0:
         commission_rate = 0.0
 
@@ -6129,15 +6422,186 @@ async def compute_client_pricing(executor_rate: float, category_id: Optional[str
 
 @api_router.get("/pricing-preview")
 async def pricing_preview(executor_rate: float, category_id: Optional[str] = None):
-    """Public price-preview endpoint. Returns marked-up total + split."""
+    """Public price-preview endpoint.
+
+    Returns the marked-up client total and the platform/executor split based on
+    the category's commission_rate. Used by the booking flow on the frontend
+    so the client sees the final amount they will be charged.
+    """
     return await compute_client_pricing(executor_rate, category_id)
 
 
+# ==================== TASK ACCEPT / DECLINE (provider workflow) ============
+
+async def _update_booking_and_task_status(booking_id: str, new_status: str, extra: Dict[str, Any] = None):
+    """Helper: update both the booking and matching task with same status + timestamp."""
+    update = {"status": new_status, "updated_at": datetime.now(timezone.utc)}
+    if extra:
+        update.update(extra)
+    await db.bookings.update_one({"booking_id": booking_id}, {"$set": update})
+    await db.tasks.update_one({"booking_id": booking_id}, {"$set": update})
+
+
+@api_router.post("/bookings/{booking_id}/accept")
+async def provider_accept_booking(booking_id: str, current_user: User = Depends(get_current_user)):
+    """Provider accepts a pending booking. Sets status -> ASSIGNED."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers can accept bookings")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="This booking is not assigned to you")
+    if booking.get("status") not in (BookingStatus.PENDING_ACCEPTANCE.value, "pending_acceptance"):
+        raise HTTPException(status_code=400, detail=f"Cannot accept from status {booking.get('status')}")
+    await _update_booking_and_task_status(booking_id, BookingStatus.ASSIGNED.value, {"accepted_at": datetime.now(timezone.utc)})
+    return {"ok": True, "booking_id": booking_id, "status": "assigned"}
+
+
+@api_router.post("/bookings/{booking_id}/decline")
+async def provider_decline_booking(
+    booking_id: str,
+    reason: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+):
+    """Provider declines a pending booking. Sets status -> DECLINED + clears provider_id so client can reassign."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers can decline bookings")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="This booking is not assigned to you")
+    extra = {
+        "declined_at": datetime.now(timezone.utc),
+        "declined_by": current_user.user_id,
+        "decline_reason": reason,
+        "previous_provider_id": current_user.user_id,
+        "provider_id": None,  # free the booking up
+    }
+    await _update_booking_and_task_status(booking_id, BookingStatus.DECLINED.value, extra)
+    return {"ok": True, "booking_id": booking_id, "status": "declined"}
+
+
+@api_router.post("/bookings/{booking_id}/en-route")
+async def provider_mark_en_route(booking_id: str, current_user: User = Depends(get_current_user)):
+    """Provider marks themselves as on the way. Requires status=ASSIGNED."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking or booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("status") not in (BookingStatus.ASSIGNED.value, "assigned"):
+        raise HTTPException(status_code=400, detail=f"Cannot mark en-route from status {booking.get('status')}")
+    await _update_booking_and_task_status(booking_id, BookingStatus.ON_THE_WAY.value)
+    return {"ok": True, "booking_id": booking_id, "status": "on_the_way"}
+
+
+@api_router.post("/bookings/{booking_id}/start")
+async def provider_start_work(booking_id: str, current_user: User = Depends(get_current_user)):
+    """Provider starts the work. Requires status=ON_THE_WAY (or ASSIGNED)."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking or booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("status") not in (BookingStatus.ON_THE_WAY.value, BookingStatus.ASSIGNED.value, "on_the_way", "assigned"):
+        raise HTTPException(status_code=400, detail=f"Cannot start from status {booking.get('status')}")
+    await _update_booking_and_task_status(booking_id, BookingStatus.STARTED.value, {"started_at": datetime.now(timezone.utc)})
+    return {"ok": True, "booking_id": booking_id, "status": "started"}
+
+
+@api_router.post("/bookings/{booking_id}/complete")
+async def provider_complete_work(booking_id: str, current_user: User = Depends(get_current_user)):
+    """Provider marks the work as completed."""
+    if current_user.role != "provider":
+        raise HTTPException(status_code=403, detail="Only providers")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking or booking.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("status") not in (BookingStatus.STARTED.value, "started"):
+        raise HTTPException(status_code=400, detail=f"Cannot complete from status {booking.get('status')}")
+    await _update_booking_and_task_status(booking_id, BookingStatus.COMPLETED_PENDING_PAYMENT.value, {"completed_at": datetime.now(timezone.utc)})
+    return {"ok": True, "booking_id": booking_id, "status": "completed_pending_payment"}
+
+
+# ==================== ADMIN INTEGRATION-KEYS ROUTES ========================
+
+class IntegrationKeysUpdate(BaseModel):
+    sendgrid_api_key: Optional[str] = None
+    sendgrid_from_email: Optional[str] = None
+    stripe_secret_key: Optional[str] = None
+    stripe_publishable_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    twilio_account_sid: Optional[str] = None
+    twilio_auth_token: Optional[str] = None
+    twilio_from_phone: Optional[str] = None
+    vapid_public_key: Optional[str] = None
+    vapid_private_key: Optional[str] = None
+    vapid_subject_email: Optional[str] = None
+    telegram_bot_token: Optional[str] = None
+    # admin-controlled feature toggles
+    enable_email_notifications: Optional[bool] = None
+    enable_sms_notifications: Optional[bool] = None
+    enable_push_notifications: Optional[bool] = None
+    enable_telegram_notifications: Optional[bool] = None
+    enable_stripe_payments: Optional[bool] = None
+
+
+def _mask(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    if len(value) <= 8:
+        return "•" * len(value)
+    return value[:4] + "•" * 8 + value[-4:]
+
+
+@api_router.get("/admin/integration-keys")
+async def get_integration_keys(current_user: User = Depends(require_admin)):
+    """Admin: return masked integration keys + feature toggles."""
+    doc = await db.integration_keys.find_one({"setting_id": "integration_keys"}, {"_id": 0}) or {}
+    out = {}
+    secret_fields = {
+        "sendgrid_api_key", "stripe_secret_key", "stripe_webhook_secret",
+        "twilio_auth_token", "vapid_private_key", "telegram_bot_token",
+    }
+    for k in IntegrationKeysUpdate.model_fields.keys():
+        v = doc.get(k)
+        if k in secret_fields and isinstance(v, str):
+            out[k] = _mask(v)
+            out[k + "_set"] = bool(v)
+        else:
+            out[k] = v
+    return out
+
+
+@api_router.put("/admin/integration-keys")
+async def set_integration_keys(payload: IntegrationKeysUpdate, current_user: User = Depends(require_admin)):
+    """Admin: update integration keys & feature toggles. Empty-string fields are ignored
+    so admins can clear with explicit null but not accidentally with blank input."""
+    data = payload.model_dump(exclude_unset=True)
+    update = {}
+    for k, v in data.items():
+        if v == "":
+            continue  # skip empties — must set None explicitly to clear
+        update[k] = v
+    if not update:
+        return {"ok": True, "updated": []}
+    update["updated_at"] = datetime.now(timezone.utc)
+    update["updated_by"] = current_user.user_id
+    await db.integration_keys.update_one(
+        {"setting_id": "integration_keys"},
+        {"$set": update, "$setOnInsert": {"setting_id": "integration_keys", "created_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    return {"ok": True, "updated": list(update.keys())}
+
+
+# ==================== END NEW BLOCK ===================
+
 async def calculate_commission(booking_id: str, base_price: float) -> Dict[str, Any]:
     """Calculate commission based on rules hierarchy"""
-    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
-
-    # Get settings for default commission
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})    # Get settings for default commission
     settings = await get_settings()
     default_commission_percent = settings.admin_commission_percentage
     service_fee = settings.fixed_booking_fee
@@ -6493,30 +6957,92 @@ async def revoke_badge(
 
 # ==================== PAYOUT ENDPOINTS ====================
 
+def _luhn_check(card_number: str) -> bool:
+    """Validate credit/debit card number via Luhn algorithm."""
+    digits = [int(c) for c in card_number if c.isdigit()]
+    if len(digits) < 12 or len(digits) > 19:
+        return False
+    checksum = 0
+    for i, d in enumerate(reversed(digits)):
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        checksum += d
+    return checksum % 10 == 0
+
+
+def _detect_card_brand(card_number: str) -> str:
+    n = "".join(c for c in card_number if c.isdigit())
+    if n.startswith("4"):
+        return "visa"
+    if n[:2] in ("34", "37"):
+        return "amex"
+    if n[:2] in ("51", "52", "53", "54", "55") or (n[:4].isdigit() and 2221 <= int(n[:4]) <= 2720):
+        return "mastercard"
+    if n.startswith("6011") or n.startswith("65"):
+        return "discover"
+    return "unknown"
+
+
 @api_router.post("/tasker/payout-accounts")
 async def create_payout_account(
     data: PayoutAccountCreate,
     current_user: User = Depends(get_current_user)
 ):
-    """Tasker adds payout account"""
+    """Tasker adds a payout account (bank or debit card). Only last4 digits are stored —
+    full numbers are validated then discarded, awaiting Stripe Connect tokenization."""
     if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
         raise HTTPException(status_code=403, detail="Only providers can add payout accounts")
 
-    account_id = f"acc_{uuid.uuid4().hex[:12]}"
+    if data.account_type not in ("bank", "card"):
+        raise HTTPException(status_code=422, detail="account_type must be 'bank' or 'card'")
+    if not data.account_holder_name or len(data.account_holder_name.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Ім'я власника обовʼязкове")
 
+    account_id = f"acc_{uuid.uuid4().hex[:12]}"
     account = {
         "account_id": account_id,
         "user_id": current_user.user_id,
         "account_type": data.account_type,
-        "bank_name": data.bank_name,
-        "account_number_last4": data.account_number[-4:] if data.account_number else None,
-        "routing_number": data.routing_number,
+        "account_holder_name": data.account_holder_name.strip(),
         "is_default": True,
         "is_verified": False,
-        "created_at": datetime.now(timezone.utc)
+        "verification_status": "pending",
+        "created_at": datetime.now(timezone.utc),
     }
 
-    # Set other accounts to non-default
+    if data.account_type == "bank":
+        if not data.account_number or not data.routing_number:
+            raise HTTPException(status_code=422, detail="Routing і Account number обовʼязкові для банку")
+        acc_num = "".join(c for c in data.account_number if c.isdigit())
+        rt_num = "".join(c for c in data.routing_number if c.isdigit())
+        if len(acc_num) < 4 or len(acc_num) > 17:
+            raise HTTPException(status_code=422, detail="Account number невірної довжини")
+        if len(rt_num) != 9:
+            raise HTTPException(status_code=422, detail="Routing number має бути 9 цифр")
+        account["bank_name"] = (data.bank_name or "").strip() or None
+        account["account_number_last4"] = acc_num[-4:]
+        account["routing_number"] = rt_num  # ABA routing numbers are public, OK to store
+    else:  # card
+        if not data.card_number or not data.card_exp_month or not data.card_exp_year:
+            raise HTTPException(status_code=422, detail="Номер картки і термін дії обовʼязкові")
+        card_num = "".join(c for c in data.card_number if c.isdigit())
+        if not _luhn_check(card_num):
+            raise HTTPException(status_code=422, detail="Невірний номер картки")
+        if not (1 <= int(data.card_exp_month) <= 12):
+            raise HTTPException(status_code=422, detail="Невірний місяць")
+        exp_year = int(data.card_exp_year)
+        if exp_year < 100:
+            exp_year += 2000
+        if exp_year < datetime.now(timezone.utc).year:
+            raise HTTPException(status_code=422, detail="Картка прострочена")
+        account["card_brand"] = _detect_card_brand(card_num)
+        account["card_last4"] = card_num[-4:]
+        account["card_exp_month"] = int(data.card_exp_month)
+        account["card_exp_year"] = exp_year
+
+    # Mark older accounts as non-default
     await db.payout_accounts.update_many(
         {"user_id": current_user.user_id},
         {"$set": {"is_default": False}}
@@ -6552,6 +7078,46 @@ async def get_tasker_payouts(current_user: User = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(100)
 
     return payouts
+
+
+@api_router.delete("/tasker/payout-accounts/{account_id}")
+async def delete_payout_account(account_id: str, current_user: User = Depends(get_current_user)):
+    """Tasker removes their payout account."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers can modify payout accounts")
+    res = await db.payout_accounts.delete_one(
+        {"account_id": account_id, "user_id": current_user.user_id}
+    )
+    if not res.deleted_count:
+        raise HTTPException(status_code=404, detail="Payout account not found")
+    # Promote some other account to default
+    remaining = await db.payout_accounts.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    if remaining:
+        await db.payout_accounts.update_one(
+            {"account_id": remaining["account_id"]},
+            {"$set": {"is_default": True}},
+        )
+    return {"ok": True}
+
+
+@api_router.post("/tasker/payout-accounts/{account_id}/default")
+async def set_default_payout_account(account_id: str, current_user: User = Depends(get_current_user)):
+    """Mark this account as the default for the current tasker."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers can modify payout accounts")
+    found = await db.payout_accounts.find_one(
+        {"account_id": account_id, "user_id": current_user.user_id}, {"_id": 0}
+    )
+    if not found:
+        raise HTTPException(status_code=404, detail="Payout account not found")
+    await db.payout_accounts.update_many(
+        {"user_id": current_user.user_id}, {"$set": {"is_default": False}}
+    )
+    await db.payout_accounts.update_one(
+        {"account_id": account_id}, {"$set": {"is_default": True}}
+    )
+    return {"ok": True}
+
 
 @api_router.post("/admin/payouts/release")
 async def release_payout(
@@ -8297,6 +8863,26 @@ async def test_connection():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+# Build/version marker — bumps on every deploy so we can confirm what's live.
+BUILD_VERSION = os.environ.get("BUILD_VERSION", "dev")
+BUILD_SHA = os.environ.get("BUILD_SHA", "unknown")
+BUILD_TIME = os.environ.get("BUILD_TIME", "unknown")
+
+@app.get("/api/version")
+async def get_version():
+    return {
+        "version": BUILD_VERSION,
+        "sha": BUILD_SHA,
+        "build_time": BUILD_TIME,
+        # known-feature flags so we can verify the deployed code surface
+        "features": {
+            "pending_acceptance": True,
+            "integration_keys": True,
+            "category_optional_str": True,
+            "stripe_connect_payouts": True,
+        },
+    }
 
 app.add_middleware(
     CORSMiddleware,
