@@ -571,20 +571,37 @@ class CommissionRuleCreate(BaseModel):
 class PayoutAccount(BaseModel):
     account_id: str
     user_id: str
-    account_type: str = "bank"  # bank, stripe_connect
+    account_type: str = "bank"  # bank, card, stripe_connect
+    # Common
+    account_holder_name: Optional[str] = None
+    # Bank fields
     bank_name: Optional[str] = None
     account_number_last4: Optional[str] = None
     routing_number: Optional[str] = None
+    # Debit card fields
+    card_brand: Optional[str] = None  # visa, mastercard, amex, discover
+    card_last4: Optional[str] = None
+    card_exp_month: Optional[int] = None
+    card_exp_year: Optional[int] = None
     stripe_account_id: Optional[str] = None
+    stripe_external_account_id: Optional[str] = None
     is_default: bool = True
     is_verified: bool = False
+    verification_status: str = "pending"  # pending, verified, failed
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PayoutAccountCreate(BaseModel):
-    account_type: str = "bank"
+    account_type: str = "bank"  # bank or card
+    account_holder_name: Optional[str] = None
+    # Bank
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     routing_number: Optional[str] = None
+    # Card
+    card_number: Optional[str] = None
+    card_exp_month: Optional[int] = None
+    card_exp_year: Optional[int] = None
+    card_cvc: Optional[str] = None
 
 class Payout(BaseModel):
     payout_id: str
@@ -1271,6 +1288,113 @@ async def create_notification(
     await db.notifications.insert_one(notification.dict())
     return notification
 
+
+# ==================== EMAIL / SMS DELIVERY ====================
+
+async def _get_integration_keys() -> Dict[str, Any]:
+    """Read admin-managed integration keys from DB. Returns {} if not configured."""
+    try:
+        doc = await db.integration_keys.find_one({"setting_id": "integration_keys"}, {"_id": 0})
+        return doc or {}
+    except Exception:
+        return {}
+
+
+async def _send_email_sendgrid(to_email: str, subject: str, body_text: str) -> bool:
+    """Send an email via SendGrid. Returns True on success, False on any failure.
+    Never raises — notifications must not break the main request flow."""
+    if not to_email:
+        return False
+    keys = await _get_integration_keys()
+    if not keys.get("enable_email_notifications", True):
+        return False
+    api_key = keys.get("sendgrid_api_key")
+    from_email = keys.get("sendgrid_from_email")
+    if not api_key or not from_email:
+        logger.info("SendGrid not configured — skipping email to %s", to_email)
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            r = await http.post(
+                "https://api.sendgrid.com/v3/mail/send",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "personalizations": [{"to": [{"email": to_email}], "subject": subject}],
+                    "from": {"email": from_email, "name": "HandyHub"},
+                    "content": [{"type": "text/plain", "value": body_text}],
+                },
+            )
+        if r.status_code >= 400:
+            logger.warning("SendGrid email failed %s: %s", r.status_code, r.text[:200])
+            return False
+        logger.info("SendGrid email sent to %s", to_email)
+        return True
+    except Exception as e:
+        logger.warning("SendGrid email error: %s", e)
+        return False
+
+
+async def _send_sms_twilio(to_phone: str, body: str) -> bool:
+    """Send an SMS via Twilio. Returns True on success, False on any failure."""
+    if not to_phone:
+        return False
+    keys = await _get_integration_keys()
+    if not keys.get("enable_sms_notifications", True):
+        return False
+    sid = keys.get("twilio_account_sid")
+    token = keys.get("twilio_auth_token")
+    from_phone = keys.get("twilio_from_phone")
+    if not sid or not token or not from_phone:
+        logger.info("Twilio not configured — skipping SMS to %s", to_phone)
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0, auth=(sid, token)) as http:
+            r = await http.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                data={"From": from_phone, "To": to_phone, "Body": body[:1500]},
+            )
+        if r.status_code >= 400:
+            logger.warning("Twilio SMS failed %s: %s", r.status_code, r.text[:200])
+            return False
+        logger.info("Twilio SMS sent to %s", to_phone)
+        return True
+    except Exception as e:
+        logger.warning("Twilio SMS error: %s", e)
+        return False
+
+
+async def notify_user(
+    user_id: str,
+    notification_type: str,
+    title: str,
+    message: str,
+    related_id: Optional[str] = None,
+    related_type: Optional[str] = None,
+    channels: Optional[List[str]] = None,
+):
+    """Multi-channel notification: in-app + email + SMS (best-effort).
+    `channels` defaults to ['inapp', 'email', 'sms']. Fails silently per channel."""
+    channels = channels or ["inapp", "email", "sms"]
+    # 1. In-app (always)
+    if "inapp" in channels:
+        try:
+            await create_notification(user_id, notification_type, title, message, related_id, related_type)
+        except Exception as e:
+            logger.warning("In-app notification failed for %s: %s", user_id, e)
+    # Lookup user contact info for email/SMS
+    if "email" in channels or "sms" in channels:
+        try:
+            user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "email": 1, "phone": 1})
+        except Exception:
+            user_doc = None
+        if user_doc:
+            if "email" in channels and user_doc.get("email"):
+                # don't await — fire-and-forget so the API request doesn't slow down
+                asyncio.create_task(_send_email_sendgrid(user_doc["email"], title, message))
+            if "sms" in channels and user_doc.get("phone"):
+                asyncio.create_task(_send_sms_twilio(user_doc["phone"], f"{title}: {message}"))
+
+
 # ==================== NOTIFICATION ROUTES ====================
 
 @api_router.get("/notifications")
@@ -1748,6 +1872,16 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
         }
         await db.tasks.insert_one(task_doc)
 
+        # Notify the chosen provider that they have a pending task to accept
+        await notify_user(
+            booking_data.provider_id,
+            "new_task_pending",
+            "Нове замовлення очікує на підтвердження",
+            f"У вас нове замовлення «{booking_data.title}» — будь ласка, прийміть або відхиліть його.",
+            related_id=task_id,
+            related_type="task",
+        )
+
     booking_dict.pop("_id", None)
     return JSONResponse(content=clean_bson(booking_dict))
 
@@ -2154,6 +2288,17 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
                 {"booking_id": task["booking_id"]},
                 {"$set": {"status": BookingStatus.ASSIGNED, "provider_id": current_user.user_id, "accepted_at": now}}
             )
+        # Notify the client that the executor accepted
+        client_id = task.get("client_id") or task.get("user_id")
+        if client_id:
+            await notify_user(
+                client_id,
+                "booking_accepted",
+                "Виконавець прийняв замовлення",
+                f"Виконавець підтвердив завдання «{task.get('title') or task.get('description') or 'Замовлення'}». Очікуйте на виконання.",
+                related_id=task.get("booking_id") or task_id,
+                related_type="booking",
+            )
         return {"message": "Task accepted", "status": TaskStatus.ASSIGNED}
 
     # Fallback: try bookings collection
@@ -2206,6 +2351,17 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
     }
     await db.tasks.insert_one(task_doc)
 
+    # Notify client about acceptance (booking-collection fallback path)
+    if booking.get("client_id"):
+        await notify_user(
+            booking["client_id"],
+            "booking_accepted",
+            "Виконавець прийняв замовлення",
+            f"Виконавець підтвердив завдання «{booking.get('title') or 'Замовлення'}».",
+            related_id=task_id,
+            related_type="booking",
+        )
+
     return {"message": "Booking accepted", "status": BookingStatus.ASSIGNED, "task_id": new_task_id, "new_task_id": new_task_id}
 
 
@@ -2244,6 +2400,17 @@ async def task_on_the_way(task_id: str, current_user: User = Depends(get_current
             {"booking_id": task["booking_id"]},
             {"$set": {"status": BookingStatus.ON_THE_WAY, "on_the_way_at": now}}
         )
+    # Notify client
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        await notify_user(
+            client_id,
+            "task_on_the_way",
+            "Виконавець у дорозі",
+            f"Виконавець виїхав на ваше замовлення «{task.get('title') or 'Завдання'}».",
+            related_id=task.get("booking_id") or real_task_id,
+            related_type="booking",
+        )
     return {"message": "Status updated: On the way", "status": TaskStatus.ON_THE_WAY, "task_id": real_task_id}
 
 @api_router.post("/tasks/{task_id}/start")
@@ -2277,6 +2444,18 @@ async def start_task(task_id: str, current_user: User = Depends(get_current_user
         await db.bookings.update_one(
             {"booking_id": task["booking_id"]},
             {"$set": {"status": BookingStatus.STARTED, "started_at": now}}
+        )
+
+    # Notify client work has started
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        await notify_user(
+            client_id,
+            "task_started",
+            "Робота розпочалась",
+            f"Виконавець розпочав роботу над «{task.get('title') or 'Завдання'}».",
+            related_id=task.get("booking_id") or real_task_id,
+            related_type="booking",
         )
 
     return {"message": "Task started", "status": TaskStatus.STARTED, "task_id": real_task_id}
@@ -2347,21 +2526,17 @@ async def complete_task(
             }}
         )
 
-    # Send notification to client about payment required
+    # Send notification to client about payment required (in-app + email + SMS)
     client_id = task.get("client_id") or task.get("user_id")
     if client_id:
-        notif = {
-            "notification_id": str(uuid.uuid4()),
-            "user_id": client_id,
-            "type": "payment_required",
-            "title": "Оплата за завдання",
-            "message": f"Виконавець завершив роботу. Відпрацьовано: {actual_hours} год. Будь ласка, оплатіть рахунок.",
-            "task_id": real_task_id,
-            "booking_id": task.get("booking_id"),
-            "is_read": False,
-            "created_at": now
-        }
-        await db.notifications.insert_one(notif)
+        await notify_user(
+            client_id,
+            "payment_required",
+            "Оплата за завдання",
+            f"Виконавець завершив роботу. Відпрацьовано: {actual_hours} год. Будь ласка, оплатіть рахунок.",
+            related_id=task.get("booking_id") or real_task_id,
+            related_type="booking",
+        )
 
     return {"message": "Task completed", "status": TaskStatus.COMPLETED_PENDING_PAYMENT, "actual_hours": actual_hours}
 
@@ -2410,6 +2585,18 @@ async def decline_task(
                 "decline_reason": reason.strip(),
                 "declined_at": datetime.utcnow().isoformat() + "Z",
             }}
+        )
+
+    # Notify client the executor declined
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        await notify_user(
+            client_id,
+            "booking_declined",
+            "Виконавець відхилив замовлення",
+            f"На жаль, виконавець відхилив завдання. Причина: {reason.strip()}. Ви можете обрати іншого виконавця.",
+            related_id=task.get("booking_id") or task_id,
+            related_type="booking",
         )
 
     return {"message": "Task declined", "status": TaskStatus.DECLINED, "reason": reason.strip()}
@@ -6770,30 +6957,92 @@ async def revoke_badge(
 
 # ==================== PAYOUT ENDPOINTS ====================
 
+def _luhn_check(card_number: str) -> bool:
+    """Validate credit/debit card number via Luhn algorithm."""
+    digits = [int(c) for c in card_number if c.isdigit()]
+    if len(digits) < 12 or len(digits) > 19:
+        return False
+    checksum = 0
+    for i, d in enumerate(reversed(digits)):
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        checksum += d
+    return checksum % 10 == 0
+
+
+def _detect_card_brand(card_number: str) -> str:
+    n = "".join(c for c in card_number if c.isdigit())
+    if n.startswith("4"):
+        return "visa"
+    if n[:2] in ("34", "37"):
+        return "amex"
+    if n[:2] in ("51", "52", "53", "54", "55") or (n[:4].isdigit() and 2221 <= int(n[:4]) <= 2720):
+        return "mastercard"
+    if n.startswith("6011") or n.startswith("65"):
+        return "discover"
+    return "unknown"
+
+
 @api_router.post("/tasker/payout-accounts")
 async def create_payout_account(
     data: PayoutAccountCreate,
     current_user: User = Depends(get_current_user)
 ):
-    """Tasker adds payout account"""
+    """Tasker adds a payout account (bank or debit card). Only last4 digits are stored —
+    full numbers are validated then discarded, awaiting Stripe Connect tokenization."""
     if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
         raise HTTPException(status_code=403, detail="Only providers can add payout accounts")
 
-    account_id = f"acc_{uuid.uuid4().hex[:12]}"
+    if data.account_type not in ("bank", "card"):
+        raise HTTPException(status_code=422, detail="account_type must be 'bank' or 'card'")
+    if not data.account_holder_name or len(data.account_holder_name.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Ім'я власника обовʼязкове")
 
+    account_id = f"acc_{uuid.uuid4().hex[:12]}"
     account = {
         "account_id": account_id,
         "user_id": current_user.user_id,
         "account_type": data.account_type,
-        "bank_name": data.bank_name,
-        "account_number_last4": data.account_number[-4:] if data.account_number else None,
-        "routing_number": data.routing_number,
+        "account_holder_name": data.account_holder_name.strip(),
         "is_default": True,
         "is_verified": False,
-        "created_at": datetime.now(timezone.utc)
+        "verification_status": "pending",
+        "created_at": datetime.now(timezone.utc),
     }
 
-    # Set other accounts to non-default
+    if data.account_type == "bank":
+        if not data.account_number or not data.routing_number:
+            raise HTTPException(status_code=422, detail="Routing і Account number обовʼязкові для банку")
+        acc_num = "".join(c for c in data.account_number if c.isdigit())
+        rt_num = "".join(c for c in data.routing_number if c.isdigit())
+        if len(acc_num) < 4 or len(acc_num) > 17:
+            raise HTTPException(status_code=422, detail="Account number невірної довжини")
+        if len(rt_num) != 9:
+            raise HTTPException(status_code=422, detail="Routing number має бути 9 цифр")
+        account["bank_name"] = (data.bank_name or "").strip() or None
+        account["account_number_last4"] = acc_num[-4:]
+        account["routing_number"] = rt_num  # ABA routing numbers are public, OK to store
+    else:  # card
+        if not data.card_number or not data.card_exp_month or not data.card_exp_year:
+            raise HTTPException(status_code=422, detail="Номер картки і термін дії обовʼязкові")
+        card_num = "".join(c for c in data.card_number if c.isdigit())
+        if not _luhn_check(card_num):
+            raise HTTPException(status_code=422, detail="Невірний номер картки")
+        if not (1 <= int(data.card_exp_month) <= 12):
+            raise HTTPException(status_code=422, detail="Невірний місяць")
+        exp_year = int(data.card_exp_year)
+        if exp_year < 100:
+            exp_year += 2000
+        if exp_year < datetime.now(timezone.utc).year:
+            raise HTTPException(status_code=422, detail="Картка прострочена")
+        account["card_brand"] = _detect_card_brand(card_num)
+        account["card_last4"] = card_num[-4:]
+        account["card_exp_month"] = int(data.card_exp_month)
+        account["card_exp_year"] = exp_year
+
+    # Mark older accounts as non-default
     await db.payout_accounts.update_many(
         {"user_id": current_user.user_id},
         {"$set": {"is_default": False}}
@@ -6829,6 +7078,46 @@ async def get_tasker_payouts(current_user: User = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(100)
 
     return payouts
+
+
+@api_router.delete("/tasker/payout-accounts/{account_id}")
+async def delete_payout_account(account_id: str, current_user: User = Depends(get_current_user)):
+    """Tasker removes their payout account."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers can modify payout accounts")
+    res = await db.payout_accounts.delete_one(
+        {"account_id": account_id, "user_id": current_user.user_id}
+    )
+    if not res.deleted_count:
+        raise HTTPException(status_code=404, detail="Payout account not found")
+    # Promote some other account to default
+    remaining = await db.payout_accounts.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    if remaining:
+        await db.payout_accounts.update_one(
+            {"account_id": remaining["account_id"]},
+            {"$set": {"is_default": True}},
+        )
+    return {"ok": True}
+
+
+@api_router.post("/tasker/payout-accounts/{account_id}/default")
+async def set_default_payout_account(account_id: str, current_user: User = Depends(get_current_user)):
+    """Mark this account as the default for the current tasker."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers can modify payout accounts")
+    found = await db.payout_accounts.find_one(
+        {"account_id": account_id, "user_id": current_user.user_id}, {"_id": 0}
+    )
+    if not found:
+        raise HTTPException(status_code=404, detail="Payout account not found")
+    await db.payout_accounts.update_many(
+        {"user_id": current_user.user_id}, {"$set": {"is_default": False}}
+    )
+    await db.payout_accounts.update_one(
+        {"account_id": account_id}, {"$set": {"is_default": True}}
+    )
+    return {"ok": True}
+
 
 @api_router.post("/admin/payouts/release")
 async def release_payout(
@@ -8574,6 +8863,26 @@ async def test_connection():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+# Build/version marker — bumps on every deploy so we can confirm what's live.
+BUILD_VERSION = os.environ.get("BUILD_VERSION", "dev")
+BUILD_SHA = os.environ.get("BUILD_SHA", "unknown")
+BUILD_TIME = os.environ.get("BUILD_TIME", "unknown")
+
+@app.get("/api/version")
+async def get_version():
+    return {
+        "version": BUILD_VERSION,
+        "sha": BUILD_SHA,
+        "build_time": BUILD_TIME,
+        # known-feature flags so we can verify the deployed code surface
+        "features": {
+            "pending_acceptance": True,
+            "integration_keys": True,
+            "category_optional_str": True,
+            "stripe_connect_payouts": True,
+        },
+    }
 
 app.add_middleware(
     CORSMiddleware,

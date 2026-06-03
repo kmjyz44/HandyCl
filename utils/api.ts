@@ -549,6 +549,16 @@ export const api = {
     return res.data;
   },
 
+  deletePayoutAccount: async (id: string) => {
+    const res = await client.delete(`/tasker/payout-accounts/${id}`);
+    return res.data;
+  },
+
+  setDefaultPayoutAccount: async (id: string) => {
+    const res = await client.post(`/tasker/payout-accounts/${id}/default`);
+    return res.data;
+  },
+
   // Admin
   getAdminDashboard: async () => {
     const res = await client.get('/admin/dashboard');

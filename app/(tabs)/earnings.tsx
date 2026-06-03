@@ -168,6 +168,24 @@ export default function Earnings() {
           </View>
         )}
 
+        {/* Payout setup CTA */}
+        <TouchableOpacity
+          style={styles.payoutSetupCard}
+          onPress={() => router.push('/payout-setup' as any)}
+          data-testid="open-payout-setup-btn"
+        >
+          <View style={styles.payoutSetupLeft}>
+            <View style={styles.payoutSetupIcon}>
+              <Ionicons name="card-outline" size={24} color="#2563eb" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.payoutSetupTitle}>Куди отримувати кошти</Text>
+              <Text style={styles.payoutSetupSub}>Додайте картку або банківський рахунок</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+        </TouchableOpacity>
+
         {/* Breakdown */}
         <View style={styles.breakdownCard}>
           <Text style={styles.sectionTitle}>Деталі заробітку</Text>
@@ -418,4 +436,17 @@ const styles = StyleSheet.create({
 
   emptyState: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { fontSize: 14, color: '#6b7280', marginTop: 12 },
+
+  payoutSetupCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
+    marginHorizontal: 16, marginBottom: 12, padding: 14, borderRadius: 14,
+    borderWidth: 1, borderColor: '#e5e7eb',
+  },
+  payoutSetupLeft: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  payoutSetupIcon: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#eff6ff',
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  payoutSetupTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  payoutSetupSub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
 });
