@@ -35,6 +35,7 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
       { id: 'stripe_secret_key', label: 'Secret Key', placeholder: 'sk_test_xxx або sk_live_xxx', secret: true },
       { id: 'stripe_publishable_key', label: 'Publishable Key', placeholder: 'pk_test_xxx або pk_live_xxx' },
       { id: 'stripe_webhook_secret', label: 'Webhook Signing Secret', placeholder: 'whsec_xxxxxxxxxxxx', secret: true },
+      { id: 'stripe_currency', label: 'Валюта (3 літери ISO)', placeholder: 'usd, uah, eur — за замовчуванням usd' },
     ],
   },
   {

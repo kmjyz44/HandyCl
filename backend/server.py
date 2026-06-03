@@ -4537,9 +4537,9 @@ async def create_checkout_session(
     if not amount or amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid booking amount")
 
-    # Default currency: UAH (Ukraine market). Override via integration_keys.stripe_currency.
+    # Default currency: USD. Override via integration_keys.stripe_currency (uah/eur/etc).
     keys = await _get_integration_keys()
-    currency = (keys.get("stripe_currency") or "uah").lower()
+    currency = (keys.get("stripe_currency") or "usd").lower()
 
     # Build Stripe Checkout session
     host_url = str(request.base_url).rstrip("/")
