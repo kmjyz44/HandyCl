@@ -6762,6 +6762,9 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
             out[k + "_set"] = bool(v)
         else:
             out[k] = v
+    # Sensible defaults so the UI shows "usd" instead of an empty input
+    if not out.get("stripe_currency"):
+        out["stripe_currency"] = "usd"
     return out
 
 
