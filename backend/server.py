@@ -4487,6 +4487,16 @@ async def _get_stripe_secret_key() -> Optional[str]:
     return os.environ.get("STRIPE_API_KEY") or os.environ.get("STRIPE_SECRET_KEY")
 
 
+async def _stripe_init() -> bool:
+    """Initialize the stripe SDK with the resolved secret key. Returns True on success."""
+    import stripe as _stripe
+    key = await _get_stripe_secret_key()
+    if not key:
+        return False
+    _stripe.api_key = key
+    return True
+
+
 def _normalize_frontend_origin(request: Request) -> str:
     """Pick where to send the user after Stripe checkout. Prefer the Origin/Referer
     header from the calling browser (e.g. https://handycl.netlify.app) so we don't
@@ -4503,6 +4513,108 @@ def _normalize_frontend_origin(request: Request) -> str:
     # last-resort fallback (will point to backend; rarely correct but better than nothing)
     return str(request.base_url).rstrip("/")
 
+
+# ==================== STRIPE CONNECT EXPRESS ====================
+
+@api_router.post("/tasker/stripe-connect/onboard")
+async def stripe_connect_onboard(request: Request, current_user: User = Depends(get_current_user)):
+    """Create (or reuse) a Stripe Express Connected Account for the executor and
+    return a one-time Account Link URL to send them to Stripe-hosted onboarding."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers can onboard")
+    if not await _stripe_init():
+        raise HTTPException(status_code=500, detail="Stripe не налаштовано — додай Secret Key в Адмін → Інтеграції")
+    import stripe as _stripe
+    # Look up existing connected account
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "stripe_account_id": 1, "email": 1, "country": 1})
+    acct_id = (user or {}).get("stripe_account_id")
+    try:
+        if not acct_id:
+            account = await asyncio.to_thread(
+                _stripe.Account.create,
+                type="express",
+                country=(user or {}).get("country") or "US",
+                email=(user or {}).get("email") or current_user.email,
+                capabilities={"transfers": {"requested": True}, "card_payments": {"requested": True}},
+                business_type="individual",
+                metadata={"user_id": current_user.user_id, "platform": "handyhub"},
+            )
+            acct_id = account.id
+            await db.users.update_one(
+                {"user_id": current_user.user_id},
+                {"$set": {"stripe_account_id": acct_id, "stripe_connect_status": "pending"}},
+            )
+        frontend = _normalize_frontend_origin(request)
+        link = await asyncio.to_thread(
+            _stripe.AccountLink.create,
+            account=acct_id,
+            refresh_url=f"{frontend}/payout-setup?stripe_refresh=1",
+            return_url=f"{frontend}/payout-setup?stripe_return=1",
+            type="account_onboarding",
+        )
+        return {"url": link.url, "account_id": acct_id}
+    except Exception as e:
+        logger.error("Stripe Connect onboard failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
+
+
+@api_router.get("/tasker/stripe-connect/status")
+async def stripe_connect_status(current_user: User = Depends(get_current_user)):
+    """Return the executor's Stripe Connect account status (charges_enabled, payouts_enabled)."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers")
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "stripe_account_id": 1})
+    acct_id = (user or {}).get("stripe_account_id")
+    if not acct_id:
+        return {"connected": False, "charges_enabled": False, "payouts_enabled": False, "details_submitted": False}
+    if not await _stripe_init():
+        return {"connected": False, "error": "stripe_not_configured"}
+    import stripe as _stripe
+    try:
+        acct = await asyncio.to_thread(_stripe.Account.retrieve, acct_id)
+        status_doc = {
+            "connected": True,
+            "account_id": acct_id,
+            "charges_enabled": bool(getattr(acct, "charges_enabled", False)),
+            "payouts_enabled": bool(getattr(acct, "payouts_enabled", False)),
+            "details_submitted": bool(getattr(acct, "details_submitted", False)),
+            "requirements": (acct.requirements.to_dict() if getattr(acct, "requirements", None) else None),
+        }
+        # Sync our local mirror
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$set": {
+                "stripe_connect_status": "active" if status_doc["charges_enabled"] and status_doc["payouts_enabled"] else "pending",
+                "stripe_charges_enabled": status_doc["charges_enabled"],
+                "stripe_payouts_enabled": status_doc["payouts_enabled"],
+            }},
+        )
+        return status_doc
+    except Exception as e:
+        logger.warning("Stripe status check failed: %s", e)
+        return {"connected": False, "error": str(e)}
+
+
+@api_router.post("/tasker/stripe-connect/dashboard-link")
+async def stripe_connect_dashboard_link(current_user: User = Depends(get_current_user)):
+    """Generate a one-time Stripe Express dashboard login link for the connected executor."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers")
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "stripe_account_id": 1})
+    acct_id = (user or {}).get("stripe_account_id")
+    if not acct_id:
+        raise HTTPException(status_code=404, detail="Stripe Connect ще не підключено")
+    if not await _stripe_init():
+        raise HTTPException(status_code=500, detail="Stripe не налаштовано")
+    import stripe as _stripe
+    try:
+        link = await asyncio.to_thread(_stripe.Account.create_login_link, acct_id)
+        return {"url": link.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== END STRIPE CONNECT ====================
 
 # Payment Routes
 @api_router.post("/payments/checkout")
@@ -4541,27 +4653,74 @@ async def create_checkout_session(
     keys = await _get_integration_keys()
     currency = (keys.get("stripe_currency") or "usd").lower()
 
-    # Build Stripe Checkout session
-    host_url = str(request.base_url).rstrip("/")
     frontend_url = _normalize_frontend_origin(request)
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url=webhook_url)
-
     success_url = f"{frontend_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{frontend_url}/payment-cancelled"
 
-    checkout_request = CheckoutSessionRequest(
-        amount=float(amount),
-        currency=currency,
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "booking_id": booking_id,
-            "user_id": current_user.user_id,
-        },
-    )
+    # Look up provider's Stripe Connect account (if any) to enable auto-split
+    provider_id = booking.get("provider_id")
+    provider_acct_id = None
+    provider_charges_enabled = False
+    if provider_id:
+        prov = await db.users.find_one(
+            {"user_id": provider_id},
+            {"_id": 0, "stripe_account_id": 1, "stripe_charges_enabled": 1},
+        ) or {}
+        provider_acct_id = prov.get("stripe_account_id")
+        provider_charges_enabled = bool(prov.get("stripe_charges_enabled"))
 
-    session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
+    # Compute platform fee (commission) for the split
+    platform_take = float(booking.get("platform_take") or 0)
+    if not platform_take:
+        # fallback: derive from commission rate snapshot if available
+        rate = float(booking.get("commission_rate_snapshot") or 0)
+        if rate > 0:
+            platform_take = round(float(amount) * (rate / 100.0), 2)
+
+    # Use native stripe SDK so we can pass transfer_data / application_fee_amount / statement_descriptor
+    import stripe as _stripe
+    _stripe.api_key = api_key
+
+    # Stripe amounts are in the smallest currency unit (cents)
+    amount_cents = int(round(float(amount) * 100))
+    app_fee_cents = int(round(platform_take * 100)) if platform_take > 0 else 0
+
+    pi_data: Dict[str, Any] = {
+        "metadata": {"booking_id": booking_id, "user_id": current_user.user_id, "platform": "handyhub"},
+        # Statement descriptor on customer's bank statement — keeps HandyHub charges
+        # distinct from any other site sharing the same Stripe account (e.g. finscan.store).
+        "statement_descriptor_suffix": "HANDYHUB",
+    }
+    enable_split = bool(provider_acct_id and provider_charges_enabled and app_fee_cents > 0 and app_fee_cents < amount_cents)
+    if enable_split:
+        pi_data["application_fee_amount"] = app_fee_cents
+        pi_data["transfer_data"] = {"destination": provider_acct_id}
+
+    session_params: Dict[str, Any] = {
+        "mode": "payment",
+        "payment_method_types": ["card"],
+        "line_items": [{
+            "price_data": {
+                "currency": currency,
+                "product_data": {
+                    "name": booking.get("title") or "HandyHub — оплата завдання",
+                    "description": (booking.get("description") or "")[:200] or "HandyHub task payment",
+                },
+                "unit_amount": amount_cents,
+            },
+            "quantity": 1,
+        }],
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "metadata": {"booking_id": booking_id, "user_id": current_user.user_id, "platform": "handyhub"},
+        "payment_intent_data": pi_data,
+    }
+
+    try:
+        session = await asyncio.to_thread(_stripe.checkout.Session.create, **session_params)
+    except Exception as e:
+        logger.error("Stripe Checkout create failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
 
     # Create payment transaction
     transaction_id = f"txn_{uuid.uuid4().hex[:12]}"
@@ -4569,11 +4728,16 @@ async def create_checkout_session(
         transaction_id=transaction_id,
         booking_id=booking_id,
         user_id=current_user.user_id,
-        amount=booking["total_price"],
-        currency="usd",
-        session_id=session.session_id,
+        amount=float(amount),
+        currency=currency,
+        session_id=session.id,
         payment_status="pending",
-        metadata={"booking_id": booking_id}
+        metadata={
+            "booking_id": booking_id,
+            "split_enabled": enable_split,
+            "destination_account": provider_acct_id if enable_split else None,
+            "application_fee_amount": app_fee_cents if enable_split else 0,
+        }
     )
 
     await db.payment_transactions.insert_one(transaction.dict())
@@ -4581,87 +4745,102 @@ async def create_checkout_session(
     # Update booking
     await db.bookings.update_one(
         {"booking_id": booking_id},
-        {"$set": {"payment_session_id": session.session_id}}
+        {"$set": {"payment_session_id": session.id}}
     )
 
-    return {"url": session.url, "session_id": session.session_id}
+    return {"url": session.url, "session_id": session.id, "split_enabled": enable_split}
 
 @api_router.get("/payments/status/{session_id}")
 async def get_payment_status(session_id: str, current_user: User = Depends(get_current_user)):
-    # Get transaction
+    """Poll Stripe for the latest checkout session status and reflect it locally."""
     transaction = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    # Resolve Stripe secret key from Integration Keys → legacy settings → env
-    api_key = await _get_stripe_secret_key()
-    if not api_key:
+    if not await _stripe_init():
         raise HTTPException(status_code=500, detail="Stripe not configured")
+    import stripe as _stripe
+    try:
+        session = await asyncio.to_thread(_stripe.checkout.Session.retrieve, session_id)
+    except Exception as e:
+        logger.error("Stripe Session.retrieve failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
 
-    # Check status with Stripe
-    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url="")
+    payment_status = session.get("payment_status") or "unpaid"
+    amount_total = session.get("amount_total") or 0
+    currency = session.get("currency") or transaction.get("currency", "usd")
 
-    status_response: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
-
-    # Update transaction if status changed
-    if transaction["payment_status"] != status_response.payment_status:
+    if transaction["payment_status"] != payment_status:
         await db.payment_transactions.update_one(
             {"session_id": session_id},
-            {"$set": {
-                "payment_status": status_response.payment_status,
-                "updated_at": datetime.now(timezone.utc)
-            }}
+            {"$set": {"payment_status": payment_status, "updated_at": datetime.now(timezone.utc)}},
         )
-
-        # Update booking if paid
-        if status_response.payment_status == "paid":
+        if payment_status == "paid" and transaction.get("booking_id"):
             await db.bookings.update_one(
                 {"booking_id": transaction["booking_id"]},
-                {"$set": {"payment_status": "paid", "status": BookingStatus.CONFIRMED}}
+                {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc)}},
             )
 
     return {
-        "payment_status": status_response.payment_status,
-        "amount": status_response.amount_total / 100,  # Convert from cents
-        "currency": status_response.currency
+        "payment_status": payment_status,
+        "amount": amount_total / 100 if amount_total else 0,
+        "currency": currency,
     }
+
 
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events (best-effort signature check if secret configured)."""
     body = await request.body()
     signature = request.headers.get("Stripe-Signature")
 
-    api_key = await _get_stripe_secret_key()
-    if not api_key:
+    if not await _stripe_init():
         raise HTTPException(status_code=500, detail="Stripe not configured")
+    import stripe as _stripe
 
-    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url="")
+    keys = await _get_integration_keys()
+    webhook_secret = keys.get("stripe_webhook_secret")
 
     try:
-        webhook_response = await stripe_checkout.handle_webhook(body, signature)
+        if webhook_secret and signature:
+            event = _stripe.Webhook.construct_event(body, signature, webhook_secret)
+        else:
+            # No webhook secret configured — accept the body unverified (dev only)
+            import json as _json
+            event = _json.loads(body)
+    except Exception as e:
+        logger.error("Stripe webhook verify failed: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid signature")
 
-        # Update transaction
+    et = event.get("type") if isinstance(event, dict) else event["type"]
+    data = (event.get("data") if isinstance(event, dict) else event["data"])["object"]
+
+    if et == "checkout.session.completed":
+        session_id = data.get("id")
+        payment_status = data.get("payment_status") or "paid"
         await db.payment_transactions.update_one(
-            {"session_id": webhook_response.session_id},
-            {"$set": {
-                "payment_status": webhook_response.payment_status,
-                "updated_at": datetime.now(timezone.utc)
-            }}
+            {"session_id": session_id},
+            {"$set": {"payment_status": payment_status, "updated_at": datetime.now(timezone.utc)}},
         )
-
-        # Update booking if paid
-        if webhook_response.payment_status == "paid":
-            transaction = await db.payment_transactions.find_one({"session_id": webhook_response.session_id})
-            if transaction:
-                await db.bookings.update_one(
-                    {"booking_id": transaction["booking_id"]},
-                    {"$set": {"payment_status": "paid", "status": BookingStatus.CONFIRMED}}
+        # Look up the booking and mark paid
+        txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0, "booking_id": 1, "user_id": 1})
+        if txn and txn.get("booking_id"):
+            await db.bookings.update_one(
+                {"booking_id": txn["booking_id"]},
+                {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc)}},
+            )
+            # Notify the client
+            if txn.get("user_id"):
+                await notify_user(
+                    txn["user_id"],
+                    "payment_received",
+                    "Оплата отримана",
+                    "Дякуємо! Ваш платіж успішно проведено. Кошти автоматично переказано виконавцю.",
+                    related_id=txn["booking_id"],
+                    related_type="booking",
                 )
 
-        return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Webhook error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+    return {"received": True}
 
 # ==================== ESCROW / HOLD PAYMENT SYSTEM ====================
 

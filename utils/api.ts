@@ -586,6 +586,20 @@ export const api = {
     return res.data;
   },
 
+  // Stripe Connect (executor onboarding for auto-payouts)
+  stripeConnectOnboard: async () => {
+    const res = await client.post('/tasker/stripe-connect/onboard');
+    return res.data;  // { url, account_id }
+  },
+  stripeConnectStatus: async () => {
+    const res = await client.get('/tasker/stripe-connect/status');
+    return res.data;
+  },
+  stripeConnectDashboardLink: async () => {
+    const res = await client.post('/tasker/stripe-connect/dashboard-link');
+    return res.data;
+  },
+
   // Admin
   getAdminDashboard: async () => {
     const res = await client.get('/admin/dashboard');

@@ -21,6 +21,8 @@ export default function PayoutSetup() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<AccountType>('card');
+  const [connectStatus, setConnectStatus] = useState<any>(null);
+  const [connectLoading, setConnectLoading] = useState(false);
 
   // shared
   const [holderName, setHolderName] = useState('');
@@ -44,7 +46,58 @@ export default function PayoutSetup() {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
+
+  const loadConnectStatus = async () => {
+    try {
+      const r = await api.stripeConnectStatus();
+      setConnectStatus(r);
+    } catch {
+      setConnectStatus(null);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    loadConnectStatus();
+    // If user just returned from Stripe onboarding (?stripe_return=1), re-check status
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.search.includes('stripe_return')) {
+      setTimeout(loadConnectStatus, 1500);
+    }
+  }, []);
+
+  const startStripeConnect = async () => {
+    setConnectLoading(true);
+    try {
+      const r = await api.stripeConnectOnboard();
+      if (!r?.url) throw new Error('No onboarding URL returned');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = r.url;
+      } else {
+        const { Linking } = await import('react-native');
+        await Linking.openURL(r.url);
+      }
+    } catch (e: any) {
+      showAlert('Помилка', e?.response?.data?.detail || e?.message || 'Не вдалось почати онбординг');
+    } finally {
+      setConnectLoading(false);
+    }
+  };
+
+  const openStripeDashboard = async () => {
+    try {
+      const r = await api.stripeConnectDashboardLink();
+      if (r?.url) {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.open(r.url, '_blank');
+        } else {
+          const { Linking } = await import('react-native');
+          await Linking.openURL(r.url);
+        }
+      }
+    } catch (e: any) {
+      showAlert('Помилка', e?.response?.data?.detail || e?.message || 'Не вдалось відкрити');
+    }
+  };
 
   const reset = () => {
     setHolderName('');
@@ -116,10 +169,51 @@ export default function PayoutSetup() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
         <Text style={styles.h1}>Куди ми переказуватимемо ваші гроші</Text>
         <Text style={styles.sub}>
-          Введіть номер дебетової картки або реквізити банківського рахунку.
-          Ми зберігаємо лише останні 4 цифри. Повний номер буде використано
-          для безпечного підключення до платіжного процесора.
+          Підключи Stripe Connect — і кошти автоматично переказуватимуться тобі на картку
+          після кожного оплаченого завдання. Stripe сам перевірить документи (5 хв) — нам
+          нічого не треба робити вручну.
         </Text>
+
+        {/* Stripe Connect — recommended */}
+        <View style={[styles.connectCard, connectStatus?.charges_enabled && styles.connectCardActive]}>
+          <View style={styles.connectHeader}>
+            <View style={styles.connectIcon}>
+              <Ionicons name="flash" size={22} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.connectTitle}>Stripe Connect (рекомендовано)</Text>
+              <Text style={styles.connectSub}>
+                {connectStatus?.charges_enabled && connectStatus?.payouts_enabled
+                  ? '✓ Активно — гроші переказуватимуться автоматично'
+                  : connectStatus?.connected
+                  ? '⏳ Підключено, але потрібно завершити онбординг'
+                  : 'Один раз пройти онбординг — і виплати автоматичні'}
+              </Text>
+            </View>
+          </View>
+          {connectStatus?.charges_enabled && connectStatus?.payouts_enabled ? (
+            <TouchableOpacity style={styles.connectBtnSecondary} onPress={openStripeDashboard} data-testid="open-stripe-dashboard-btn">
+              <Text style={styles.connectBtnSecondaryText}>Відкрити Stripe Dashboard</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.connectBtn, connectLoading && { opacity: 0.6 }]}
+              onPress={startStripeConnect}
+              disabled={connectLoading}
+              data-testid="start-stripe-connect-btn"
+            >
+              {connectLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.connectBtnText}>
+                  {connectStatus?.connected ? 'Продовжити онбординг' : 'Підключити Stripe →'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={styles.dividerLabel}>або зберегти реквізити вручну (для довідки)</Text>
 
         {/* Existing accounts */}
         {loading ? (
@@ -339,4 +433,32 @@ const styles = StyleSheet.create({
   },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   helper: { fontSize: 11, color: '#6b7280', marginTop: 10, lineHeight: 16 },
+
+  connectCard: {
+    backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 12,
+    borderWidth: 2, borderColor: '#635bff',
+  },
+  connectCardActive: { borderColor: '#22c55e' },
+  connectHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 12 },
+  connectIcon: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: '#635bff',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  connectTitle: { fontSize: 15, fontWeight: '800', color: '#111827' },
+  connectSub: { fontSize: 12, color: '#6b7280', marginTop: 2, lineHeight: 16 },
+  connectBtn: {
+    backgroundColor: '#635bff', paddingVertical: 14, borderRadius: 10,
+    alignItems: 'center',
+  },
+  connectBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  connectBtnSecondary: {
+    backgroundColor: '#ecfdf5', paddingVertical: 12, borderRadius: 10,
+    alignItems: 'center', borderWidth: 1, borderColor: '#86efac',
+  },
+  connectBtnSecondaryText: { color: '#16a34a', fontSize: 13, fontWeight: '700' },
+
+  dividerLabel: {
+    fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 6, marginBottom: 12,
+    textTransform: 'uppercase', letterSpacing: 0.5,
+  },
 });
