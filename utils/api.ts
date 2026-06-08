@@ -455,6 +455,32 @@ export const api = {
     return res.data;
   },
 
+  // Blog / Community feed
+  listBlogPosts: async (params?: { limit?: number; offset?: number; category?: string; author_id?: string }) => {
+    const res = await client.get('/blog/posts', { params });
+    return res.data;
+  },
+  createBlogPost: async (data: { title: string; description: string; images?: string[]; tags?: string[]; category?: string; booking_id?: string }) => {
+    const res = await client.post('/blog/posts', data);
+    return res.data;
+  },
+  getBlogPost: async (id: string) => {
+    const res = await client.get(`/blog/posts/${id}`);
+    return res.data;
+  },
+  toggleBlogLike: async (id: string) => {
+    const res = await client.post(`/blog/posts/${id}/like`);
+    return res.data;
+  },
+  addBlogComment: async (id: string, text: string) => {
+    const res = await client.post(`/blog/posts/${id}/comments`, { text });
+    return res.data;
+  },
+  deleteBlogPost: async (id: string) => {
+    const res = await client.delete(`/blog/posts/${id}`);
+    return res.data;
+  },
+
   // Tasks
   getProviderTasks: async () => {
     const res = await client.get('/provider/tasks');

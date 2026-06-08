@@ -272,6 +272,13 @@ export default function AvailableTasks() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Завдання</Text>
         <TouchableOpacity
+          onPress={() => router.push('/blog' as any)}
+          data-testid="open-blog-btn-tasks"
+          style={{ position: 'absolute', right: 60, top: 16 }}
+        >
+          <Ionicons name="newspaper-outline" size={26} color="#111827" />
+        </TouchableOpacity>
+        <TouchableOpacity
           onPress={() => router.push('/notifications' as any)}
           data-testid="open-notifications-btn-tasks"
           style={{ position: 'absolute', right: 16, top: 16 }}

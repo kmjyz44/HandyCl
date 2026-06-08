@@ -1081,6 +1081,52 @@ class Notification(BaseModel):
     is_read: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+
+# ==================== BLOG / COMMUNITY FEED ====================
+
+class BlogPost(BaseModel):
+    post_id: str
+    author_id: str
+    author_role: str  # client / provider / admin
+    author_name: Optional[str] = None
+    author_avatar: Optional[str] = None
+    title: str
+    description: str
+    images: List[str] = []  # base64 data URLs or remote URLs
+    tags: List[str] = []
+    category: Optional[str] = None  # e.g. cleaning, plumbing — for filtering
+    booking_id: Optional[str] = None  # optional link to a completed booking
+    likes_count: int = 0
+    comments_count: int = 0
+    is_published: bool = True
+    is_pinned: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
+
+
+class BlogPostCreate(BaseModel):
+    title: str
+    description: str
+    images: List[str] = []
+    tags: List[str] = []
+    category: Optional[str] = None
+    booking_id: Optional[str] = None
+
+
+class BlogComment(BaseModel):
+    comment_id: str
+    post_id: str
+    author_id: str
+    author_name: Optional[str] = None
+    author_avatar: Optional[str] = None
+    text: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class BlogCommentCreate(BaseModel):
+    text: str
+
+
 class NotificationCreate(BaseModel):
     user_id: str
     notification_type: str
@@ -6859,6 +6905,206 @@ def _mask(value: Optional[str]) -> Optional[str]:
     if len(value) <= 8:
         return "•" * len(value)
     return value[:4] + "•" * 8 + value[-4:]
+
+
+# ==================== BLOG / COMMUNITY FEED ROUTES ====================
+
+@api_router.get("/blog/posts")
+async def list_blog_posts(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+    category: Optional[str] = None,
+    author_id: Optional[str] = None,
+    author_role: Optional[str] = None,
+    pinned_first: bool = True,
+):
+    """Public feed of blog posts. Auth optional — anonymous users can read."""
+    q: Dict[str, Any] = {"is_published": True}
+    if category:
+        q["category"] = category
+    if author_id:
+        q["author_id"] = author_id
+    if author_role:
+        q["author_role"] = author_role
+
+    sort_order = [("is_pinned", -1), ("created_at", -1)] if pinned_first else [("created_at", -1)]
+    cursor = db.blog_posts.find(q, {"_id": 0}).sort(sort_order).skip(max(0, offset)).limit(min(50, max(1, limit)))
+    posts = await cursor.to_list(50)
+
+    # Add liked_by_me flag for the requesting user (if logged in)
+    me_id: Optional[str] = None
+    try:
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+            sess = await db.sessions.find_one({"session_token": token}, {"_id": 0, "user_id": 1})
+            if sess:
+                me_id = sess.get("user_id")
+    except Exception:
+        me_id = None
+
+    if me_id and posts:
+        post_ids = [p["post_id"] for p in posts]
+        liked = await db.blog_likes.find(
+            {"user_id": me_id, "post_id": {"$in": post_ids}}, {"_id": 0, "post_id": 1}
+        ).to_list(len(post_ids))
+        liked_set = {l["post_id"] for l in liked}
+        for p in posts:
+            p["liked_by_me"] = p["post_id"] in liked_set
+    else:
+        for p in posts:
+            p["liked_by_me"] = False
+
+    total = await db.blog_posts.count_documents(q)
+    return {"posts": posts, "total": total, "offset": offset, "limit": limit}
+
+
+@api_router.post("/blog/posts")
+async def create_blog_post(data: BlogPostCreate, current_user: User = Depends(get_current_user)):
+    """Any logged-in user (client/provider/admin) can create a post."""
+    title = (data.title or "").strip()
+    description = (data.description or "").strip()
+    if len(title) < 3 or len(title) > 200:
+        raise HTTPException(status_code=422, detail="Заголовок: 3–200 символів")
+    if len(description) < 10 or len(description) > 5000:
+        raise HTTPException(status_code=422, detail="Опис: 10–5000 символів")
+    if data.images and len(data.images) > 10:
+        raise HTTPException(status_code=422, detail="Не більше 10 зображень")
+
+    post = BlogPost(
+        post_id=f"post_{uuid.uuid4().hex[:12]}",
+        author_id=current_user.user_id,
+        author_role=current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
+        author_name=getattr(current_user, "full_name", None) or getattr(current_user, "username", None) or current_user.email,
+        author_avatar=getattr(current_user, "picture", None),
+        title=title,
+        description=description,
+        images=[img for img in (data.images or []) if isinstance(img, str)],
+        tags=[t.strip().lower() for t in (data.tags or []) if t and t.strip()][:10],
+        category=(data.category or "").strip() or None,
+        booking_id=data.booking_id,
+    )
+    await db.blog_posts.insert_one(post.dict())
+    return post.dict()
+
+
+@api_router.get("/blog/posts/{post_id}")
+async def get_blog_post(post_id: str, request: Request):
+    post = await db.blog_posts.find_one({"post_id": post_id, "is_published": True}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    # Pull last 50 comments
+    comments = await db.blog_comments.find({"post_id": post_id}, {"_id": 0}).sort("created_at", -1).limit(50).to_list(50)
+    # liked_by_me
+    try:
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Bearer "):
+            sess = await db.sessions.find_one({"session_token": auth[7:]}, {"_id": 0, "user_id": 1})
+            if sess:
+                liked = await db.blog_likes.find_one(
+                    {"post_id": post_id, "user_id": sess["user_id"]}, {"_id": 0}
+                )
+                post["liked_by_me"] = bool(liked)
+    except Exception:
+        pass
+    post["comments"] = comments
+    return post
+
+
+@api_router.post("/blog/posts/{post_id}/like")
+async def toggle_blog_like(post_id: str, current_user: User = Depends(get_current_user)):
+    """Toggle like. Returns the new state and updated counter."""
+    post = await db.blog_posts.find_one({"post_id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    existing = await db.blog_likes.find_one({"post_id": post_id, "user_id": current_user.user_id})
+    if existing:
+        await db.blog_likes.delete_one({"_id": existing["_id"]})
+        new_count = max(0, int(post.get("likes_count", 0)) - 1)
+        await db.blog_posts.update_one({"post_id": post_id}, {"$set": {"likes_count": new_count}})
+        return {"liked": False, "likes_count": new_count}
+    else:
+        await db.blog_likes.insert_one({
+            "post_id": post_id,
+            "user_id": current_user.user_id,
+            "created_at": datetime.now(timezone.utc),
+        })
+        new_count = int(post.get("likes_count", 0)) + 1
+        await db.blog_posts.update_one({"post_id": post_id}, {"$set": {"likes_count": new_count}})
+        # Notify author (skip if author == liker)
+        if post.get("author_id") and post["author_id"] != current_user.user_id:
+            try:
+                liker = getattr(current_user, "full_name", None) or getattr(current_user, "username", None) or "Хтось"
+                await notify_user(
+                    post["author_id"],
+                    "blog_like",
+                    "Новий лайк",
+                    f"{liker} вподобав ваш пост «{post.get('title','')[:80]}»",
+                    related_id=post_id,
+                    related_type="blog_post",
+                    channels=["inapp", "push"],
+                )
+            except Exception:
+                pass
+        return {"liked": True, "likes_count": new_count}
+
+
+@api_router.post("/blog/posts/{post_id}/comments")
+async def add_blog_comment(
+    post_id: str,
+    data: BlogCommentCreate,
+    current_user: User = Depends(get_current_user),
+):
+    post = await db.blog_posts.find_one({"post_id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    text = (data.text or "").strip()
+    if len(text) < 1 or len(text) > 2000:
+        raise HTTPException(status_code=422, detail="Коментар: 1–2000 символів")
+    comment = BlogComment(
+        comment_id=f"cmt_{uuid.uuid4().hex[:12]}",
+        post_id=post_id,
+        author_id=current_user.user_id,
+        author_name=getattr(current_user, "full_name", None) or getattr(current_user, "username", None) or current_user.email,
+        author_avatar=getattr(current_user, "picture", None),
+        text=text,
+    )
+    await db.blog_comments.insert_one(comment.dict())
+    new_count = int(post.get("comments_count", 0)) + 1
+    await db.blog_posts.update_one({"post_id": post_id}, {"$set": {"comments_count": new_count}})
+    # Notify author
+    if post.get("author_id") and post["author_id"] != current_user.user_id:
+        try:
+            await notify_user(
+                post["author_id"],
+                "blog_comment",
+                "Новий коментар",
+                f"{comment.author_name}: {text[:80]}",
+                related_id=post_id,
+                related_type="blog_post",
+                channels=["inapp", "push"],
+            )
+        except Exception:
+            pass
+    return comment.dict()
+
+
+@api_router.delete("/blog/posts/{post_id}")
+async def delete_blog_post(post_id: str, current_user: User = Depends(get_current_user)):
+    post = await db.blog_posts.find_one({"post_id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if post["author_id"] != current_user.user_id and role != "admin":
+        raise HTTPException(status_code=403, detail="Тільки автор або адмін може видалити")
+    await db.blog_posts.delete_one({"post_id": post_id})
+    await db.blog_likes.delete_many({"post_id": post_id})
+    await db.blog_comments.delete_many({"post_id": post_id})
+    return {"ok": True}
+
+
+# ==================== END BLOG ====================
 
 
 @api_router.get("/push/vapid-public-key")

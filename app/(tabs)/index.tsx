@@ -630,6 +630,12 @@ export default function HomeScreen() {
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <TouchableOpacity
+                onPress={() => router.push('/blog' as any)}
+                data-testid="open-blog-btn"
+              >
+                <Ionicons name="newspaper-outline" size={26} color="#111827" />
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => router.push('/notifications' as any)}
                 data-testid="open-notifications-btn"
                 style={{ position: 'relative' }}
