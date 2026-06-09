@@ -173,6 +173,17 @@ export default function TabsLayout() {
         }}
       />
 
+      {/* Community blog — visible to everyone (clients, providers, admins, guests) */}
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Спільнота',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="newspaper-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
       <Tabs.Screen
         name="users"
         options={{

@@ -11,9 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import { api } from '../utils/api';
-import { useAuthStore } from '../store/authStore';
-import { showAlert } from '../utils/alert';
+import { api } from '../../utils/api';
+import { useAuthStore } from '../../store/authStore';
+import { showAlert } from '../../utils/alert';
 
 function fmt(ts: string) {
   try {

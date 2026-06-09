@@ -272,7 +272,7 @@ export default function AvailableTasks() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Завдання</Text>
         <TouchableOpacity
-          onPress={() => router.push('/blog' as any)}
+          onPress={() => router.push('/(tabs)/community' as any)}
           data-testid="open-blog-btn-tasks"
           style={{ position: 'absolute', right: 60, top: 16 }}
         >
