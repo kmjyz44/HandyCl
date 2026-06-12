@@ -6950,6 +6950,22 @@ FAQ_DEFAULT_UK = [
 ]
 
 
+@api_router.get("/help/admin-contact")
+async def get_admin_contact():
+    """Public — returns the first available admin so users can start a chat with them."""
+    admin = await db.users.find_one(
+        {"role": "admin"},
+        {"_id": 0, "user_id": 1, "full_name": 1, "username": 1, "email": 1, "picture": 1},
+    )
+    if not admin:
+        raise HTTPException(status_code=503, detail="Адміна поки не призначено")
+    return {
+        "user_id": admin["user_id"],
+        "name": admin.get("full_name") or admin.get("username") or "Підтримка HandyHub",
+        "avatar": admin.get("picture"),
+    }
+
+
 @api_router.get("/help/faq")
 async def get_faq():
     """Public FAQ list. Returns the canonical Ukrainian FAQ."""

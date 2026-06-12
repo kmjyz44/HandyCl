@@ -490,6 +490,19 @@ export const api = {
     const res = await client.get('/help/support-info');
     return res.data;
   },
+  getAdminContact: async () => {
+    const res = await client.get('/help/admin-contact');
+    return res.data;
+  },
+  // Direct user-to-user messages (used for support chat with admin)
+  getDirectMessages: async (withUserId: string) => {
+    const res = await client.get('/messages', { params: { with_user_id: withUserId } });
+    return res.data;
+  },
+  sendDirectMessage: async (toUserId: string, message: string) => {
+    const res = await client.post('/messages', { to_user_id: toUserId, message });
+    return res.data;
+  },
   submitSupportRequest: async (data: { name: string; email: string; subject?: string; message: string; category?: string }) => {
     const res = await client.post('/help/support-request', data);
     return res.data;

@@ -42,6 +42,8 @@ export default function RootLayout() {
       <Stack.Screen name="blog/[id]" />
       <Stack.Screen name="blog-create" />
       <Stack.Screen name="help-center" />
+      <Stack.Screen name="support-chat" />
+      <Stack.Screen name="admin-support-requests" />
       <Stack.Screen name="(tabs)" />
     </Stack>
   );

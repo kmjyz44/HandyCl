@@ -315,6 +315,13 @@ export default function Services() {
         <Text style={styles.headerTitle}>Admin Panel</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: '#0ea5e9' }]}
+            onPress={() => router.push('/admin-support-requests' as any)}
+            data-testid="open-admin-support-btn"
+          >
+            <Ionicons name="mail-unread" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.addButton, { backgroundColor: '#6b7280' }]}
             onPress={() => router.push('/admin-integrations')}
             data-testid="open-admin-integrations-btn"

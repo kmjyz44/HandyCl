@@ -82,6 +82,18 @@ export default function HelpCenter() {
           <Text style={styles.heroSub}>Знайди відповідь у часто запитуваному, або напиши нам напряму — відповімо протягом 24 годин.</Text>
 
           <View style={styles.heroLinks}>
+            <TouchableOpacity
+              style={styles.heroLinkPrimary}
+              onPress={() => {
+                // open dedicated support chat
+                // (router.push imported via expo-router below)
+                require('expo-router').router.push('/support-chat');
+              }}
+              data-testid="open-support-chat-btn"
+            >
+              <Ionicons name="chatbubbles" size={16} color="#fff" />
+              <Text style={styles.heroLinkPrimaryText}>Написати в чат адміну</Text>
+            </TouchableOpacity>
             {supportInfo.support_email && (
               <TouchableOpacity
                 style={styles.heroLink}
@@ -217,6 +229,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#eff6ff', borderRadius: 8,
   },
   heroLinkText: { color: '#2563eb', fontSize: 12, fontWeight: '700' },
+  heroLinkPrimary: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#2563eb', borderRadius: 8,
+  },
+  heroLinkPrimaryText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   sectionH: { fontSize: 15, fontWeight: '800', color: '#111827', marginTop: 8, marginBottom: 12 },
 
