@@ -17,6 +17,7 @@ from telegram import Bot
 from telegram.constants import ParseMode
 import asyncio
 import json
+import re
 from bson import ObjectId
 
 # Web push (best-effort import — never block server boot if missing)
@@ -6884,6 +6885,9 @@ class IntegrationKeysUpdate(BaseModel):
     stripe_publishable_key: Optional[str] = None
     stripe_webhook_secret: Optional[str] = None
     stripe_currency: Optional[str] = None  # uah, usd, eur — default uah
+    # Support / Help center
+    support_email: Optional[str] = None  # where contact-form submissions are emailed
+    support_phone: Optional[str] = None  # shown on the help page
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
     twilio_from_phone: Optional[str] = None
@@ -6905,6 +6909,173 @@ def _mask(value: Optional[str]) -> Optional[str]:
     if len(value) <= 8:
         return "•" * len(value)
     return value[:4] + "•" * 8 + value[-4:]
+
+
+# ==================== HELP CENTER / SUPPORT ====================
+
+FAQ_DEFAULT_UK = [
+    {
+        "category": "Загальне",
+        "items": [
+            {"q": "Що таке HandyHub?", "a": "HandyHub — це маркетплейс побутових послуг. Клієнти знаходять перевірених виконавців біля себе, виконавці — отримують замовлення та оплату."},
+            {"q": "Чи безкоштовно зареєструватись?", "a": "Так, реєстрація і клієнтом, і виконавцем — повністю безкоштовна."},
+        ],
+    },
+    {
+        "category": "Для клієнта",
+        "items": [
+            {"q": "Як замовити послугу?", "a": "На головній обери категорію → опиши задачу → вкажи адресу і час → обери виконавця → надішли замовлення."},
+            {"q": "Як я плачу за роботу?", "a": "Після того як виконавець завершить роботу, ти бачиш кнопку «Оплатити». Можна оплатити карткою через Stripe — гроші діляться автоматично між платформою і виконавцем."},
+            {"q": "А якщо я не задоволений роботою?", "a": "Зв'яжись із виконавцем у вбудованому чаті. Якщо не вдається домовитись — напиши нам через форму нижче, ми все вирішимо."},
+            {"q": "Чи можу я скасувати замовлення?", "a": "Так, до моменту коли виконавець почав роботу — без жодних санкцій. Після початку роботи — погоджуй з виконавцем напряму."},
+        ],
+    },
+    {
+        "category": "Для виконавця",
+        "items": [
+            {"q": "Як почати отримувати замовлення?", "a": "Зареєструйся → постав свою локацію, графік і прайс → дочекайся пуш-сповіщення про нове замовлення → натисни «Прийняти»."},
+            {"q": "Як я отримую гроші?", "a": "Підключи Stripe Connect у вкладці «Заробіток» → «Спосіб виплати». Після кожної оплати клієнтом гроші автоматично переказуються на твою картку/банк."},
+            {"q": "Яка комісія платформи?", "a": "Розмір комісії встановлює адмін платформи для кожної категорії. Ти бачиш свою ставку, а клієнт бачить підсумкову суму з комісією."},
+            {"q": "Що робити якщо я не можу взяти замовлення?", "a": "Натисни «Відхилити» — замовлення повернеться в чергу і клієнт зможе обрати іншого виконавця. Це не штрафує твій рейтинг."},
+        ],
+    },
+    {
+        "category": "Платежі",
+        "items": [
+            {"q": "Які платіжні методи приймаються?", "a": "Зараз — банківські картки (Visa, Mastercard, Amex) через Stripe Checkout. У майбутньому додамо Apple Pay і Google Pay."},
+            {"q": "Чи безпечно вводити картку?", "a": "Так. Платежі обробляє Stripe — це сертифікований PCI DSS Level 1 процесор. Ми ніколи не бачимо і не зберігаємо повний номер картки."},
+            {"q": "Як отримати квитанцію?", "a": "Stripe автоматично надсилає чек на email, який ти ввів під час оплати."},
+        ],
+    },
+]
+
+
+@api_router.get("/help/faq")
+async def get_faq():
+    """Public FAQ list. Returns the canonical Ukrainian FAQ."""
+    # could be overridden by db.faq in future
+    return {"categories": FAQ_DEFAULT_UK}
+
+
+@api_router.get("/help/support-info")
+async def get_support_info():
+    """Public — returns the contact email/phone that should be shown to users."""
+    keys = await _get_integration_keys()
+    return {
+        "support_email": keys.get("support_email") or "Nexus.ss.llc@gmail.com",
+        "support_phone": keys.get("support_phone"),
+    }
+
+
+class SupportRequestCreate(BaseModel):
+    name: str
+    email: str
+    subject: Optional[str] = "Запит з форми зворотного зв'язку"
+    message: str
+    category: Optional[str] = None  # bug / feature / billing / other
+
+
+@api_router.post("/help/support-request")
+async def submit_support_request(data: SupportRequestCreate, request: Request):
+    """Anyone (incl. guests) can send a support message.
+    Persists to db.support_requests and emails the admin via SendGrid (if configured)."""
+    name = (data.name or "").strip()
+    email = (data.email or "").strip()
+    message = (data.message or "").strip()
+    if len(name) < 2 or len(name) > 100:
+        raise HTTPException(status_code=422, detail="Ім'я: 2–100 символів")
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise HTTPException(status_code=422, detail="Невірний email")
+    if len(message) < 10 or len(message) > 5000:
+        raise HTTPException(status_code=422, detail="Повідомлення: 10–5000 символів")
+
+    # Try to attach user_id if request is authenticated
+    user_id: Optional[str] = None
+    try:
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Bearer "):
+            sess = await db.sessions.find_one({"session_token": auth[7:]}, {"_id": 0, "user_id": 1})
+            if sess:
+                user_id = sess.get("user_id")
+    except Exception:
+        pass
+
+    req_id = f"sup_{uuid.uuid4().hex[:12]}"
+    doc = {
+        "request_id": req_id,
+        "name": name,
+        "email": email,
+        "subject": (data.subject or "").strip() or "Запит з форми зворотного зв'язку",
+        "message": message,
+        "category": (data.category or "").strip() or "other",
+        "user_id": user_id,
+        "user_agent": request.headers.get("user-agent"),
+        "ip": request.client.host if request.client else None,
+        "status": "new",
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.support_requests.insert_one(doc)
+
+    # Email admin (best-effort)
+    keys = await _get_integration_keys()
+    admin_email = keys.get("support_email") or "Nexus.ss.llc@gmail.com"
+    body = (
+        f"Нове повідомлення з форми HandyHub\n\n"
+        f"Від: {name} <{email}>\n"
+        f"Категорія: {doc['category']}\n"
+        f"Тема: {doc['subject']}\n\n"
+        f"Повідомлення:\n{message}\n\n"
+        f"---\n"
+        f"User ID: {user_id or 'guest'}\n"
+        f"IP: {doc['ip']}\n"
+        f"User-Agent: {doc['user_agent']}\n"
+        f"Request ID: {req_id}\n"
+    )
+    asyncio.create_task(
+        _send_email_sendgrid(admin_email, f"[HandyHub Support] {doc['subject']}", body)
+    )
+    return {"ok": True, "request_id": req_id}
+
+
+@api_router.get("/admin/support-requests")
+async def list_support_requests(
+    status: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(require_admin),
+):
+    q: Dict[str, Any] = {}
+    if status:
+        q["status"] = status
+    cursor = db.support_requests.find(q, {"_id": 0}).sort("created_at", -1).skip(max(0, offset)).limit(min(200, max(1, limit)))
+    items = await cursor.to_list(200)
+    total = await db.support_requests.count_documents(q)
+    return {"items": items, "total": total}
+
+
+@api_router.put("/admin/support-requests/{request_id}")
+async def update_support_request(
+    request_id: str,
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(require_admin),
+):
+    new_status = payload.get("status")
+    notes = payload.get("notes")
+    update: Dict[str, Any] = {}
+    if new_status in ("new", "in_progress", "resolved", "closed"):
+        update["status"] = new_status
+    if notes is not None:
+        update["admin_notes"] = str(notes)
+    if not update:
+        raise HTTPException(status_code=422, detail="Nothing to update")
+    update["updated_at"] = datetime.now(timezone.utc)
+    res = await db.support_requests.update_one({"request_id": request_id}, {"$set": update})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"ok": True}
+
+
+# ==================== END HELP CENTER ====================
 
 
 # ==================== BLOG / COMMUNITY FEED ROUTES ====================
@@ -7190,6 +7361,8 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
     # Sensible defaults so the UI shows "usd" instead of an empty input
     if not out.get("stripe_currency"):
         out["stripe_currency"] = "usd"
+    if not out.get("support_email"):
+        out["support_email"] = "Nexus.ss.llc@gmail.com"
     return out
 
 

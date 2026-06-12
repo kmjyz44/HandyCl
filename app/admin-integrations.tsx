@@ -39,6 +39,13 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
+    title: 'Центр допомоги / Підтримка',
+    keys: [
+      { id: 'support_email', label: 'Email для зворотного зв\'язку', placeholder: 'support@yourbrand.com' },
+      { id: 'support_phone', label: 'Телефон підтримки (опціонально)', placeholder: '+38 050 000 0000' },
+    ],
+  },
+  {
     title: 'Twilio (SMS)',
     toggle: 'enable_sms_notifications',
     toggleLabel: 'Увімкнути SMS-сповіщення',

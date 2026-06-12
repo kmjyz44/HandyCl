@@ -481,6 +481,28 @@ export const api = {
     return res.data;
   },
 
+  // Help Center / Support
+  getFaq: async () => {
+    const res = await client.get('/help/faq');
+    return res.data;
+  },
+  getSupportInfo: async () => {
+    const res = await client.get('/help/support-info');
+    return res.data;
+  },
+  submitSupportRequest: async (data: { name: string; email: string; subject?: string; message: string; category?: string }) => {
+    const res = await client.post('/help/support-request', data);
+    return res.data;
+  },
+  listSupportRequests: async (params?: { status?: string; limit?: number; offset?: number }) => {
+    const res = await client.get('/admin/support-requests', { params });
+    return res.data;
+  },
+  updateSupportRequest: async (id: string, payload: { status?: string; notes?: string }) => {
+    const res = await client.put(`/admin/support-requests/${id}`, payload);
+    return res.data;
+  },
+
   // Tasks
   getProviderTasks: async () => {
     const res = await client.get('/provider/tasks');

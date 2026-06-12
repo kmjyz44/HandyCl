@@ -41,6 +41,7 @@ export default function RootLayout() {
       <Stack.Screen name="payment-cancelled" />
       <Stack.Screen name="blog/[id]" />
       <Stack.Screen name="blog-create" />
+      <Stack.Screen name="help-center" />
       <Stack.Screen name="(tabs)" />
     </Stack>
   );

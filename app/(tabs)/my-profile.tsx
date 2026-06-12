@@ -417,7 +417,8 @@ function ClientProfile() {
           <Text style={styles.sectionTitle}>Підтримка</Text>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Допомога', 'Зверніться до support@handyhub.com')}
+            onPress={() => router.push('/help-center' as any)}
+            data-testid="help-center-link"
           >
             <Ionicons name="help-circle-outline" size={22} color="#6b7280" />
             <Text style={styles.menuText}>Центр допомоги</Text>
