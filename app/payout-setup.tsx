@@ -36,6 +36,11 @@ export default function PayoutSetup() {
   const [routingNumber, setRoutingNumber] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
 
+  const [paypalEmail, setPaypalEmail] = useState('');
+  const [zelleHandle, setZelleHandle] = useState('');
+  const [venmoHandle, setVenmoHandle] = useState('');
+  const [savingContacts, setSavingContacts] = useState(false);
+
   const load = async () => {
     try {
       const list = await api.getPayoutAccounts();
@@ -44,6 +49,28 @@ export default function PayoutSetup() {
       setAccounts([]);
     } finally {
       setLoading(false);
+    }
+    try {
+      const c = await api.getTaskerPayoutContacts();
+      setPaypalEmail(c?.paypal_email || '');
+      setZelleHandle(c?.zelle_handle || '');
+      setVenmoHandle(c?.venmo_handle || '');
+    } catch {}
+  };
+
+  const saveContacts = async () => {
+    setSavingContacts(true);
+    try {
+      await api.updateTaskerPayoutContacts({
+        paypal_email: paypalEmail.trim(),
+        zelle_handle: zelleHandle.trim(),
+        venmo_handle: venmoHandle.trim(),
+      });
+      showAlert('Готово', 'Контакти збережено. Клієнти бачитимуть їх при оплаті.');
+    } catch (e: any) {
+      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось зберегти');
+    } finally {
+      setSavingContacts(false);
     }
   };
 
@@ -214,6 +241,50 @@ export default function PayoutSetup() {
         </View>
 
         <Text style={styles.dividerLabel}>або зберегти реквізити вручну (для довідки)</Text>
+
+        {/* PayPal / Zelle / Venmo contacts — for manual-split methods */}
+        <View style={styles.altCard}>
+          <Text style={styles.altTitle}>Альтернативні способи отримання</Text>
+          <Text style={styles.altSub}>
+            Якщо клієнт обирає PayPal / Zelle / Venmo — він буде надсилати тобі гроші напряму на ці акаунти.
+          </Text>
+          <Text style={styles.label}>PayPal email</Text>
+          <TextInput
+            value={paypalEmail}
+            onChangeText={setPaypalEmail}
+            placeholder="you@paypal.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            style={styles.input}
+            data-testid="paypal-email-input"
+          />
+          <Text style={styles.label}>Zelle (email або телефон)</Text>
+          <TextInput
+            value={zelleHandle}
+            onChangeText={setZelleHandle}
+            placeholder="you@bank.com або +1 234 567 8900"
+            autoCapitalize="none"
+            style={styles.input}
+            data-testid="zelle-handle-input"
+          />
+          <Text style={styles.label}>Venmo username (без @)</Text>
+          <TextInput
+            value={venmoHandle}
+            onChangeText={setVenmoHandle}
+            placeholder="your-venmo-name"
+            autoCapitalize="none"
+            style={styles.input}
+            data-testid="venmo-handle-input"
+          />
+          <TouchableOpacity
+            style={[styles.saveBtn, savingContacts && { opacity: 0.5 }, { marginTop: 12 }]}
+            onPress={saveContacts}
+            disabled={savingContacts}
+            data-testid="save-payout-contacts-btn"
+          >
+            {savingContacts ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Зберегти контакти</Text>}
+          </TouchableOpacity>
+        </View>
 
         {/* Existing accounts */}
         {loading ? (
@@ -461,4 +532,11 @@ const styles = StyleSheet.create({
     fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 6, marginBottom: 12,
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
+
+  altCard: {
+    backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 12,
+    borderWidth: 1, borderColor: '#e5e7eb',
+  },
+  altTitle: { fontSize: 15, fontWeight: '800', color: '#111827' },
+  altSub: { fontSize: 12, color: '#6b7280', marginTop: 4, marginBottom: 8, lineHeight: 17 },
 });

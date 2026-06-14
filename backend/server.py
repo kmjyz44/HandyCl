@@ -6888,6 +6888,15 @@ class IntegrationKeysUpdate(BaseModel):
     # Support / Help center
     support_email: Optional[str] = None  # where contact-form submissions are emailed
     support_phone: Optional[str] = None  # shown on the help page
+    # Alternative payment methods — admin enables/disables + platform recipient details
+    enable_stripe_method: Optional[bool] = None
+    enable_paypal: Optional[bool] = None
+    enable_zelle: Optional[bool] = None
+    enable_venmo: Optional[bool] = None
+    paypal_platform_email: Optional[str] = None
+    zelle_platform_handle: Optional[str] = None   # email or phone
+    venmo_platform_handle: Optional[str] = None   # username
+    paypal_auto_split: Optional[bool] = None  # if True, backend tries Payouts API after charge
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
     twilio_from_phone: Optional[str] = None
@@ -6909,6 +6918,282 @@ def _mask(value: Optional[str]) -> Optional[str]:
     if len(value) <= 8:
         return "•" * len(value)
     return value[:4] + "•" * 8 + value[-4:]
+
+
+# ==================== PAYMENT METHODS (multi-channel) ====================
+
+@api_router.get("/payments/methods")
+async def list_payment_methods():
+    """Public — returns which payment methods are enabled by admin and how they work.
+    Frontend uses this to render the client's payment options."""
+    keys = await _get_integration_keys()
+    stripe_secret_present = bool(keys.get("stripe_secret_key"))
+
+    methods = []
+    # Stripe — auto-split when provider connected
+    if keys.get("enable_stripe_method", True) and stripe_secret_present:
+        methods.append({
+            "id": "stripe",
+            "label": "Картка (Stripe)",
+            "icon": "card",
+            "mode": "auto",           # gateway charge
+            "auto_split": True,       # via Stripe Connect when available
+            "platform_handle": None,
+        })
+    # PayPal — manual split (auto in v2)
+    if keys.get("enable_paypal") and keys.get("paypal_platform_email"):
+        methods.append({
+            "id": "paypal",
+            "label": "PayPal",
+            "icon": "logo-paypal",
+            "mode": "manual",         # client pays both parties separately for now
+            "auto_split": False,      # TODO: PayPal Payouts API integration
+            "platform_handle": keys["paypal_platform_email"],
+        })
+    # Zelle — manual split, two recipients
+    if keys.get("enable_zelle") and keys.get("zelle_platform_handle"):
+        methods.append({
+            "id": "zelle",
+            "label": "Zelle",
+            "icon": "flash",
+            "mode": "manual",
+            "auto_split": False,
+            "platform_handle": keys["zelle_platform_handle"],
+        })
+    # Venmo — manual split
+    if keys.get("enable_venmo") and keys.get("venmo_platform_handle"):
+        methods.append({
+            "id": "venmo",
+            "label": "Venmo",
+            "icon": "logo-venmo",
+            "mode": "manual",
+            "auto_split": False,
+            "platform_handle": keys["venmo_platform_handle"],
+        })
+    return {"methods": methods}
+
+
+@api_router.get("/payments/manual-instructions")
+async def get_manual_instructions(
+    booking_id: str,
+    method: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Returns the split details + recipient handles a client needs to send money to.
+    Used for non-gateway methods (paypal/zelle/venmo)."""
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking["client_id"] != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    keys = await _get_integration_keys()
+    if method not in ("paypal", "zelle", "venmo"):
+        raise HTTPException(status_code=422, detail="Метод має бути paypal/zelle/venmo")
+    if not keys.get(f"enable_{method}"):
+        raise HTTPException(status_code=503, detail="Цей метод вимкнено адміном")
+
+    platform_handle = keys.get({
+        "paypal": "paypal_platform_email",
+        "zelle": "zelle_platform_handle",
+        "venmo": "venmo_platform_handle",
+    }[method])
+    if not platform_handle:
+        raise HTTPException(status_code=503, detail="Адмін не вказав свої реквізити для цього методу")
+
+    amount = float(booking.get("total_price") or 0)
+    platform_take = float(booking.get("platform_take") or 0)
+    executor_take = float(booking.get("executor_take") or max(0, amount - platform_take))
+
+    # Look up executor's contact for this method
+    provider_id = booking.get("provider_id")
+    provider_handle = None
+    if provider_id:
+        prov = await db.users.find_one({"user_id": provider_id}, {"_id": 0, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1}) or {}
+        provider_handle = prov.get({
+            "paypal": "paypal_email",
+            "zelle": "zelle_handle",
+            "venmo": "venmo_handle",
+        }[method])
+
+    currency = (keys.get("stripe_currency") or "usd").upper()
+
+    instructions = {
+        "method": method,
+        "booking_id": booking_id,
+        "currency": currency,
+        "total": round(amount, 2),
+        "splits": [
+            {
+                "to": "platform",
+                "label": "HandyHub (платформа)",
+                "amount": round(platform_take, 2),
+                "handle": platform_handle,
+            },
+            {
+                "to": "executor",
+                "label": "Виконавець",
+                "amount": round(executor_take, 2),
+                "handle": provider_handle or "(виконавець ще не вказав свій акаунт)",
+                "missing_handle": not provider_handle,
+            },
+        ],
+        "note": "Відправте обидві суми відповідним отримувачам у застосунку " + method.upper() + ", потім натисніть «Я надіслав».",
+    }
+    return instructions
+
+
+@api_router.post("/payments/manual-confirm")
+async def confirm_manual_payment(
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Client marks they have sent manual payment (zelle/venmo/paypal). Creates a
+    pending payment transaction; admin verifies + marks the booking paid manually."""
+    booking_id = payload.get("booking_id")
+    method = payload.get("method")
+    if not booking_id or method not in ("paypal", "zelle", "venmo"):
+        raise HTTPException(status_code=422, detail="booking_id + method required")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking["client_id"] != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    txn_id = f"txn_{uuid.uuid4().hex[:12]}"
+    txn = {
+        "transaction_id": txn_id,
+        "booking_id": booking_id,
+        "user_id": current_user.user_id,
+        "amount": float(booking.get("total_price") or 0),
+        "currency": "usd",
+        "payment_method": method,
+        "payment_status": "pending_verification",
+        "metadata": {
+            "type": "manual_split",
+            "method": method,
+            "note": (payload.get("note") or "")[:500],
+            "platform_take": float(booking.get("platform_take") or 0),
+            "executor_take": float(booking.get("executor_take") or 0),
+        },
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.payment_transactions.insert_one(txn)
+    await db.bookings.update_one(
+        {"booking_id": booking_id},
+        {"$set": {"payment_status": "pending_verification", "payment_method": method, "payment_session_id": txn_id}},
+    )
+
+    # Notify admin to verify
+    admin = await db.users.find_one({"role": "admin"}, {"_id": 0, "user_id": 1})
+    if admin:
+        try:
+            await notify_user(
+                admin["user_id"],
+                "manual_payment_pending",
+                "Платіж очікує підтвердження",
+                f"Клієнт надіслав {method.upper()}-платіж за бронь {booking_id}. Перевір рахунок і підтверди в адмінці.",
+                related_id=booking_id,
+                related_type="booking",
+                channels=["inapp", "push", "email"],
+            )
+        except Exception:
+            pass
+    return {"ok": True, "transaction_id": txn_id, "status": "pending_verification"}
+
+
+@api_router.post("/admin/payments/{transaction_id}/verify")
+async def verify_manual_payment(
+    transaction_id: str,
+    payload: Dict[str, Any] = Body(default=None),
+    current_user: User = Depends(require_admin),
+):
+    """Admin confirms (or rejects) a manual payment."""
+    txn = await db.payment_transactions.find_one({"transaction_id": transaction_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    action = (payload or {}).get("action", "approve")  # approve | reject
+    if action not in ("approve", "reject"):
+        raise HTTPException(status_code=422, detail="action must be approve|reject")
+    new_status = "paid" if action == "approve" else "rejected"
+    await db.payment_transactions.update_one(
+        {"transaction_id": transaction_id},
+        {"$set": {"payment_status": new_status, "verified_by": current_user.user_id, "verified_at": datetime.now(timezone.utc)}},
+    )
+    await db.bookings.update_one(
+        {"booking_id": txn["booking_id"]},
+        {"$set": {"payment_status": new_status, "paid_at": datetime.now(timezone.utc) if action == "approve" else None}},
+    )
+    # Notify client
+    if txn.get("user_id"):
+        try:
+            await notify_user(
+                txn["user_id"],
+                "payment_verified" if action == "approve" else "payment_rejected",
+                "Платіж підтверджено" if action == "approve" else "Платіж відхилено",
+                "Дякуємо! Платіж зарахований." if action == "approve" else "Адмін не зміг знайти ваш платіж. Перевірте реквізити і спробуйте знову.",
+                related_id=txn["booking_id"],
+                related_type="booking",
+            )
+        except Exception:
+            pass
+    return {"ok": True, "status": new_status}
+
+
+@api_router.get("/admin/payments/pending")
+async def list_pending_manual_payments(current_user: User = Depends(require_admin)):
+    """Admin sees all manual payments awaiting verification."""
+    cursor = db.payment_transactions.find(
+        {"payment_status": "pending_verification"},
+        {"_id": 0},
+    ).sort("created_at", -1).limit(100)
+    items = await cursor.to_list(100)
+    return {"items": items}
+
+
+class ProviderPayoutContacts(BaseModel):
+    paypal_email: Optional[str] = None
+    zelle_handle: Optional[str] = None
+    venmo_handle: Optional[str] = None
+
+
+@api_router.put("/tasker/payout-contacts")
+async def update_tasker_payout_contacts(
+    data: ProviderPayoutContacts,
+    current_user: User = Depends(get_current_user),
+):
+    """Executor saves their PayPal/Zelle/Venmo handles so clients can send manual payments."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers can update payout contacts")
+    update: Dict[str, Any] = {}
+    if data.paypal_email is not None:
+        update["paypal_email"] = data.paypal_email.strip() or None
+    if data.zelle_handle is not None:
+        update["zelle_handle"] = data.zelle_handle.strip() or None
+    if data.venmo_handle is not None:
+        update["venmo_handle"] = data.venmo_handle.strip() or None
+    if not update:
+        return {"ok": True, "updated": []}
+    await db.users.update_one({"user_id": current_user.user_id}, {"$set": update})
+    return {"ok": True, "updated": list(update.keys())}
+
+
+@api_router.get("/tasker/payout-contacts")
+async def get_tasker_payout_contacts(current_user: User = Depends(get_current_user)):
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers")
+    u = await db.users.find_one(
+        {"user_id": current_user.user_id},
+        {"_id": 0, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1},
+    ) or {}
+    return {
+        "paypal_email": u.get("paypal_email"),
+        "zelle_handle": u.get("zelle_handle"),
+        "venmo_handle": u.get("venmo_handle"),
+    }
+
+
+# ==================== END PAYMENT METHODS ====================
 
 
 # ==================== HELP CENTER / SUPPORT ====================

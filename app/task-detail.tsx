@@ -109,6 +109,16 @@ export default function TaskDetail() {
   // Payment modal
   const [showPayment, setShowPayment] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState('');
+  const [enabledMethods, setEnabledMethods] = useState<any[]>([]);
+  const [showManualSplit, setShowManualSplit] = useState(false);
+  const [manualInstructions, setManualInstructions] = useState<any>(null);
+
+  // Load enabled payment methods from backend (configurable by admin)
+  useEffect(() => {
+    api.getPaymentMethods()
+      .then((r) => setEnabledMethods(r?.methods || []))
+      .catch(() => setEnabledMethods([]));
+  }, []);
 
   // Review modal (shown after payment)
   const [showReview, setShowReview] = useState(false);
@@ -205,11 +215,12 @@ export default function TaskDetail() {
 
   const submitPayment = async () => {
     if (!selectedMethod) { Alert.alert('Оберіть спосіб оплати'); return; }
+    const bookingId = task?.booking_id || taskId;
+
     // Stripe path: create a Checkout session and redirect the browser
     if (selectedMethod === 'stripe') {
       setActionLoading(true);
       try {
-        const bookingId = task?.booking_id || taskId;
         const r = await api.startStripeCheckout(bookingId);
         if (!r?.url) throw new Error('Stripe: не отримано URL для оплати');
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -227,13 +238,28 @@ export default function TaskDetail() {
         setActionLoading(false);
       }
     }
+
+    // Manual split methods (paypal/zelle/venmo): load instructions and show split modal
+    if (['paypal', 'zelle', 'venmo'].includes(selectedMethod)) {
+      setActionLoading(true);
+      try {
+        const inst = await api.getManualInstructions(bookingId, selectedMethod);
+        setManualInstructions(inst);
+        setShowManualSplit(true);
+      } catch (e: any) {
+        Alert.alert('Помилка', e?.response?.data?.detail || 'Не вдалося завантажити реквізити');
+      } finally {
+        setActionLoading(false);
+      }
+      return;
+    }
+
+    // Fallback (legacy methods like monobank/privatbank/cash) — simulated mark-as-paid
     setActionLoading(true);
     try {
       await api.payTask(taskId, { payment_method: selectedMethod });
     } catch (e: any) {
-      // Even if API call fails (simulated payment), proceed with UI flow
       const msg = e?.response?.data?.detail || e.message || '';
-      // Only block if it's a real error (not 404 on simulated endpoint)
       if (msg && !msg.includes('not found') && !msg.includes('404') && !msg.includes('Method Not Allowed')) {
         setActionLoading(false);
         Alert.alert('Помилка оплати', msg);
@@ -242,10 +268,28 @@ export default function TaskDetail() {
     } finally {
       setActionLoading(false);
     }
-    // Close payment modal and reload task, then show review
     setShowPayment(false);
     try { await loadTask(); } catch (_) {}
     setTimeout(() => setShowReview(true), 400);
+  };
+
+  const confirmManualSent = async () => {
+    if (!manualInstructions) return;
+    setActionLoading(true);
+    try {
+      await api.confirmManualPayment({
+        booking_id: manualInstructions.booking_id,
+        method: manualInstructions.method,
+      });
+      setShowManualSplit(false);
+      setShowPayment(false);
+      Alert.alert('Дякуємо!', 'Адмін перевірить ваш переказ і підтвердить оплату. Ви отримаєте сповіщення.');
+      try { await loadTask(); } catch (_) {}
+    } catch (e: any) {
+      Alert.alert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const submitReview = async () => {
@@ -344,7 +388,25 @@ export default function TaskDetail() {
   const taskPhotos = [...(task.photos || []), ...(task.problem_photos || [])];
   const stepIdx = STEP_ORDER.indexOf(status);
   const isUA = (task.country || user?.country || 'UA').toUpperCase().includes('UA');
-  const payMethods = isUA ? UA_METHODS : US_METHODS;
+  // Prefer dynamic admin-configured methods if available, otherwise fall back to defaults.
+  const ICON_BY_ID: Record<string, { icon: any; color: string }> = {
+    stripe: { icon: 'card', color: '#635bff' },
+    paypal: { icon: 'logo-paypal', color: '#0070ba' },
+    zelle:  { icon: 'flash',  color: '#6d28d9' },
+    venmo:  { icon: 'logo-venmo', color: '#008cff' },
+    cash:   { icon: 'cash',   color: '#22c55e' },
+  };
+  const dynamicMethods = enabledMethods.length > 0
+    ? enabledMethods.map((m) => ({
+        id: m.id,
+        label: m.label,
+        icon: ICON_BY_ID[m.id]?.icon || 'wallet',
+        color: ICON_BY_ID[m.id]?.color || '#6b7280',
+      }))
+    : null;
+  const payMethods = dynamicMethods && dynamicMethods.length > 0
+    ? dynamicMethods
+    : (isUA ? UA_METHODS : US_METHODS);
 
   return (
     <View style={s.container}>
@@ -851,6 +913,79 @@ export default function TaskDetail() {
                   ? <ActivityIndicator color="#fff" />
                   : <Text style={s.submitBtnText}>Підтвердити оплату</Text>
                 }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MANUAL SPLIT MODAL (PayPal / Zelle / Venmo)
+      ═══════════════════════════════════════════════════════════════ */}
+      <Modal visible={showManualSplit} animationType="slide" transparent>
+        <View style={s.overlay}>
+          <View style={s.modalBox}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Реквізити для оплати ({(manualInstructions?.method || '').toUpperCase()})</Text>
+              <TouchableOpacity onPress={() => setShowManualSplit(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={s.modalBody}>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 12, lineHeight: 18 }}>
+                Платіж розділений на 2 частини. Будь ласка, надішли обидві суми відповідним отримувачам у застосунку{' '}
+                <Text style={{ fontWeight: '700' }}>{(manualInstructions?.method || '').toUpperCase()}</Text>.
+              </Text>
+
+              {(manualInstructions?.splits || []).map((sp: any) => (
+                <View
+                  key={sp.to}
+                  style={{
+                    borderWidth: 1, borderColor: sp.missing_handle ? '#fca5a5' : '#bfdbfe',
+                    backgroundColor: sp.missing_handle ? '#fef2f2' : '#eff6ff',
+                    borderRadius: 12, padding: 14, marginBottom: 12,
+                  }}
+                  data-testid={`manual-split-${sp.to}`}
+                >
+                  <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '700', textTransform: 'uppercase' }}>
+                    {sp.label}
+                  </Text>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#111827', marginTop: 4 }}>
+                    {sp.amount.toFixed(2)} {manualInstructions?.currency}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#374151', marginTop: 6 }} selectable>
+                    {sp.handle}
+                  </Text>
+                  {sp.missing_handle && (
+                    <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 6 }}>
+                      ⚠ Виконавець ще не вказав свій акаунт. Зв'яжись із ним у чаті.
+                    </Text>
+                  )}
+                </View>
+              ))}
+
+              <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4, lineHeight: 17 }}>
+                💡 Після того як надішлеш обидва платежі, натисни кнопку нижче — адмін перевірить надходження
+                на твоєму банківському рахунку і підтвердить замовлення.
+              </Text>
+            </ScrollView>
+            <View style={{ flexDirection: 'row', gap: 8, padding: 16 }}>
+              <TouchableOpacity
+                style={[s.modalBtn, s.cancelBtn]}
+                onPress={() => setShowManualSplit(false)}
+                data-testid="manual-cancel-btn"
+              >
+                <Text style={s.cancelBtnText}>Скасувати</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, s.confirmBtn, actionLoading && { opacity: 0.5 }]}
+                onPress={confirmManualSent}
+                disabled={actionLoading}
+                data-testid="manual-confirm-sent-btn"
+              >
+                {actionLoading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.confirmBtnText}>Я надіслав обидва платежі</Text>}
               </TouchableOpacity>
             </View>
           </View>

@@ -481,6 +481,37 @@ export const api = {
     return res.data;
   },
 
+  // Multi-method payments
+  getPaymentMethods: async () => {
+    const res = await client.get('/payments/methods');
+    return res.data;
+  },
+  getManualInstructions: async (bookingId: string, method: string) => {
+    const res = await client.get('/payments/manual-instructions', { params: { booking_id: bookingId, method } });
+    return res.data;
+  },
+  confirmManualPayment: async (data: { booking_id: string; method: string; note?: string }) => {
+    const res = await client.post('/payments/manual-confirm', data);
+    return res.data;
+  },
+  verifyManualPayment: async (transactionId: string, action: 'approve' | 'reject') => {
+    const res = await client.post(`/admin/payments/${transactionId}/verify`, { action });
+    return res.data;
+  },
+  listPendingManualPayments: async () => {
+    const res = await client.get('/admin/payments/pending');
+    return res.data;
+  },
+  // Provider payout contacts (PayPal/Zelle/Venmo handles)
+  getTaskerPayoutContacts: async () => {
+    const res = await client.get('/tasker/payout-contacts');
+    return res.data;
+  },
+  updateTaskerPayoutContacts: async (data: { paypal_email?: string; zelle_handle?: string; venmo_handle?: string }) => {
+    const res = await client.put('/tasker/payout-contacts', data);
+    return res.data;
+  },
+
   // Help Center / Support
   getFaq: async () => {
     const res = await client.get('/help/faq');

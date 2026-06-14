@@ -39,6 +39,30 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
+    title: 'PayPal (manual split)',
+    toggle: 'enable_paypal',
+    toggleLabel: 'Приймати оплату через PayPal',
+    keys: [
+      { id: 'paypal_platform_email', label: 'PayPal email платформи', placeholder: 'admin@yourbrand.com' },
+    ],
+  },
+  {
+    title: 'Zelle',
+    toggle: 'enable_zelle',
+    toggleLabel: 'Приймати оплату через Zelle',
+    keys: [
+      { id: 'zelle_platform_handle', label: 'Zelle email або телефон платформи', placeholder: 'admin@yourbrand.com або +1234567890' },
+    ],
+  },
+  {
+    title: 'Venmo',
+    toggle: 'enable_venmo',
+    toggleLabel: 'Приймати оплату через Venmo',
+    keys: [
+      { id: 'venmo_platform_handle', label: 'Venmo username платформи (без @)', placeholder: 'handyhub-platform' },
+    ],
+  },
+  {
     title: 'Центр допомоги / Підтримка',
     keys: [
       { id: 'support_email', label: 'Email для зворотного зв\'язку', placeholder: 'support@yourbrand.com' },
