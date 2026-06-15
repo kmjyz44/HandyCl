@@ -98,8 +98,28 @@ Full feature set requested across the iterations:
 - **P0** Stripe Checkout for client payment — already wired but reads `settings.stripe_api_key`
   from `db.settings`. Switch to read from `db.integration_keys` so admin keys UI is the
   single source of truth.
+- **P1** Admin UI to verify pending manual payments (Zelle, Venmo, PayPal, Bank Transfer)
 - **P1** Banner/prompt forcing new providers to set their geo-location
 - **P1** "Distance / Remote" tag for out-of-area executors if strict filtering is relaxed
 - **P2** Consolidate root `server.py` and `backend/server.py` into one file
 - **P2** Admin audit log of category/key changes
 - **P2** Web push (VAPID) and Telegram bot notifications (keys already collectable in admin UI)
+
+## 2026-02-15 — Earnings reports + duplicate menu cleanup
+- ✅ Removed the duplicate "Оплата та виплати" menu item from the executor profile
+  (`app/(tabs)/my-profile.tsx`). Card / IBAN editing now lives only behind the
+  "Заробіток → Куди отримувати кошти" CTA → `/payout-setup`.
+- ✅ Wired `api.getEarnings()` and `api.getEarningsHistory()` in `utils/api.ts`
+  (these were called from `earnings.tsx` but never declared, which is why the
+  Earnings tab was showing zeros).
+- ✅ New backend endpoint `GET /api/earnings/report?type={monthly|yearly|tax}&month=YYYY-MM&year=YYYY`
+  generates a Ukrainian-language PDF via `reportlab` 4.5.1 with:
+  - Period header (executor name, email, period label, generation timestamp)
+  - Summary table (jobs, gross, tips, commission, net, hours)
+  - Tax block (for `type=tax`): gross income, platform commission withheld, actual received
+  - Detailed task list (date, title, client, hours, gross, net) with banded rows
+- ✅ Frontend: added "Звіти та податкова" CTA card on the Earnings tab; tapping it
+  opens a sheet listing every month with paid earnings + yearly + tax PDF buttons.
+  Downloads on web via Blob/`a[download]`; on native via `expo-file-system` + `expo-sharing`.
+- ✅ Dockerfile now installs `fonts-dejavu-core` so Cyrillic renders correctly in PDFs.
+- ✅ Regression tests at `/app/backend/tests/test_earnings_report.py` (7 passing).
