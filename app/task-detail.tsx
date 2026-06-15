@@ -399,9 +399,10 @@ export default function TaskDetail() {
   const dynamicMethods = enabledMethods.length > 0
     ? enabledMethods.map((m) => ({
         id: m.id,
-        label: m.label,
+        label: m.label + (m.configured === false ? '  (не налаштовано)' : ''),
         icon: ICON_BY_ID[m.id]?.icon || 'wallet',
         color: ICON_BY_ID[m.id]?.color || '#6b7280',
+        configured: m.configured !== false,
       }))
     : null;
   const payMethods = dynamicMethods && dynamicMethods.length > 0

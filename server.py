@@ -6955,45 +6955,50 @@ async def list_payment_methods():
     stripe_secret_present = bool(keys.get("stripe_secret_key"))
 
     methods = []
-    # Stripe — auto-split when provider connected
-    if keys.get("enable_stripe_method", True) and stripe_secret_present:
+    # Stripe — auto-split when provider connected. Show if secret is set unless
+    # admin EXPLICITLY disabled it (enable_stripe_method=False).
+    stripe_enabled = keys.get("enable_stripe_method")
+    if stripe_secret_present and stripe_enabled is not False:
         methods.append({
             "id": "stripe",
             "label": "Картка (Stripe)",
             "icon": "card",
-            "mode": "auto",           # gateway charge
-            "auto_split": True,       # via Stripe Connect when available
+            "mode": "auto",
+            "auto_split": True,
             "platform_handle": None,
+            "configured": True,
         })
-    # PayPal — manual split (auto in v2)
-    if keys.get("enable_paypal") and keys.get("paypal_platform_email"):
+    # PayPal / Zelle / Venmo — always return when enabled; mark not-configured if
+    # admin forgot to enter the platform handle. Frontend will display warning then.
+    if keys.get("enable_paypal"):
         methods.append({
             "id": "paypal",
             "label": "PayPal",
             "icon": "logo-paypal",
-            "mode": "manual",         # client pays both parties separately for now
-            "auto_split": False,      # TODO: PayPal Payouts API integration
-            "platform_handle": keys["paypal_platform_email"],
+            "mode": "manual",
+            "auto_split": False,
+            "platform_handle": keys.get("paypal_platform_email"),
+            "configured": bool(keys.get("paypal_platform_email")),
         })
-    # Zelle — manual split, two recipients
-    if keys.get("enable_zelle") and keys.get("zelle_platform_handle"):
+    if keys.get("enable_zelle"):
         methods.append({
             "id": "zelle",
             "label": "Zelle",
             "icon": "flash",
             "mode": "manual",
             "auto_split": False,
-            "platform_handle": keys["zelle_platform_handle"],
+            "platform_handle": keys.get("zelle_platform_handle"),
+            "configured": bool(keys.get("zelle_platform_handle")),
         })
-    # Venmo — manual split
-    if keys.get("enable_venmo") and keys.get("venmo_platform_handle"):
+    if keys.get("enable_venmo"):
         methods.append({
             "id": "venmo",
             "label": "Venmo",
             "icon": "logo-venmo",
             "mode": "manual",
             "auto_split": False,
-            "platform_handle": keys["venmo_platform_handle"],
+            "platform_handle": keys.get("venmo_platform_handle"),
+            "configured": bool(keys.get("venmo_platform_handle")),
         })
     return {"methods": methods}
 
