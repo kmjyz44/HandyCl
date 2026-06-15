@@ -2609,12 +2609,33 @@ async def complete_task(
     notes = completion.provider_notes or completion.provider_comments
     materials = completion.materials_cost or completion.expenses or 0.0
 
-    # Calculate final price: hours × hourly_rate + materials
+    # Calculate executor's gross earnings (labor + materials).
+    # Platform commission is added ON TOP for the client (commission_paid_by=client by default),
+    # OR deducted from executor's gross (commission_paid_by=executor) — controlled by admin.
     hourly_rate = task.get("hourly_rate") or task.get("provider_hourly_rate") or 0.0
     labor_cost = round((actual_hours or 0) * hourly_rate, 2)
-    final_price = round(labor_cost + materials, 2)
-    platform_fee = round(final_price * 0.15, 2)
-    provider_payout = round(final_price - platform_fee, 2)
+    executor_total = round(labor_cost + materials, 2)
+
+    # Resolve commission rate: prefer booking snapshot → category → settings → 15%
+    commission_rate = float(task.get("commission_rate_snapshot") or 0)
+    if not commission_rate and task.get("category_id"):
+        cat = await db.categories.find_one({"category_id": task["category_id"]}, {"_id": 0, "commission_rate": 1})
+        commission_rate = float((cat or {}).get("commission_rate") or 0)
+    if not commission_rate:
+        commission_rate = 15.0
+
+    int_keys = await _get_integration_keys()
+    commission_paid_by = (int_keys.get("commission_paid_by") or "client").lower()
+
+    commission_amount = round(executor_total * (commission_rate / 100.0), 2)
+    if commission_paid_by == "executor":
+        final_price = executor_total
+        provider_payout = round(executor_total - commission_amount, 2)
+    else:
+        # commission added on top — client pays more, executor gets full amount
+        final_price = round(executor_total + commission_amount, 2)
+        provider_payout = executor_total
+    platform_fee = commission_amount
 
     await db.tasks.update_one(
         {"task_id": real_task_id},
@@ -2629,6 +2650,8 @@ async def complete_task(
             "final_price": final_price,
             "labor_cost": labor_cost,
             "platform_fee": platform_fee,
+            "commission_rate_snapshot": commission_rate,
+            "commission_paid_by": commission_paid_by,
             "provider_payout": provider_payout,
             "updated_at": now
         }}
@@ -6897,6 +6920,8 @@ class IntegrationKeysUpdate(BaseModel):
     zelle_platform_handle: Optional[str] = None   # email or phone
     venmo_platform_handle: Optional[str] = None   # username
     paypal_auto_split: Optional[bool] = None  # if True, backend tries Payouts API after charge
+    # Who pays the platform commission (default 'client' — added on top)
+    commission_paid_by: Optional[str] = None  # "client" or "executor"
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
     twilio_from_phone: Optional[str] = None

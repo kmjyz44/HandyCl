@@ -39,6 +39,12 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
+    title: 'Комісія платформи',
+    keys: [
+      { id: 'commission_paid_by', label: 'Хто оплачує комісію (client / executor)', placeholder: 'client — додається клієнту зверху; executor — віднімається з виконавця' },
+    ],
+  },
+  {
     title: 'PayPal (manual split)',
     toggle: 'enable_paypal',
     toggleLabel: 'Приймати оплату через PayPal',

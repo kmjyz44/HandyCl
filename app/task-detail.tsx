@@ -587,15 +587,17 @@ export default function TaskDetail() {
                     <Text style={s.priceLabel}>{task.materials_cost} грн</Text>
                   </View>
                 )}
-                <View style={[s.priceRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 8, paddingTop: 8 }]}>
-                  <Text style={[s.priceLabel, { fontWeight: '700', fontSize: 15 }]}>Загальна сума</Text>
-                  <Text style={[s.priceGreen, { fontSize: 22, fontWeight: '800' }]}>{task.final_price} грн</Text>
-                </View>
-                {/* Provider sees their payout */}
+                {!isProvider && (
+                  <View style={[s.priceRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 8, paddingTop: 8 }]}>
+                    <Text style={[s.priceLabel, { fontWeight: '700', fontSize: 15 }]}>До оплати</Text>
+                    <Text style={[s.priceGreen, { fontSize: 22, fontWeight: '800' }]}>{task.final_price} грн</Text>
+                  </View>
+                )}
+                {/* Provider sees their payout — without showing commission */}
                 {isProvider && isMyTask && !!task.provider_payout && (
                   <View style={[s.priceRow, { backgroundColor: '#f0fdf4', borderRadius: 8, padding: 8, marginTop: 8 }]}>
-                    <Text style={[s.priceLabel, { color: '#16a34a' }]}>Ваш заробіток (85%)</Text>
-                    <Text style={[s.priceGreen, { color: '#16a34a', fontSize: 18, fontWeight: '700' }]}>{task.provider_payout} грн</Text>
+                    <Text style={[s.priceLabel, { color: '#16a34a' }]}>Ваш заробіток</Text>
+                    <Text style={[s.priceGreen, { color: '#16a34a', fontSize: 22, fontWeight: '800' }]}>{task.provider_payout} грн</Text>
                   </View>
                 )}
               </>
@@ -764,7 +766,7 @@ export default function TaskDetail() {
                 </View>
               </View>
 
-              {/* Earnings preview — always visible */}
+              {/* Earnings preview — executor sees ONLY their own earnings (commission is added to client total, not deducted from executor) */}
               <View style={s.earningsCard}>
                 <Text style={s.earningsTitle}>Розрахунок заробітку</Text>
                 <View style={s.earningsRow}>
@@ -781,14 +783,10 @@ export default function TaskDetail() {
                     <Text style={s.earningsVal}>{matCost} грн</Text>
                   </View>
                 )}
-                <View style={[s.earningsRow, s.earningsDivider]}>
-                  <Text style={s.earningsLabel}>Комісія платформи (15%)</Text>
-                  <Text style={[s.earningsVal, { color: '#ef4444' }]}>−{platformFee} грн</Text>
-                </View>
-                {/* Big highlighted payout */}
+                {/* Big highlighted payout — full amount, no commission deduction */}
                 <View style={s.earningsPayoutBox}>
                   <Text style={s.earningsPayoutLabel}>Ваш заробіток</Text>
-                  <Text style={s.earningsPayoutValue}>{providerEarnings} грн</Text>
+                  <Text style={s.earningsPayoutValue}>{(parseFloat(laborCost) + matCost).toFixed(2)} грн</Text>
                 </View>
               </View>
 
