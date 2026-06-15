@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
+import { showAlert } from '../utils/alert';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { label: string; color: string; icon: string }> = {
@@ -213,12 +214,18 @@ export default function TaskDetail() {
     }
   };
 
-  const submitPayment = async () => {
-    if (!selectedMethod) { Alert.alert('Оберіть спосіб оплати'); return; }
+  const onMethodTap = (methodId: string) => {
+    setSelectedMethod(methodId);
+    // Trigger payment immediately — no extra confirm step
+    setTimeout(() => submitPayment(methodId), 100);
+  };
+
+  const submitPayment = async (forceMethod?: string) => {
+    const method = forceMethod || selectedMethod;
+    if (!method) { showAlert('Оберіть спосіб оплати', ''); return; }
     const bookingId = task?.booking_id || taskId;
 
-    // Stripe path: create a Checkout session and redirect the browser
-    if (selectedMethod === 'stripe') {
+    if (method === 'stripe') {
       setActionLoading(true);
       try {
         const r = await api.startStripeCheckout(bookingId);
@@ -231,43 +238,27 @@ export default function TaskDetail() {
         }
         return;
       } catch (e: any) {
-        const msg = e?.response?.data?.detail || e?.message || 'Не вдалося розпочати оплату через Stripe';
-        Alert.alert('Помилка оплати', msg);
+        showAlert('Помилка оплати', e?.response?.data?.detail || e?.message || 'Не вдалося розпочати оплату через Stripe');
         return;
-      } finally {
-        setActionLoading(false);
-      }
+      } finally { setActionLoading(false); }
     }
 
-    // Manual split methods (paypal/zelle/venmo): load instructions and show split modal
-    if (['paypal', 'zelle', 'venmo'].includes(selectedMethod)) {
+    if (['paypal', 'zelle', 'venmo'].includes(method)) {
       setActionLoading(true);
       try {
-        const inst = await api.getManualInstructions(bookingId, selectedMethod);
+        const inst = await api.getManualInstructions(bookingId, method);
         setManualInstructions(inst);
         setShowManualSplit(true);
       } catch (e: any) {
-        Alert.alert('Помилка', e?.response?.data?.detail || 'Не вдалося завантажити реквізити');
-      } finally {
-        setActionLoading(false);
-      }
+        showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося завантажити реквізити');
+      } finally { setActionLoading(false); }
       return;
     }
 
-    // Fallback (legacy methods like monobank/privatbank/cash) — simulated mark-as-paid
+    // Legacy fallback (cash etc)
     setActionLoading(true);
-    try {
-      await api.payTask(taskId, { payment_method: selectedMethod });
-    } catch (e: any) {
-      const msg = e?.response?.data?.detail || e.message || '';
-      if (msg && !msg.includes('not found') && !msg.includes('404') && !msg.includes('Method Not Allowed')) {
-        setActionLoading(false);
-        Alert.alert('Помилка оплати', msg);
-        return;
-      }
-    } finally {
-      setActionLoading(false);
-    }
+    try { await api.payTask(taskId, { payment_method: method }); } catch (_) {}
+    setActionLoading(false);
     setShowPayment(false);
     try { await loadTask(); } catch (_) {}
     setTimeout(() => setShowReview(true), 400);
@@ -388,7 +379,6 @@ export default function TaskDetail() {
   const taskPhotos = [...(task.photos || []), ...(task.problem_photos || [])];
   const stepIdx = STEP_ORDER.indexOf(status);
   const isUA = (task.country || user?.country || 'UA').toUpperCase().includes('UA');
-  // Prefer dynamic admin-configured methods if available, otherwise fall back to defaults.
   const ICON_BY_ID: Record<string, { icon: any; color: string }> = {
     stripe: { icon: 'card', color: '#635bff' },
     paypal: { icon: 'logo-paypal', color: '#0070ba' },
@@ -396,7 +386,10 @@ export default function TaskDetail() {
     venmo:  { icon: 'logo-venmo', color: '#008cff' },
     cash:   { icon: 'cash',   color: '#22c55e' },
   };
-  const dynamicMethods = enabledMethods.length > 0
+  // Only show methods returned by /api/payments/methods (admin-controlled).
+  // Fallback to Stripe-only if the API call hasn't completed yet — never to
+  // hard-coded Monobank/ПриватБанк list (those were removed per admin request).
+  const payMethods = enabledMethods.length > 0
     ? enabledMethods.map((m) => ({
         id: m.id,
         label: m.label + (m.configured === false ? '  (не налаштовано)' : ''),
@@ -404,10 +397,7 @@ export default function TaskDetail() {
         color: ICON_BY_ID[m.id]?.color || '#6b7280',
         configured: m.configured !== false,
       }))
-    : null;
-  const payMethods = dynamicMethods && dynamicMethods.length > 0
-    ? dynamicMethods
-    : (isUA ? UA_METHODS : US_METHODS);
+    : [{ id: 'stripe', label: 'Картка (Stripe — тестова)', icon: 'card', color: '#635bff', configured: true }];
 
   return (
     <View style={s.container}>
@@ -886,7 +876,7 @@ export default function TaskDetail() {
                 <TouchableOpacity
                   key={m.id}
                   style={[s.methodCard, selectedMethod === m.id && { borderColor: m.color, borderWidth: 2 }]}
-                  onPress={() => setSelectedMethod(m.id)}
+                  onPress={() => onMethodTap(m.id)}
                 >
                   <View style={[s.methodIcon, { backgroundColor: m.color + '22' }]}>
                     <Ionicons name={m.icon as any} size={22} color={m.color} />
