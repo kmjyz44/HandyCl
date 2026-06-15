@@ -4714,8 +4714,47 @@ async def create_checkout_session(
     if not api_key:
         raise HTTPException(status_code=500, detail="Stripe не налаштовано — додай Secret Key в Адмін → Інтеграції")
 
-    # Compute final amount client should pay (commission already snapshotted on booking)
+    # Compute final amount client should pay (commission already snapshotted on booking).
+    # If snapshot missing/zero — recompute from category commission rate.
     amount = booking.get("total_price") or booking.get("client_total") or 0
+    platform_take = float(booking.get("platform_take") or 0)
+    executor_take = float(booking.get("executor_take") or 0)
+    if platform_take <= 0 or executor_take <= 0:
+        executor_rate = (
+            float(booking.get("executor_rate") or 0)
+            or float(booking.get("provider_hourly_rate") or 0)
+            or float(booking.get("estimated_price") or 0)
+            or float(amount or 0)
+        )
+        category_id = booking.get("category")
+        pricing = await compute_client_pricing(executor_rate, category_id)
+        amount = pricing["client_total"]
+        platform_take = pricing["platform_take"]
+        executor_take = pricing["executor_take"]
+        try:
+            await db.bookings.update_one(
+                {"booking_id": booking_id},
+                {"$set": {
+                    "total_price": amount,
+                    "executor_rate": pricing["executor_rate"],
+                    "commission_rate_snapshot": pricing["commission_rate"],
+                    "commission_amount": pricing["commission_amount"],
+                    "platform_take": platform_take,
+                    "executor_take": executor_take,
+                }}
+            )
+            await db.tasks.update_many(
+                {"booking_id": booking_id},
+                {"$set": {
+                    "total_price": amount,
+                    "executor_take": executor_take,
+                    "platform_take": platform_take,
+                    "commission_rate_snapshot": pricing["commission_rate"],
+                }}
+            )
+        except Exception as _e:
+            logging.warning(f"checkout: failed to backfill booking split: {_e}")
+
     if not amount or amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid booking amount")
 
@@ -4738,14 +4777,6 @@ async def create_checkout_session(
         ) or {}
         provider_acct_id = prov.get("stripe_account_id")
         provider_charges_enabled = bool(prov.get("stripe_charges_enabled"))
-
-    # Compute platform fee (commission) for the split
-    platform_take = float(booking.get("platform_take") or 0)
-    if not platform_take:
-        # fallback: derive from commission rate snapshot if available
-        rate = float(booking.get("commission_rate_snapshot") or 0)
-        if rate > 0:
-            platform_take = round(float(amount) * (rate / 100.0), 2)
 
     # Use native stripe SDK so we can pass transfer_data / application_fee_amount / statement_descriptor
     import stripe as _stripe
@@ -7282,7 +7313,54 @@ async def get_manual_instructions(
 
     amount = float(booking.get("total_price") or 0)
     platform_take = float(booking.get("platform_take") or 0)
-    executor_take = float(booking.get("executor_take") or max(0, amount - platform_take))
+    executor_take = float(booking.get("executor_take") or 0)
+    commission_rate_snapshot = booking.get("commission_rate_snapshot")
+
+    # Fallback: if the split is missing/zero on this booking (older bookings,
+    # legacy data, or commission not applied at creation time), recompute it
+    # NOW from the category's current commission rate. The executor's set price
+    # is treated as authoritative; commission is added ON TOP of it.
+    if platform_take <= 0 or executor_take <= 0:
+        # Determine executor's set price (in priority order)
+        executor_rate = (
+            float(booking.get("executor_rate") or 0)
+            or float(booking.get("provider_hourly_rate") or 0)
+            or float(booking.get("estimated_price") or 0)
+            or amount
+        )
+        category_id = booking.get("category")
+        pricing = await compute_client_pricing(executor_rate, category_id)
+        client_total = pricing["client_total"]
+        platform_take = pricing["platform_take"]
+        executor_take = pricing["executor_take"]
+        amount = client_total  # client must pay marked-up total
+        commission_rate_snapshot = pricing["commission_rate"]
+
+        # Persist back so subsequent reads stay consistent
+        try:
+            await db.bookings.update_one(
+                {"booking_id": booking_id},
+                {"$set": {
+                    "total_price": client_total,
+                    "executor_rate": pricing["executor_rate"],
+                    "commission_rate_snapshot": pricing["commission_rate"],
+                    "commission_amount": pricing["commission_amount"],
+                    "platform_take": platform_take,
+                    "executor_take": executor_take,
+                }}
+            )
+            # Mirror to linked task (if exists) so executor / payouts see correct numbers
+            await db.tasks.update_many(
+                {"booking_id": booking_id},
+                {"$set": {
+                    "total_price": client_total,
+                    "executor_take": executor_take,
+                    "platform_take": platform_take,
+                    "commission_rate_snapshot": pricing["commission_rate"],
+                }}
+            )
+        except Exception as _e:
+            logging.warning(f"manual-instructions: failed to backfill booking split: {_e}")
 
     # Look up executor's contact for this method
     provider_id = booking.get("provider_id")
@@ -7313,6 +7391,7 @@ async def get_manual_instructions(
         "booking_id": booking_id,
         "currency": currency,
         "total": round(amount, 2),
+        "commission_rate": float(commission_rate_snapshot) if commission_rate_snapshot is not None else None,
         "splits": [
             {
                 "to": "platform",
