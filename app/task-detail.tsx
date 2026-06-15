@@ -243,7 +243,7 @@ export default function TaskDetail() {
       } finally { setActionLoading(false); }
     }
 
-    if (['paypal', 'zelle', 'venmo'].includes(method)) {
+    if (['paypal', 'zelle', 'venmo', 'bank_transfer'].includes(method)) {
       setActionLoading(true);
       try {
         const inst = await api.getManualInstructions(bookingId, method);
@@ -384,6 +384,7 @@ export default function TaskDetail() {
     paypal: { icon: 'logo-paypal', color: '#0070ba' },
     zelle:  { icon: 'flash',  color: '#6d28d9' },
     venmo:  { icon: 'logo-venmo', color: '#008cff' },
+    bank_transfer: { icon: 'wallet', color: '#0891b2' },
     cash:   { icon: 'cash',   color: '#22c55e' },
   };
   // Only show methods returned by /api/payments/methods (admin-controlled).

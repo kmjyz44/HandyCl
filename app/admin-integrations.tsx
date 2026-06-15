@@ -69,6 +69,14 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
+    title: 'Переказ на картку / банк (manual)',
+    toggle: 'enable_bank_transfer',
+    toggleLabel: 'Приймати прямі перекази на картку/рахунок',
+    keys: [
+      { id: 'bank_platform_details', label: 'Реквізити платформи (картка/банк/IBAN)', placeholder: 'PrivatBank 4149 0000 0000 0000 (Іван Петренко)' },
+    ],
+  },
+  {
     title: 'Центр допомоги / Підтримка',
     keys: [
       { id: 'support_email', label: 'Email для зворотного зв\'язку', placeholder: 'support@yourbrand.com' },

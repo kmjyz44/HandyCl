@@ -6920,6 +6920,9 @@ class IntegrationKeysUpdate(BaseModel):
     zelle_platform_handle: Optional[str] = None   # email or phone
     venmo_platform_handle: Optional[str] = None   # username
     paypal_auto_split: Optional[bool] = None  # if True, backend tries Payouts API after charge
+    # Direct bank/card transfer — client sends to 2 cards manually
+    enable_bank_transfer: Optional[bool] = None
+    bank_platform_details: Optional[str] = None  # free-form (card number / bank / IBAN of platform)
     # Who pays the platform commission (default 'client' — added on top)
     commission_paid_by: Optional[str] = None  # "client" or "executor"
     twilio_account_sid: Optional[str] = None
@@ -7000,6 +7003,16 @@ async def list_payment_methods():
             "platform_handle": keys.get("venmo_platform_handle"),
             "configured": bool(keys.get("venmo_platform_handle")),
         })
+    if keys.get("enable_bank_transfer"):
+        methods.append({
+            "id": "bank_transfer",
+            "label": "Переказ на картку / банк",
+            "icon": "wallet",
+            "mode": "manual",
+            "auto_split": False,
+            "platform_handle": keys.get("bank_platform_details"),
+            "configured": bool(keys.get("bank_platform_details")),
+        })
     return {"methods": methods}
 
 
@@ -7018,8 +7031,8 @@ async def get_manual_instructions(
         raise HTTPException(status_code=403, detail="Access denied")
 
     keys = await _get_integration_keys()
-    if method not in ("paypal", "zelle", "venmo"):
-        raise HTTPException(status_code=422, detail="Метод має бути paypal/zelle/venmo")
+    if method not in ("paypal", "zelle", "venmo", "bank_transfer"):
+        raise HTTPException(status_code=422, detail="Метод має бути paypal/zelle/venmo/bank_transfer")
     if not keys.get(f"enable_{method}"):
         raise HTTPException(status_code=503, detail="Цей метод вимкнено адміном")
 
@@ -7027,6 +7040,7 @@ async def get_manual_instructions(
         "paypal": "paypal_platform_email",
         "zelle": "zelle_platform_handle",
         "venmo": "venmo_platform_handle",
+        "bank_transfer": "bank_platform_details",
     }[method])
     if not platform_handle:
         raise HTTPException(status_code=503, detail="Адмін не вказав свої реквізити для цього методу")
@@ -7039,12 +7053,23 @@ async def get_manual_instructions(
     provider_id = booking.get("provider_id")
     provider_handle = None
     if provider_id:
-        prov = await db.users.find_one({"user_id": provider_id}, {"_id": 0, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1}) or {}
-        provider_handle = prov.get({
-            "paypal": "paypal_email",
-            "zelle": "zelle_handle",
-            "venmo": "venmo_handle",
-        }[method])
+        if method == "bank_transfer":
+            # Pull from saved payout_accounts (card or bank), prefer default
+            pa = await db.payout_accounts.find_one(
+                {"user_id": provider_id, "is_default": True}, {"_id": 0}
+            ) or await db.payout_accounts.find_one({"user_id": provider_id}, {"_id": 0})
+            if pa:
+                if pa.get("account_type") == "card":
+                    provider_handle = f"{(pa.get('card_brand') or 'CARD').upper()} •••• {pa.get('card_last4', '????')} — {pa.get('account_holder_name','')}"
+                else:
+                    provider_handle = f"{pa.get('bank_name') or 'Банк'} routing {pa.get('routing_number','?')} acct •••• {pa.get('account_number_last4', '????')} — {pa.get('account_holder_name','')}"
+        else:
+            prov = await db.users.find_one({"user_id": provider_id}, {"_id": 0, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1}) or {}
+            provider_handle = prov.get({
+                "paypal": "paypal_email",
+                "zelle": "zelle_handle",
+                "venmo": "venmo_handle",
+            }[method])
 
     currency = (keys.get("stripe_currency") or "usd").upper()
 
@@ -7082,7 +7107,7 @@ async def confirm_manual_payment(
     pending payment transaction; admin verifies + marks the booking paid manually."""
     booking_id = payload.get("booking_id")
     method = payload.get("method")
-    if not booking_id or method not in ("paypal", "zelle", "venmo"):
+    if not booking_id or method not in ("paypal", "zelle", "venmo", "bank_transfer"):
         raise HTTPException(status_code=422, detail="booking_id + method required")
     booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
     if not booking:
