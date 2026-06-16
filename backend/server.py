@@ -3404,6 +3404,85 @@ async def get_all_executors(current_user: User = Depends(get_current_user)):
     return JSONResponse(content=clean_bson(result))
 
 
+# ── Skill ↔ Category map (mirrors front-end SKILL_CATEGORIES) ────────
+# An executor matches a `category` when at least one of their skills
+# belongs to that category. Lower-case lookup; supports both Ukrainian
+# display names and English ids (`furniture_assembly`, etc.).
+SKILL_TO_CATEGORIES = {
+    # assembly
+    "збірка меблів": "assembly", "furniture_assembly": "assembly",
+    "збірка ikea": "assembly", "ikea_assembly": "assembly",
+    "монтаж полиць": "assembly", "shelving": "assembly",
+    "збірка шаф": "assembly", "wardrobe": "assembly",
+    "офісні меблі": "assembly", "office_furniture": "assembly",
+    "монтаж телевізора": "assembly", "tv_mount": "assembly",
+    # cleaning
+    "прибирання будинку": "cleaning", "home_cleaning": "cleaning",
+    "прибирання офісу": "cleaning", "office_cleaning": "cleaning",
+    "генеральне прибирання": "cleaning", "deep_cleaning": "cleaning",
+    "прибирання при переїзді": "cleaning", "move_in_out": "cleaning",
+    "миття вікон": "cleaning", "window_cleaning": "cleaning",
+    "чищення килимів": "cleaning", "carpet_cleaning": "cleaning",
+    # home_improvements
+    "встановлення техніки": "home_improvements", "appliance_install": "home_improvements",
+    "ремонт дверей та меблів": "home_improvements", "door_repair": "home_improvements",
+    "фарбування": "home_improvements", "painting": "home_improvements",
+    "укладання плитки": "home_improvements", "tiling": "home_improvements",
+    "укладання підлоги": "home_improvements", "flooring": "home_improvements",
+    "гіпсокартон": "home_improvements", "drywall": "home_improvements",
+    "сантехніка": "home_improvements", "plumbing": "home_improvements",
+    "електрика": "home_improvements", "electrical": "home_improvements",
+    # moving
+    "допомога з переїздом": "moving", "moving_help": "moving",
+    "пакування речей": "moving", "packing": "moving",
+    "перенесення меблів": "moving", "furniture_moving": "moving",
+    "доставка": "moving", "delivery": "moving",
+    "вивіз сміття": "moving", "junk_removal": "moving",
+    # outdoor
+    "догляд за газоном": "outdoor", "lawn_care": "outdoor",
+    "прибирання снігу": "outdoor", "snow_removal": "outdoor",
+    "садівництво": "outdoor", "garden_planting": "outdoor",
+    "миття під тиском": "outdoor", "pressure_washing": "outdoor",
+    "встановлення огорожі": "outdoor", "fence_install": "outdoor",
+    # personal
+    "доручення": "personal", "errand": "personal",
+    "шопінг-асистент": "personal", "shopping": "personal",
+    "догляд за тваринами": "personal", "pet_care": "personal",
+    "допомога літнім людям": "personal", "elderly_help": "personal",
+    # it_tech
+    "налаштування комп'ютера": "it_tech", "computer_setup": "it_tech",
+    "налаштування smart tv": "it_tech", "tv_setup": "it_tech",
+    "ремонт телефонів": "it_tech", "phone_repair": "it_tech",
+    "налаштування мережі": "it_tech", "network_setup": "it_tech",
+    "відновлення даних": "it_tech", "data_recovery": "it_tech",
+    # events
+    "організація заходів": "events", "event_setup": "events",
+    "фотографія": "events", "photography": "events",
+    "допомога на кухні": "events", "catering_help": "events",
+    "бармен": "events", "bartending": "events",
+    # other
+    "майстер на всі руки": "other", "handyman": "other",
+    "репетиторство": "other", "tutoring": "other",
+    "переклад": "other", "translation": "other",
+    "водій": "other", "driving": "other",
+}
+
+
+def _skill_matches_category(skill_value: Any, target_category: Optional[str]) -> bool:
+    """True if a skill belongs to the given category. Empty target → True."""
+    if not target_category:
+        return True
+    target = str(target_category).lower().strip()
+    if isinstance(skill_value, dict):
+        cat_id = (skill_value.get("category_id") or "").lower().strip()
+        if cat_id and cat_id == target:
+            return True
+        name = (skill_value.get("name") or skill_value.get("label") or "").lower().strip()
+    else:
+        name = str(skill_value).lower().strip()
+    return SKILL_TO_CATEGORIES.get(name) == target
+
+
 @api_router.get("/executors/by-service")
 async def get_executors_by_service(
     service_name: Optional[str] = None,
@@ -3488,6 +3567,18 @@ async def get_executors_by_service(
     filtered = []
     for executor in result:
         profile = executor.get("profile") or {}
+
+        # ── Category filter ───────────────────────────────────────────
+        # The executor must have at least one skill belonging to the
+        # requested category. This prevents an "assembly-only" provider
+        # from showing up when the client searches for "home_improvements".
+        if category:
+            user_skills = profile.get("skills") or []
+            if not user_skills:
+                # No skills declared — exclude (cannot match any category)
+                continue
+            if not any(_skill_matches_category(s, category) for s in user_skills):
+                continue
 
         # ── Skill filter ──────────────────────────────────────────────
         if service_name:
@@ -4116,6 +4207,12 @@ async def search_taskers(
     results = []
     for tasker in taskers:
         profile = tasker.get("profile", {}) or {}
+
+        # Filter by category — provider must have at least one skill in that category
+        if category:
+            user_skills = profile.get("skills") or []
+            if not user_skills or not any(_skill_matches_category(s, category) for s in user_skills):
+                continue
 
         # Filter by rating
         if min_rating and tasker.get("average_rating", 0) < min_rating:
