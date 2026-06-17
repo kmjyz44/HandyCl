@@ -7526,12 +7526,23 @@ async def confirm_manual_payment(
     if booking["client_id"] != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Optional tip amount the client decided to include for the executor
+    try:
+        tip_amount = float(payload.get("tip_amount") or 0)
+        if tip_amount < 0:
+            tip_amount = 0.0
+    except (TypeError, ValueError):
+        tip_amount = 0.0
+
+    base_total = float(booking.get("total_price") or 0)
+    total_with_tip = round(base_total + tip_amount, 2)
+
     txn_id = f"txn_{uuid.uuid4().hex[:12]}"
     txn = {
         "transaction_id": txn_id,
         "booking_id": booking_id,
         "user_id": current_user.user_id,
-        "amount": float(booking.get("total_price") or 0),
+        "amount": total_with_tip,
         "currency": "usd",
         "payment_method": method,
         "payment_status": "pending_verification",
@@ -7540,15 +7551,36 @@ async def confirm_manual_payment(
             "method": method,
             "note": (payload.get("note") or "")[:500],
             "platform_take": float(booking.get("platform_take") or 0),
-            "executor_take": float(booking.get("executor_take") or 0),
+            "executor_take": round(float(booking.get("executor_take") or 0) + tip_amount, 2),
+            "tip_amount": tip_amount,
+            "base_total": base_total,
         },
         "created_at": datetime.now(timezone.utc),
     }
     await db.payment_transactions.insert_one(txn)
-    await db.bookings.update_one(
-        {"booking_id": booking_id},
-        {"$set": {"payment_status": "pending_verification", "payment_method": method, "payment_session_id": txn_id}},
-    )
+
+    booking_update = {
+        "payment_status": "pending_verification",
+        "payment_method": method,
+        "payment_session_id": txn_id,
+        "manual_payment_submitted_at": datetime.now(timezone.utc),
+    }
+    if tip_amount > 0:
+        booking_update["tip_amount"] = tip_amount
+    await db.bookings.update_one({"booking_id": booking_id}, {"$set": booking_update})
+
+    # Mirror the pending payment status onto the linked task so the client UI
+    # immediately reflects "waiting for admin verification" instead of still
+    # showing the green "Pay task" button.
+    task_update = {
+        "payment_status": "pending_verification",
+        "payment_method": method,
+        "manual_payment_submitted_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    if tip_amount > 0:
+        task_update["tip_amount"] = tip_amount
+    await db.tasks.update_many({"booking_id": booking_id}, {"$set": task_update})
 
     # Notify admin to verify
     admin = await db.users.find_one({"role": "admin"}, {"_id": 0, "user_id": 1})
@@ -7590,6 +7622,16 @@ async def verify_manual_payment(
         {"booking_id": txn["booking_id"]},
         {"$set": {"payment_status": new_status, "paid_at": datetime.now(timezone.utc) if action == "approve" else None}},
     )
+    # Mirror onto the linked task and bump task.status to PAID once approved so
+    # the executor's earnings & the client's "review" CTA become available.
+    task_set = {
+        "payment_status": new_status,
+        "updated_at": datetime.now(timezone.utc),
+    }
+    if action == "approve":
+        task_set["status"] = TaskStatus.PAID
+        task_set["paid_at"] = datetime.now(timezone.utc)
+    await db.tasks.update_many({"booking_id": txn["booking_id"]}, {"$set": task_set})
     # Notify client
     if txn.get("user_id"):
         try:
