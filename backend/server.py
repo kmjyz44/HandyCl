@@ -7597,7 +7597,168 @@ async def confirm_manual_payment(
             )
         except Exception:
             pass
+    # Notify provider so they can confirm receipt of their share independently
+    provider_id = booking.get("provider_id")
+    if provider_id:
+        try:
+            executor_amt = round(float(booking.get("executor_take") or 0) + tip_amount, 2)
+            tip_msg = f" (у т.ч. {tip_amount:.0f} ₴ чайові)" if tip_amount > 0 else ""
+            await notify_user(
+                provider_id,
+                "manual_payment_pending",
+                "Клієнт надіслав вам платіж",
+                f"Клієнт повідомив, що відправив вам {executor_amt:.2f} ₴{tip_msg} через {method.upper()}. Перевірте свій рахунок і підтвердіть отримання у деталях завдання.",
+                related_id=booking_id,
+                related_type="booking",
+                channels=["inapp", "push", "email", "sms"],
+            )
+        except Exception:
+            pass
     return {"ok": True, "transaction_id": txn_id, "status": "pending_verification"}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Two-step verification: provider self-confirms receipt of their share.
+# When BOTH executor_confirmed AND admin_confirmed are true → task becomes
+# fully paid. Either party can be first.
+# ──────────────────────────────────────────────────────────────────────
+async def _finalize_payment_if_both_confirmed(booking_id: str):
+    """Bump task.status to PAID iff executor_confirmed AND admin_confirmed are both True.
+    Returns the resolved payment status string."""
+    b = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not b:
+        return None
+    exec_ok = bool(b.get("executor_confirmed"))
+    admin_ok = bool(b.get("admin_confirmed"))
+    if exec_ok and admin_ok:
+        now = datetime.now(timezone.utc)
+        await db.bookings.update_one(
+            {"booking_id": booking_id},
+            {"$set": {"payment_status": "paid", "paid_at": now}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": booking_id},
+            {"$set": {"status": TaskStatus.PAID, "payment_status": "paid", "paid_at": now, "updated_at": now}},
+        )
+        # Notify all participants
+        for uid_key, role_label in (("client_id", "клієнт"), ("provider_id", "виконавець")):
+            uid = b.get(uid_key)
+            if not uid:
+                continue
+            try:
+                await notify_user(
+                    uid,
+                    "payment_fully_confirmed",
+                    "Завдання повністю оплачено ✅",
+                    "Адмін і виконавець підтвердили отримання коштів. Завдання закрите.",
+                    related_id=booking_id, related_type="booking",
+                    channels=["inapp", "push", "email"],
+                )
+            except Exception:
+                pass
+        return "paid"
+    if exec_ok:
+        return "executor_confirmed"
+    if admin_ok:
+        return "admin_confirmed"
+    return b.get("payment_status") or "pending_verification"
+
+
+@api_router.post("/payments/executor-confirm")
+async def executor_confirm_manual_payment(
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Provider clicks "Я отримав свою частку" — confirms they received the
+    manual payment. Sets executor_confirmed=True on the booking and linked
+    task. Final task.status=paid only after admin ALSO confirms."""
+    booking_id = payload.get("booking_id")
+    action = (payload.get("action") or "confirm").lower()  # confirm | reject
+    if not booking_id:
+        raise HTTPException(status_code=422, detail="booking_id required")
+    if action not in ("confirm", "reject"):
+        raise HTTPException(status_code=422, detail="action must be confirm|reject")
+    b = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("provider_id") != current_user.user_id and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if b.get("payment_status") not in ("pending_verification", "paid", "executor_confirmed", "admin_confirmed"):
+        raise HTTPException(status_code=400, detail="Payment not awaiting confirmation")
+
+    now = datetime.now(timezone.utc)
+    if action == "confirm":
+        await db.bookings.update_one(
+            {"booking_id": booking_id},
+            {"$set": {"executor_confirmed": True, "executor_confirmed_at": now}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": booking_id},
+            {"$set": {"executor_confirmed": True, "executor_confirmed_at": now, "updated_at": now}},
+        )
+        new_status = await _finalize_payment_if_both_confirmed(booking_id)
+        # Notify client + admin
+        for uid in [b.get("client_id")]:
+            if uid:
+                try:
+                    await notify_user(
+                        uid,
+                        "executor_confirmed_payment",
+                        "Виконавець підтвердив отримання",
+                        "Чекаємо лише на підтвердження адміністратора." if new_status != "paid" else "Завдання повністю оплачено.",
+                        related_id=booking_id, related_type="booking",
+                    )
+                except Exception:
+                    pass
+        admin = await db.users.find_one({"role": "admin"}, {"_id": 0, "user_id": 1})
+        if admin and new_status != "paid":
+            try:
+                await notify_user(
+                    admin["user_id"],
+                    "executor_confirmed_payment",
+                    "Виконавець підтвердив платіж",
+                    f"Виконавець підтвердив отримання за бронь {booking_id}. Залишилось підтвердити вашу частку.",
+                    related_id=booking_id, related_type="booking",
+                )
+            except Exception:
+                pass
+        return {"ok": True, "payment_status": new_status or "executor_confirmed"}
+    else:
+        # Executor rejects — mark as disputed; admin must intervene
+        await db.bookings.update_one(
+            {"booking_id": booking_id},
+            {"$set": {"payment_status": "disputed", "executor_rejected_at": now}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": booking_id},
+            {"$set": {"payment_status": "disputed", "updated_at": now}},
+        )
+        admin = await db.users.find_one({"role": "admin"}, {"_id": 0, "user_id": 1})
+        if admin:
+            try:
+                await notify_user(
+                    admin["user_id"],
+                    "payment_disputed",
+                    "⚠ Спір по оплаті",
+                    f"Виконавець заявив що НЕ отримав платіж за бронь {booking_id}. Зв'яжіться з обома сторонами.",
+                    related_id=booking_id, related_type="booking",
+                    channels=["inapp", "push", "email", "sms"],
+                )
+            except Exception:
+                pass
+        # Notify client too
+        if b.get("client_id"):
+            try:
+                await notify_user(
+                    b["client_id"],
+                    "payment_disputed",
+                    "Виконавець не отримав платежу",
+                    "Виконавець не побачив ваш переказ. Адмін зв'яжеться з вами для уточнення.",
+                    related_id=booking_id, related_type="booking",
+                )
+            except Exception:
+                pass
+        return {"ok": True, "payment_status": "disputed"}
 
 
 @api_router.post("/admin/payments/{transaction_id}/verify")
@@ -7613,39 +7774,70 @@ async def verify_manual_payment(
     action = (payload or {}).get("action", "approve")  # approve | reject
     if action not in ("approve", "reject"):
         raise HTTPException(status_code=422, detail="action must be approve|reject")
-    new_status = "paid" if action == "approve" else "rejected"
-    await db.payment_transactions.update_one(
-        {"transaction_id": transaction_id},
-        {"$set": {"payment_status": new_status, "verified_by": current_user.user_id, "verified_at": datetime.now(timezone.utc)}},
-    )
-    await db.bookings.update_one(
-        {"booking_id": txn["booking_id"]},
-        {"$set": {"payment_status": new_status, "paid_at": datetime.now(timezone.utc) if action == "approve" else None}},
-    )
-    # Mirror onto the linked task and bump task.status to PAID once approved so
-    # the executor's earnings & the client's "review" CTA become available.
-    task_set = {
-        "payment_status": new_status,
-        "updated_at": datetime.now(timezone.utc),
-    }
     if action == "approve":
-        task_set["status"] = TaskStatus.PAID
-        task_set["paid_at"] = datetime.now(timezone.utc)
-    await db.tasks.update_many({"booking_id": txn["booking_id"]}, {"$set": task_set})
-    # Notify client
-    if txn.get("user_id"):
-        try:
-            await notify_user(
-                txn["user_id"],
-                "payment_verified" if action == "approve" else "payment_rejected",
-                "Платіж підтверджено" if action == "approve" else "Платіж відхилено",
-                "Дякуємо! Платіж зарахований." if action == "approve" else "Адмін не зміг знайти ваш платіж. Перевірте реквізити і спробуйте знову.",
-                related_id=txn["booking_id"],
-                related_type="booking",
-            )
-        except Exception:
-            pass
-    return {"ok": True, "status": new_status}
+        # Admin confirms their share (commission) was received. Final paid only
+        # if executor ALSO confirmed receipt of their share.
+        now = datetime.now(timezone.utc)
+        await db.payment_transactions.update_one(
+            {"transaction_id": transaction_id},
+            {"$set": {"payment_status": "admin_confirmed", "verified_by": current_user.user_id, "verified_at": now}},
+        )
+        await db.bookings.update_one(
+            {"booking_id": txn["booking_id"]},
+            {"$set": {"admin_confirmed": True, "admin_confirmed_at": now}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": txn["booking_id"]},
+            {"$set": {"admin_confirmed": True, "admin_confirmed_at": now, "updated_at": now}},
+        )
+        final_status = await _finalize_payment_if_both_confirmed(txn["booking_id"])
+        # Notify client + provider
+        b = await db.bookings.find_one({"booking_id": txn["booking_id"]}, {"_id": 0})
+        notify_targets = []
+        if b and b.get("client_id"):
+            notify_targets.append(b["client_id"])
+        if b and b.get("provider_id") and not b.get("executor_confirmed"):
+            notify_targets.append(b["provider_id"])
+        for uid in notify_targets:
+            try:
+                await notify_user(
+                    uid,
+                    "admin_confirmed_payment",
+                    "Адмін підтвердив отримання комісії",
+                    "Чекаємо підтвердження виконавця." if final_status != "paid" else "Завдання повністю оплачено.",
+                    related_id=txn["booking_id"], related_type="booking",
+                )
+            except Exception:
+                pass
+        return {"ok": True, "payment_status": final_status or "admin_confirmed"}
+    else:
+        # Reject — mark txn rejected, booking disputed
+        now = datetime.now(timezone.utc)
+        await db.payment_transactions.update_one(
+            {"transaction_id": transaction_id},
+            {"$set": {"payment_status": "rejected", "verified_by": current_user.user_id, "verified_at": now}},
+        )
+        await db.bookings.update_one(
+            {"booking_id": txn["booking_id"]},
+            {"$set": {"payment_status": "disputed"}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": txn["booking_id"]},
+            {"$set": {"payment_status": "disputed", "updated_at": now}},
+        )
+        # Notify client
+        if txn.get("user_id"):
+            try:
+                await notify_user(
+                    txn["user_id"],
+                    "payment_rejected",
+                    "Платіж відхилено",
+                    "Адмін не зміг знайти ваш платіж. Перевірте реквізити і спробуйте знову.",
+                    related_id=txn["booking_id"], related_type="booking",
+                )
+            except Exception:
+                pass
+        return {"ok": True, "payment_status": "rejected"}
 
 
 @api_router.get("/admin/payments/pending")
