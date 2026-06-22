@@ -7842,13 +7842,45 @@ async def verify_manual_payment(
 
 @api_router.get("/admin/payments/pending")
 async def list_pending_manual_payments(current_user: User = Depends(require_admin)):
-    """Admin sees all manual payments awaiting verification."""
-    cursor = db.payment_transactions.find(
-        {"payment_status": "pending_verification"},
+    """Admin sees all manual payments awaiting verification (or already partially confirmed)."""
+    # Include: payment_status=pending_verification + bookings where executor or admin confirmed but not both
+    cursor = db.bookings.find(
+        {"payment_status": {"$in": ["pending_verification", "executor_confirmed", "admin_confirmed", "disputed"]}},
         {"_id": 0},
-    ).sort("created_at", -1).limit(100)
-    items = await cursor.to_list(100)
-    return {"items": items}
+    ).sort("manual_payment_submitted_at", -1).limit(100)
+    bookings = await cursor.to_list(100)
+    items: List[Dict[str, Any]] = []
+    for b in bookings:
+        # Last manual txn for this booking
+        txn = await db.payment_transactions.find_one(
+            {"booking_id": b["booking_id"], "payment_method": {"$in": ["paypal", "zelle", "venmo", "bank_transfer"]}},
+            {"_id": 0},
+            sort=[("created_at", -1)],
+        )
+        client = await db.users.find_one({"user_id": b.get("client_id")}, {"_id": 0, "name": 1, "email": 1, "phone": 1})
+        provider = await db.users.find_one({"user_id": b.get("provider_id")}, {"_id": 0, "name": 1, "email": 1, "phone": 1, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1})
+        items.append({
+            "booking_id": b["booking_id"],
+            "transaction_id": txn.get("transaction_id") if txn else None,
+            "title": b.get("title") or b.get("service_name"),
+            "category": b.get("category"),
+            "payment_status": b.get("payment_status"),
+            "payment_method": b.get("payment_method"),
+            "total_price": b.get("total_price"),
+            "platform_take": b.get("platform_take"),
+            "executor_take": b.get("executor_take"),
+            "tip_amount": b.get("tip_amount", 0),
+            "commission_rate_snapshot": b.get("commission_rate_snapshot"),
+            "manual_payment_submitted_at": b.get("manual_payment_submitted_at"),
+            "executor_confirmed": bool(b.get("executor_confirmed")),
+            "executor_confirmed_at": b.get("executor_confirmed_at"),
+            "admin_confirmed": bool(b.get("admin_confirmed")),
+            "admin_confirmed_at": b.get("admin_confirmed_at"),
+            "client": client,
+            "provider": provider,
+            "created_at": b.get("created_at"),
+        })
+    return {"items": items, "count": len(items)}
 
 
 class ProviderPayoutContacts(BaseModel):
