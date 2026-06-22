@@ -332,7 +332,11 @@ export default function TaskDetail() {
   };
 
   const executorConfirmReceipt = async (action: 'confirm' | 'reject') => {
-    if (!bookingId) return;
+    const bookingId = task?.booking_id || task?.booking?.booking_id || taskId;
+    if (!bookingId) {
+      Alert.alert('Помилка', 'Не вдалося знайти ID бронювання');
+      return;
+    }
     if (action === 'reject') {
       const confirmed = Platform.OS === 'web'
         // eslint-disable-next-line no-alert
