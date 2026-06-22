@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, TextInput, Modal, Image, Switch,
+  ActivityIndicator, Alert, TextInput, Modal, Image, Switch, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -113,6 +113,8 @@ export default function TaskDetail() {
   const [enabledMethods, setEnabledMethods] = useState<any[]>([]);
   const [showManualSplit, setShowManualSplit] = useState(false);
   const [manualInstructions, setManualInstructions] = useState<any>(null);
+  // Tip the client decides to include with the manual payment (added on top of executor amount)
+  const [manualTip, setManualTip] = useState<number>(0);
 
   // Load enabled payment methods from backend (configurable by admin)
   useEffect(() => {
@@ -248,6 +250,7 @@ export default function TaskDetail() {
       try {
         const inst = await api.getManualInstructions(bookingId, method);
         setManualInstructions(inst);
+        setManualTip(0);
         setShowManualSplit(true);
       } catch (e: any) {
         showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося завантажити реквізити');
@@ -271,10 +274,89 @@ export default function TaskDetail() {
       await api.confirmManualPayment({
         booking_id: manualInstructions.booking_id,
         method: manualInstructions.method,
+        tip_amount: manualTip || 0,
       });
       setShowManualSplit(false);
       setShowPayment(false);
-      Alert.alert('Дякуємо!', 'Адмін перевірить ваш переказ і підтвердить оплату. Ви отримаєте сповіщення.');
+      const tipMsg = manualTip > 0 ? ` Ваші чайові +${manualTip} ₴ враховано в сумі переказу виконавцю.` : '';
+      Alert.alert(
+        'Дякуємо!',
+        `Адмін перевірить ваш переказ і підтвердить оплату.${tipMsg} Ви отримаєте сповіщення. Залишіть, будь ласка, відгук про виконавця.`,
+      );
+      setManualTip(0);
+      try { await loadTask(); } catch (_) {}
+      // Auto-open the review modal so client can rate the executor immediately
+      setTimeout(() => setShowReview(true), 350);
+    } catch (e: any) {
+      Alert.alert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Helper: copy a value to clipboard (web + native)
+  const copyToClipboard = async (text: string, label?: string) => {
+    if (!text) return;
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Native: use expo-clipboard if available, fall back gracefully
+        try {
+          const Clipboard = await import('expo-clipboard');
+          await (Clipboard as any).setStringAsync(text);
+        } catch {
+          // Fallback: silently do nothing
+        }
+      }
+      if (Platform.OS === 'web') {
+        // Inline toast (web) — Alert.alert is no-op on RN-web
+        // eslint-disable-next-line no-alert
+        if (typeof window !== 'undefined') {
+          // tiny in-place toast
+          const id = `copy-toast-${Date.now()}`;
+          const div = document.createElement('div');
+          div.id = id;
+          div.textContent = `Скопійовано: ${label || text.slice(0, 30)}`;
+          div.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;z-index:99999;opacity:0;transition:opacity .2s;';
+          document.body.appendChild(div);
+          requestAnimationFrame(() => { div.style.opacity = '1'; });
+          setTimeout(() => { div.style.opacity = '0'; setTimeout(() => div.remove(), 250); }, 1500);
+        }
+      } else {
+        Alert.alert('Скопійовано', `${label || text}`);
+      }
+    } catch (e: any) {
+      Alert.alert('Помилка', 'Не вдалося скопіювати');
+    }
+  };
+
+  const executorConfirmReceipt = async (action: 'confirm' | 'reject') => {
+    if (!bookingId) return;
+    if (action === 'reject') {
+      const confirmed = Platform.OS === 'web'
+        // eslint-disable-next-line no-alert
+        ? (typeof window !== 'undefined' && window.confirm('Підтвердити, що ви НЕ отримали платіж? Адмін відкриє спір і зв\'яжеться з клієнтом.'))
+        : await new Promise<boolean>(resolve => {
+            Alert.alert(
+              'Не отримано платежу?',
+              'Адмін відкриє спір і зв\'яжеться з клієнтом для з\'ясування.',
+              [
+                { text: 'Скасувати', style: 'cancel', onPress: () => resolve(false) },
+                { text: 'Так, не отримав', style: 'destructive', onPress: () => resolve(true) },
+              ]
+            );
+          });
+      if (!confirmed) return;
+    }
+    setActionLoading(true);
+    try {
+      await api.executorConfirmPayment({ booking_id: bookingId, action });
+      if (action === 'confirm') {
+        Alert.alert('Дякуємо!', 'Ви підтвердили отримання. Адмін зробить фінальне підтвердження.');
+      } else {
+        Alert.alert('Спір відкрито', 'Адмін зв\'яжеться з вами для з\'ясування.');
+      }
       try { await loadTask(); } catch (_) {}
     } catch (e: any) {
       Alert.alert('Помилка', e?.response?.data?.detail || 'Не вдалось');
@@ -293,7 +375,6 @@ export default function TaskDetail() {
         booking_id: bookingId,
         rating: reviewRating,
         comment: reviewComment || undefined,
-        tip_amount: reviewTip ? parseFloat(reviewTip) : undefined,
       });
       setShowReview(false);
       if (Platform.OS === 'web') {
@@ -354,7 +435,16 @@ export default function TaskDetail() {
   const isMyTask = task.provider_id === user?.user_id;
   const isOpenTask = !task.provider_id && (status === 'posted' || status === 'offering');
   const execAction = isProvider ? (isOpenTask ? EXEC_ACTIONS['posted'] : isMyTask ? EXEC_ACTIONS[status] : null) : null;
-  const showPayBtn = isClient && status === 'completed_pending_payment' && task.client_id === user?.user_id;
+  // True when client has clicked "I've sent the manual payment" but admin hasn't verified yet.
+  const isPaymentPending = task.payment_status === 'pending_verification';
+  const executorAlreadyConfirmed = !!task.executor_confirmed;
+  const adminAlreadyConfirmed = !!task.admin_confirmed;
+  const showPayBtn = isClient && status === 'completed_pending_payment' && task.client_id === user?.user_id && !isPaymentPending;
+  const showPendingPaymentCard = isClient && status === 'completed_pending_payment' && isPaymentPending;
+  // For provider: show "Я отримав свою частку" CTA when client has marked payment as sent
+  // and provider has not yet self-confirmed.
+  const showExecutorConfirmCard = isProvider && isMyTask && isPaymentPending && !executorAlreadyConfirmed;
+  const showExecutorWaitingCard = isProvider && isMyTask && isPaymentPending && executorAlreadyConfirmed && !adminAlreadyConfirmed;
 
   const price = task.estimated_price || task.total_price;
   const hourlyRate = task.hourly_rate || 25;
@@ -691,11 +781,117 @@ export default function TaskDetail() {
           </View>
         )}
 
+        {/* Pending verification card — replaces pay button after manual payment sent */}
+        {showPendingPaymentCard && (
+          <View
+            style={{
+              flex: 1, flexDirection: 'row', alignItems: 'center',
+              backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d',
+              padding: 14, borderRadius: 12, gap: 12,
+            }}
+            data-testid="payment-pending-card"
+          >
+            <Ionicons name="time-outline" size={24} color="#b45309" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e' }}>
+                Очікує підтвердження оплати
+              </Text>
+              <Text style={{ fontSize: 12, color: '#92400e', marginTop: 2, lineHeight: 16 }}>
+                {executorAlreadyConfirmed
+                  ? 'Виконавець підтвердив отримання. Чекаємо на адміністратора.'
+                  : adminAlreadyConfirmed
+                  ? 'Адмін підтвердив комісію. Чекаємо на виконавця.'
+                  : `Адмін і виконавець перевіряють ваш переказ (${(task.payment_method || '').toUpperCase()}).`}
+              </Text>
+              <View style={{ flexDirection: 'row', marginTop: 6, gap: 12 }}>
+                <Text style={{ fontSize: 11, color: executorAlreadyConfirmed ? '#059669' : '#92400e', fontWeight: '600' }}>
+                  {executorAlreadyConfirmed ? '✓ Виконавець' : '○ Виконавець'}
+                </Text>
+                <Text style={{ fontSize: 11, color: adminAlreadyConfirmed ? '#059669' : '#92400e', fontWeight: '600' }}>
+                  {adminAlreadyConfirmed ? '✓ Адмін' : '○ Адмін'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Executor: confirm receipt of their share */}
+        {showExecutorConfirmCard && (
+          <View
+            style={{
+              flex: 1, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0',
+              padding: 14, borderRadius: 12,
+            }}
+            data-testid="executor-confirm-card"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Ionicons name="cash-outline" size={22} color="#059669" />
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#065f46', marginLeft: 8 }}>
+                Клієнт повідомив про оплату
+              </Text>
+            </View>
+            <Text style={{ fontSize: 12, color: '#065f46', lineHeight: 17, marginBottom: 12 }}>
+              Метод: {(task.payment_method || '').toUpperCase()}. Перевірте свій {(task.payment_method || '').toUpperCase()}-рахунок і підтвердьте отримання.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1, paddingVertical: 10, borderRadius: 10,
+                  backgroundColor: '#10b981', alignItems: 'center',
+                  flexDirection: 'row', justifyContent: 'center', gap: 6,
+                }}
+                onPress={() => executorConfirmReceipt('confirm')}
+                disabled={actionLoading}
+                data-testid="executor-confirm-receipt-btn"
+              >
+                <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Я отримав</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1, paddingVertical: 10, borderRadius: 10,
+                  backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#dc2626', alignItems: 'center',
+                  flexDirection: 'row', justifyContent: 'center', gap: 6,
+                }}
+                onPress={() => executorConfirmReceipt('reject')}
+                disabled={actionLoading}
+                data-testid="executor-reject-receipt-btn"
+              >
+                <Ionicons name="close-circle-outline" size={18} color="#dc2626" />
+                <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>Не отримав</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Executor: already confirmed, waiting for admin */}
+        {showExecutorWaitingCard && (
+          <View
+            style={{
+              flex: 1, flexDirection: 'row', alignItems: 'center',
+              backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe',
+              padding: 14, borderRadius: 12, gap: 12,
+            }}
+            data-testid="executor-waiting-card"
+          >
+            <Ionicons name="checkmark-circle" size={24} color="#2563eb" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e3a8a' }}>
+                Ви підтвердили отримання
+              </Text>
+              <Text style={{ fontSize: 12, color: '#1e3a8a', marginTop: 2, lineHeight: 16 }}>
+                Очікуємо фінальне підтвердження адміністратора.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Client payment button */}
         {showPayBtn && (
           <TouchableOpacity
             style={[s.actionBtn, { backgroundColor: '#10b981', flex: 1 }]}
             onPress={() => setShowPayment(true)}
+            data-testid="pay-task-btn"
           >
             <Ionicons name="card" size={22} color="#fff" />
             <Text style={s.actionBtnText}>Оплатити завдання</Text>
@@ -927,7 +1123,9 @@ export default function TaskDetail() {
                 <Text style={{ fontWeight: '700' }}>{(manualInstructions?.method || '').toUpperCase()}</Text>.
               </Text>
 
-              {(manualInstructions?.splits || []).map((sp: any) => (
+              {(manualInstructions?.splits || []).map((sp: any) => {
+                const displayAmount = sp.to === 'executor' ? (sp.amount + manualTip) : sp.amount;
+                return (
                 <View
                   key={sp.to}
                   style={{
@@ -940,19 +1138,99 @@ export default function TaskDetail() {
                   <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '700', textTransform: 'uppercase' }}>
                     {sp.label}
                   </Text>
-                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#111827', marginTop: 4 }}>
-                    {sp.amount.toFixed(2)} {manualInstructions?.currency}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: '#374151', marginTop: 6 }} selectable>
-                    {sp.handle}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}>
+                    <Text style={{ fontSize: 22, fontWeight: '800', color: '#111827', flex: 1 }}>
+                      {displayAmount.toFixed(2)} {manualInstructions?.currency}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => copyToClipboard(displayAmount.toFixed(2), `Сума: ${displayAmount.toFixed(2)}`)}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 4,
+                        backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+                        borderWidth: 1, borderColor: '#bfdbfe',
+                      }}
+                      data-testid={`copy-amount-${sp.to}`}
+                    >
+                      <Ionicons name="copy-outline" size={14} color="#2563eb" />
+                      <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '700' }}>Копія</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {sp.to === 'executor' && manualTip > 0 && (
+                    <Text style={{ fontSize: 11, color: '#059669', marginTop: 2 }}>
+                      = {sp.amount.toFixed(2)} + {manualTip.toFixed(2)} чайові
+                    </Text>
+                  )}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                    <Text style={{ fontSize: 13, color: '#374151', flex: 1 }} selectable numberOfLines={2}>
+                      {sp.handle}
+                    </Text>
+                    {!sp.missing_handle && (
+                      <TouchableOpacity
+                        onPress={() => copyToClipboard(String(sp.handle || ''), `${sp.label}: ${sp.handle}`)}
+                        style={{
+                          flexDirection: 'row', alignItems: 'center', gap: 4,
+                          backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+                          borderWidth: 1, borderColor: '#bfdbfe',
+                        }}
+                        data-testid={`copy-handle-${sp.to}`}
+                      >
+                        <Ionicons name="copy-outline" size={14} color="#2563eb" />
+                        <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '700' }}>Копія</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   {sp.missing_handle && (
                     <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 6 }}>
                       ⚠ Виконавець ще не вказав свій акаунт. Зв'яжись із ним у чаті.
                     </Text>
                   )}
                 </View>
-              ))}
+                );
+              })}
+
+              {/* ── Optional Tip for executor ───────────────────────────── */}
+              <View
+                style={{
+                  borderWidth: 1, borderColor: '#fde68a', backgroundColor: '#fffbeb',
+                  borderRadius: 12, padding: 14, marginBottom: 12,
+                }}
+                data-testid="manual-tip-section"
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                  <Ionicons name="gift-outline" size={18} color="#b45309" />
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e', marginLeft: 8 }}>
+                    Чайові виконавцю (необов'язково)
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 12, color: '#92400e', marginBottom: 10, lineHeight: 17 }}>
+                  Додайте суму понад ставку — 100% піде виконавцю разом з основним переказом.
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {[0, 50, 100, 200, 500].map(val => {
+                    const active = manualTip === val;
+                    return (
+                      <TouchableOpacity
+                        key={`tip-${val}`}
+                        style={{
+                          paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999,
+                          borderWidth: 1.5,
+                          borderColor: active ? '#f59e0b' : '#fcd34d',
+                          backgroundColor: active ? '#f59e0b' : '#fff',
+                        }}
+                        onPress={() => setManualTip(val)}
+                        data-testid={`manual-tip-${val}`}
+                      >
+                        <Text style={{
+                          fontSize: 13, fontWeight: '700',
+                          color: active ? '#fff' : '#92400e',
+                        }}>
+                          {val === 0 ? 'Без чайових' : `+${val} ₴`}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
 
               <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4, lineHeight: 17 }}>
                 💡 Після того як надішлеш обидва платежі, натисни кнопку нижче — адмін перевірить надходження
@@ -1040,37 +1318,6 @@ export default function TaskDetail() {
                 placeholder="Напишіть ваш відгук..."
                 placeholderTextColor="#9ca3af"
               />
-
-              {/* Tip */}
-              <View style={s.tipCard}>
-                <View style={s.tipHeader}>
-                  <Ionicons name="gift-outline" size={20} color="#f59e0b" />
-                  <Text style={s.tipTitle}>Чайові (необов’язково)</Text>
-                </View>
-                <Text style={s.tipHint}>Покажіть вдячність за чудову роботу — 100% виконавцю</Text>
-                {/* Quick tip buttons */}
-                <View style={s.tipBtns}>
-                  {['50', '100', '200', '500'].map((amt) => (
-                    <TouchableOpacity
-                      key={amt}
-                      style={[s.tipAmtBtn, reviewTip === amt && s.tipAmtBtnActive]}
-                      onPress={() => setReviewTip(reviewTip === amt ? '' : amt)}
-                    >
-                      <Text style={[s.tipAmtText, reviewTip === amt && s.tipAmtTextActive]}>
-                        +{amt} грн
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TextInput
-                  style={[s.input, { marginBottom: 0, marginTop: 8 }]}
-                  value={reviewTip}
-                  onChangeText={setReviewTip}
-                  keyboardType="numeric"
-                  placeholder="Або введіть свою суму..."
-                  placeholderTextColor="#9ca3af"
-                />
-              </View>
             </ScrollView>
 
             <View style={s.modalFooter}>

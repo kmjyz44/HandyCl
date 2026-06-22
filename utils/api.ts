@@ -490,8 +490,12 @@ export const api = {
     const res = await client.get('/payments/manual-instructions', { params: { booking_id: bookingId, method } });
     return res.data;
   },
-  confirmManualPayment: async (data: { booking_id: string; method: string; note?: string }) => {
+  confirmManualPayment: async (data: { booking_id: string; method: string; note?: string; tip_amount?: number }) => {
     const res = await client.post('/payments/manual-confirm', data);
+    return res.data;
+  },
+  executorConfirmPayment: async (data: { booking_id: string; action: 'confirm' | 'reject' }) => {
+    const res = await client.post('/payments/executor-confirm', data);
     return res.data;
   },
   verifyManualPayment: async (transactionId: string, action: 'approve' | 'reject') => {
@@ -653,6 +657,22 @@ export const api = {
   },
 
   // Earnings
+  getEarnings: async () => {
+    const res = await client.get('/earnings');
+    return res.data;
+  },
+
+  getEarningsHistory: async (limit: number = 365) => {
+    const res = await client.get('/earnings/history', { params: { limit } });
+    return res.data;
+  },
+
+  // Returns a Blob (PDF). type: 'monthly' | 'yearly' | 'tax'; month: 'YYYY-MM' (for monthly); year: 'YYYY' (for yearly/tax)
+  downloadEarningsReport: async (params: { type: 'monthly' | 'yearly' | 'tax'; month?: string; year?: string }) => {
+    const res = await client.get('/earnings/report', { params, responseType: 'blob' });
+    return res.data as Blob;
+  },
+
   getMyPayouts: async () => {
     const res = await client.get('/tasker/payouts');
     return res.data;

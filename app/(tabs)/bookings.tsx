@@ -60,7 +60,7 @@ export default function Bookings() {
   const user = useAuthStore((state) => state.user);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'completed'>('active');
 
   const CACHE_KEY = `bookings_cache_${user?.user_id || 'guest'}`;
 
@@ -106,9 +106,19 @@ export default function Bookings() {
   }, []);
   const onRefresh = () => { setRefreshing(true); loadBookings(); };
 
+  const isPendingConfirmation = (b: any): boolean => {
+    const ps = b.payment_status;
+    if (b.status === 'paid' || b.status === 'completed') return false;
+    return ps === 'pending_verification' || ps === 'executor_confirmed' || ps === 'admin_confirmed' || ps === 'disputed';
+  };
   const activeBookings = bookings.filter(b => !COMPLETED_STATUSES.includes(b.status));
-  const completedBookings = bookings.filter(b => COMPLETED_STATUSES.includes(b.status));
-  const displayList = activeTab === 'active' ? activeBookings : completedBookings;
+  const pendingPayBookings = bookings.filter(isPendingConfirmation);
+  const completedBookings = bookings.filter(b => COMPLETED_STATUSES.includes(b.status) && !isPendingConfirmation(b));
+  const displayList = activeTab === 'active'
+    ? activeBookings
+    : activeTab === 'pending'
+    ? pendingPayBookings
+    : completedBookings;
 
   // Overdue payment reminder: tasks with status 'completed_pending_payment' older than 1 day
   const now = Date.now();
@@ -275,6 +285,23 @@ export default function Bookings() {
             Активні ({activeBookings.length})
           </Text>
         </TouchableOpacity>
+        {pendingPayBookings.length > 0 && (
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'pending' && styles.tabActivePending]}
+            onPress={() => setActiveTab('pending')}
+            data-testid="tab-pending-confirmation"
+          >
+            <Ionicons
+              name="time-outline"
+              size={14}
+              color={activeTab === 'pending' ? '#b45309' : '#9ca3af'}
+              style={{ marginRight: 3 }}
+            />
+            <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextPending]} numberOfLines={1}>
+              Підтвердж. ({pendingPayBookings.length})
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[styles.tab, activeTab === 'completed' && styles.tabActiveCompleted]}
           onPress={() => setActiveTab('completed')}
@@ -321,12 +348,18 @@ export default function Bookings() {
         {displayList.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons
-              name={activeTab === 'active' ? 'calendar-outline' : 'checkmark-done-circle-outline'}
+              name={
+                activeTab === 'active' ? 'calendar-outline' :
+                activeTab === 'pending' ? 'time-outline' :
+                'checkmark-done-circle-outline'
+              }
               size={64}
               color="#d1d5db"
             />
             <Text style={styles.emptyText}>
-              {activeTab === 'active' ? 'Немає активних замовлень' : 'Немає виконаних завдань'}
+              {activeTab === 'active' ? 'Немає активних замовлень' :
+               activeTab === 'pending' ? 'Немає платежів в очікуванні' :
+               'Немає виконаних завдань'}
             </Text>
             {activeTab === 'active' && user?.role === 'client' && (
               <TouchableOpacity style={styles.browseButton} onPress={() => router.push('/(tabs)')}>
@@ -335,7 +368,22 @@ export default function Bookings() {
             )}
           </View>
         ) : (
-          displayList.map(renderCard)
+          <>
+            {activeTab === 'pending' && (
+              <View style={styles.pendingBanner} data-testid="pending-verification-banner-client">
+                <View style={styles.pendingBannerHeader}>
+                  <Ionicons name="time-outline" size={20} color="#b45309" />
+                  <Text style={styles.pendingBannerTitle}>
+                    Очікують підтвердження ({pendingPayBookings.length})
+                  </Text>
+                </View>
+                <Text style={styles.pendingBannerSubtitle}>
+                  Ви надіслали платіж. Завдання перейде до "Виконаних" після того як і виконавець, і адмін підтвердять отримання.
+                </Text>
+              </View>
+            )}
+            {displayList.map(renderCard)}
+          </>
         )}
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -373,11 +421,30 @@ const styles = StyleSheet.create({
   },
   tabActive: { borderBottomColor: '#2563eb' },
   tabActiveCompleted: { borderBottomColor: '#22c55e' },
+  tabActivePending: { borderBottomColor: '#b45309' },
   tabText: { fontSize: 14, fontWeight: '600', color: '#9ca3af' },
   tabTextActive: { color: '#2563eb' },
   tabTextCompleted: { color: '#22c55e' },
+  tabTextPending: { color: '#b45309', fontWeight: '700' },
   content: { flex: 1, padding: 16 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 64 },
+  pendingBanner: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#fcd34d',
+  },
+  pendingBannerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pendingBannerTitle: { fontSize: 15, fontWeight: '800', color: '#92400e' },
+  pendingBannerSubtitle: { fontSize: 12, color: '#92400e', marginTop: 4, marginBottom: 10, lineHeight: 16 },
+  pendingItem: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#fff', borderRadius: 10, padding: 12, marginTop: 8,
+    borderWidth: 1, borderColor: '#fde68a', gap: 12,
+  },
+  pendingItemTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
   emptyText: { marginTop: 16, fontSize: 16, color: '#6b7280' },
   browseButton: {
     marginTop: 24,

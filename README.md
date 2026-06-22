@@ -171,8 +171,8 @@ A comprehensive mobile application for booking handyman and cleaning services, b
 ## 🌍 Deployment
 
 The app is deployed on Emergent platform:
-- **Web Preview:** https://handyhub-preview-1.preview.emergentagent.com
-- **Backend API:** https://handyhub-preview-1.preview.emergentagent.com/api
+- **Web Preview:** https://payout-hub-20.preview.emergentagent.com
+- **Backend API:** https://payout-hub-20.preview.emergentagent.com/api
 - **Mobile:** Scan QR code in Expo Go app
 
 ## 📝 Future Enhancements

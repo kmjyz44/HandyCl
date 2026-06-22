@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "extra": {
       "router": {},
-      "backendUrl": "https://handyhub-preview-1.preview.emergentagent.com",
+      "backendUrl": "https://payout-hub-20.preview.emergentagent.com",
       "eas": {
         "projectId": "9f1fe59e-2f9e-4833-b938-df04fcf7c431"
       }

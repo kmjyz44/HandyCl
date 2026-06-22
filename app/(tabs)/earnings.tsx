@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -24,6 +27,8 @@ export default function Earnings() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null); // 'YYYY-MM' or null = all
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const loadData = async () => {
     try {
@@ -105,6 +110,72 @@ export default function Earnings() {
 
   const maxEarned = Math.max(...monthlyStats.map(([, v]) => v.earned), 1);
 
+  // Available years for tax/yearly reports
+  const availableYears = useMemo(() => {
+    const ys = new Set<string>();
+    paidAll.forEach(i => {
+      const k = getMonthKey(i.completed_at || i.paid_at);
+      if (k) ys.add(k.split('-')[0]);
+    });
+    if (ys.size === 0) ys.add(String(new Date().getFullYear()));
+    return Array.from(ys).sort().reverse();
+  }, [paidAll]);
+
+  const downloadReport = async (type: 'monthly' | 'yearly' | 'tax', month?: string, year?: string) => {
+    setDownloading(true);
+    try {
+      const blob = await api.downloadEarningsReport({ type, month, year });
+      const filename =
+        type === 'monthly'
+          ? `handyhub-earnings-${month}.pdf`
+          : type === 'tax'
+          ? `handyhub-tax-${year}.pdf`
+          : `handyhub-earnings-${year}.pdf`;
+
+      if (Platform.OS === 'web') {
+        // @ts-ignore
+        const url = window.URL.createObjectURL(blob as any);
+        // @ts-ignore
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        // @ts-ignore
+        document.body.appendChild(link);
+        link.click();
+        // @ts-ignore
+        document.body.removeChild(link);
+        // @ts-ignore
+        window.URL.revokeObjectURL(url);
+      } else {
+        // Native: convert Blob -> base64 -> file -> share
+        const FileSystem = await import('expo-file-system');
+        const Sharing = await import('expo-sharing');
+        const reader = new FileReader();
+        const base64: string = await new Promise((resolve, reject) => {
+          reader.onerror = () => reject(reader.error);
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1] || '');
+          };
+          reader.readAsDataURL(blob as any);
+        });
+        const path = `${(FileSystem as any).cacheDirectory}${filename}`;
+        await (FileSystem as any).writeAsStringAsync(path, base64, { encoding: 'base64' });
+        if (await (Sharing as any).isAvailableAsync()) {
+          await (Sharing as any).shareAsync(path, { mimeType: 'application/pdf', dialogTitle: 'Звіт про заробіток' });
+        } else {
+          Alert.alert('Звіт збережено', path);
+        }
+      }
+      setReportModalVisible(false);
+    } catch (e: any) {
+      console.error('Report download error', e);
+      Alert.alert('Помилка', e?.response?.data?.detail || e?.message || 'Не вдалося завантажити звіт');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   if (loading) {
     return <View style={styles.centered}><ActivityIndicator size="large" color="#2563eb" /></View>;
   }
@@ -153,6 +224,24 @@ export default function Earnings() {
             </View>
           </View>
         </View>
+
+        {/* Reports CTA */}
+        <TouchableOpacity
+          style={styles.reportsCard}
+          onPress={() => setReportModalVisible(true)}
+          data-testid="open-reports-modal-btn"
+        >
+          <View style={styles.reportsLeft}>
+            <View style={styles.reportsIcon}>
+              <Ionicons name="document-text-outline" size={24} color="#7c3aed" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reportsTitle}>Звіти та податкова</Text>
+              <Text style={styles.reportsSub}>Завантажити PDF за місяць або рік</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+        </TouchableOpacity>
 
         {/* Pending payout card */}
         {totalPending > 0 && (
@@ -344,6 +433,85 @@ export default function Earnings() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Reports Modal */}
+      <Modal visible={reportModalVisible} animationType="slide" transparent onRequestClose={() => setReportModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Завантажити звіт</Text>
+              <TouchableOpacity onPress={() => setReportModalVisible(false)} disabled={downloading} data-testid="close-reports-modal-btn">
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ padding: 16 }}>
+              <Text style={styles.modalSectionLabel}>📅 Місячний звіт (PDF)</Text>
+              {availableMonths.length === 0 ? (
+                <Text style={styles.modalEmpty}>Поки немає оплачених завдань.</Text>
+              ) : (
+                availableMonths.map(key => {
+                  const [y, m] = key.split('-');
+                  const label = `${MONTHS_UA[parseInt(m) - 1]} ${y}`;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={styles.reportRow}
+                      disabled={downloading}
+                      onPress={() => downloadReport('monthly', key)}
+                      data-testid={`download-monthly-${key}`}
+                    >
+                      <Ionicons name="calendar-outline" size={20} color="#2563eb" />
+                      <Text style={styles.reportRowText}>{label}</Text>
+                      <Ionicons name="download-outline" size={18} color="#6b7280" />
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+
+              <Text style={[styles.modalSectionLabel, { marginTop: 20 }]}>📊 Річний звіт (PDF)</Text>
+              {availableYears.map(yr => (
+                <TouchableOpacity
+                  key={`y-${yr}`}
+                  style={styles.reportRow}
+                  disabled={downloading}
+                  onPress={() => downloadReport('yearly', undefined, yr)}
+                  data-testid={`download-yearly-${yr}`}
+                >
+                  <Ionicons name="bar-chart-outline" size={20} color="#059669" />
+                  <Text style={styles.reportRowText}>{yr} рік — всі завдання</Text>
+                  <Ionicons name="download-outline" size={18} color="#6b7280" />
+                </TouchableOpacity>
+              ))}
+
+              <Text style={[styles.modalSectionLabel, { marginTop: 20 }]}>🧾 Податковий звіт (PDF)</Text>
+              {availableYears.map(yr => (
+                <TouchableOpacity
+                  key={`t-${yr}`}
+                  style={[styles.reportRow, { backgroundColor: '#fef3c7' }]}
+                  disabled={downloading}
+                  onPress={() => downloadReport('tax', undefined, yr)}
+                  data-testid={`download-tax-${yr}`}
+                >
+                  <Ionicons name="receipt-outline" size={20} color="#b45309" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.reportRowText}>Податковий за {yr} рік</Text>
+                    <Text style={styles.reportRowHint}>З сумою брутто, комісією та нетто</Text>
+                  </View>
+                  <Ionicons name="download-outline" size={18} color="#92400e" />
+                </TouchableOpacity>
+              ))}
+
+              {downloading && (
+                <View style={{ alignItems: 'center', marginTop: 20 }}>
+                  <ActivityIndicator color="#2563eb" />
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>Генеруємо PDF…</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -449,4 +617,34 @@ const styles = StyleSheet.create({
   },
   payoutSetupTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
   payoutSetupSub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+
+  reportsCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
+    marginHorizontal: 16, marginBottom: 12, padding: 14, borderRadius: 14,
+    borderWidth: 1, borderColor: '#e5e7eb',
+  },
+  reportsLeft: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  reportsIcon: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#f5f3ff',
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  reportsTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  reportsSub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 24 },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  modalSectionLabel: { fontSize: 13, fontWeight: '700', color: '#6b7280', marginBottom: 8 },
+  modalEmpty: { fontSize: 13, color: '#9ca3af', fontStyle: 'italic', paddingVertical: 8 },
+  reportRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 14, backgroundColor: '#f9fafb', borderRadius: 12, marginBottom: 8,
+    borderWidth: 1, borderColor: '#e5e7eb',
+  },
+  reportRowText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#111827' },
+  reportRowHint: { fontSize: 11, color: '#92400e', marginTop: 2 },
 });

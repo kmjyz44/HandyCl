@@ -768,14 +768,6 @@ function ProviderProfile() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewsModalVisible, setReviewsModalVisible] = useState(false);
 
-  // Payment card modal
-  const [paymentCardVisible, setPaymentCardVisible] = useState(false);
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardHolder, setCardHolder] = useState('');
-  const [cardIban, setCardIban] = useState('');
-  const [savingCard, setSavingCard] = useState(false);
-
   // 2FA modal
   const [twoFaVisible, setTwoFaVisible] = useState(false);
   const [twoFaMethod, setTwoFaMethod] = useState<'email' | 'phone'>('email');
@@ -841,7 +833,17 @@ function ProviderProfile() {
       } catch {}
       const storedSkills: ProviderSkill[] = (data.skills || []).map((s: any, i: number) => {
         if (typeof s === 'string') {
-          return { id: `skill_${i}`, category_id: 'other', name: s, hourly_rate: data.hourly_rate || 25, status: 'active' as const };
+          // Reverse-lookup category from the hardcoded SKILL_CATEGORIES map
+          // so legacy bookings that only stored skill names still resolve
+          // to the correct category (otherwise everything falls into 'other').
+          let categoryId = 'other';
+          for (const c of SKILL_CATEGORIES) {
+            if (c.skills.some(sk => sk.name.toLowerCase() === s.toLowerCase())) {
+              categoryId = c.id;
+              break;
+            }
+          }
+          return { id: `skill_${i}`, category_id: categoryId, name: s, hourly_rate: data.hourly_rate || 25, status: 'active' as const };
         }
         return s;
       });
@@ -990,21 +992,39 @@ function ProviderProfile() {
     };
     const updated = [...providerSkills, newSkill];
     setProviderSkills(updated);
-    saveProfile({ skills: updated.map(s => s.name), hourly_rate: rate });
+    saveProfile({
+      skills: updated.map(s => ({
+        id: s.id,
+        category_id: s.category_id,
+        name: s.name,
+        hourly_rate: s.hourly_rate,
+        status: s.status,
+      })),
+      hourly_rate: rate,
+    });
     setStats(prev => ({ ...prev, activatedSkillsCount: updated.filter(s => s.status === 'active').length }));
   };
 
   const removeSkill = (skillId: string) => {
     const updated = providerSkills.filter(s => s.id !== skillId);
     setProviderSkills(updated);
-    saveProfile({ skills: updated.map(s => s.name) });
+    saveProfile({
+      skills: updated.map(s => ({
+        id: s.id, category_id: s.category_id, name: s.name, hourly_rate: s.hourly_rate, status: s.status,
+      })),
+    });
     setStats(prev => ({ ...prev, activatedSkillsCount: updated.filter(s => s.status === 'active').length }));
   };
 
   const updateSkillRate = (skillId: string, rate: number) => {
     const updated = providerSkills.map(s => s.id === skillId ? { ...s, hourly_rate: rate } : s);
     setProviderSkills(updated);
-    saveProfile({ skills: updated.map(s => s.name), hourly_rate: rate });
+    saveProfile({
+      skills: updated.map(s => ({
+        id: s.id, category_id: s.category_id, name: s.name, hourly_rate: s.hourly_rate, status: s.status,
+      })),
+      hourly_rate: rate,
+    });
   };
 
   const skillsByCategory = SKILL_CATEGORIES.map(cat => ({
@@ -1185,16 +1205,6 @@ function ProviderProfile() {
           ))}
         </ScrollView>
       )}
-      <View style={pStyles.menuDivider} />
-
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => setPaymentCardVisible(true)}>
-        <Ionicons name="card-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
-        <View style={{ flex: 1 }}>
-          <Text style={pStyles.menuRowText}>Оплата та виплати</Text>
-          <Text style={pStyles.menuRowSub}>Погодинна ставка: {profile?.hourly_rate || 25} ₴ • Платіжні реквізити</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
-      </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
       <TouchableOpacity style={pStyles.menuRow} onPress={() => setServiceAreaVisible(true)}>
@@ -1829,148 +1839,6 @@ function ProviderProfile() {
               </View>
             ))}
           </ScrollView>
-        </View>
-      </Modal>
-
-      {/* ══ Payment Card Modal ══ */}
-      <Modal visible={paymentCardVisible} animationType="slide">
-        <View style={{ flex: 1, backgroundColor: '#fff' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-            <TouchableOpacity onPress={() => setPaymentCardVisible(false)}>
-              <Ionicons name="arrow-back" size={24} color="#111827" />
-            </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Оплата та виплати</Text>
-            <View style={{ width: 40 }} />
-          </View>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-            {/* Hourly rate */}
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 1, marginBottom: 8 }}>ПОГОДИННА СТАВКА</Text>
-            <View style={{ backgroundColor: '#f0fdf4', borderRadius: 12, padding: 16, marginBottom: 20 }}>
-              <Text style={{ fontSize: 28, fontWeight: '800', color: '#16a34a' }}>{profile?.hourly_rate || 25} ₴/год</Text>
-              <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>Ставка встановлюється при додаванні навичок</Text>
-            </View>
-
-            {/* Bank card */}
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 1, marginBottom: 12 }}>ПЛАТІЖНІ РЕКВІЗИТИ</Text>
-            <Text style={styles.label}>Номер картки</Text>
-            <TextInput
-              style={styles.input}
-              value={cardNumber}
-              onChangeText={setCardNumber}
-              placeholder="1234 5678 9012 3456"
-              keyboardType="numeric"
-              maxLength={19}
-            />
-            <Text style={styles.label}>Термін дії</Text>
-            <TextInput
-              style={styles.input}
-              value={cardExpiry}
-              onChangeText={setCardExpiry}
-              placeholder="MM/YY"
-              maxLength={5}
-            />
-            <Text style={styles.label}>Ім'я власника картки</Text>
-            <TextInput
-              style={styles.input}
-              value={cardHolder}
-              onChangeText={setCardHolder}
-              placeholder="IVAN PETRENKO"
-              autoCapitalize="characters"
-            />
-            <Text style={styles.label}>IBAN (для виплат)</Text>
-            <TextInput
-              style={styles.input}
-              value={cardIban}
-              onChangeText={setCardIban}
-              placeholder="UA12 3456 7890 1234 5678 9012 3456"
-              autoCapitalize="characters"
-            />
-            <View style={{ backgroundColor: '#fffbeb', borderRadius: 12, padding: 14, marginTop: 4, flexDirection: 'row', gap: 10 }}>
-              <Ionicons name="information-circle-outline" size={20} color="#d97706" />
-              <Text style={{ flex: 1, fontSize: 13, color: '#92400e', lineHeight: 18 }}>Виплати надходять автоматично після оплати клієнтом. Дані захищені шифруванням.</Text>
-            </View>
-          </ScrollView>
-          <View style={{ padding: 20, paddingBottom: 32, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb', flexDirection: 'row', gap: 12 }}>
-            <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setPaymentCardVisible(false)}>
-              <Text style={styles.btnCancelText}>Скасувати</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnSave, savingCard && { opacity: 0.6 }]}
-              disabled={savingCard}
-              onPress={async () => {
-                // Validation
-                const digits = cardNumber.replace(/\s+/g, '');
-                if (!cardHolder.trim() || cardHolder.trim().length < 2) {
-                  Alert.alert('Помилка', "Введіть ім'я власника картки");
-                  return;
-                }
-                if (!/^\d{12,19}$/.test(digits)) {
-                  Alert.alert('Помилка', 'Номер картки має містити 12–19 цифр');
-                  return;
-                }
-                // Luhn check
-                let sum = 0;
-                for (let i = 0; i < digits.length; i++) {
-                  let d = parseInt(digits[digits.length - 1 - i], 10);
-                  if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; }
-                  sum += d;
-                }
-                if (sum % 10 !== 0) {
-                  Alert.alert('Помилка', 'Невірний номер картки (не пройшов перевірку Luhn)');
-                  return;
-                }
-                // Expiry validation MM/YY or MM/YYYY
-                const m = cardExpiry.match(/^(\d{2})\s*\/\s*(\d{2}|\d{4})$/);
-                if (!m) {
-                  Alert.alert('Помилка', 'Термін дії у форматі MM/YY (наприклад 05/28)');
-                  return;
-                }
-                const mm = parseInt(m[1], 10);
-                let yy = parseInt(m[2], 10);
-                if (yy < 100) yy += 2000;
-                if (mm < 1 || mm > 12) { Alert.alert('Помилка', 'Невірний місяць'); return; }
-                const now = new Date();
-                const exp = new Date(yy, mm - 1, 1);
-                if (exp < new Date(now.getFullYear(), now.getMonth(), 1)) {
-                  Alert.alert('Помилка', 'Картка прострочена'); return;
-                }
-                // IBAN validation (optional, but if provided — check)
-                const iban = cardIban.replace(/\s+/g, '').toUpperCase();
-                if (iban) {
-                  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban)) {
-                    Alert.alert('Помилка', 'Невірний формат IBAN'); return;
-                  }
-                  // IBAN mod-97 check
-                  const rearranged = iban.slice(4) + iban.slice(0, 4);
-                  const num = rearranged.split('').map((c: string) => {
-                    const code = c.charCodeAt(0);
-                    return code >= 65 ? (code - 55).toString() : c;
-                  }).join('');
-                  let rem = 0;
-                  for (const ch of num) rem = (rem * 10 + parseInt(ch, 10)) % 97;
-                  if (rem !== 1) { Alert.alert('Помилка', 'Невірна контрольна сума IBAN'); return; }
-                }
-                setSavingCard(true);
-                try {
-                  await api.updateExecutorProfile({
-                    payment_card: {
-                      card_number: digits,
-                      card_last4: digits.slice(-4),
-                      expiry: cardExpiry.trim(),
-                      card_holder: cardHolder.trim(),
-                      iban: iban || null
-                    }
-                  });
-                  Alert.alert('Збережено', 'Платіжні реквізити оновлено');
-                  setPaymentCardVisible(false);
-                } catch (e: any) {
-                  Alert.alert('Помилка', e.message || 'Не вдалося зберегти');
-                } finally { setSavingCard(false); }
-              }}
-            >
-              {savingCard ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Зберегти</Text>}
-            </TouchableOpacity>
-          </View>
         </View>
       </Modal>
 

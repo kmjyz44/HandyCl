@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 // Backend URL - configured in app.json extra.backendUrl
 const API_URL = Constants.expoConfig?.extra?.backendUrl ||
                 process.env.EXPO_PUBLIC_BACKEND_URL ||
-                'https://handyhub-preview-1.preview.emergentagent.com';
+                'https://payout-hub-20.preview.emergentagent.com';
 
 console.log('API_URL configured:', API_URL);
 

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends, Query, Body
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -3404,6 +3404,85 @@ async def get_all_executors(current_user: User = Depends(get_current_user)):
     return JSONResponse(content=clean_bson(result))
 
 
+# ── Skill ↔ Category map (mirrors front-end SKILL_CATEGORIES) ────────
+# An executor matches a `category` when at least one of their skills
+# belongs to that category. Lower-case lookup; supports both Ukrainian
+# display names and English ids (`furniture_assembly`, etc.).
+SKILL_TO_CATEGORIES = {
+    # assembly
+    "збірка меблів": "assembly", "furniture_assembly": "assembly",
+    "збірка ikea": "assembly", "ikea_assembly": "assembly",
+    "монтаж полиць": "assembly", "shelving": "assembly",
+    "збірка шаф": "assembly", "wardrobe": "assembly",
+    "офісні меблі": "assembly", "office_furniture": "assembly",
+    "монтаж телевізора": "assembly", "tv_mount": "assembly",
+    # cleaning
+    "прибирання будинку": "cleaning", "home_cleaning": "cleaning",
+    "прибирання офісу": "cleaning", "office_cleaning": "cleaning",
+    "генеральне прибирання": "cleaning", "deep_cleaning": "cleaning",
+    "прибирання при переїзді": "cleaning", "move_in_out": "cleaning",
+    "миття вікон": "cleaning", "window_cleaning": "cleaning",
+    "чищення килимів": "cleaning", "carpet_cleaning": "cleaning",
+    # home_improvements
+    "встановлення техніки": "home_improvements", "appliance_install": "home_improvements",
+    "ремонт дверей та меблів": "home_improvements", "door_repair": "home_improvements",
+    "фарбування": "home_improvements", "painting": "home_improvements",
+    "укладання плитки": "home_improvements", "tiling": "home_improvements",
+    "укладання підлоги": "home_improvements", "flooring": "home_improvements",
+    "гіпсокартон": "home_improvements", "drywall": "home_improvements",
+    "сантехніка": "home_improvements", "plumbing": "home_improvements",
+    "електрика": "home_improvements", "electrical": "home_improvements",
+    # moving
+    "допомога з переїздом": "moving", "moving_help": "moving",
+    "пакування речей": "moving", "packing": "moving",
+    "перенесення меблів": "moving", "furniture_moving": "moving",
+    "доставка": "moving", "delivery": "moving",
+    "вивіз сміття": "moving", "junk_removal": "moving",
+    # outdoor
+    "догляд за газоном": "outdoor", "lawn_care": "outdoor",
+    "прибирання снігу": "outdoor", "snow_removal": "outdoor",
+    "садівництво": "outdoor", "garden_planting": "outdoor",
+    "миття під тиском": "outdoor", "pressure_washing": "outdoor",
+    "встановлення огорожі": "outdoor", "fence_install": "outdoor",
+    # personal
+    "доручення": "personal", "errand": "personal",
+    "шопінг-асистент": "personal", "shopping": "personal",
+    "догляд за тваринами": "personal", "pet_care": "personal",
+    "допомога літнім людям": "personal", "elderly_help": "personal",
+    # it_tech
+    "налаштування комп'ютера": "it_tech", "computer_setup": "it_tech",
+    "налаштування smart tv": "it_tech", "tv_setup": "it_tech",
+    "ремонт телефонів": "it_tech", "phone_repair": "it_tech",
+    "налаштування мережі": "it_tech", "network_setup": "it_tech",
+    "відновлення даних": "it_tech", "data_recovery": "it_tech",
+    # events
+    "організація заходів": "events", "event_setup": "events",
+    "фотографія": "events", "photography": "events",
+    "допомога на кухні": "events", "catering_help": "events",
+    "бармен": "events", "bartending": "events",
+    # other
+    "майстер на всі руки": "other", "handyman": "other",
+    "репетиторство": "other", "tutoring": "other",
+    "переклад": "other", "translation": "other",
+    "водій": "other", "driving": "other",
+}
+
+
+def _skill_matches_category(skill_value: Any, target_category: Optional[str]) -> bool:
+    """True if a skill belongs to the given category. Empty target → True."""
+    if not target_category:
+        return True
+    target = str(target_category).lower().strip()
+    if isinstance(skill_value, dict):
+        cat_id = (skill_value.get("category_id") or "").lower().strip()
+        if cat_id and cat_id == target:
+            return True
+        name = (skill_value.get("name") or skill_value.get("label") or "").lower().strip()
+    else:
+        name = str(skill_value).lower().strip()
+    return SKILL_TO_CATEGORIES.get(name) == target
+
+
 @api_router.get("/executors/by-service")
 async def get_executors_by_service(
     service_name: Optional[str] = None,
@@ -3488,6 +3567,18 @@ async def get_executors_by_service(
     filtered = []
     for executor in result:
         profile = executor.get("profile") or {}
+
+        # ── Category filter ───────────────────────────────────────────
+        # The executor must have at least one skill belonging to the
+        # requested category. This prevents an "assembly-only" provider
+        # from showing up when the client searches for "home_improvements".
+        if category:
+            user_skills = profile.get("skills") or []
+            if not user_skills:
+                # No skills declared — exclude (cannot match any category)
+                continue
+            if not any(_skill_matches_category(s, category) for s in user_skills):
+                continue
 
         # ── Skill filter ──────────────────────────────────────────────
         if service_name:
@@ -4117,6 +4208,12 @@ async def search_taskers(
     for tasker in taskers:
         profile = tasker.get("profile", {}) or {}
 
+        # Filter by category — provider must have at least one skill in that category
+        if category:
+            user_skills = profile.get("skills") or []
+            if not user_skills or not any(_skill_matches_category(s, category) for s in user_skills):
+                continue
+
         # Filter by rating
         if min_rating and tasker.get("average_rating", 0) < min_rating:
             continue
@@ -4714,8 +4811,47 @@ async def create_checkout_session(
     if not api_key:
         raise HTTPException(status_code=500, detail="Stripe не налаштовано — додай Secret Key в Адмін → Інтеграції")
 
-    # Compute final amount client should pay (commission already snapshotted on booking)
+    # Compute final amount client should pay (commission already snapshotted on booking).
+    # If snapshot missing/zero — recompute from category commission rate.
     amount = booking.get("total_price") or booking.get("client_total") or 0
+    platform_take = float(booking.get("platform_take") or 0)
+    executor_take = float(booking.get("executor_take") or 0)
+    if platform_take <= 0 or executor_take <= 0:
+        executor_rate = (
+            float(booking.get("executor_rate") or 0)
+            or float(booking.get("provider_hourly_rate") or 0)
+            or float(booking.get("estimated_price") or 0)
+            or float(amount or 0)
+        )
+        category_id = booking.get("category")
+        pricing = await compute_client_pricing(executor_rate, category_id)
+        amount = pricing["client_total"]
+        platform_take = pricing["platform_take"]
+        executor_take = pricing["executor_take"]
+        try:
+            await db.bookings.update_one(
+                {"booking_id": booking_id},
+                {"$set": {
+                    "total_price": amount,
+                    "executor_rate": pricing["executor_rate"],
+                    "commission_rate_snapshot": pricing["commission_rate"],
+                    "commission_amount": pricing["commission_amount"],
+                    "platform_take": platform_take,
+                    "executor_take": executor_take,
+                }}
+            )
+            await db.tasks.update_many(
+                {"booking_id": booking_id},
+                {"$set": {
+                    "total_price": amount,
+                    "executor_take": executor_take,
+                    "platform_take": platform_take,
+                    "commission_rate_snapshot": pricing["commission_rate"],
+                }}
+            )
+        except Exception as _e:
+            logging.warning(f"checkout: failed to backfill booking split: {_e}")
+
     if not amount or amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid booking amount")
 
@@ -4738,14 +4874,6 @@ async def create_checkout_session(
         ) or {}
         provider_acct_id = prov.get("stripe_account_id")
         provider_charges_enabled = bool(prov.get("stripe_charges_enabled"))
-
-    # Compute platform fee (commission) for the split
-    platform_take = float(booking.get("platform_take") or 0)
-    if not platform_take:
-        # fallback: derive from commission rate snapshot if available
-        rate = float(booking.get("commission_rate_snapshot") or 0)
-        if rate > 0:
-            platform_take = round(float(amount) * (rate / 100.0), 2)
 
     # Use native stripe SDK so we can pass transfer_data / application_fee_amount / statement_descriptor
     import stripe as _stripe
@@ -5829,6 +5957,241 @@ async def get_earnings_history(
         task["client"] = client
 
     return tasks
+
+# ==================== EARNINGS PDF REPORT ====================
+
+@api_router.get("/earnings/report")
+async def get_earnings_report(
+    type: str = Query("monthly", regex="^(monthly|yearly|tax)$"),
+    month: Optional[str] = None,  # 'YYYY-MM'
+    year: Optional[str] = None,   # 'YYYY'
+    current_user: User = Depends(get_current_user)
+):
+    """Generate PDF earnings report for executor.
+    type=monthly: requires month (YYYY-MM). Lists paid tasks for that month.
+    type=yearly: requires year (YYYY). Lists all paid tasks for that year, grouped by month.
+    type=tax: same as yearly but includes a tax summary block (gross income, platform commission, net).
+    """
+    if current_user.role != UserRole.PROVIDER:
+        raise HTTPException(status_code=403, detail="Only taskers can download earnings reports")
+
+    from io import BytesIO
+    from datetime import datetime as _dt
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    )
+
+    # Register a Unicode-capable font (DejaVu or Liberation) for Ukrainian/Cyrillic chars
+    font_name = "Helvetica"
+    font_bold = "Helvetica-Bold"
+    candidates = [
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ("/usr/share/fonts/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"),
+        ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+    ]
+    for reg_path, bold_path in candidates:
+        try:
+            if os.path.exists(reg_path):
+                pdfmetrics.registerFont(TTFont("UniFont", reg_path))
+                font_name = "UniFont"
+                if bold_path and os.path.exists(bold_path):
+                    pdfmetrics.registerFont(TTFont("UniFont-Bold", bold_path))
+                    font_bold = "UniFont-Bold"
+                else:
+                    font_bold = "UniFont"
+                break
+        except Exception:
+            pass
+
+    # Build date filter
+    now = datetime.now(timezone.utc)
+    if type == "monthly":
+        if not month or not re.match(r"^\d{4}-\d{2}$", month):
+            raise HTTPException(status_code=400, detail="Parameter 'month' must be YYYY-MM")
+        y, m = int(month.split("-")[0]), int(month.split("-")[1])
+        period_start = datetime(y, m, 1, tzinfo=timezone.utc)
+        if m == 12:
+            period_end = datetime(y + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            period_end = datetime(y, m + 1, 1, tzinfo=timezone.utc)
+        period_label = f"{['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'][m-1]} {y}"
+        filename = f"earnings_{month}.pdf"
+    else:
+        if not year or not re.match(r"^\d{4}$", year):
+            year = str(now.year)
+        y = int(year)
+        period_start = datetime(y, 1, 1, tzinfo=timezone.utc)
+        period_end = datetime(y + 1, 1, 1, tzinfo=timezone.utc)
+        period_label = f"{y} рік"
+        filename = f"{'tax' if type == 'tax' else 'earnings'}_{y}.pdf"
+
+    # Fetch paid tasks for the period
+    tasks = await db.tasks.find({
+        "provider_id": current_user.user_id,
+        "status": TaskStatus.PAID,
+    }, {"_id": 0}).to_list(5000)
+
+    def _to_dt(v):
+        if not v:
+            return None
+        if isinstance(v, datetime):
+            return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+        try:
+            s = str(v)
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+            return datetime.fromisoformat(s)
+        except Exception:
+            return None
+
+    filtered = []
+    for t in tasks:
+        dt = _to_dt(t.get("paid_at") or t.get("completed_at") or t.get("updated_at"))
+        if dt and period_start <= dt < period_end:
+            t["_dt"] = dt
+            filtered.append(t)
+    filtered.sort(key=lambda x: x["_dt"])
+
+    # Aggregates
+    total_gross = sum(float(t.get("final_price") or 0) for t in filtered)
+    total_tips = sum(float(t.get("tip_amount") or 0) for t in filtered)
+    total_commission = sum(float(t.get("commission_amount") or 0) for t in filtered)
+    # provider_payout is what executor actually received (already excludes platform commission)
+    total_net = sum(float(t.get("provider_payout") or t.get("final_price") or 0) for t in filtered)
+    total_jobs = len(filtered)
+    total_hours = sum(float(t.get("actual_hours") or 0) for t in filtered)
+
+    # Build PDF
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=1.6*cm, rightMargin=1.6*cm, topMargin=1.6*cm, bottomMargin=1.6*cm,
+        title=f"HandyHub - {period_label}", author="HandyHub"
+    )
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontName=font_bold, fontSize=18, leading=22, textColor=colors.HexColor("#111827"))
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontName=font_bold, fontSize=13, leading=16, textColor=colors.HexColor("#2563eb"))
+    body = ParagraphStyle("body", parent=styles["Normal"], fontName=font_name, fontSize=10, leading=14, textColor=colors.HexColor("#374151"))
+    small = ParagraphStyle("small", parent=styles["Normal"], fontName=font_name, fontSize=9, leading=12, textColor=colors.HexColor("#6b7280"))
+
+    story = []
+
+    title_map = {"monthly": "Звіт про заробіток", "yearly": "Річний звіт про заробіток", "tax": "Податковий звіт"}
+    story.append(Paragraph(title_map[type], h1))
+    story.append(Paragraph(f"Період: <b>{period_label}</b>", body))
+    story.append(Paragraph(f"Виконавець: <b>{current_user.name or current_user.email}</b>", body))
+    story.append(Paragraph(f"Email: {current_user.email}", small))
+    story.append(Paragraph(f"Сформовано: {now.strftime('%d.%m.%Y %H:%M UTC')}", small))
+    story.append(Spacer(1, 0.5*cm))
+
+    # Summary
+    story.append(Paragraph("Підсумок", h2))
+    summary_rows = [
+        ["Завершено завдань", str(total_jobs)],
+        ["Загальна сума (брутто)", f"{total_gross:.2f} ₴"],
+        ["В т.ч. чайові", f"{total_tips:.2f} ₴"],
+        ["Комісія платформи", f"{total_commission:.2f} ₴"],
+        ["До отримання (нетто)", f"{total_net:.2f} ₴"],
+        ["Робочих годин", f"{total_hours:.1f}"],
+    ]
+    t_summary = Table(summary_rows, colWidths=[8*cm, 6*cm])
+    t_summary.setStyle(TableStyle([
+        ("FONTNAME", (0,0), (-1,-1), font_name),
+        ("FONTSIZE", (0,0), (-1,-1), 10),
+        ("TEXTCOLOR", (0,0), (0,-1), colors.HexColor("#6b7280")),
+        ("TEXTCOLOR", (1,0), (1,-1), colors.HexColor("#111827")),
+        ("FONTNAME", (1,0), (1,-1), font_bold),
+        ("ALIGN", (1,0), (1,-1), "RIGHT"),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ("LINEBELOW", (0,0), (-1,-2), 0.25, colors.HexColor("#e5e7eb")),
+        ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#f0fdf4")),
+        ("TEXTCOLOR", (1,-1), (1,-1), colors.HexColor("#10b981")),
+    ]))
+    story.append(t_summary)
+    story.append(Spacer(1, 0.6*cm))
+
+    # Tax block (for type=tax)
+    if type == "tax":
+        story.append(Paragraph("Податкова інформація", h2))
+        story.append(Paragraph(
+            "Цей звіт призначений для декларування доходу. Загальна сума брутто є базою для нарахування податків. "
+            "Точну ставку та правила оподаткування уточнюйте в податковій службі вашої країни.",
+            body
+        ))
+        tax_rows = [
+            ["Валовий дохід (брутто)", f"{total_gross:.2f} ₴"],
+            ["Утримана комісія платформи", f"{total_commission:.2f} ₴"],
+            ["Фактично отримано", f"{total_net:.2f} ₴"],
+        ]
+        t_tax = Table(tax_rows, colWidths=[10*cm, 4*cm])
+        t_tax.setStyle(TableStyle([
+            ("FONTNAME", (0,0), (-1,-1), font_name),
+            ("FONTSIZE", (0,0), (-1,-1), 10),
+            ("FONTNAME", (1,0), (1,-1), font_bold),
+            ("ALIGN", (1,0), (1,-1), "RIGHT"),
+            ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ("INNERGRID", (0,0), (-1,-1), 0.25, colors.HexColor("#e5e7eb")),
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#eff6ff")),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+            ("TOPPADDING", (0,0), (-1,-1), 8),
+        ]))
+        story.append(t_tax)
+        story.append(Spacer(1, 0.6*cm))
+
+    # Detail table
+    story.append(Paragraph("Детальний перелік завдань", h2))
+    if not filtered:
+        story.append(Paragraph("Завдань за обраний період не знайдено.", body))
+    else:
+        header = ["Дата", "Завдання", "Клієнт", "Год.", "Брутто, ₴", "Нетто, ₴"]
+        rows = [header]
+        for t in filtered:
+            client_doc = await db.users.find_one({"user_id": t.get("client_id")}, {"_id": 0, "name": 1, "email": 1})
+            client_name = (client_doc or {}).get("name") or (client_doc or {}).get("email") or "—"
+            rows.append([
+                t["_dt"].strftime("%d.%m.%Y"),
+                Paragraph((t.get("title") or "—")[:60], body),
+                Paragraph(str(client_name)[:30], body),
+                f"{float(t.get('actual_hours') or 0):.1f}",
+                f"{float(t.get('final_price') or 0):.2f}",
+                f"{float(t.get('provider_payout') or t.get('final_price') or 0):.2f}",
+            ])
+        t_detail = Table(rows, colWidths=[2.2*cm, 6.2*cm, 3.4*cm, 1.2*cm, 2.2*cm, 2.2*cm], repeatRows=1)
+        t_detail.setStyle(TableStyle([
+            ("FONTNAME", (0,0), (-1,-1), font_name),
+            ("FONTNAME", (0,0), (-1,0), font_bold),
+            ("FONTSIZE", (0,0), (-1,-1), 9),
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2563eb")),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+            ("ALIGN", (3,0), (-1,-1), "RIGHT"),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f9fafb")]),
+            ("GRID", (0,0), (-1,-1), 0.25, colors.HexColor("#e5e7eb")),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+            ("TOPPADDING", (0,0), (-1,-1), 5),
+        ]))
+        story.append(t_detail)
+
+    story.append(Spacer(1, 0.8*cm))
+    story.append(Paragraph(
+        "Документ сформовано автоматично системою HandyHub. Підпис не потрібен.",
+        small
+    ))
+
+    doc.build(story)
+    buf.seek(0)
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+    return StreamingResponse(buf, media_type="application/pdf", headers=headers)
+
 
 # ==================== CLIENT TASK CREATION ====================
 
@@ -7047,7 +7410,54 @@ async def get_manual_instructions(
 
     amount = float(booking.get("total_price") or 0)
     platform_take = float(booking.get("platform_take") or 0)
-    executor_take = float(booking.get("executor_take") or max(0, amount - platform_take))
+    executor_take = float(booking.get("executor_take") or 0)
+    commission_rate_snapshot = booking.get("commission_rate_snapshot")
+
+    # Fallback: if the split is missing/zero on this booking (older bookings,
+    # legacy data, or commission not applied at creation time), recompute it
+    # NOW from the category's current commission rate. The executor's set price
+    # is treated as authoritative; commission is added ON TOP of it.
+    if platform_take <= 0 or executor_take <= 0:
+        # Determine executor's set price (in priority order)
+        executor_rate = (
+            float(booking.get("executor_rate") or 0)
+            or float(booking.get("provider_hourly_rate") or 0)
+            or float(booking.get("estimated_price") or 0)
+            or amount
+        )
+        category_id = booking.get("category")
+        pricing = await compute_client_pricing(executor_rate, category_id)
+        client_total = pricing["client_total"]
+        platform_take = pricing["platform_take"]
+        executor_take = pricing["executor_take"]
+        amount = client_total  # client must pay marked-up total
+        commission_rate_snapshot = pricing["commission_rate"]
+
+        # Persist back so subsequent reads stay consistent
+        try:
+            await db.bookings.update_one(
+                {"booking_id": booking_id},
+                {"$set": {
+                    "total_price": client_total,
+                    "executor_rate": pricing["executor_rate"],
+                    "commission_rate_snapshot": pricing["commission_rate"],
+                    "commission_amount": pricing["commission_amount"],
+                    "platform_take": platform_take,
+                    "executor_take": executor_take,
+                }}
+            )
+            # Mirror to linked task (if exists) so executor / payouts see correct numbers
+            await db.tasks.update_many(
+                {"booking_id": booking_id},
+                {"$set": {
+                    "total_price": client_total,
+                    "executor_take": executor_take,
+                    "platform_take": platform_take,
+                    "commission_rate_snapshot": pricing["commission_rate"],
+                }}
+            )
+        except Exception as _e:
+            logging.warning(f"manual-instructions: failed to backfill booking split: {_e}")
 
     # Look up executor's contact for this method
     provider_id = booking.get("provider_id")
@@ -7078,6 +7488,7 @@ async def get_manual_instructions(
         "booking_id": booking_id,
         "currency": currency,
         "total": round(amount, 2),
+        "commission_rate": float(commission_rate_snapshot) if commission_rate_snapshot is not None else None,
         "splits": [
             {
                 "to": "platform",
@@ -7115,12 +7526,23 @@ async def confirm_manual_payment(
     if booking["client_id"] != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Optional tip amount the client decided to include for the executor
+    try:
+        tip_amount = float(payload.get("tip_amount") or 0)
+        if tip_amount < 0:
+            tip_amount = 0.0
+    except (TypeError, ValueError):
+        tip_amount = 0.0
+
+    base_total = float(booking.get("total_price") or 0)
+    total_with_tip = round(base_total + tip_amount, 2)
+
     txn_id = f"txn_{uuid.uuid4().hex[:12]}"
     txn = {
         "transaction_id": txn_id,
         "booking_id": booking_id,
         "user_id": current_user.user_id,
-        "amount": float(booking.get("total_price") or 0),
+        "amount": total_with_tip,
         "currency": "usd",
         "payment_method": method,
         "payment_status": "pending_verification",
@@ -7129,15 +7551,36 @@ async def confirm_manual_payment(
             "method": method,
             "note": (payload.get("note") or "")[:500],
             "platform_take": float(booking.get("platform_take") or 0),
-            "executor_take": float(booking.get("executor_take") or 0),
+            "executor_take": round(float(booking.get("executor_take") or 0) + tip_amount, 2),
+            "tip_amount": tip_amount,
+            "base_total": base_total,
         },
         "created_at": datetime.now(timezone.utc),
     }
     await db.payment_transactions.insert_one(txn)
-    await db.bookings.update_one(
-        {"booking_id": booking_id},
-        {"$set": {"payment_status": "pending_verification", "payment_method": method, "payment_session_id": txn_id}},
-    )
+
+    booking_update = {
+        "payment_status": "pending_verification",
+        "payment_method": method,
+        "payment_session_id": txn_id,
+        "manual_payment_submitted_at": datetime.now(timezone.utc),
+    }
+    if tip_amount > 0:
+        booking_update["tip_amount"] = tip_amount
+    await db.bookings.update_one({"booking_id": booking_id}, {"$set": booking_update})
+
+    # Mirror the pending payment status onto the linked task so the client UI
+    # immediately reflects "waiting for admin verification" instead of still
+    # showing the green "Pay task" button.
+    task_update = {
+        "payment_status": "pending_verification",
+        "payment_method": method,
+        "manual_payment_submitted_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    if tip_amount > 0:
+        task_update["tip_amount"] = tip_amount
+    await db.tasks.update_many({"booking_id": booking_id}, {"$set": task_update})
 
     # Notify admin to verify
     admin = await db.users.find_one({"role": "admin"}, {"_id": 0, "user_id": 1})
@@ -7154,7 +7597,168 @@ async def confirm_manual_payment(
             )
         except Exception:
             pass
+    # Notify provider so they can confirm receipt of their share independently
+    provider_id = booking.get("provider_id")
+    if provider_id:
+        try:
+            executor_amt = round(float(booking.get("executor_take") or 0) + tip_amount, 2)
+            tip_msg = f" (у т.ч. {tip_amount:.0f} ₴ чайові)" if tip_amount > 0 else ""
+            await notify_user(
+                provider_id,
+                "manual_payment_pending",
+                "Клієнт надіслав вам платіж",
+                f"Клієнт повідомив, що відправив вам {executor_amt:.2f} ₴{tip_msg} через {method.upper()}. Перевірте свій рахунок і підтвердіть отримання у деталях завдання.",
+                related_id=booking_id,
+                related_type="booking",
+                channels=["inapp", "push", "email", "sms"],
+            )
+        except Exception:
+            pass
     return {"ok": True, "transaction_id": txn_id, "status": "pending_verification"}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Two-step verification: provider self-confirms receipt of their share.
+# When BOTH executor_confirmed AND admin_confirmed are true → task becomes
+# fully paid. Either party can be first.
+# ──────────────────────────────────────────────────────────────────────
+async def _finalize_payment_if_both_confirmed(booking_id: str):
+    """Bump task.status to PAID iff executor_confirmed AND admin_confirmed are both True.
+    Returns the resolved payment status string."""
+    b = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not b:
+        return None
+    exec_ok = bool(b.get("executor_confirmed"))
+    admin_ok = bool(b.get("admin_confirmed"))
+    if exec_ok and admin_ok:
+        now = datetime.now(timezone.utc)
+        await db.bookings.update_one(
+            {"booking_id": booking_id},
+            {"$set": {"payment_status": "paid", "paid_at": now}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": booking_id},
+            {"$set": {"status": TaskStatus.PAID, "payment_status": "paid", "paid_at": now, "updated_at": now}},
+        )
+        # Notify all participants
+        for uid_key, role_label in (("client_id", "клієнт"), ("provider_id", "виконавець")):
+            uid = b.get(uid_key)
+            if not uid:
+                continue
+            try:
+                await notify_user(
+                    uid,
+                    "payment_fully_confirmed",
+                    "Завдання повністю оплачено ✅",
+                    "Адмін і виконавець підтвердили отримання коштів. Завдання закрите.",
+                    related_id=booking_id, related_type="booking",
+                    channels=["inapp", "push", "email"],
+                )
+            except Exception:
+                pass
+        return "paid"
+    if exec_ok:
+        return "executor_confirmed"
+    if admin_ok:
+        return "admin_confirmed"
+    return b.get("payment_status") or "pending_verification"
+
+
+@api_router.post("/payments/executor-confirm")
+async def executor_confirm_manual_payment(
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Provider clicks "Я отримав свою частку" — confirms they received the
+    manual payment. Sets executor_confirmed=True on the booking and linked
+    task. Final task.status=paid only after admin ALSO confirms."""
+    booking_id = payload.get("booking_id")
+    action = (payload.get("action") or "confirm").lower()  # confirm | reject
+    if not booking_id:
+        raise HTTPException(status_code=422, detail="booking_id required")
+    if action not in ("confirm", "reject"):
+        raise HTTPException(status_code=422, detail="action must be confirm|reject")
+    b = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("provider_id") != current_user.user_id and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if b.get("payment_status") not in ("pending_verification", "paid", "executor_confirmed", "admin_confirmed"):
+        raise HTTPException(status_code=400, detail="Payment not awaiting confirmation")
+
+    now = datetime.now(timezone.utc)
+    if action == "confirm":
+        await db.bookings.update_one(
+            {"booking_id": booking_id},
+            {"$set": {"executor_confirmed": True, "executor_confirmed_at": now}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": booking_id},
+            {"$set": {"executor_confirmed": True, "executor_confirmed_at": now, "updated_at": now}},
+        )
+        new_status = await _finalize_payment_if_both_confirmed(booking_id)
+        # Notify client + admin
+        for uid in [b.get("client_id")]:
+            if uid:
+                try:
+                    await notify_user(
+                        uid,
+                        "executor_confirmed_payment",
+                        "Виконавець підтвердив отримання",
+                        "Чекаємо лише на підтвердження адміністратора." if new_status != "paid" else "Завдання повністю оплачено.",
+                        related_id=booking_id, related_type="booking",
+                    )
+                except Exception:
+                    pass
+        admin = await db.users.find_one({"role": "admin"}, {"_id": 0, "user_id": 1})
+        if admin and new_status != "paid":
+            try:
+                await notify_user(
+                    admin["user_id"],
+                    "executor_confirmed_payment",
+                    "Виконавець підтвердив платіж",
+                    f"Виконавець підтвердив отримання за бронь {booking_id}. Залишилось підтвердити вашу частку.",
+                    related_id=booking_id, related_type="booking",
+                )
+            except Exception:
+                pass
+        return {"ok": True, "payment_status": new_status or "executor_confirmed"}
+    else:
+        # Executor rejects — mark as disputed; admin must intervene
+        await db.bookings.update_one(
+            {"booking_id": booking_id},
+            {"$set": {"payment_status": "disputed", "executor_rejected_at": now}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": booking_id},
+            {"$set": {"payment_status": "disputed", "updated_at": now}},
+        )
+        admin = await db.users.find_one({"role": "admin"}, {"_id": 0, "user_id": 1})
+        if admin:
+            try:
+                await notify_user(
+                    admin["user_id"],
+                    "payment_disputed",
+                    "⚠ Спір по оплаті",
+                    f"Виконавець заявив що НЕ отримав платіж за бронь {booking_id}. Зв'яжіться з обома сторонами.",
+                    related_id=booking_id, related_type="booking",
+                    channels=["inapp", "push", "email", "sms"],
+                )
+            except Exception:
+                pass
+        # Notify client too
+        if b.get("client_id"):
+            try:
+                await notify_user(
+                    b["client_id"],
+                    "payment_disputed",
+                    "Виконавець не отримав платежу",
+                    "Виконавець не побачив ваш переказ. Адмін зв'яжеться з вами для уточнення.",
+                    related_id=booking_id, related_type="booking",
+                )
+            except Exception:
+                pass
+        return {"ok": True, "payment_status": "disputed"}
 
 
 @api_router.post("/admin/payments/{transaction_id}/verify")
@@ -7170,29 +7774,70 @@ async def verify_manual_payment(
     action = (payload or {}).get("action", "approve")  # approve | reject
     if action not in ("approve", "reject"):
         raise HTTPException(status_code=422, detail="action must be approve|reject")
-    new_status = "paid" if action == "approve" else "rejected"
-    await db.payment_transactions.update_one(
-        {"transaction_id": transaction_id},
-        {"$set": {"payment_status": new_status, "verified_by": current_user.user_id, "verified_at": datetime.now(timezone.utc)}},
-    )
-    await db.bookings.update_one(
-        {"booking_id": txn["booking_id"]},
-        {"$set": {"payment_status": new_status, "paid_at": datetime.now(timezone.utc) if action == "approve" else None}},
-    )
-    # Notify client
-    if txn.get("user_id"):
-        try:
-            await notify_user(
-                txn["user_id"],
-                "payment_verified" if action == "approve" else "payment_rejected",
-                "Платіж підтверджено" if action == "approve" else "Платіж відхилено",
-                "Дякуємо! Платіж зарахований." if action == "approve" else "Адмін не зміг знайти ваш платіж. Перевірте реквізити і спробуйте знову.",
-                related_id=txn["booking_id"],
-                related_type="booking",
-            )
-        except Exception:
-            pass
-    return {"ok": True, "status": new_status}
+    if action == "approve":
+        # Admin confirms their share (commission) was received. Final paid only
+        # if executor ALSO confirmed receipt of their share.
+        now = datetime.now(timezone.utc)
+        await db.payment_transactions.update_one(
+            {"transaction_id": transaction_id},
+            {"$set": {"payment_status": "admin_confirmed", "verified_by": current_user.user_id, "verified_at": now}},
+        )
+        await db.bookings.update_one(
+            {"booking_id": txn["booking_id"]},
+            {"$set": {"admin_confirmed": True, "admin_confirmed_at": now}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": txn["booking_id"]},
+            {"$set": {"admin_confirmed": True, "admin_confirmed_at": now, "updated_at": now}},
+        )
+        final_status = await _finalize_payment_if_both_confirmed(txn["booking_id"])
+        # Notify client + provider
+        b = await db.bookings.find_one({"booking_id": txn["booking_id"]}, {"_id": 0})
+        notify_targets = []
+        if b and b.get("client_id"):
+            notify_targets.append(b["client_id"])
+        if b and b.get("provider_id") and not b.get("executor_confirmed"):
+            notify_targets.append(b["provider_id"])
+        for uid in notify_targets:
+            try:
+                await notify_user(
+                    uid,
+                    "admin_confirmed_payment",
+                    "Адмін підтвердив отримання комісії",
+                    "Чекаємо підтвердження виконавця." if final_status != "paid" else "Завдання повністю оплачено.",
+                    related_id=txn["booking_id"], related_type="booking",
+                )
+            except Exception:
+                pass
+        return {"ok": True, "payment_status": final_status or "admin_confirmed"}
+    else:
+        # Reject — mark txn rejected, booking disputed
+        now = datetime.now(timezone.utc)
+        await db.payment_transactions.update_one(
+            {"transaction_id": transaction_id},
+            {"$set": {"payment_status": "rejected", "verified_by": current_user.user_id, "verified_at": now}},
+        )
+        await db.bookings.update_one(
+            {"booking_id": txn["booking_id"]},
+            {"$set": {"payment_status": "disputed"}},
+        )
+        await db.tasks.update_many(
+            {"booking_id": txn["booking_id"]},
+            {"$set": {"payment_status": "disputed", "updated_at": now}},
+        )
+        # Notify client
+        if txn.get("user_id"):
+            try:
+                await notify_user(
+                    txn["user_id"],
+                    "payment_rejected",
+                    "Платіж відхилено",
+                    "Адмін не зміг знайти ваш платіж. Перевірте реквізити і спробуйте знову.",
+                    related_id=txn["booking_id"], related_type="booking",
+                )
+            except Exception:
+                pass
+        return {"ok": True, "payment_status": "rejected"}
 
 
 @api_router.get("/admin/payments/pending")

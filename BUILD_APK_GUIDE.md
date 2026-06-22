@@ -240,7 +240,7 @@ Settings → Security → Unknown Sources
 ### Дані не синхронізуються:
 ```
 Перевірте:
-1. Backend працює: curl https://handyhub-preview-1.preview.emergentagent.com/api/test
+1. Backend працює: curl https://payout-hub-20.preview.emergentagent.com/api/test
 2. Інтернет на пристрої
 3. URL в app.json правильний
 ```
@@ -248,7 +248,7 @@ Settings → Security → Unknown Sources
 ### Помилка "Network Error":
 ```
 Перевірте:
-1. Backend URL: https://handyhub-preview-1.preview.emergentagent.com
+1. Backend URL: https://payout-hub-20.preview.emergentagent.com
 2. CORS налаштовано на backend
 3. SSL сертифікат валідний
 ```
@@ -262,11 +262,11 @@ Settings → Security → Unknown Sources
 **Через Backend API:**
 ```bash
 # Всі користувачі
-curl https://handyhub-preview-1.preview.emergentagent.com/api/admin/users \
+curl https://payout-hub-20.preview.emergentagent.com/api/admin/users \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 
 # По ролях
-curl "https://handyhub-preview-1.preview.emergentagent.com/api/admin/users?role=provider"
+curl "https://payout-hub-20.preview.emergentagent.com/api/admin/users?role=provider"
 ```
 
 **Через MongoDB:**

@@ -83,11 +83,22 @@ export default function AvailableTasks() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const COMPLETED_STATUSES = ['completed_pending_payment', 'paid', 'completed'];
+  // A task is in "pending payment confirmation" stage when the client has
+  // marked the payment as sent but it isn't yet fully confirmed by BOTH
+  // executor and admin.
+  const isPendingConfirmation = (t: Task): boolean => {
+    const ps = (t as any).payment_status;
+    if (t.status === 'paid' || t.status === 'completed') return false;
+    return ps === 'pending_verification' || ps === 'executor_confirmed' || ps === 'admin_confirmed' || ps === 'disputed';
+  };
   const activeMyTasks = myTasks.filter(t => !COMPLETED_STATUSES.includes(t.status));
-  const doneTasks = myTasks.filter(t => COMPLETED_STATUSES.includes(t.status));
+  const pendingPayTasks = myTasks.filter(isPendingConfirmation);
+  const doneTasks = myTasks.filter(t => COMPLETED_STATUSES.includes(t.status) && !isPendingConfirmation(t));
   // Support deep-link tab param from dashboard tiles
-  const initialTab = (params.tab === 'my' || params.tab === 'done') ? params.tab : 'available';
-  const [activeTab, setActiveTab] = useState<'available' | 'my' | 'done'>(initialTab as any);
+  const initialTab = (params.tab === 'my' || params.tab === 'done' || params.tab === 'pending')
+    ? params.tab
+    : 'available';
+  const [activeTab, setActiveTab] = useState<'available' | 'my' | 'pending' | 'done'>(initialTab as any);
 
   const loadTasks = async () => {
     try {
@@ -317,6 +328,18 @@ export default function AvailableTasks() {
             Мої ({activeMyTasks.length})
           </Text>
         </TouchableOpacity>
+        {pendingPayTasks.length > 0 && (
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'pending' && styles.tabActivePending]}
+            onPress={() => setActiveTab('pending')}
+            data-testid="tab-pending-confirmation"
+          >
+            <Ionicons name="time-outline" size={14} color={activeTab === 'pending' ? '#b45309' : '#9ca3af'} style={{ marginRight: 3 }} />
+            <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextPending]} numberOfLines={1}>
+              Підтвердж. ({pendingPayTasks.length})
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[styles.tab, activeTab === 'done' && styles.tabActiveDone]}
           onPress={() => setActiveTab('done')}
@@ -350,6 +373,67 @@ export default function AvailableTasks() {
               <Ionicons name="briefcase-outline" size={64} color="#d1d5db" />
               <Text style={styles.emptyTitle}>У вас немає активних завдань</Text>
               <Text style={styles.emptySubtitle}>Прийміть завдання зі списку доступних</Text>
+            </View>
+          )
+        ) : activeTab === 'pending' ? (
+          pendingPayTasks.length > 0 ? (
+            <>
+              <View style={styles.pendingBanner} data-testid="pending-verification-banner">
+                <View style={styles.pendingBannerHeader}>
+                  <Ionicons name="time-outline" size={20} color="#b45309" />
+                  <Text style={styles.pendingBannerTitle}>
+                    Очікують підтвердження ({pendingPayTasks.length})
+                  </Text>
+                </View>
+                <Text style={styles.pendingBannerSubtitle}>
+                  Клієнт надіслав платіж. Завдання буде закрите, коли і виконавець, і адмін підтвердять отримання.
+                </Text>
+              </View>
+              {pendingPayTasks.map(task => {
+                const execOk = !!(task as any).executor_confirmed;
+                const adminOk = !!(task as any).admin_confirmed;
+                const isDisputed = (task as any).payment_status === 'disputed';
+                return (
+                  <TouchableOpacity
+                    key={task.task_id}
+                    style={[
+                      styles.pendingItemBig,
+                      isDisputed && { borderColor: '#fca5a5', backgroundColor: '#fef2f2' },
+                    ]}
+                    onPress={() => router.push(`/task-detail?id=${task.task_id}` as any)}
+                    data-testid={`pending-task-${task.task_id}`}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pendingItemTitle} numberOfLines={2}>
+                        {task.title || 'Завдання'}
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
+                        <Text style={{ fontSize: 12, color: execOk ? '#059669' : '#92400e', fontWeight: '700' }}>
+                          {execOk ? '✓' : '○'} Виконавець
+                        </Text>
+                        <Text style={{ fontSize: 12, color: adminOk ? '#059669' : '#92400e', fontWeight: '700' }}>
+                          {adminOk ? '✓' : '○'} Адмін
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#92400e', fontWeight: '600' }}>
+                          {((task as any).payment_method || '').toUpperCase()}
+                        </Text>
+                      </View>
+                      {isDisputed && (
+                        <Text style={{ fontSize: 12, color: '#dc2626', marginTop: 6, fontWeight: '600' }}>
+                          ⚠ Виник спір. Адмін розгляне.
+                        </Text>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-forward" size={22} color="#b45309" />
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="time-outline" size={64} color="#d1d5db" />
+              <Text style={styles.emptyTitle}>Немає платежів в очікуванні</Text>
+              <Text style={styles.emptySubtitle}>Тут з'являться завдання після того як клієнт надішле платіж</Text>
             </View>
           )
         ) : (
@@ -641,6 +725,34 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginTop: 4,
   },
+  pendingBanner: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#fcd34d',
+  },
+  pendingBannerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pendingBannerTitle: { fontSize: 15, fontWeight: '800', color: '#92400e' },
+  pendingBannerSubtitle: { fontSize: 12, color: '#92400e', marginTop: 4, marginBottom: 10, lineHeight: 16 },
+  pendingItem: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#fff', borderRadius: 10, padding: 12, marginTop: 8,
+    borderWidth: 1, borderColor: '#fde68a', gap: 12,
+  },
+  pendingItemTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  pendingItemBig: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#fffbeb', borderRadius: 14, padding: 16, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#fcd34d', gap: 12,
+  },
+  tabActivePending: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#b45309',
+  },
+  tabTextPending: { color: '#b45309', fontWeight: '700' },
+
   doneSummaryCard: {
     backgroundColor: '#fff',
     borderRadius: 16,

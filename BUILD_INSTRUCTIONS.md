@@ -144,7 +144,7 @@ npx eas update --branch production
 ### Q: Чи потрібен окремий сервер?
 **A:** Ні! Ваш backend вже працює на:
 ```
-https://handyhub-preview-1.preview.emergentagent.com
+https://payout-hub-20.preview.emergentagent.com
 ```
 
 ---
@@ -154,7 +154,7 @@ https://handyhub-preview-1.preview.emergentagent.com
 Виконайте команду і перевірте:
 ```bash
 # Backend працює?
-curl https://handyhub-preview-1.preview.emergentagent.com/api/test
+curl https://payout-hub-20.preview.emergentagent.com/api/test
 
 # MongoDB працює?
 sudo systemctl status mongod
