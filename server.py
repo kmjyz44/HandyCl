@@ -7,7 +7,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
@@ -425,7 +425,7 @@ class ExecutorProfile(BaseModel):
     profile_id: str
     user_id: str
     bio: Optional[str] = None
-    skills: List[str] = []
+    skills: List[Union[str, Dict[str, Any]]] = []
     experience_years: Optional[int] = None
     hourly_rate: Optional[float] = None
     # Service pricing options
@@ -465,7 +465,7 @@ class ExecutorProfile(BaseModel):
 
 class ExecutorProfileCreate(BaseModel):
     bio: Optional[str] = None
-    skills: List[str] = []
+    skills: List[Union[str, Dict[str, Any]]] = []
     experience_years: Optional[int] = None
     hourly_rate: Optional[float] = None
     fixed_price_packages: List[Dict[str, Any]] = []
@@ -486,7 +486,8 @@ class ExecutorProfileCreate(BaseModel):
     longitude: Optional[float] = None
 class ExecutorProfileUpdate(BaseModel):
     bio: Optional[str] = None
-    skills: Optional[List[str]] = None
+    # Skills can be plain strings (legacy) or rich objects {id, category_id, name, hourly_rate, status}
+    skills: Optional[List[Union[str, Dict[str, Any]]]] = None
     experience_years: Optional[int] = None
     hourly_rate: Optional[float] = None
     fixed_price_packages: Optional[List[Dict[str, Any]]] = None
