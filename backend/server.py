@@ -3584,11 +3584,12 @@ async def get_executors_by_service(
         # ── Skill filter ──────────────────────────────────────────────
         if service_name:
             skills = profile.get("skills") or []
-            # skills can be list of strings or list of dicts
+            # skills can be list of strings or list of dicts {id, category_id, name, ...}
             skill_names = []
             for s in skills:
                 if isinstance(s, dict):
-                    skill_names.append((s.get("label") or s.get("id") or "").lower())
+                    # `name` is the human-readable skill (Ukrainian); fall back to label/id
+                    skill_names.append((s.get("name") or s.get("label") or s.get("id") or "").lower())
                 else:
                     skill_names.append(str(s).lower())
             svc_lower = service_name.lower()
