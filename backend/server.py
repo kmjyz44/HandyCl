@@ -7904,26 +7904,52 @@ async def get_payment_reminders(current_user: User = Depends(get_current_user)):
     Client → tasks waiting for payment
     Provider → tasks waiting for executor confirmation
     Admin → all pending payments needing admin verification
+    Returns first_pending_id so the banner can deep-link directly to the relevant detail page.
     """
-    counts = {"role": current_user.role, "needs_pay": 0, "needs_executor_confirm": 0, "needs_admin_verify": 0}
+    counts: Dict[str, Any] = {
+        "role": current_user.role,
+        "needs_pay": 0,
+        "needs_executor_confirm": 0,
+        "needs_admin_verify": 0,
+        "first_pending_id": None,        # booking_id (client/admin) or task_id (executor)
+        "first_pending_kind": None,       # 'booking' | 'task'
+    }
     if current_user.role == UserRole.CLIENT:
-        counts["needs_pay"] = await db.bookings.count_documents({
+        q = {
             "client_id": current_user.user_id,
             "status": "completed_pending_payment",
             "$or": [{"payment_status": {"$exists": False}}, {"payment_status": "pending"}],
-        })
+        }
+        counts["needs_pay"] = await db.bookings.count_documents(q)
+        if counts["needs_pay"] > 0:
+            first = await db.bookings.find_one(q, {"_id": 0, "booking_id": 1}, sort=[("created_at", -1)])
+            if first:
+                # Map booking -> linked task (task-detail is the UI entry point with the Pay button)
+                t = await db.tasks.find_one({"booking_id": first["booking_id"]}, {"_id": 0, "task_id": 1})
+                counts["first_pending_id"] = (t or {}).get("task_id") or first["booking_id"]
+                counts["first_pending_kind"] = "task" if t else "booking"
     elif current_user.role == UserRole.PROVIDER:
-        counts["needs_executor_confirm"] = await db.bookings.count_documents({
+        q = {
             "provider_id": current_user.user_id,
             "payment_status": "pending_verification",
             "executor_confirmed": {"$ne": True},
-        })
+        }
+        counts["needs_executor_confirm"] = await db.bookings.count_documents(q)
+        if counts["needs_executor_confirm"] > 0:
+            first = await db.bookings.find_one(q, {"_id": 0, "booking_id": 1}, sort=[("manual_payment_submitted_at", -1)])
+            if first:
+                t = await db.tasks.find_one({"booking_id": first["booking_id"]}, {"_id": 0, "task_id": 1})
+                counts["first_pending_id"] = (t or {}).get("task_id") or first["booking_id"]
+                counts["first_pending_kind"] = "task" if t else "booking"
     elif current_user.role == UserRole.ADMIN:
         counts["needs_admin_verify"] = await db.bookings.count_documents({
             "payment_status": {"$in": ["pending_verification", "executor_confirmed"]},
             "admin_confirmed": {"$ne": True},
         })
         counts["disputed"] = await db.bookings.count_documents({"payment_status": "disputed"})
+        if counts["needs_admin_verify"] > 0 or counts.get("disputed", 0) > 0:
+            counts["first_pending_id"] = "all"  # link to /admin-payments list
+            counts["first_pending_kind"] = "admin_list"
     return counts
 
 
