@@ -91,7 +91,7 @@ const US_METHODS = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function TaskDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, autopay } = useLocalSearchParams<{ id: string; autopay?: string }>();
   const router = useRouter();
   const { user } = useAuthStore();
 
@@ -136,6 +136,16 @@ export default function TaskDetail() {
   const [decliningLoading, setDecliningLoading] = useState(false);
 
   useEffect(() => { loadTask(); }, [taskId]);
+
+  // Auto-open payment modal if banner deep-linked here with ?autopay=1
+  useEffect(() => {
+    if (autopay === '1' && task && task.status === 'completed_pending_payment'
+        && task.payment_status !== 'pending_verification'
+        && task.client_id === user?.user_id) {
+      setShowPayment(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autopay, task?.task_id, task?.status, task?.payment_status]);
 
   const loadTask = async () => {
     try {

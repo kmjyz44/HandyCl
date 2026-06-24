@@ -11,6 +11,8 @@ type Reminders = {
   needs_executor_confirm?: number;
   needs_admin_verify?: number;
   disputed?: number;
+  first_pending_id?: string | null;
+  first_pending_kind?: string | null;
 };
 
 export default function PaymentReminderBanner() {
@@ -50,7 +52,15 @@ export default function PaymentReminderBanner() {
     color = '#dc2626';
     bg = '#fef2f2';
     border = '#fca5a5';
-    onPress = () => router.push('/(tabs)/bookings' as any);
+    onPress = () => {
+      // Deep-link to the first pending task's detail (where Pay button lives).
+      // Fall back to /bookings list if no task_id available.
+      if (data.first_pending_id) {
+        router.push(`/task-detail?id=${data.first_pending_id}&autopay=1` as any);
+      } else {
+        router.push('/(tabs)/bookings' as any);
+      }
+    };
     testId = 'reminder-client-pay';
   } else if (data.role === 'provider' && (data.needs_executor_confirm || 0) > 0) {
     title = `Підтвердьте отримання (${data.needs_executor_confirm})`;
@@ -59,7 +69,13 @@ export default function PaymentReminderBanner() {
     color = '#059669';
     bg = '#ecfdf5';
     border = '#a7f3d0';
-    onPress = () => router.push('/(tabs)/tasks?tab=pending' as any);
+    onPress = () => {
+      if (data.first_pending_id) {
+        router.push(`/task-detail?id=${data.first_pending_id}` as any);
+      } else {
+        router.push('/(tabs)/tasks?tab=pending' as any);
+      }
+    };
     testId = 'reminder-provider-confirm';
   } else if (data.role === 'admin' && ((data.needs_admin_verify || 0) > 0 || (data.disputed || 0) > 0)) {
     const total = (data.needs_admin_verify || 0) + (data.disputed || 0);

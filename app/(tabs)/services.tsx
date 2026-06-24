@@ -19,6 +19,7 @@ import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useServiceStore } from '../../store/serviceStore';
 import { api } from '../../utils/api';
+import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 import { showAlert, showConfirm } from '../../utils/alert';
 import { compressBase64Image } from '../../utils/imageCompress';
 
@@ -363,6 +364,7 @@ export default function Services() {
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        <PaymentReminderBanner />
         {activeTab === 'services' ? (
           services.map((service) => (
             <View key={service.service_id} style={styles.card}>
