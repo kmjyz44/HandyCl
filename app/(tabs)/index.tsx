@@ -689,6 +689,7 @@ export default function HomeScreen() {
 
         {/* Category grid */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+          <PaymentReminderBanner />
           <Text style={s.sectionTitle}>Оберіть категорію</Text>
           <View style={s.grid}>
             {filteredCategories.map(cat => {

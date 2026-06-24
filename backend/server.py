@@ -7670,6 +7670,41 @@ async def _finalize_payment_if_both_confirmed(booking_id: str):
     return b.get("payment_status") or "pending_verification"
 
 
+@api_router.post("/admin/test/mark-user-paid")
+async def admin_test_mark_user_paid(
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(require_admin),
+):
+    """TEST helper — marks ALL bookings/tasks of a given user as fully paid.
+    Body: {"email": "client@..."} (matches client or provider role)."""
+    email = (payload.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=422, detail="email required")
+    u = await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}, {"_id": 0, "user_id": 1, "role": 1, "email": 1})
+    if not u:
+        raise HTTPException(status_code=404, detail=f"User '{email}' not found")
+    uid = u["user_id"]
+    now = datetime.now(timezone.utc)
+    q = {"$or": [{"client_id": uid}, {"provider_id": uid}]}
+    set_payload = {
+        "status": "paid",
+        "payment_status": "paid",
+        "executor_confirmed": True,
+        "admin_confirmed": True,
+        "paid_at": now,
+    }
+    bookings_res = await db.bookings.update_many(q, {"$set": set_payload})
+    task_set = {**set_payload, "status": TaskStatus.PAID, "updated_at": now}
+    tasks_res = await db.tasks.update_many(q, {"$set": task_set})
+    return {
+        "ok": True,
+        "user_email": u["email"],
+        "role": u.get("role"),
+        "bookings_updated": bookings_res.modified_count,
+        "tasks_updated": tasks_res.modified_count,
+    }
+
+
 @api_router.post("/admin/payments/backfill-paid-status")
 async def backfill_paid_status(current_user: User = Depends(require_admin)):
     """One-time fixer: for bookings where both executor_confirmed AND admin_confirmed
