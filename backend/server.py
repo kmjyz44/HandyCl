@@ -7636,7 +7636,11 @@ async def _finalize_payment_if_both_confirmed(booking_id: str):
         now = datetime.now(timezone.utc)
         await db.bookings.update_one(
             {"booking_id": booking_id},
-            {"$set": {"payment_status": "paid", "paid_at": now}},
+            {"$set": {
+                "status": "paid",
+                "payment_status": "paid",
+                "paid_at": now,
+            }},
         )
         await db.tasks.update_many(
             {"booking_id": booking_id},
@@ -7664,6 +7668,22 @@ async def _finalize_payment_if_both_confirmed(booking_id: str):
     if admin_ok:
         return "admin_confirmed"
     return b.get("payment_status") or "pending_verification"
+
+
+@api_router.post("/admin/payments/backfill-paid-status")
+async def backfill_paid_status(current_user: User = Depends(require_admin)):
+    """One-time fixer: for bookings where both executor_confirmed AND admin_confirmed
+    are True but status is still 'completed_pending_payment', bump them to 'paid'.
+    Also mirrors onto tasks."""
+    cursor = db.bookings.find(
+        {"executor_confirmed": True, "admin_confirmed": True, "status": {"$ne": "paid"}},
+        {"_id": 0, "booking_id": 1},
+    )
+    fixed = 0
+    async for b in cursor:
+        await _finalize_payment_if_both_confirmed(b["booking_id"])
+        fixed += 1
+    return {"ok": True, "fixed": fixed}
 
 
 @api_router.post("/payments/executor-confirm")
@@ -7840,6 +7860,36 @@ async def verify_manual_payment(
             except Exception:
                 pass
         return {"ok": True, "payment_status": "rejected"}
+
+
+@api_router.get("/payments/reminders")
+async def get_payment_reminders(current_user: User = Depends(get_current_user)):
+    """Return counts of pending payment-related actions for the current user.
+    Used by the in-app top reminder banner.
+    Client → tasks waiting for payment
+    Provider → tasks waiting for executor confirmation
+    Admin → all pending payments needing admin verification
+    """
+    counts = {"role": current_user.role, "needs_pay": 0, "needs_executor_confirm": 0, "needs_admin_verify": 0}
+    if current_user.role == UserRole.CLIENT:
+        counts["needs_pay"] = await db.bookings.count_documents({
+            "client_id": current_user.user_id,
+            "status": "completed_pending_payment",
+            "$or": [{"payment_status": {"$exists": False}}, {"payment_status": "pending"}],
+        })
+    elif current_user.role == UserRole.PROVIDER:
+        counts["needs_executor_confirm"] = await db.bookings.count_documents({
+            "provider_id": current_user.user_id,
+            "payment_status": "pending_verification",
+            "executor_confirmed": {"$ne": True},
+        })
+    elif current_user.role == UserRole.ADMIN:
+        counts["needs_admin_verify"] = await db.bookings.count_documents({
+            "payment_status": {"$in": ["pending_verification", "executor_confirmed"]},
+            "admin_confirmed": {"$ne": True},
+        })
+        counts["disputed"] = await db.bookings.count_documents({"payment_status": "disputed"})
+    return counts
 
 
 @api_router.get("/admin/payments/pending")
