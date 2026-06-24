@@ -506,6 +506,10 @@ export const api = {
     const res = await client.post(`/admin/payments/${transactionId}/verify`, { action });
     return res.data;
   },
+  getPaymentReminders: async () => {
+    const res = await client.get('/payments/reminders');
+    return res.data;
+  },
   verifyManualPayment: async (transactionId: string, action: 'approve' | 'reject') => {
     const res = await client.post(`/admin/payments/${transactionId}/verify`, { action });
     return res.data;

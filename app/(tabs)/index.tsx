@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { useBookingStore } from '../../store/bookingStore';
 import { api } from '../../utils/api';
+import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
 
@@ -161,6 +162,8 @@ function ProviderDashboard() {
         </Text>
         <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>Ваші завдання на сьогодні</Text>
       </View>
+
+      <PaymentReminderBanner />
 
       {/* Stats row — clickable tiles */}
       <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12 }}>

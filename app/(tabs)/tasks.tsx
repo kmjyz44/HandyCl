@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../../utils/api';
+import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 import { useAuthStore } from '../../store/authStore';
 
 const CATEGORIES: Record<string, { name: string; icon: string }> = {
@@ -309,6 +310,8 @@ export default function AvailableTasks() {
           )}
         </TouchableOpacity>
       </View>
+
+      <PaymentReminderBanner />
 
       {/* Tabs */}
       <View style={styles.tabs}>

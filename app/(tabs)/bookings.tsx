@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useBookingStore } from '../../store/bookingStore';
 import { useAuthStore } from '../../store/authStore';
 import { api } from '../../utils/api';
+import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 
 const STATUS_COLORS: Record<string, string> = {
   pending:                   '#f59e0b',
@@ -274,6 +275,8 @@ export default function Bookings() {
           {user?.role === 'provider' ? 'Ваші призначені завдання' : 'Ваші замовлення послуг'}
         </Text>
       </View>
+
+      <PaymentReminderBanner />
 
       {/* Tabs */}
       <View style={styles.tabs}>
