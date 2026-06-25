@@ -510,6 +510,12 @@ export const api = {
     const res = await client.get('/payments/reminders');
     return res.data;
   },
+  createSessionFromOAuth: async (sessionId: string) => {
+    const res = await client.post('/auth/session', null, {
+      headers: { 'X-Session-ID': sessionId },
+    });
+    return res.data;
+  },
   verifyManualPayment: async (transactionId: string, action: 'approve' | 'reject') => {
     const res = await client.post(`/admin/payments/${transactionId}/verify`, { action });
     return res.data;

@@ -71,6 +71,34 @@ export default function Login() {
           <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleLogin} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Увійти</Text>}
           </TouchableOpacity>
+
+          {/* OAuth divider */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 16 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: '#e5e7eb' }} />
+            <Text style={{ marginHorizontal: 12, fontSize: 12, color: '#9ca3af' }}>або</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: '#e5e7eb' }} />
+          </View>
+
+          {/* Google OAuth button */}
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+              backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d1d5db',
+              paddingVertical: 12, borderRadius: 12,
+            }}
+            onPress={() => {
+              // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+              if (typeof window !== 'undefined') {
+                const redirectUrl = window.location.origin + '/auth-callback';
+                window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+              }
+            }}
+            data-testid="google-login-btn"
+          >
+            <Ionicons name="logo-google" size={20} color="#ea4335" />
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>Увійти через Google</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={() => router.push('/register')} style={styles.linkContainer}>
             <Text style={styles.linkText}>Немає акаунту? <Text style={styles.link}>Зареєструватися</Text></Text>
           </TouchableOpacity>

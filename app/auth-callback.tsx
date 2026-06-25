@@ -6,34 +6,33 @@ import { api } from '../utils/api';
 
 export default function AuthCallback() {
   const router = useRouter();
-  const { session_id } = useLocalSearchParams();
+  const params = useLocalSearchParams();
   const { setUser, setToken } = useAuthStore();
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
       try {
-        if (!session_id || typeof session_id !== 'string') {
-          throw new Error('Invalid session ID');
+        // Emergent Auth returns session_id in URL HASH (#session_id=...), not query.
+        // Fall back to query param for backwards compat.
+        let session_id: string | null = (params.session_id as string) || null;
+        if (!session_id && typeof window !== 'undefined' && window.location?.hash) {
+          const m = window.location.hash.match(/session_id=([^&]+)/);
+          if (m) session_id = decodeURIComponent(m[1]);
         }
+        if (!session_id) throw new Error('Invalid session ID');
 
-        // Exchange OAuth session_id for user session
         const response = await api.createSessionFromOAuth(session_id);
-
-        // Store token and user data
         await setToken(response.session_token);
         setUser(response.user);
-
-        // Redirect to main app
         router.replace('/(tabs)');
       } catch (error: any) {
         console.error('OAuth callback error:', error);
-        // Redirect back to login on error
         router.replace('/login');
       }
     };
-
     handleOAuthCallback();
-  }, [session_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={styles.container}>
