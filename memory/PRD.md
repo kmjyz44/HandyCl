@@ -29,6 +29,13 @@ Full feature set requested across the iterations:
 
 ## Implemented (chronological)
 
+### 2026-06-25: Modern in-app notifications (toasts) + confirm dialog
+- New `components/ToastHost.tsx` (animated cross-platform toasts: success/error/info) + `components/ConfirmHost.tsx` (modern modal confirm, `confirmDialog(): Promise<boolean>`, destructive variant).
+- Rewired `utils/alert.ts` so `showAlert`→toast and `showConfirm`/`showAlertWithButtons`→modal — upgrades ALL ~70 existing call sites across 12 screens automatically.
+- Mounted both hosts in `app/_layout.tsx`. Converted remaining direct `Alert.alert` in `users.tsx` to helpers.
+- esbuild syntax-validated. Visual check pending on live Netlify after "Save to GitHub".
+
+
 ### 2026-06-25: Fix — Admin "Delete User" button did nothing (web)
 - RCA: `app/(tabs)/users.tsx` `handleDelete` used React Native `Alert.alert` with button callbacks, which are no-ops on React Native Web → the "Delete" `onPress` never fired, so `DELETE /api/admin/users/{id}` was never called. Backend was always healthy.
 - Fix: switched to cross-platform `showConfirm`/`showAlert` from `utils/alert.ts` (uses `window.confirm` on web). Errors now surface `response.data.detail`.
