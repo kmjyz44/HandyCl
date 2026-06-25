@@ -146,19 +146,18 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Messages tab — visible for clients and providers with unread badge */}
+      {/* Messages tab — hidden from bottom nav (kept routable for task chats & help center) */}
       <Tabs.Screen
         name="messages"
         options={{
           title: 'Чат',
-          href: (role === 'client' || role === 'provider') ? undefined : null,
+          href: null,
           tabBarIcon: ({ color, size }) => (
             <View>
               <Ionicons name="chatbubbles-outline" size={size} color={color} />
               <UnreadBadge count={unreadCount} />
             </View>
           ),
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
         }}
       />
 
