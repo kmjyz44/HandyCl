@@ -2,7 +2,7 @@
 import os
 import requests
 
-API_URL = os.environ.get("PUBLIC_API_URL", "https://payout-hub-20.preview.emergentagent.com")
+API_URL = os.environ.get("PUBLIC_API_URL", "https://payment-flow-test-39.preview.emergentagent.com")
 PROVIDER_EMAIL = "provider@handyhub.com"
 PROVIDER_PASS = "Provider2024!"
 

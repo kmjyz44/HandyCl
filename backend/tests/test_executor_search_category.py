@@ -7,7 +7,7 @@ import requests
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 
-API_URL = os.environ.get("PUBLIC_API_URL", "https://payout-hub-20.preview.emergentagent.com")
+API_URL = os.environ.get("PUBLIC_API_URL", "https://payment-flow-test-39.preview.emergentagent.com")
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("DB_NAME", "test_database")
 
