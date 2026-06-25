@@ -138,6 +138,8 @@ function ProviderDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'available' | 'my'>('available');
   const [statFilter, setStatFilter] = useState<'available' | 'my' | 'done' | null>(null);
+  // Sub-filter for 'Мої завдання' tab — group by stage
+  const [myFilter, setMyFilter] = useState<'all' | 'assigned' | 'in_progress' | 'pending_pay' | 'paid'>('all');
 
   const load = async () => {
     try {
@@ -151,7 +153,16 @@ function ProviderDashboard() {
 
   useEffect(() => { load(); }, []);
 
-  const displayed = activeTab === 'available' ? tasks : myTasks;
+  const matchesMyFilter = (task: any): boolean => {
+    if (myFilter === 'all') return true;
+    if (myFilter === 'assigned') return task.status === 'assigned' || task.status === 'accepted';
+    if (myFilter === 'in_progress') return ['on_the_way', 'started', 'in_progress'].includes(task.status);
+    if (myFilter === 'pending_pay') return task.status === 'completed_pending_payment';
+    if (myFilter === 'paid') return task.status === 'paid' || task.status === 'completed';
+    return true;
+  };
+  const myFiltered = myTasks.filter(matchesMyFilter);
+  const displayed = activeTab === 'available' ? tasks : myFiltered;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -204,6 +215,51 @@ function ProviderDashboard() {
         ))}
       </View>
 
+      {/* Sub-filter chips — visible only on "Мої завдання" tab */}
+      {activeTab === 'my' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}
+        >
+          {([
+            { id: 'all', label: 'Усі', icon: 'layers-outline', color: '#374151' },
+            { id: 'assigned', label: 'Призначено', icon: 'briefcase-outline', color: '#f59e0b' },
+            { id: 'in_progress', label: 'В роботі', icon: 'time-outline', color: '#2563eb' },
+            { id: 'pending_pay', label: 'Очікує оплати', icon: 'card-outline', color: '#dc2626' },
+            { id: 'paid', label: 'Оплачено', icon: 'checkmark-circle-outline', color: '#059669' },
+          ] as { id: typeof myFilter; label: string; icon: any; color: string }[]).map(chip => {
+            const count = chip.id === 'all'
+              ? myTasks.length
+              : myTasks.filter(t => {
+                  if (chip.id === 'assigned') return ['assigned','accepted'].includes(t.status);
+                  if (chip.id === 'in_progress') return ['on_the_way','started','in_progress'].includes(t.status);
+                  if (chip.id === 'pending_pay') return t.status === 'completed_pending_payment';
+                  if (chip.id === 'paid') return ['paid','completed'].includes(t.status);
+                  return false;
+                }).length;
+            const active = myFilter === chip.id;
+            return (
+              <TouchableOpacity
+                key={chip.id}
+                style={[
+                  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8,
+                    borderRadius: 999, backgroundColor: active ? chip.color : '#fff',
+                    borderWidth: 1, borderColor: active ? chip.color : '#e5e7eb' },
+                ]}
+                onPress={() => setMyFilter(chip.id)}
+                data-testid={`provider-filter-${chip.id}`}
+              >
+                <Ionicons name={chip.icon} size={14} color={active ? '#fff' : chip.color} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#fff' : chip.color }}>
+                  {chip.label} ({count})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
       {/* Task list */}
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -220,7 +276,11 @@ function ProviderDashboard() {
               <Ionicons name="clipboard-outline" size={56} color="#d1d5db" />
               <Text style={{ fontSize: 18, fontWeight: '700', color: '#9ca3af' }}>Завдань немає</Text>
               <Text style={{ fontSize: 14, color: '#9ca3af', textAlign: 'center' }}>
-                {activeTab === 'available' ? 'Нових завдань у вашій зоні поки немає' : 'Ви ще не прийняли жодного завдання'}
+                {activeTab === 'available'
+                  ? 'Нових завдань у вашій зоні поки немає'
+                  : myFilter !== 'all'
+                  ? 'У цій категорії завдань немає. Спробуйте інший фільтр.'
+                  : 'Ви ще не прийняли жодного завдання'}
               </Text>
             </View>
           ) : displayed.map(task => {
