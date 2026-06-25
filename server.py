@@ -197,6 +197,7 @@ class UserRegister(BaseModel):
     name: str
     role: UserRole
     phone: Optional[str] = None
+    accepted_terms: Optional[bool] = False
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -1653,6 +1654,9 @@ async def get_conversation_messages(
 # Authentication Routes
 @api_router.post("/auth/register")
 async def register(user_data: UserRegister):
+    # Require accepted_terms
+    if not user_data.accepted_terms:
+        raise HTTPException(status_code=400, detail="You must accept the Terms of Use and Privacy Policy to register")
     # Check if user exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
@@ -1672,6 +1676,9 @@ async def register(user_data: UserRegister):
     user_dict = user.dict()
     # Store plain password for admin view (user requirement)
     user_dict["plain_password"] = user_data.password
+    # Audit-trail field for ToS/Privacy acceptance
+    user_dict["accepted_terms_at"] = datetime.now(timezone.utc)
+    user_dict["accepted_terms_version"] = "2026-02-15"
 
     await db.users.insert_one(user_dict)
 

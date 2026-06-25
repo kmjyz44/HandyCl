@@ -19,6 +19,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const handleRegister = async () => {
     if (!email || !password || !name) {
@@ -29,10 +30,14 @@ export default function Register() {
       setErrorMsg('Пароль має бути мінімум 6 символів');
       return;
     }
+    if (!acceptedTerms) {
+      setErrorMsg('Будь ласка, погодьтеся з Terms of Use та Privacy Policy');
+      return;
+    }
     setErrorMsg('');
     setLoading(true);
     try {
-      const response = await api.register({ email, password, name, phone, role });
+      const response = await api.register({ email, password, name, phone, role, accepted_terms: true } as any);
       await setToken(response.session_token);
       setUser(response.user);
       // If we have a pending booking draft (guest interrupted booking flow),
@@ -102,6 +107,27 @@ export default function Register() {
               </TouchableOpacity>
             </View>
           </View>
+          <TouchableOpacity
+            style={termsStyles.row}
+            onPress={() => setAcceptedTerms(v => !v)}
+            data-testid="accept-terms-checkbox"
+          >
+            <View style={[termsStyles.box, acceptedTerms && termsStyles.boxActive]}>
+              {acceptedTerms && <Ionicons name="checkmark" size={16} color="#fff" />}
+            </View>
+            <Text style={termsStyles.text}>
+              I agree to the{' '}
+              <Text style={termsStyles.link} onPress={() => router.push('/terms' as any)}>
+                Terms of Use
+              </Text>
+              {' '}and{' '}
+              <Text style={termsStyles.link} onPress={() => router.push('/privacy' as any)}>
+                Privacy Policy
+              </Text>
+              . I understand that all payments and communications must be conducted through the HandyHub platform.
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleRegister} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create Account</Text>}
           </TouchableOpacity>
@@ -141,4 +167,15 @@ const styles = StyleSheet.create({
   linkContainer: { marginTop: 24, alignItems: 'center' },
   linkText: { fontSize: 14, color: '#6b7280' },
   link: { color: '#2563eb', fontWeight: '600' },
+});
+
+const termsStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 12, paddingHorizontal: 4, marginBottom: 8 },
+  box: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#9ca3af',
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginTop: 1,
+  },
+  boxActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  text: { flex: 1, fontSize: 13, color: '#374151', lineHeight: 18 },
+  link: { color: '#2563eb', fontWeight: '600', textDecorationLine: 'underline' },
 });
