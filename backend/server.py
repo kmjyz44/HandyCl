@@ -1761,10 +1761,12 @@ async def google_auth_redirect(request: Request):
 
 @api_router.post("/auth/session")
 async def create_session_from_oauth(session_id: str = Header(..., alias="X-Session-ID")):
-    """Exchange OAuth session_id for user session"""
+    """Exchange OAuth session_id for user session.
+    REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    """
     async with httpx.AsyncClient() as client:
         response = await client.get(
-
+            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
             headers={"X-Session-ID": session_id}
         )
 
@@ -1777,7 +1779,7 @@ async def create_session_from_oauth(session_id: str = Header(..., alias="X-Sessi
     user_doc = await db.users.find_one({"email": oauth_data["email"]}, {"_id": 0})
 
     if user_doc:
-        # Update existing user
+        # Update existing user (Google login)
         await db.users.update_one(
             {"user_id": user_doc["user_id"]},
             {"$set": {
@@ -1787,8 +1789,10 @@ async def create_session_from_oauth(session_id: str = Header(..., alias="X-Sessi
             }}
         )
         user = User(**user_doc)
+        is_new_user = False
     else:
-        # Create new user (default role: client)
+        # New user — implicit acceptance of Terms on first Google sign-in (the
+        # button on the frontend states the user agrees to Terms & Privacy)
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user = User(
             user_id=user_id,
@@ -1798,7 +1802,12 @@ async def create_session_from_oauth(session_id: str = Header(..., alias="X-Sessi
             google_id=oauth_data["id"],
             role=UserRole.CLIENT
         )
-        await db.users.insert_one(user.dict())
+        user_dict = user.dict()
+        user_dict["accepted_terms_at"] = datetime.now(timezone.utc)
+        user_dict["accepted_terms_version"] = "2026-02-15"
+        user_dict["accepted_terms_via"] = "google_oauth"
+        await db.users.insert_one(user_dict)
+        is_new_user = True
 
     # Create session
     session_token = oauth_data["session_token"]
@@ -1812,7 +1821,8 @@ async def create_session_from_oauth(session_id: str = Header(..., alias="X-Sessi
 
     return {
         "user": user.dict(),
-        "session_token": session_token
+        "session_token": session_token,
+        "is_new_user": is_new_user
     }
 
 @api_router.get("/auth/me")
