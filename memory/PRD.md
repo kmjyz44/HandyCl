@@ -29,6 +29,16 @@ Full feature set requested across the iterations:
 
 ## Implemented (chronological)
 
+### 2026-06-25: SMS Phone Verification (Twilio) + Apple/Google Pay
+- Backend (`server.py` synced to all 3 copies):
+  - `POST /api/auth/send-phone-code` (auth) — optional {phone} to set/update; generates 6-digit code (10-min expiry, 60s cooldown), stores in `phone_verifications`, sends via existing `_send_sms_twilio` (raw Twilio Messages API, keys from `integration_keys`).
+  - `POST /api/auth/verify-phone` (auth) {code} — validates, sets `users.phone_verified=true`. Same expiry-fix pattern as email.
+  - Added `phone_verified: bool` to `User` model → returned in `/me`, `/login`, `/register`.
+- Frontend (repo): `utils/api.ts` `sendPhoneCode`/`verifyPhone`; new screen `app/verify-phone.tsx` (enter phone → SMS code → verify, with skip); my-profile "Підтвердження акаунту" section with Email + Phone status rows; `authStore` User gains `phone`/`phone_verified`.
+- Backend curl-tested e2e: send code (200, code stored) → wrong code (400) → correct (200) → /me phone_verified:true. PASS. (Twilio `sent:false` locally — keys only on prod Railway DB.)
+- **Apple Pay / Google Pay:** handled by existing Stripe hosted Checkout (`/api/payments/checkout`, `payment_method_types:["card"]`) — Stripe auto-surfaces Apple Pay & Google Pay wallets on supported devices/browsers; no extra code needed. Apple Pay domain verification is automatic for hosted Checkout.
+
+
 ### 2026-06-25: Email Verification (COMPLETE & backend-tested)
 - Backend (`server.py` + `backend/server.py` + local `/app/backend/server.py` all synced):
   - `POST /api/auth/register` generates a 6-digit code (10-min expiry), stores in `email_verifications`, emails via SendGrid.

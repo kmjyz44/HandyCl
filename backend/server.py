@@ -190,6 +190,7 @@ class User(BaseModel):
     payment_methods: Optional[List[dict]] = []
     saved_addresses: Optional[List[dict]] = []
     email_verified: bool = False
+    phone_verified: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserRegister(BaseModel):
@@ -1737,6 +1738,7 @@ async def register(user_data: UserRegister):
         "payment_methods": user.payment_methods or [],
         "saved_addresses": user.saved_addresses or [],
         "email_verified": False,
+        "phone_verified": False,
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
@@ -1840,6 +1842,64 @@ async def resend_verification(payload: Dict[str, Any] = Body(...)):
     except Exception:
         pass
     return {"ok": True}
+
+
+@api_router.post("/auth/send-phone-code")
+async def send_phone_code(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(get_current_user)):
+    """Send a 6-digit SMS code to verify the current user's phone.
+    Optional body: {"phone": "+1..."} to set/update the phone before sending. 60s cooldown."""
+    phone = (payload.get("phone") or current_user.phone or "").strip()
+    if not phone:
+        raise HTTPException(status_code=422, detail="Phone number required")
+    # If a new phone is provided, update the user record (and reset verified flag)
+    if payload.get("phone") and payload["phone"].strip() != (current_user.phone or ""):
+        await db.users.update_one({"user_id": current_user.user_id}, {"$set": {"phone": phone, "phone_verified": False}})
+    # 60s cooldown
+    last = await db.phone_verifications.find_one({"user_id": current_user.user_id})
+    if last and last.get("created_at"):
+        created = last["created_at"]
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - created).total_seconds() < 60:
+            raise HTTPException(status_code=429, detail="Please wait 60 seconds before requesting another code")
+    import random as _r
+    code = f"{_r.randint(0, 999999):06d}"
+    await db.phone_verifications.delete_many({"user_id": current_user.user_id})
+    await db.phone_verifications.insert_one({
+        "user_id": current_user.user_id, "phone": phone, "code": code,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "created_at": datetime.now(timezone.utc), "attempts": 0,
+    })
+    sent = await _send_sms_twilio(phone, f"HandyHub: your verification code is {code}. It expires in 10 minutes.")
+    return {"ok": True, "sent": sent}
+
+
+@api_router.post("/auth/verify-phone")
+async def verify_phone(payload: Dict[str, Any] = Body(...), current_user: User = Depends(get_current_user)):
+    """Verify the current user's phone with the 6-digit code. Body: {"code": "123456"}"""
+    code = (payload.get("code") or "").strip()
+    if not code:
+        raise HTTPException(status_code=422, detail="code required")
+    rec = await db.phone_verifications.find_one({"user_id": current_user.user_id})
+    if not rec:
+        raise HTTPException(status_code=400, detail="No verification pending")
+    if rec.get("attempts", 0) >= 5:
+        raise HTTPException(status_code=429, detail="Too many attempts. Request a new code.")
+    exp = rec.get("expires_at")
+    if exp:
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Code expired")
+    if rec.get("code") != code:
+        await db.phone_verifications.update_one({"_id": rec["_id"]}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=400, detail="Invalid code")
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {"phone_verified": True, "phone_verified_at": datetime.now(timezone.utc), "phone": rec.get("phone")}}
+    )
+    await db.phone_verifications.delete_many({"user_id": current_user.user_id})
+    return {"ok": True, "verified": True}
 
 
 @api_router.post("/auth/session")
