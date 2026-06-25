@@ -304,9 +304,50 @@ export default function TaskDetail() {
     }
   };
 
+  // Helper: open an external payment app via deep link (web + native)
+  const openPaymentApp = (method: string, handle: string, amount: number) => {
+    if (!handle) {
+      Alert.alert('Неможливо відкрити', 'Виконавець ще не вказав свій акаунт');
+      return;
+    }
+    const note = encodeURIComponent('HandyHub');
+    const amt = amount.toFixed(2);
+    let url = '';
+    let appName = '';
+    switch (method) {
+      case 'venmo': {
+        const username = String(handle).replace(/^@/, '').trim();
+        // Universal link — opens app on mobile, web fallback otherwise
+        url = `https://venmo.com/${encodeURIComponent(username)}?txn=pay&amount=${amt}&note=${note}`;
+        appName = 'Venmo';
+        break;
+      }
+      case 'paypal': {
+        // Strip 'paypal.me/' or '@' if user entered them
+        let id = String(handle).replace(/^https?:\/\/(www\.)?paypal\.me\//i, '').replace(/^@/, '').trim();
+        // If it's an email, use the email send link
+        if (id.includes('@')) {
+          url = `https://www.paypal.com/myaccount/transfer/homepage/external/topup?recipient=${encodeURIComponent(id)}&amount=${amt}`;
+        } else {
+          url = `https://paypal.me/${encodeURIComponent(id)}/${amt}`;
+        }
+        appName = 'PayPal';
+        break;
+      }
+      default:
+        return;
+    }
+    if (Platform.OS === 'web') {
+      // @ts-ignore
+      if (typeof window !== 'undefined') window.open(url, '_blank');
+    } else {
+      const { Linking } = require('react-native');
+      Linking.openURL(url).catch(() => Alert.alert('Помилка', `Не вдалося відкрити ${appName}. Додаток встановлений?`));
+    }
+  };
+
   // Helper: copy a value to clipboard (web + native)
-  const copyToClipboard = async (text: string, label?: string) => {
-    if (!text) return;
+  const copyToClipboard = async (text: string, label?: string) => {    if (!text) return;
     try {
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(text);
@@ -1197,6 +1238,27 @@ export default function TaskDetail() {
                     <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 6 }}>
                       ⚠ Виконавець ще не вказав свій акаунт. Зв'яжись із ним у чаті.
                     </Text>
+                  )}
+                  {!sp.missing_handle && sp.to === 'executor' &&
+                    (manualInstructions?.method === 'venmo' || manualInstructions?.method === 'paypal') && (
+                    <TouchableOpacity
+                      onPress={() => openPaymentApp(manualInstructions.method, String(sp.handle || ''), displayAmount)}
+                      style={{
+                        marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        backgroundColor: manualInstructions.method === 'venmo' ? '#3D95CE' : '#0070BA',
+                        paddingVertical: 10, borderRadius: 10,
+                      }}
+                      data-testid={`open-app-${manualInstructions.method}-${sp.to}`}
+                    >
+                      <Ionicons
+                        name={manualInstructions.method === 'venmo' ? 'logo-usd' : 'logo-paypal'}
+                        size={16}
+                        color="#fff"
+                      />
+                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
+                        Відкрити у {manualInstructions.method === 'venmo' ? 'Venmo' : 'PayPal'}
+                      </Text>
+                    </TouchableOpacity>
                   )}
                 </View>
                 );
