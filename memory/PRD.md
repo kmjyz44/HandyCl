@@ -29,6 +29,22 @@ Full feature set requested across the iterations:
 
 ## Implemented (chronological)
 
+### 2026-06-25: Email Verification (COMPLETE & backend-tested)
+- Backend (`server.py` + `backend/server.py` + local `/app/backend/server.py` all synced):
+  - `POST /api/auth/register` generates a 6-digit code (10-min expiry), stores in `email_verifications`, emails via SendGrid.
+  - `POST /api/auth/verify-email` {email, code} — validates code, sets `users.email_verified=true`. FIXED a broken ternary in the expiry check that always raised "Code expired" for naive datetimes.
+  - `POST /api/auth/resend-verification` {email} — 60s cooldown, regenerates code.
+  - Added `email_verified: bool` to `User` model so `/auth/me`, `/auth/login`, `/auth/register` all return it.
+- Frontend (repo `/app/HandyCl_repo`):
+  - `utils/api.ts`: `verifyEmail`, `resendVerification`.
+  - `register.tsx`: after signup routes to `/verify-email?email=...` (verification is OPTIONAL per user — they can skip).
+  - `verify-email.tsx`: success updates store + routes to `/(tabs)`; added "Пропустити поки що" skip link.
+  - `components/EmailVerificationBanner.tsx`: amber reminder banner on home for unverified non-admin users (dismissable).
+  - `store/authStore.ts`: User interface gains `email_verified?`.
+- Backend curl-tested e2e: register→wrong code (400)→correct code (200)→login returns email_verified:true→resend(already_verified). PASS.
+- NOTE: Expo frontend does NOT render in this preview pod (pod serves a placeholder CRA app); frontend must be verified on the live Netlify deploy after "Save to GitHub".
+
+
 ### 2026-01: Admin Categories
 - Backend: `POST/PUT/DELETE /api/admin/categories` (JSON body, base64 cover image, soft+hard delete)
 - Pydantic models: `CategoryCreateRequest`, `CategoryUpdateRequest`

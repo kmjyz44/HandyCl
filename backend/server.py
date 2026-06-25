@@ -189,6 +189,7 @@ class User(BaseModel):
     # Client saved data
     payment_methods: Optional[List[dict]] = []
     saved_addresses: Optional[List[dict]] = []
+    email_verified: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserRegister(BaseModel):
@@ -1662,7 +1663,7 @@ async def register(user_data: UserRegister):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Create user
+    # Create user (unverified email)
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     user = User(
         user_id=user_id,
@@ -1674,13 +1675,33 @@ async def register(user_data: UserRegister):
     )
 
     user_dict = user.dict()
-    # Store plain password for admin view (user requirement)
     user_dict["plain_password"] = user_data.password
-    # Audit-trail field for ToS/Privacy acceptance
     user_dict["accepted_terms_at"] = datetime.now(timezone.utc)
     user_dict["accepted_terms_version"] = "2026-02-15"
+    user_dict["email_verified"] = False
 
     await db.users.insert_one(user_dict)
+
+    # Generate 6-digit verification code (valid 10 min)
+    import random as _r
+    code = f"{_r.randint(0, 999999):06d}"
+    await db.email_verifications.delete_many({"email": user_data.email})
+    await db.email_verifications.insert_one({
+        "email": user_data.email,
+        "user_id": user_id,
+        "code": code,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "created_at": datetime.now(timezone.utc),
+        "attempts": 0,
+    })
+    try:
+        await _send_email_sendgrid(
+            user_data.email,
+            "HandyHub — Email Verification",
+            f"Welcome to HandyHub!\n\nYour verification code is: {code}\n\nThis code expires in 10 minutes.\n\nIf you did not sign up, ignore this email."
+        )
+    except Exception:
+        pass
 
     # Create session
     session_token = f"session_{uuid.uuid4().hex}"
@@ -1715,6 +1736,7 @@ async def register(user_data: UserRegister):
         "stripe_connect_account_id": user.stripe_connect_account_id,
         "payment_methods": user.payment_methods or [],
         "saved_addresses": user.saved_addresses or [],
+        "email_verified": False,
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
@@ -1758,6 +1780,67 @@ async def google_auth_redirect(request: Request):
     redirect_url = f"{str(request.base_url)}auth-callback"
 
     return {"auth_url": auth_url}
+
+@api_router.post("/auth/verify-email")
+async def verify_email(payload: Dict[str, Any] = Body(...)):
+    """Verify a user's email with the 6-digit code sent at registration.
+    Body: {"email": "...", "code": "123456"}"""
+    email = (payload.get("email") or "").strip().lower()
+    code = (payload.get("code") or "").strip()
+    if not email or not code:
+        raise HTTPException(status_code=422, detail="email + code required")
+    rec = await db.email_verifications.find_one({"email": email})
+    if not rec:
+        raise HTTPException(status_code=400, detail="No verification pending")
+    if rec.get("attempts", 0) >= 5:
+        raise HTTPException(status_code=429, detail="Too many attempts. Request a new code.")
+    exp = rec.get("expires_at")
+    if exp:
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Code expired")
+    if rec.get("code") != code:
+        await db.email_verifications.update_one({"_id": rec["_id"]}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=400, detail="Invalid code")
+    await db.users.update_one({"email": email}, {"$set": {"email_verified": True, "email_verified_at": datetime.now(timezone.utc)}})
+    await db.email_verifications.delete_many({"email": email})
+    return {"ok": True, "verified": True}
+
+
+@api_router.post("/auth/resend-verification")
+async def resend_verification(payload: Dict[str, Any] = Body(...)):
+    """Resend the verification code (rate-limited via 60s cooldown).
+    Body: {"email": "..."}"""
+    email = (payload.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=422, detail="email required")
+    user = await db.users.find_one({"email": email}, {"_id": 0, "user_id": 1, "email_verified": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("email_verified"):
+        return {"ok": True, "already_verified": True}
+    last = await db.email_verifications.find_one({"email": email})
+    if last and last.get("created_at"):
+        created = last["created_at"]
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - created).total_seconds() < 60:
+            raise HTTPException(status_code=429, detail="Please wait 60 seconds before requesting another code")
+    import random as _r
+    code = f"{_r.randint(0, 999999):06d}"
+    await db.email_verifications.delete_many({"email": email})
+    await db.email_verifications.insert_one({
+        "email": email, "user_id": user["user_id"], "code": code,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "created_at": datetime.now(timezone.utc), "attempts": 0,
+    })
+    try:
+        await _send_email_sendgrid(email, "HandyHub — New Verification Code", f"Your new verification code is: {code}\n\nExpires in 10 minutes.")
+    except Exception:
+        pass
+    return {"ok": True}
+
 
 @api_router.post("/auth/session")
 async def create_session_from_oauth(session_id: str = Header(..., alias="X-Session-ID")):
