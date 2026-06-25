@@ -29,6 +29,13 @@ Full feature set requested across the iterations:
 
 ## Implemented (chronological)
 
+### 2026-06-25: Fix — Admin "Delete User" button did nothing (web)
+- RCA: `app/(tabs)/users.tsx` `handleDelete` used React Native `Alert.alert` with button callbacks, which are no-ops on React Native Web → the "Delete" `onPress` never fired, so `DELETE /api/admin/users/{id}` was never called. Backend was always healthy.
+- Fix: switched to cross-platform `showConfirm`/`showAlert` from `utils/alert.ts` (uses `window.confirm` on web). Errors now surface `response.data.detail`.
+- Verified: backend DELETE endpoint 100% (5/5 pytest via testing_agent: auth 401/403, 404 on missing, 400 self-delete, success+DB cleanup). Frontend fix needs live verification on Netlify after "Save to GitHub" (Expo app doesn't render in preview pod).
+- NOTE for future: other `Alert.alert([...buttons])` usages in users.tsx (moderator set/remove) have the same web limitation — convert if reported.
+
+
 ### 2026-06-25: SMS Phone Verification (Twilio) + Apple/Google Pay
 - Backend (`server.py` synced to all 3 copies):
   - `POST /api/auth/send-phone-code` (auth) — optional {phone} to set/update; generates 6-digit code (10-min expiry, 60s cooldown), stores in `phone_verifications`, sends via existing `_send_sms_twilio` (raw Twilio Messages API, keys from `integration_keys`).
