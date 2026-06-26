@@ -134,3 +134,9 @@ yarn-error.log*
 # Environment files
 *.env
 *.env.*
+
+# platform/workspace internals (do not push)
+.emergent/
+.backup_workspace_git/
+.backup_emergent/
+.backup_backend_env

@@ -41,6 +41,26 @@ export const api = {
     return res.data;
   },
 
+  verifyEmail: async (data: { email: string; code: string }) => {
+    const res = await client.post('/auth/verify-email', data);
+    return res.data;
+  },
+
+  resendVerification: async (data: { email: string }) => {
+    const res = await client.post('/auth/resend-verification', data);
+    return res.data;
+  },
+
+  sendPhoneCode: async (data?: { phone?: string }) => {
+    const res = await client.post('/auth/send-phone-code', data || {});
+    return res.data;
+  },
+
+  verifyPhone: async (data: { code: string }) => {
+    const res = await client.post('/auth/verify-phone', data);
+    return res.data;
+  },
+
   logout: async () => {
     const res = await client.post('/auth/logout');
     return res.data;

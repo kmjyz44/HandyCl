@@ -1,7 +1,10 @@
 import React, { useEffect } from 'react';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { registerWebPush } from '../utils/webPush';
+import ToastHost from '../components/ToastHost';
+import ConfirmHost from '../components/ConfirmHost';
 
 export default function RootLayout() {
   const loadToken = useAuthStore((state) => state.loadToken);
@@ -26,25 +29,29 @@ export default function RootLayout() {
   }, [token]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="register" />
-      <Stack.Screen name="auth-callback" />
-      <Stack.Screen name="create-task" />
-      <Stack.Screen name="task-detail" />
-      <Stack.Screen name="service" />
-      <Stack.Screen name="executor" />
-      <Stack.Screen name="notifications" />
-      <Stack.Screen name="payout-setup" />
-      <Stack.Screen name="payment-success" />
-      <Stack.Screen name="payment-cancelled" />
-      <Stack.Screen name="blog/[id]" />
-      <Stack.Screen name="blog-create" />
-      <Stack.Screen name="help-center" />
-      <Stack.Screen name="support-chat" />
-      <Stack.Screen name="admin-support-requests" />
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="register" />
+        <Stack.Screen name="auth-callback" />
+        <Stack.Screen name="create-task" />
+        <Stack.Screen name="task-detail" />
+        <Stack.Screen name="service" />
+        <Stack.Screen name="executor" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="payout-setup" />
+        <Stack.Screen name="payment-success" />
+        <Stack.Screen name="payment-cancelled" />
+        <Stack.Screen name="blog/[id]" />
+        <Stack.Screen name="blog-create" />
+        <Stack.Screen name="help-center" />
+        <Stack.Screen name="support-chat" />
+        <Stack.Screen name="admin-support-requests" />
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+      <ConfirmHost />
+      <ToastHost />
+    </View>
   );
 }

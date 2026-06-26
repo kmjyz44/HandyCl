@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   Modal,
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../utils/api';
+import { showConfirm, showAlert } from '../../utils/alert';
 
 export default function Users() {
   const [users, setUsers] = useState<any[]>([]);
@@ -34,23 +34,17 @@ export default function Users() {
   };
 
   const handleSetModerator = async (user: any) => {
-    Alert.alert('Зробити модератором', `Надати ${user.name} роль модератора?`, [
-      { text: 'Скасувати', style: 'cancel' },
-      { text: 'Підтвердити', onPress: async () => {
-        try { await api.setModerator(user.user_id); Alert.alert('Успіх', `${user.name} тепер модератор`); loadUsers(); }
-        catch (e: any) { Alert.alert('Помилка', e.message); }
-      }}
-    ]);
+    showConfirm('Зробити модератором', `Надати ${user.name} роль модератора?`, async () => {
+      try { await api.setModerator(user.user_id); showAlert('Успіх', `${user.name} тепер модератор`); loadUsers(); }
+      catch (e: any) { showAlert('Помилка', e?.response?.data?.detail || e.message); }
+    }, 'Підтвердити', 'Скасувати');
   };
 
   const handleRemoveModerator = async (user: any) => {
-    Alert.alert('Зняти модератора', `Забрати у ${user.name} роль модератора?`, [
-      { text: 'Скасувати', style: 'cancel' },
-      { text: 'Підтвердити', style: 'destructive', onPress: async () => {
-        try { await api.removeModerator(user.user_id); Alert.alert('Успіх', 'Роль модератора знято'); loadUsers(); }
-        catch (e: any) { Alert.alert('Помилка', e.message); }
-      }}
-    ]);
+    showConfirm('Зняти модератора', `Забрати у ${user.name} роль модератора?`, async () => {
+      try { await api.removeModerator(user.user_id); showAlert('Успіх', 'Роль модератора знято'); loadUsers(); }
+      catch (e: any) { showAlert('Помилка', e?.response?.data?.detail || e.message); }
+    }, 'Підтвердити', 'Скасувати');
   };
 
   const openModulesModal = (user: any) => {
@@ -62,10 +56,10 @@ export default function Users() {
   const saveModules = async () => {
     try {
       await api.updateModeratorModules(selectedUser.user_id, modModules);
-      Alert.alert('Успіх', 'Доступ до модулів оновлено');
+      showAlert('Успіх', 'Доступ до модулів оновлено');
       setModModalVisible(false);
       loadUsers();
-    } catch (e: any) { Alert.alert('Помилка', e.message); }
+    } catch (e: any) { showAlert('Помилка', e?.response?.data?.detail || e.message); }
   };
 
   const loadUsers = async () => {
@@ -73,7 +67,7 @@ export default function Users() {
       const data = await api.getUsers();
       setUsers(data);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load users');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to load users');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -91,66 +85,55 @@ export default function Users() {
 
   const handleBlock = async (permanent: boolean) => {
     if (!blockReason.trim()) {
-      Alert.alert('Error', 'Please provide a reason for blocking');
+      showAlert('Error', 'Please provide a reason for blocking');
       return;
     }
 
     try {
       const durationHours = permanent ? undefined : parseInt(blockDuration);
       if (!permanent && (!durationHours || durationHours <= 0)) {
-        Alert.alert('Error', 'Please provide valid duration in hours');
+        showAlert('Error', 'Please provide valid duration in hours');
         return;
       }
 
       await api.blockUser(selectedUser.user_id, blockReason, durationHours);
-      Alert.alert('Success', `User blocked ${permanent ? 'permanently' : 'temporarily'}`);
+      showAlert('Success', `User blocked ${permanent ? 'permanently' : 'temporarily'}`);
       setBlockModalVisible(false);
       setBlockReason('');
       setBlockDuration('');
       loadUsers();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to block user');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to block user');
     }
   };
 
   const handleUnblock = async (userId: string) => {
-    Alert.alert('Unblock User', 'Are you sure you want to unblock this user?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Unblock',
-        onPress: async () => {
-          try {
-            await api.unblockUser(userId);
-            Alert.alert('Success', 'User unblocked');
-            loadUsers();
-          } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to unblock user');
-          }
-        },
-      },
-    ]);
+    showConfirm('Unblock User', 'Are you sure you want to unblock this user?', async () => {
+      try {
+        await api.unblockUser(userId);
+        showAlert('Success', 'User unblocked');
+        loadUsers();
+      } catch (error: any) {
+        showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to unblock user');
+      }
+    }, 'Unblock', 'Cancel');
   };
 
   const handleDelete = async (userId: string, userEmail: string) => {
-    Alert.alert(
+    showConfirm(
       'Delete User',
       `Are you sure you want to permanently delete ${userEmail}? This action cannot be undone and will delete all their data.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.deleteUser(userId);
-              Alert.alert('Success', 'User deleted permanently');
-              loadUsers();
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to delete user');
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          await api.deleteUser(userId);
+          showAlert('Success', 'User deleted permanently');
+          loadUsers();
+        } catch (error: any) {
+          showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to delete user');
+        }
+      },
+      'Delete',
+      'Cancel',
     );
   };
 

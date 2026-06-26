@@ -17,7 +17,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://payout-hub-20.preview.emergentagent.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://payment-flow-test-39.preview.emergentagent.com"
       }
     },
     "production": {
@@ -26,7 +26,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://payout-hub-20.preview.emergentagent.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://payment-flow-test-39.preview.emergentagent.com"
       }
     }
   },

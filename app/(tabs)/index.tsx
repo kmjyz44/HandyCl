@@ -10,6 +10,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useBookingStore } from '../../store/bookingStore';
 import { api } from '../../utils/api';
 import PaymentReminderBanner from '../../components/PaymentReminderBanner';
+import EmailVerificationBanner from '../../components/EmailVerificationBanner';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
 
@@ -175,6 +176,7 @@ function ProviderDashboard() {
       </View>
 
       <PaymentReminderBanner />
+      <EmailVerificationBanner />
 
       {/* Stats row — clickable tiles */}
       <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12 }}>
@@ -750,6 +752,7 @@ export default function HomeScreen() {
         {/* Category grid */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <PaymentReminderBanner />
+          <EmailVerificationBanner />
           <Text style={s.sectionTitle}>Оберіть категорію</Text>
           <View style={s.grid}>
             {filteredCategories.map(cat => {

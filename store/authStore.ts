@@ -15,6 +15,9 @@ interface User {
     email: string;
     name: string;
     role: 'client' | 'provider' | 'admin';
+    phone?: string;
+    email_verified?: boolean;
+    phone_verified?: boolean;
 }
 
 interface AuthStore {

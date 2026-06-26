@@ -29,6 +29,15 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 - ✅ **User's code files integrated** - NewDashboardPage.js, apiClient.js, server.py, translations.js from files_1.zip
 - ✅ **Booking confirmation error fixed** - [object Object] error resolved (service.name vs service.title mismatch)
 - ✅ **Photo upload functionality added** - Click-to-select photo upload with preview and delete buttons
+### 2026-06-25: Modern in-app notifications (toasts) + confirm dialog
+- New `components/ToastHost.tsx` — animated, cross-platform toast system (`toast.success/error/info`), top-anchored, auto-dismiss, stacked, with icons/colors per type.
+- New `components/ConfirmHost.tsx` — modern animated modal confirm dialog (`confirmDialog(): Promise<boolean>`), destructive variant (red trash icon) for delete/block.
+- Rewired `utils/alert.ts`: `showAlert` → toast (auto success/error/info detection incl. Ukrainian keywords); `showConfirm`/`showAlertWithButtons` → modal confirm. This upgrades ALL ~70 existing call sites across 12 screens automatically (no per-screen changes needed).
+- Mounted `<ToastHost/>` + `<ConfirmHost/>` once in `app/_layout.tsx`.
+- Converted remaining direct `Alert.alert([...])` calls in `app/(tabs)/users.tsx` (set/remove moderator, block/unblock, errors) to the new helpers; removed unused `Alert` import.
+- Syntax-validated via esbuild (no errors). Visual verification pending on live Netlify after "Save to GitHub" (Expo app not served in preview pod).
+
+
 - ✅ **Error handling improved** - Better error message display in booking confirmation
 
 ### March 13, 2025 - Bug Fixes (Session 2)

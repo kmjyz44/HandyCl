@@ -412,6 +412,46 @@ function ClientProfile() {
           )}
         </View>
 
+        {/* Account Verification */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Підтвердження акаунту</Text>
+          <TouchableOpacity
+            style={styles.menuItem}
+            disabled={(user as any)?.email_verified}
+            onPress={() => router.push({ pathname: '/verify-email', params: { email: user?.email } } as any)}
+            data-testid="verify-email-row"
+          >
+            <Ionicons name="mail-outline" size={22} color={(user as any)?.email_verified ? '#059669' : '#6b7280'} />
+            <Text style={styles.menuText}>Email</Text>
+            {(user as any)?.email_verified ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="checkmark-circle" size={18} color="#059669" />
+                <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>Підтверджено</Text>
+              </View>
+            ) : (
+              <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '600' }}>Підтвердити</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuItem}
+            disabled={(user as any)?.phone_verified}
+            onPress={() => router.push({ pathname: '/verify-phone', params: { phone: user?.phone } } as any)}
+            data-testid="verify-phone-row"
+          >
+            <Ionicons name="call-outline" size={22} color={(user as any)?.phone_verified ? '#059669' : '#6b7280'} />
+            <Text style={styles.menuText}>Телефон</Text>
+            {(user as any)?.phone_verified ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="checkmark-circle" size={18} color="#059669" />
+                <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>Підтверджено</Text>
+              </View>
+            ) : (
+              <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '600' }}>Підтвердити</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+
         {/* Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Підтримка</Text>

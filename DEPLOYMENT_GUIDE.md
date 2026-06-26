@@ -3,7 +3,7 @@
 ## 🚀 Швидкий Старт (Поточне середовище - Emergent)
 
 ### ✅ Що вже запущено:
-- ✅ **Backend API**: https://payout-hub-20.preview.emergentagent.com/api
+- ✅ **Backend API**: https://payment-flow-test-39.preview.emergentagent.com/api
 - ✅ **MongoDB**: Локально на порту 27017
 - ✅ **Frontend (Expo)**: Готовий до запуску
 
@@ -18,7 +18,7 @@
 
 ### Крок 2: Запустіть Expo сервер (Вже запущено)
 Додаток вже працює на:
-- **Frontend URL**: https://payout-hub-20.preview.emergentagent.com
+- **Frontend URL**: https://payment-flow-test-39.preview.emergentagent.com
 - **Expo Dev Server**: Перевірте QR код нижче
 
 ### Крок 3: Підключіться до додатку

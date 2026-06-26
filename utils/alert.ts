@@ -1,21 +1,34 @@
 /**
- * Cross-platform alert helpers.
+ * Cross-platform alert helpers — now backed by modern in-app UI.
  *
- * React Native's built-in `Alert.alert` is a no-op on web — buttons never
- * fire and the user sees nothing. We use `window.alert` / `window.confirm`
- * on the web and fall back to the native module on iOS/Android.
+ * `showAlert`  -> animated toast (success/error/info auto-detected)
+ * `showConfirm`/`showAlertWithButtons` -> modern modal confirm dialog
+ *
+ * Works identically on web and native. The visual hosts (<ToastHost/> and
+ * <ConfirmHost/>) are mounted once at the root layout.
  */
-import { Alert, Platform } from 'react-native';
+import { toast, type ToastType } from '../components/ToastHost';
+import { confirmDialog } from '../components/ConfirmHost';
 
 type Btn = { text: string; style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void };
 
+const SUCCESS_RE = /(success|успіх|готов|saved|збереж|надіслан|sent|verified|підтвердж|оновлен|updated|added|додан|deleted|видален)/i;
+const ERROR_RE = /(error|помилк|fail|не вдал|invalid|невірн|denied|forbidden)/i;
+
+function detectType(title: string, message?: string): ToastType {
+  const text = `${title} ${message || ''}`;
+  if (ERROR_RE.test(text)) return 'error';
+  if (SUCCESS_RE.test(text)) return 'success';
+  return 'info';
+}
+
+function isDestructive(label: string, btnStyle?: string): boolean {
+  if (btnStyle === 'destructive') return true;
+  return /(delete|remove|видал|зня|block|заблок|cancel booking)/i.test(label);
+}
+
 export function showAlert(title: string, message?: string) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    window.alert(message ? `${title}\n\n${message}` : title);
-    return;
-  }
-  Alert.alert(title, message);
+  toast.show({ type: detectType(title, message), title, message });
 }
 
 export function showConfirm(
@@ -23,39 +36,39 @@ export function showConfirm(
   message: string,
   onConfirm: () => void,
   confirmLabel: string = 'OK',
-  cancelLabel: string = 'Cancel',
+  cancelLabel: string = 'Скасувати',
 ) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    const ok = window.confirm(`${title}\n\n${message}`);
+  confirmDialog({
+    title,
+    message,
+    confirmLabel,
+    cancelLabel,
+    destructive: isDestructive(confirmLabel),
+  }).then((ok) => {
     if (ok) onConfirm();
-    return;
-  }
-  Alert.alert(title, message, [
-    { text: cancelLabel, style: 'cancel' },
-    { text: confirmLabel, style: 'destructive', onPress: onConfirm },
-  ]);
+  });
 }
 
 /**
- * Generic multi-button alert that works on web by chaining confirms.
- * Use sparingly — prefer showConfirm for yes/no.
+ * Generic multi-button alert. 1 button -> toast; 2+ -> modal confirm using
+ * the first non-cancel button as the action.
  */
 export function showAlertWithButtons(title: string, message: string, buttons: Btn[]) {
-  if (Platform.OS === 'web') {
-    // Build a numbered prompt fallback
-    if (buttons.length <= 1) {
-      // eslint-disable-next-line no-alert
-      window.alert(`${title}\n\n${message}`);
-      buttons[0]?.onPress?.();
-      return;
-    }
-    // 2-button: confirm = first non-cancel button
-    const actionBtn = buttons.find((b) => b.style !== 'cancel') || buttons[0];
-    // eslint-disable-next-line no-alert
-    const ok = window.confirm(`${title}\n\n${message}\n\nOK = ${actionBtn.text}`);
-    if (ok) actionBtn.onPress?.();
+  if (!buttons || buttons.length <= 1) {
+    showAlert(title, message);
+    buttons?.[0]?.onPress?.();
     return;
   }
-  Alert.alert(title, message, buttons as any);
+  const cancelBtn = buttons.find((b) => b.style === 'cancel');
+  const actionBtn = buttons.find((b) => b.style !== 'cancel') || buttons[0];
+  confirmDialog({
+    title,
+    message,
+    confirmLabel: actionBtn.text,
+    cancelLabel: cancelBtn?.text || 'Скасувати',
+    destructive: isDestructive(actionBtn.text, actionBtn.style),
+  }).then((ok) => {
+    if (ok) actionBtn.onPress?.();
+    else cancelBtn?.onPress?.();
+  });
 }
