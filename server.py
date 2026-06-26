@@ -1660,13 +1660,19 @@ async def get_conversation_messages(
     return messages
 
 # Authentication Routes
+def _ci_email(email: str) -> Dict[str, Any]:
+    """Case-insensitive exact-match query for an email (handles legacy mixed-case data)."""
+    return {"email": {"$regex": f"^{re.escape((email or '').strip())}$", "$options": "i"}}
+
 @api_router.post("/auth/register")
 async def register(user_data: UserRegister):
     # Require accepted_terms
     if not user_data.accepted_terms:
         raise HTTPException(status_code=400, detail="You must accept the Terms of Use and Privacy Policy to register")
-    # Check if user exists
-    existing_user = await db.users.find_one({"email": user_data.email})
+    # Normalize email (store lowercased for consistency)
+    reg_email = (user_data.email or "").strip().lower()
+    # Check if user exists (case-insensitive)
+    existing_user = await db.users.find_one(_ci_email(reg_email))
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -1674,7 +1680,7 @@ async def register(user_data: UserRegister):
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     user = User(
         user_id=user_id,
-        email=user_data.email,
+        email=reg_email,
         name=user_data.name,
         role=user_data.role,
         phone=user_data.phone,
@@ -1692,9 +1698,9 @@ async def register(user_data: UserRegister):
     # Generate 6-digit verification code (valid 10 min)
     import random as _r
     code = f"{_r.randint(0, 999999):06d}"
-    await db.email_verifications.delete_many({"email": user_data.email})
+    await db.email_verifications.delete_many(_ci_email(reg_email))
     await db.email_verifications.insert_one({
-        "email": user_data.email,
+        "email": reg_email,
         "user_id": user_id,
         "code": code,
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
@@ -1703,7 +1709,7 @@ async def register(user_data: UserRegister):
     })
     try:
         await _send_email_sendgrid(
-            user_data.email,
+            reg_email,
             "HandyHub — Email Verification",
             f"Welcome to HandyHub!\n\nYour verification code is: {code}\n\nThis code expires in 10 minutes.\n\nIf you did not sign up, ignore this email."
         )
@@ -1756,7 +1762,7 @@ async def register(user_data: UserRegister):
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin):
     # Find user
-    user_doc = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    user_doc = await db.users.find_one(_ci_email(credentials.email), {"_id": 0})
     if not user_doc:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -1797,7 +1803,7 @@ async def verify_email(payload: Dict[str, Any] = Body(...)):
     code = (payload.get("code") or "").strip()
     if not email or not code:
         raise HTTPException(status_code=422, detail="email + code required")
-    rec = await db.email_verifications.find_one({"email": email})
+    rec = await db.email_verifications.find_one(_ci_email(email))
     if not rec:
         raise HTTPException(status_code=400, detail="No verification pending")
     if rec.get("attempts", 0) >= 5:
@@ -1811,8 +1817,11 @@ async def verify_email(payload: Dict[str, Any] = Body(...)):
     if rec.get("code") != code:
         await db.email_verifications.update_one({"_id": rec["_id"]}, {"$inc": {"attempts": 1}})
         raise HTTPException(status_code=400, detail="Invalid code")
-    await db.users.update_one({"email": email}, {"$set": {"email_verified": True, "email_verified_at": datetime.now(timezone.utc)}})
-    await db.email_verifications.delete_many({"email": email})
+    if rec.get("user_id"):
+        await db.users.update_one({"user_id": rec["user_id"]}, {"$set": {"email_verified": True, "email_verified_at": datetime.now(timezone.utc)}})
+    else:
+        await db.users.update_one(_ci_email(email), {"$set": {"email_verified": True, "email_verified_at": datetime.now(timezone.utc)}})
+    await db.email_verifications.delete_many(_ci_email(email))
     return {"ok": True, "verified": True}
 
 
@@ -1823,12 +1832,12 @@ async def resend_verification(payload: Dict[str, Any] = Body(...)):
     email = (payload.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(status_code=422, detail="email required")
-    user = await db.users.find_one({"email": email}, {"_id": 0, "user_id": 1, "email_verified": 1})
+    user = await db.users.find_one(_ci_email(email), {"_id": 0, "user_id": 1, "email_verified": 1})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user.get("email_verified"):
         return {"ok": True, "already_verified": True}
-    last = await db.email_verifications.find_one({"email": email})
+    last = await db.email_verifications.find_one(_ci_email(email))
     if last and last.get("created_at"):
         created = last["created_at"]
         if created.tzinfo is None:
@@ -1837,17 +1846,18 @@ async def resend_verification(payload: Dict[str, Any] = Body(...)):
             raise HTTPException(status_code=429, detail="Please wait 60 seconds before requesting another code")
     import random as _r
     code = f"{_r.randint(0, 999999):06d}"
-    await db.email_verifications.delete_many({"email": email})
+    await db.email_verifications.delete_many(_ci_email(email))
     await db.email_verifications.insert_one({
         "email": email, "user_id": user["user_id"], "code": code,
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
         "created_at": datetime.now(timezone.utc), "attempts": 0,
     })
+    sent = False
     try:
-        await _send_email_sendgrid(email, "HandyHub — New Verification Code", f"Your new verification code is: {code}\n\nExpires in 10 minutes.")
+        sent = await _send_email_sendgrid(email, "HandyHub — New Verification Code", f"Your new verification code is: {code}\n\nExpires in 10 minutes.")
     except Exception:
         pass
-    return {"ok": True}
+    return {"ok": True, "email_sent": sent}
 
 
 @api_router.post("/auth/send-phone-code")

@@ -1,0 +1,45 @@
+{
+  "summary": "Backend-only verification of the email-case-insensitivity fix on /auth/register, /auth/login, /auth/verify-email and /auth/resend-verification. 8/8 pytest cases pass against the preview backend (https://payment-flow-test-39.preview.emergentagent.com). The original 'User not found' regression on resend-verification with mixed-case email is fully fixed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tested_features": {
+    "POST /api/auth/register (mixed-case email)": "200; response.user.email is lowercased; DB row inserted with lowercased email; no mixed-case duplicate row in DB.",
+    "POST /api/auth/resend-verification (UPPER email, fresh user)": "Returns 429 (60s cooldown) — NOT 404. Bug regression check passed.",
+    "POST /api/auth/resend-verification (unknown email)": "404 User not found (negative case still 404).",
+    "POST /api/auth/verify-email (UPPER email + correct 6-digit code fetched from DB)": "200 {ok:true, verified:true}; users.email_verified flipped to true; email_verifications row consumed.",
+    "POST /api/auth/resend-verification after verification (mixed case)": "200 {ok:true, already_verified:true}.",
+    "POST /api/auth/login (original mixed-case email)": "200, returns session_token; response.user.email is lowercased.",
+    "POST /api/auth/login (all UPPER email)": "200.",
+    "POST /api/auth/register duplicate with different case": "400 'Email already registered'."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_email_case_insensitive_verification.py",
+    "/app/test_reports/pytest/email_case_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 11218 lines — still violates the <700-line guideline; auth section (~lines 1660-1860) is a good candidate for extraction into routers/auth.py.",
+    "register() stores plain_password in the user document (server.py:1691). Storing the cleartext password in the DB is a serious security issue regardless of the case-insensitivity fix — recommend removing this field.",
+    "_ci_email() uses a regex equality match. This works but is not index-friendly; for higher volume consider adding a normalized lowercased index field (e.g. 'email_lower') and querying it as an exact match. Functionally correct as-is.",
+    "verify_email() and resend_verification() are correctly using rec['user_id'] (when available) for the users.update_one — guards against false-positive matches if DB still has legacy rows.",
+    "Cooldown branch in resend_verification (60s) raises 429 with detail text — frontend already handles both 200 and 429, good.",
+    "_send_email_sendgrid failures are swallowed via bare except — acceptable for non-blocking notification, but should at least log.warning so SendGrid mis-config is visible in logs."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_email_case_insensitive_verification.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@handyhub.com / Admin2024! works. Throwaway test users registered per-test with TestUser_<timestamp>@Gmail.com pattern and cleaned up at session end.",
+  "seed_data_creation": "Each test creates a unique TestUser_<ts>@Gmail.com user; session-scoped autouse fixture deletes db.users and db.email_verifications rows whose email starts with 'testuser_' (case-insensitive) after the run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Email-case-insensitivity fix is solid: register lowercases on write; login/verify-email/resend-verification all use _ci_email() (case-insensitive regex). Verification codes are stored in db.email_verifications keyed by lowercased email, retrievable via mongosh or pymongo. Note SendGrid is not configured on preview — email_sent will be false on real-send paths, that is expected. If you need to retest the original bug, register with mixed case e.g. TestUser_<ts>@Gmail.com and POST resend with all UPPER — must return 200/429, never 404.",
+  "rca of the issue": "RCA: Before the fix, register() stored the email exactly as the user typed it. The two verification endpoints normalized the inbound email with .lower() and queried users with an EXACT lowercased email match, which never matched a mixed-case stored row → 'User not found' (404). Fix applies on two fronts: (1) register() now persists email lowercased (server.py:1673 reg_email = email.strip().lower(); 1683 email=reg_email), and (2) login / verify_email / resend_verification all use _ci_email() (server.py:1663-1665) which returns a case-insensitive ^...$ regex query — this also covers any legacy mixed-case rows still in the DB. Reproduction (before fix): register TestUser@Gmail.com; POST resend with TESTUSER@GMAIL.COM → 404. Mitigation (after fix): same flow returns 200/429."
+}
