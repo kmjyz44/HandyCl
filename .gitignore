@@ -140,3 +140,8 @@ yarn-error.log*
 .backup_workspace_git/
 .backup_emergent/
 .backup_backend_env
+.env
+.env.*
+credentials.json
+*.key
+.credentials
