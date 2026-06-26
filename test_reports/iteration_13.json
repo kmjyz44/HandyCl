@@ -1,0 +1,46 @@
+{
+  "summary": "Backend-only verification of Resend email provider integration & admin provider selection on HandyHub. 7/7 pytest cases pass against the preview backend. Confirmed: PUT /api/admin/integration-keys persists resend_api_key/resend_from_email/email_provider; GET masks resend_api_key (re_J••••••••jaQ3) while returning resend_from_email plaintext and email_provider; provider can be flipped to sendgrid and back to resend; GET defaults email_provider='resend' when the field is unset in DB; POST /api/auth/register for the Resend test-mode owner address (nexus.ss.llc@gmail.com) triggers the Resend path and backend log shows 'Resend email sent to nexus.ss.llc@gmail.com'; POST /api/auth/register for a non-owner address still returns 200 even though Resend test-mode answers 403 ('You can only send testing emails to your own email address') — backend logs the warning + 'No email provider sent message' and registration is NOT blocked.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tested_features": {
+    "Admin login (admin@handyhub.com / Admin2024!)": "200, session_token (40 chars) returned.",
+    "PUT /api/admin/integration-keys {email_provider:'resend', resend_api_key, resend_from_email:'onboarding@resend.dev', enable_email_notifications:true}": "200; body.ok=true and all four keys present in 'updated' list.",
+    "GET /api/admin/integration-keys masks resend_api_key": "Returns 're_J••••••••jaQ3' (prefix 're_J' + 8 bullets + suffix 'jaQ3') matching server _mask(); resend_api_key_set=true; resend_from_email returned plaintext as 'onboarding@resend.dev'; email_provider='resend'.",
+    "GET defaults email_provider to 'resend' when unset": "Unset the field via mongosh ($unset email_provider) -> next GET returns email_provider='resend' (driven by server.py lines 8774-8775).",
+    "PUT email_provider='sendgrid' then GET": "200; subsequent GET shows email_provider='sendgrid'.",
+    "PUT email_provider='resend' (restore)": "200; subsequent GET shows email_provider='resend'.",
+    "POST /api/auth/register nexus.ss.llc@gmail.com (after mongosh deleteMany) / password Test1234 / role client / accepted_terms true": "200; session_token present; user.email='nexus.ss.llc@gmail.com'. Backend log emits 'server - INFO - Resend email sent to nexus.ss.llc@gmail.com' and 'httpx - INFO - HTTP Request: POST https://api.resend.com/emails \"HTTP/1.1 200 OK\"'. No SendGrid line for this address — Resend path confirmed.",
+    "POST /api/auth/register non-owner random email (resend.nonowner.<ts>@example.com)": "200; session_token present. Backend logs Resend WARNING 'Resend email failed 403: ... You can only send testing emails to your own email address (nexus.ss.llc@gmail.com)' then 'No email provider sent message to resend.nonowner.<ts>@example.com (provider=resend)' — confirming _send_email returns False and register() does NOT propagate the email failure. Endpoint still 200."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_resend_email_provider.py",
+    "/app/test_reports/pytest/resend_email_provider_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py _send_email() dispatcher (line 1431-1447) correctly defaults provider to 'resend', tries the preferred provider first, falls back to the other if the preferred is not configured, and returns False on total failure — verified by the non-owner test where _send_email logged 'No email provider sent message' but the HTTP register flow was unaffected.",
+    "_send_email_resend() (line 1403-1428) correctly returns False on response.status_code>=400 and logs a single-line WARNING with response.text[:300] — debuggable without leaking the API key.",
+    "_mask() (line 7570-7575) format is value[:4] + 8 bullets + value[-4:]. For the test key len=35 it produced 're_J••••••••jaQ3' as expected. resend_api_key is properly listed in secret_fields (line 8758-8761) so it's masked on every GET.",
+    "_get_integration_keys() (1360-1366) reads from db.integration_keys but does NOT inject the email_provider default — defaulting happens only in the GET admin endpoint (8774-8775). _send_email() compensates with `keys.get('email_provider') or 'resend'` so the default works at runtime even before any admin PUT.",
+    "register()/resend_verification()/notifications/support all now go through _send_email() (no direct _send_email_sendgrid call remains in those flows) — Resend selection is uniformly honored across the codebase.",
+    "server.py is still 11270 lines — file-size violation persists from iteration_12; suggest extracting admin/integration-keys + email/notification helpers into separate modules.",
+    "register() still stores plain_password on the user doc (unchanged from iteration_12) — separate security smell, unrelated to this iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_resend_email_provider.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@handyhub.com / Admin2024! (from /app/memory/test_credentials.md). Resend test API key re_J5AFwPh2_4ohQT6u5o2d4tSsrxyEZjaQ3 was saved via PUT during the test and is now persisted in db.integration_keys; from-email 'onboarding@resend.dev'; only the Resend owner (nexus.ss.llc@gmail.com) actually receives delivered mail in test mode.",
+  "seed_data_creation": "Test creates one persistent registered user nexus.ss.llc@gmail.com (after deleting any prior copy via mongosh) and one throw-away resend.nonowner.<ts>@example.com user that is deleted in the same test. integration_keys document now holds the Resend test key.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Resend integration is wired end-to-end. The Resend API key currently in the DB is a TEST-MODE key — it ONLY delivers mail to nexus.ss.llc@gmail.com; any other recipient gets a 403 from Resend with message 'You can only send testing emails to your own email address (nexus.ss.llc@gmail.com)' and the backend logs that as a WARNING. This is expected and does NOT block any user-facing flow because _send_email() catches the failure and register/resend-verification/notifications/support all proceed with HTTP 200. If a future test needs Resend to actually deliver to other addresses, admin must (a) verify a domain at resend.com/domains, (b) update resend_from_email to use that domain, and (c) replace the test key with a production key. The masked-key contract is `value[:4] + '••••••••' + value[-4:]`; tests rely on this format.",
+  "rca of the issue": "Not a bug-fix iteration — this was a feature verification run. All 7 assertions exercised the spec items in the review_request and all passed. Single real Resend send to nexus.ss.llc@gmail.com was performed exactly once as instructed."
+}

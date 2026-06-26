@@ -19,9 +19,17 @@ type KeyDef = { id: string; label: string; placeholder: string; secret?: boolean
 
 const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: KeyDef[] }[] = [
   {
-    title: 'SendGrid (Email)',
+    title: 'Resend (Email — за замовчуванням)',
     toggle: 'enable_email_notifications',
     toggleLabel: 'Увімкнути email-сповіщення',
+    keys: [
+      { id: 'email_provider', label: 'Провайдер email (resend / sendgrid)', placeholder: 'resend — за замовчуванням; sendgrid — резервний' },
+      { id: 'resend_api_key', label: 'Resend API Key', placeholder: 're_xxxxxxxxxxxxxxxxxxxx', secret: true },
+      { id: 'resend_from_email', label: 'From email (підтверджений домен)', placeholder: 'onboarding@resend.dev або noreply@your-domain.com' },
+    ],
+  },
+  {
+    title: 'SendGrid (Email — резервний)',
     keys: [
       { id: 'sendgrid_api_key', label: 'API Key', placeholder: 'SG.xxxxxxxxxxxxxxxxxxxx', secret: true },
       { id: 'sendgrid_from_email', label: 'From email', placeholder: 'noreply@your-domain.com' },

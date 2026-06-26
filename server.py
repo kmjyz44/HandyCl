@@ -1400,6 +1400,53 @@ async def _send_email_sendgrid(to_email: str, subject: str, body_text: str) -> b
         return False
 
 
+async def _send_email_resend(to_email: str, subject: str, body_text: str) -> bool:
+    """Send an email via Resend (https://api.resend.com/emails). Returns True on success."""
+    if not to_email:
+        return False
+    keys = await _get_integration_keys()
+    api_key = keys.get("resend_api_key")
+    from_email = keys.get("resend_from_email") or "onboarding@resend.dev"
+    if not api_key:
+        logger.info("Resend not configured — skipping email to %s", to_email)
+        return False
+    html = "<p>" + (body_text or "").replace("\n", "<br>") + "</p>"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            r = await http.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"from": from_email, "to": [to_email], "subject": subject, "text": body_text, "html": html},
+            )
+        if r.status_code >= 400:
+            logger.warning("Resend email failed %s: %s", r.status_code, r.text[:300])
+            return False
+        logger.info("Resend email sent to %s", to_email)
+        return True
+    except Exception as e:
+        logger.warning("Resend email error: %s", e)
+        return False
+
+
+async def _send_email(to_email: str, subject: str, body_text: str) -> bool:
+    """Unified email sender. Provider selectable in admin (email_provider), Resend is default.
+    Falls back to the other provider if the preferred one isn't configured."""
+    keys = await _get_integration_keys()
+    if not keys.get("enable_email_notifications", True):
+        return False
+    provider = (keys.get("email_provider") or "resend").lower()
+    order = ["resend", "sendgrid"] if provider != "sendgrid" else ["sendgrid", "resend"]
+    for p in order:
+        if p == "resend" and keys.get("resend_api_key"):
+            if await _send_email_resend(to_email, subject, body_text):
+                return True
+        elif p == "sendgrid" and keys.get("sendgrid_api_key") and keys.get("sendgrid_from_email"):
+            if await _send_email_sendgrid(to_email, subject, body_text):
+                return True
+    logger.info("No email provider sent message to %s (provider=%s)", to_email, provider)
+    return False
+
+
 async def _send_sms_twilio(to_phone: str, body: str) -> bool:
     """Send an SMS via Twilio. Returns True on success, False on any failure."""
     if not to_phone:
@@ -1512,7 +1559,7 @@ async def notify_user(
         if user_doc:
             if "email" in channels and user_doc.get("email"):
                 # don't await — fire-and-forget so the API request doesn't slow down
-                asyncio.create_task(_send_email_sendgrid(user_doc["email"], title, message))
+                asyncio.create_task(_send_email(user_doc["email"], title, message))
             if "sms" in channels and user_doc.get("phone"):
                 asyncio.create_task(_send_sms_twilio(user_doc["phone"], f"{title}: {message}"))
     # Web push — fire-and-forget; routes notification to /notifications by default
@@ -1708,7 +1755,7 @@ async def register(user_data: UserRegister):
         "attempts": 0,
     })
     try:
-        await _send_email_sendgrid(
+        await _send_email(
             reg_email,
             "HandyHub — Email Verification",
             f"Welcome to HandyHub!\n\nYour verification code is: {code}\n\nThis code expires in 10 minutes.\n\nIf you did not sign up, ignore this email."
@@ -1854,7 +1901,7 @@ async def resend_verification(payload: Dict[str, Any] = Body(...)):
     })
     sent = False
     try:
-        sent = await _send_email_sendgrid(email, "HandyHub — New Verification Code", f"Your new verification code is: {code}\n\nExpires in 10 minutes.")
+        sent = await _send_email(email, "HandyHub — New Verification Code", f"Your new verification code is: {code}\n\nExpires in 10 minutes.")
     except Exception:
         pass
     return {"ok": True, "email_sent": sent}
@@ -7481,6 +7528,9 @@ async def provider_complete_work(booking_id: str, current_user: User = Depends(g
 class IntegrationKeysUpdate(BaseModel):
     sendgrid_api_key: Optional[str] = None
     sendgrid_from_email: Optional[str] = None
+    resend_api_key: Optional[str] = None
+    resend_from_email: Optional[str] = None
+    email_provider: Optional[str] = None  # "resend" (default) or "sendgrid"
     stripe_secret_key: Optional[str] = None
     stripe_publishable_key: Optional[str] = None
     stripe_webhook_secret: Optional[str] = None
@@ -8390,7 +8440,7 @@ async def submit_support_request(data: SupportRequestCreate, request: Request):
         f"Request ID: {req_id}\n"
     )
     asyncio.create_task(
-        _send_email_sendgrid(admin_email, f"[HandyHub Support] {doc['subject']}", body)
+        _send_email(admin_email, f"[HandyHub Support] {doc['subject']}", body)
     )
     return {"ok": True, "request_id": req_id}
 
@@ -8706,7 +8756,7 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
     doc = await db.integration_keys.find_one({"setting_id": "integration_keys"}, {"_id": 0}) or {}
     out = {}
     secret_fields = {
-        "sendgrid_api_key", "stripe_secret_key", "stripe_webhook_secret",
+        "sendgrid_api_key", "resend_api_key", "stripe_secret_key", "stripe_webhook_secret",
         "twilio_auth_token", "vapid_private_key", "telegram_bot_token",
     }
     for k in IntegrationKeysUpdate.model_fields.keys():
@@ -8721,6 +8771,8 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
         out["stripe_currency"] = "usd"
     if not out.get("support_email"):
         out["support_email"] = "Nexus.ss.llc@gmail.com"
+    if not out.get("email_provider"):
+        out["email_provider"] = "resend"
     return out
 
 
