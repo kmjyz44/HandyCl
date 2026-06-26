@@ -13,8 +13,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../utils/api';
 import { showConfirm, showAlert } from '../../utils/alert';
+import { useAuthStore } from '../../store/authStore';
+
+const ROLE_OPTIONS = [
+  { value: 'client', label: 'Клієнт', icon: 'person-outline', color: '#10b981' },
+  { value: 'provider', label: 'Виконавець', icon: 'briefcase-outline', color: '#2563eb' },
+  { value: 'admin', label: 'Адміністратор', icon: 'shield-checkmark-outline', color: '#f59e0b' },
+  { value: 'moderator', label: 'Модератор', icon: 'ribbon-outline', color: '#8b5cf6' },
+  { value: 'support', label: 'Техпідтримка', icon: 'headset-outline', color: '#0ea5e9' },
+] as const;
+
+const roleMeta = (role: string) => ROLE_OPTIONS.find((r) => r.value === role) || ROLE_OPTIONS[0];
 
 export default function Users() {
+  const currentUserId = useAuthStore((s) => s.user?.user_id);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -23,6 +35,34 @@ export default function Users() {
   const [blockModalVisible, setBlockModalVisible] = useState(false);
   const [blockReason, setBlockReason] = useState('');
   const [blockDuration, setBlockDuration] = useState('');
+
+  const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [roleTarget, setRoleTarget] = useState<any>(null);
+
+  const openRoleModal = (user: any) => {
+    setRoleTarget(user);
+    setRoleModalVisible(true);
+  };
+
+  const handleChangeRole = async (newRole: string) => {
+    if (!roleTarget || roleTarget.role === newRole) {
+      setRoleModalVisible(false);
+      return;
+    }
+    try {
+      await api.changeUserRole(roleTarget.user_id, newRole);
+      showAlert('Успіх', `Роль змінено на «${roleMeta(newRole).label}»`);
+      setRoleModalVisible(false);
+      const becameModerator = newRole === 'moderator';
+      const target = roleTarget;
+      setRoleTarget(null);
+      await loadUsers();
+      if (becameModerator) openModulesModal({ ...target, role: 'moderator' });
+    } catch (e: any) {
+      showAlert('Помилка', e?.response?.data?.detail || e.message || 'Не вдалося змінити роль');
+    }
+  };
+
 
   const [modModalVisible, setModModalVisible] = useState(false);
   const [modModules, setModModules] = useState<string[]>([]);
@@ -169,32 +209,10 @@ export default function Users() {
                 <Text style={styles.userEmail}>{user.email}</Text>
               </View>
               <View
-                style={[
-                  styles.roleBadge,
-                  {
-                    backgroundColor:
-                      user.role === 'admin'
-                        ? '#fef3c7'
-                        : user.role === 'provider'
-                        ? '#dbeafe'
-                        : '#d1fae5',
-                  },
-                ]}
+                style={[styles.roleBadge, { backgroundColor: roleMeta(user.role).color + '22' }]}
               >
-                <Text
-                  style={[
-                    styles.roleText,
-                    {
-                      color:
-                        user.role === 'admin'
-                          ? '#f59e0b'
-                          : user.role === 'provider'
-                          ? '#2563eb'
-                          : '#10b981',
-                    },
-                  ]}
-                >
-                  {user.role.toUpperCase()}
+                <Text style={[styles.roleText, { color: roleMeta(user.role).color }]}>
+                  {roleMeta(user.role).label}
                 </Text>
               </View>
             </View>
@@ -216,8 +234,30 @@ export default function Users() {
             )}
 
             <View style={styles.actions}>
-              {user.role !== 'admin' && (
+              {user.user_id === currentUserId ? (
+                <Text style={styles.selfNote}>Це ваш акаунт</Text>
+              ) : (
                 <>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.roleButton]}
+                    onPress={() => openRoleModal(user)}
+                    data-testid={`change-role-btn-${user.user_id}`}
+                  >
+                    <Ionicons name="swap-horizontal" size={16} color="#6366f1" />
+                    <Text style={[styles.actionText, { color: '#6366f1' }]}>Роль</Text>
+                  </TouchableOpacity>
+
+                  {user.role === 'moderator' && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, { borderColor: '#8b5cf6' }]}
+                      onPress={() => openModulesModal(user)}
+                      data-testid={`modules-btn-${user.user_id}`}
+                    >
+                      <Ionicons name="options-outline" size={16} color="#8b5cf6" />
+                      <Text style={[styles.actionText, { color: '#8b5cf6' }]}>Модулі</Text>
+                    </TouchableOpacity>
+                  )}
+
                   {user.is_blocked ? (
                     <TouchableOpacity
                       style={[styles.actionButton, styles.unblockButton]}
@@ -335,6 +375,42 @@ export default function Users() {
           </View>
         </View>
       </Modal>
+
+      {/* Change Role Modal */}
+      <Modal visible={roleModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Змінити роль</Text>
+              <TouchableOpacity onPress={() => setRoleModalVisible(false)} data-testid="role-modal-close">
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
+                {roleTarget?.name} — оберіть нову роль:
+              </Text>
+              {ROLE_OPTIONS.map((opt) => {
+                const active = roleTarget?.role === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.roleOption, active && { borderColor: opt.color, backgroundColor: opt.color + '14' }]}
+                    onPress={() => handleChangeRole(opt.value)}
+                    data-testid={`role-option-${opt.value}`}
+                  >
+                    <View style={[styles.roleOptionIcon, { backgroundColor: opt.color + '22' }]}>
+                      <Ionicons name={opt.icon as any} size={20} color={opt.color} />
+                    </View>
+                    <Text style={styles.roleOptionLabel}>{opt.label}</Text>
+                    {active && <Ionicons name="checkmark-circle" size={20} color={opt.color} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -405,6 +481,39 @@ const styles = StyleSheet.create({
   roleText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  selfNote: {
+    fontSize: 13,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    paddingVertical: 6,
+  },
+  roleButton: {
+    borderColor: '#6366f1',
+  },
+  roleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  roleOptionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roleOptionLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
   },
   blockedBanner: {
     flexDirection: 'row',

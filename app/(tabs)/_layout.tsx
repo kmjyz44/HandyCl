@@ -146,12 +146,12 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Messages tab — hidden from bottom nav (kept routable for task chats & help center) */}
+      {/* Messages tab — chats. Surfaced for support role (chats with users). */}
       <Tabs.Screen
         name="messages"
         options={{
-          title: 'Чат',
-          href: null,
+          title: 'Чати',
+          href: role === 'support' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <View>
               <Ionicons name="chatbubbles-outline" size={size} color={color} />
@@ -161,11 +161,23 @@ export default function TabsLayout() {
         }}
       />
 
+      {/* Support inbox — support role + admin */}
+      <Tabs.Screen
+        name="support-inbox"
+        options={{
+          title: 'Підтримка',
+          href: role === 'support' || role === 'admin' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="headset-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
       <Tabs.Screen
         name="dashboard"
         options={{
           title: 'Dashboard',
-          href: role === 'admin' ? undefined : null,
+          href: role === 'admin' || role === 'moderator' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="grid-outline" size={size} color={color} />
           ),
@@ -187,7 +199,7 @@ export default function TabsLayout() {
         name="users"
         options={{
           title: 'Users',
-          href: role === 'admin' ? undefined : null,
+          href: role === 'admin' || role === 'moderator' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-circle-outline" size={size} color={color} />
           ),
@@ -198,7 +210,7 @@ export default function TabsLayout() {
         name="services"
         options={{
           title: 'Services',
-          href: role === 'admin' ? undefined : null,
+          href: role === 'admin' || role === 'moderator' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="construct-outline" size={size} color={color} />
           ),

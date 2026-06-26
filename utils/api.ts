@@ -644,6 +644,10 @@ export const api = {
     const res = await client.post(`/admin/users/${userId}/set-moderator`);
     return res.data;
   },
+  changeUserRole: async (userId: string, role: string) => {
+    const res = await client.put(`/admin/users/${userId}/role`, { role });
+    return res.data;
+  },
   removeModerator: async (userId: string) => {
     const res = await client.post(`/admin/users/${userId}/remove-moderator`);
     return res.data;

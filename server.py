@@ -62,6 +62,7 @@ class UserRole(str, Enum):
     PROVIDER = "provider"
     ADMIN = "admin"
     MODERATOR = "moderator"
+    SUPPORT = "support"
 
 class BookingStatus(str, Enum):
     DRAFT = "draft"
@@ -1301,6 +1302,11 @@ async def get_current_user_optional(
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+async def require_admin_or_support(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in (UserRole.ADMIN, UserRole.SUPPORT):
+        raise HTTPException(status_code=403, detail="Admin or support access required")
     return current_user
 
 async def get_settings() -> Settings:
@@ -3255,6 +3261,42 @@ async def update_moderator_modules(
         {"$set": {"moderator_modules": modules, "updated_at": datetime.now(timezone.utc)}}
     )
     return {"message": "Modules updated", "modules": modules}
+
+@api_router.put("/admin/users/{user_id}/role")
+async def change_user_role(user_id: str, payload: Dict[str, Any] = Body(...), current_user: User = Depends(get_current_user)):
+    """Admin changes a user's role to any of: client, provider, admin, moderator, support."""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin can change user roles")
+
+    new_role = (payload.get("role") or "").strip().lower()
+    valid_roles = [r.value for r in UserRole]
+    if new_role not in valid_roles:
+        raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {valid_roles}")
+
+    if user_id == current_user.user_id:
+        raise HTTPException(status_code=400, detail="You cannot change your own role")
+
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    update: Dict[str, Any] = {
+        "role": new_role,
+        "role_updated_at": datetime.now(timezone.utc),
+        "role_updated_by": current_user.user_id,
+    }
+    # Role-specific side effects
+    if new_role == UserRole.MODERATOR.value:
+        # Grant full module access by default if none set yet
+        if not user.get("moderator_modules"):
+            update["moderator_modules"] = AVAILABLE_MODULES
+    else:
+        # Leaving moderator clears module grants
+        update["moderator_modules"] = []
+
+    await db.users.update_one({"user_id": user_id}, {"$set": update})
+    return {"message": "Role updated", "role": new_role, "moderator_modules": update.get("moderator_modules", [])}
+
 
 @api_router.get("/admin/moderators")
 async def get_moderators(current_user: User = Depends(get_current_user)):
@@ -8348,7 +8390,7 @@ async def list_support_requests(
     status: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_admin_or_support),
 ):
     q: Dict[str, Any] = {}
     if status:
@@ -8363,7 +8405,7 @@ async def list_support_requests(
 async def update_support_request(
     request_id: str,
     payload: Dict[str, Any] = Body(...),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_admin_or_support),
 ):
     new_status = payload.get("status")
     notes = payload.get("notes")

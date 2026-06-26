@@ -1,0 +1,57 @@
+{
+  "summary": "Backend-only verification of new PUT /api/admin/users/{user_id}/role endpoint and support-request gating (require_admin_or_support). 14/14 pytest cases pass against the preview backend.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login", "issue": "Seeded user client@handyhub.com / Admin2024! returns 401 (Invalid credentials). The credentials file /app/memory/test_credentials.md claims this account is auto-seeded but it is not actually login-able on the preview backend. provider@handyhub.com not verified; only admin@handyhub.com login works. Tests worked around it by registering throwaway client users."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tested_features": {
+    "PUT /api/admin/users/{user_id}/role": {
+      "support": "200, role persisted and visible via /auth/me after re-login",
+      "moderator": "200, auto-grants full moderator_modules = [tasks, bookings, users, payments, reviews, messages, services, analytics, settings]",
+      "admin": "200 (admin CAN promote others to admin), moderator_modules cleared to []",
+      "provider": "200, persisted",
+      "client": "200, persisted",
+      "invalid (superuser)": "400",
+      "self role change": "400 ('cannot change your own role')",
+      "non-admin (client) caller": "403",
+      "support caller": "403 (only admin can change roles)"
+    },
+    "GET /api/admin/support-requests": {
+      "admin": "200",
+      "support": "200 (gating via require_admin_or_support works)",
+      "plain client": "403"
+    },
+    "PUT /api/admin/support-requests/{id}": {
+      "support": "404 on bogus id (NOT 403 — gating passed)",
+      "plain client": "403"
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_admin_role_change.py",
+    "/app/test_reports/pytest/role_change_results.xml"
+  ],
+  "action_items": [
+    "Optional: re-seed or document the actual state of client@handyhub.com / provider@handyhub.com — the credentials file (/app/memory/test_credentials.md) is stale on the preview environment. The admin account works."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 11208 lines — should be split into modular routers (users, admin, support, etc.) to respect the <700-line guideline.",
+    "change_user_role correctly excludes MongoDB _id from the user lookup and uses Pydantic-style validation on role; behavior matches spec.",
+    "moderator_modules is cleared on every non-moderator transition — correct behavior; verified by test_change_role_to_admin_clears_modules."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_admin_role_change.py (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@handyhub.com / Admin2024! (works). client@handyhub.com / Admin2024! does NOT work on preview backend — register throwaway users instead.",
+  "seed_data_creation": "Each test registers throwaway users with TEST_/test_role_/test_supp_ email prefixes. Not cleaned up — recommend adding cleanup if rerunning frequently.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New endpoint PUT /api/admin/users/{user_id}/role at server.py:3265 is fully working. Support role gating via require_admin_or_support (server.py:1307) on /admin/support-requests endpoints is working. Use admin@handyhub.com / Admin2024! for admin token; do NOT trust client@handyhub.com — register a fresh client via POST /api/auth/register (note: field is 'name' not 'full_name')."
+}
