@@ -29,6 +29,13 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 - ✅ **User's code files integrated** - NewDashboardPage.js, apiClient.js, server.py, translations.js from files_1.zip
 - ✅ **Booking confirmation error fixed** - [object Object] error resolved (service.name vs service.title mismatch)
 - ✅ **Photo upload functionality added** - Click-to-select photo upload with preview and delete buttons
+### 2026-06-25: Admin can change user ROLE (5 roles) + Support role
+- Backend: added `SUPPORT` to `UserRole`; new `PUT /api/admin/users/{user_id}/role` (admin-only) accepts client/provider/admin/moderator/support. Admin CAN promote others to admin. Blocks self-role-change (400), invalid role (400), non-admin caller (403). Moderator auto-gets full `moderator_modules`; leaving moderator clears them. Added `require_admin_or_support` dependency; `/admin/support-requests` GET+PUT now allow admin OR support.
+- Frontend: `utils/api.ts` `changeUserRole`; `app/(tabs)/users.tsx` role badge + "Роль" button → modal with 5 roles (admin hidden for self; self card shows "Це ваш акаунт"); moderator shows "Модулі" button.
+- Menu access (`app/(tabs)/_layout.tsx`): dashboard/users/services → admin OR moderator; payment-settings/profile → admin; messages("Чати") → support; new `support-inbox` tab ("Підтримка", reuses admin-support-requests) → support OR admin.
+- Verified: testing_agent backend 100% (14/14) — all role transitions, gating, support-request access. Frontend syntax clean (esbuild); needs live verification on Netlify after Save to GitHub (Expo not rendered in preview pod).
+
+
 ### 2026-06-25: Modern in-app notifications (toasts) + confirm dialog
 - New `components/ToastHost.tsx` — animated, cross-platform toast system (`toast.success/error/info`), top-anchored, auto-dismiss, stacked, with icons/colors per type.
 - New `components/ConfirmHost.tsx` — modern animated modal confirm dialog (`confirmDialog(): Promise<boolean>`), destructive variant (red trash icon) for delete/block.

@@ -3,11 +3,11 @@
 These accounts are auto-seeded by the backend on every startup
 (`server.py` seed routine). They exist on the production Railway DB as well.
 
-| Role     | Email                       | Password    |
-|----------|-----------------------------|-------------|
-| Admin    | admin@handyhub.com          | Admin2024!  |
-| Provider | provider@handyhub.com       | Admin2024!  |
-| Client   | client@handyhub.com         | Admin2024!  |
+| Role     | Email                       | Password      |
+|----------|-----------------------------|---------------|
+| Admin    | admin@handyhub.com          | Admin2024!    |
+| Provider | provider@handyhub.com       | Provider2024! |
+| Client   | client@handyhub.com         | Client2024!   |
 
 ## Endpoints
 - Backend (prod): https://backend-production-a461.up.railway.app
