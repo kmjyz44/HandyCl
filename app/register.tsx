@@ -44,9 +44,14 @@ export default function Register() {
       // (they can confirm now or skip and verify later via the home banner).
       router.replace({ pathname: '/verify-email', params: { email } } as any);
     } catch (error: any) {
-      let msg = error.message || 'Помилка реєстрації';
-      if (msg.includes('already registered')) msg = 'Цей email вже зареєстрований.';
-      if (msg.includes('Network') || msg.includes('fetch')) msg = 'Не вдалося підключитися до сервера.';
+      const detail = error?.response?.data?.detail;
+      let msg = (typeof detail === 'string' && detail) || error.message || 'Помилка реєстрації';
+      const lower = String(msg).toLowerCase();
+      if (lower.includes('already registered')) {
+        msg = 'Цей email вже зареєстрований. Спробуйте увійти або скористайтесь іншим email.';
+      } else if (error.message && (error.message.includes('Network') || error.message.includes('fetch'))) {
+        msg = 'Не вдалося підключитися до сервера.';
+      }
       setErrorMsg(msg);
     } finally {
       setLoading(false);

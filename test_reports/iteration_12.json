@@ -1,0 +1,40 @@
+{
+  "summary": "Backend-only verification of POST /api/auth/register 400 'Email already registered' detail (and accepted_terms 400 branch) that the frontend register.tsx now surfaces via error.response.data.detail. 4/4 pytest cases pass against preview backend.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tested_features": {
+    "POST /api/auth/register fresh unique email (role=provider, phone='3317713444', accepted_terms=true)": "200; response has session_token (non-empty str) and user with email lowercased, name='Fresh', role='provider', phone='3317713444', email_verified=false.",
+    "POST /api/auth/register duplicate same case": "400 with JSON detail exactly 'Email already registered'.",
+    "POST /api/auth/register duplicate UPPERCASE email": "400 with JSON detail exactly 'Email already registered' (case-insensitive duplicate check via _ci_email confirmed).",
+    "POST /api/auth/register accepted_terms=false": "400 with detail containing 'Terms' ('You must accept the Terms of Use and Privacy Policy to register').",
+    "POST /api/auth/register role='provider'": "Covered by fresh-email test — registration with role 'provider' succeeds (200)."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_register_duplicate_400.py",
+    "/app/test_reports/pytest/register_duplicate_400_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py register() still stores plain_password (line 1691) — security smell carried over from iteration_11; unrelated to this fix but should be removed.",
+    "Both 400 branches use raise HTTPException(status_code=400, detail=...) so FastAPI returns {detail: '...'} which is exactly what the new frontend error.response.data.detail expects — contract is aligned.",
+    "_ci_email regex check works for duplicate detection across case variants; insert_one writes lowercased email so subsequent same-case lookups also hit a unique row.",
+    "server.py is 11218 lines — file size violation persists; consider extracting auth routes (1660-1860) into routers/auth.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_register_duplicate_400.py (new)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "not tested (per request)"},
+  "test_credentials": "No fixed creds needed — tests register a per-run unique fresh_<ts>_<pid>@example.com and noterms_<ts>_<pid>@example.com. Cleanup fixture deletes matching users/email_verifications via pymongo using MONGO_URL/DB_NAME from /app/backend/.env.",
+  "seed_data_creation": "Per-run unique throwaway test users; teardown removes them from db.users and db.email_verifications.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend 400 contract for /api/auth/register is confirmed: duplicate-email branch returns {detail:'Email already registered'} (exact string, case-insensitive on input email); accepted_terms=false branch returns {detail:'You must accept the Terms of Use and Privacy Policy to register'}. Frontend register.tsx reads error.response.data.detail so the user will now see the precise message instead of the generic axios 'Request failed with status code 400'. The original failing email Nexus.ss.llc@gmail.com is already in the DB from earlier attempts, so any further registration with that email (any case) will correctly hit the duplicate branch — that is the expected behavior, not a bug.",
+  "rca of the issue": "RCA: The red banner 'Request failed with status code 400' the user saw on the live Create Account screen was a frontend display issue, not a backend regression. Backend was already correctly returning HTTP 400 with body {detail:'Email already registered'} because Nexus.ss.llc@gmail.com had been registered in a prior attempt. The old frontend catch block was rendering axios's default error.message ('Request failed with status code 400') instead of error.response.data.detail. Fix: register.tsx now extracts error.response.data.detail and shows the backend message. This testing run formally confirms the backend contract the new frontend relies on — duplicate detection is case-insensitive (verified by registering UPPERCASE variant and still getting 400 + same detail), and a fresh unique email still registers successfully (200 + session_token + user), proving the 400 is duplicate-specific and not a general registration breakage."
+}
