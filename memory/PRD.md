@@ -29,6 +29,13 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 - ✅ **User's code files integrated** - NewDashboardPage.js, apiClient.js, server.py, translations.js from files_1.zip
 - ✅ **Booking confirmation error fixed** - [object Object] error resolved (service.name vs service.title mismatch)
 - ✅ **Photo upload functionality added** - Click-to-select photo upload with preview and delete buttons
+### 2026-06-26: Email via Resend (default) + SendGrid, selectable in admin
+- Backend: `_send_email_resend()` (httpx → https://api.resend.com/emails) + unified `_send_email()` dispatcher. Provider chosen by `integration_keys.email_provider` (default "resend"), with automatic fallback to the other provider. ALL email paths (register verification, resend-verification, notifications, support contact) now use `_send_email`.
+- Integration keys: added `resend_api_key` (masked), `resend_from_email`, `email_provider`. Admin UI (admin-integrations.tsx) shows a "Resend (default)" section (provider selector + key + from) above "SendGrid (fallback)".
+- Verified: testing_agent backend 7/7 — save/mask/retrieve, provider switch, default=resend, register sends via Resend ('Resend email sent' logged), register never fails on email errors.
+- CAVEAT: Resend test sender `onboarding@resend.dev` only delivers to the Resend account owner email. To email ALL users, verify a domain in Resend and set `resend_from_email` to a verified-domain address.
+
+
 ### 2026-06-25: Fix — register error showed "Request failed with status code 400"
 - RCA: register 400 was actually "Email already registered" (Nexus.ss.llc@gmail.com was registered in a prior attempt), but `register.tsx` displayed `error.message` (generic axios string) instead of `error.response.data.detail`.
 - Fix: register.tsx catch now reads `error.response.data.detail` and shows a clear UA message ("Цей email вже зареєстрований. Спробуйте увійти або скористайтесь іншим email.").
