@@ -29,6 +29,13 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 - ✅ **User's code files integrated** - NewDashboardPage.js, apiClient.js, server.py, translations.js from files_1.zip
 - ✅ **Booking confirmation error fixed** - [object Object] error resolved (service.name vs service.title mismatch)
 - ✅ **Photo upload functionality added** - Click-to-select photo upload with preview and delete buttons
+### 2026-06-25: Fix — register error showed "Request failed with status code 400"
+- RCA: register 400 was actually "Email already registered" (Nexus.ss.llc@gmail.com was registered in a prior attempt), but `register.tsx` displayed `error.message` (generic axios string) instead of `error.response.data.detail`.
+- Fix: register.tsx catch now reads `error.response.data.detail` and shows a clear UA message ("Цей email вже зареєстрований. Спробуйте увійти або скористайтесь іншим email.").
+- Verified: testing_agent backend 4/4 — fresh email→200; duplicate (same & uppercase)→400 "Email already registered"; accepted_terms=false→400 Terms message. Frontend display needs live verification after deploy.
+- USER WORKAROUND (pre-deploy): the email is already registered (verification is optional, account works) → log in with it; OR delete that user in Admin→Users; OR use a different email.
+
+
 ### 2026-06-25: Fix — email verification "User not found" (case mismatch)
 - RCA: register() stored email AS-TYPED (mixed case), but /auth/verify-email & /auth/resend-verification `.lower()`-ed it before an exact-match lookup → never matched → 404 "User not found" + verify failing.
 - Fix: register() now stores email lowercased; added `_ci_email()` case-insensitive regex helper used by login, verify-email, resend-verification (also fixes legacy mixed-case rows). verify/resend update users by `user_id` from the verification record. resend returns `email_sent` flag.
