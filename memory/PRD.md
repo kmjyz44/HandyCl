@@ -29,6 +29,13 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 - ✅ **User's code files integrated** - NewDashboardPage.js, apiClient.js, server.py, translations.js from files_1.zip
 - ✅ **Booking confirmation error fixed** - [object Object] error resolved (service.name vs service.title mismatch)
 - ✅ **Photo upload functionality added** - Click-to-select photo upload with preview and delete buttons
+### 2026-06-25: Fix — email verification "User not found" (case mismatch)
+- RCA: register() stored email AS-TYPED (mixed case), but /auth/verify-email & /auth/resend-verification `.lower()`-ed it before an exact-match lookup → never matched → 404 "User not found" + verify failing.
+- Fix: register() now stores email lowercased; added `_ci_email()` case-insensitive regex helper used by login, verify-email, resend-verification (also fixes legacy mixed-case rows). verify/resend update users by `user_id` from the verification record. resend returns `email_sent` flag.
+- Verified: testing_agent backend 100% (8/8) — mixed-case register→resend(any case, not 404)→verify→login all pass; case-insensitive duplicate check; unknown email still 404.
+- NOTE: actual email DELIVERY depends on SendGrid prod config — BOTH `sendgrid_api_key` AND `sendgrid_from_email` (a VERIFIED sender) must be set in admin Integration Keys, and `enable_email_notifications` on. Not testable on preview (SendGrid unconfigured there).
+
+
 ### 2026-06-25: Admin can change user ROLE (5 roles) + Support role
 - Backend: added `SUPPORT` to `UserRole`; new `PUT /api/admin/users/{user_id}/role` (admin-only) accepts client/provider/admin/moderator/support. Admin CAN promote others to admin. Blocks self-role-change (400), invalid role (400), non-admin caller (403). Moderator auto-gets full `moderator_modules`; leaving moderator clears them. Added `require_admin_or_support` dependency; `/admin/support-requests` GET+PUT now allow admin OR support.
 - Frontend: `utils/api.ts` `changeUserRole`; `app/(tabs)/users.tsx` role badge + "Роль" button → modal with 5 roles (admin hidden for self; self card shows "Це ваш акаунт"); moderator shows "Модулі" button.
