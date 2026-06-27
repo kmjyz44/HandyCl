@@ -40,6 +40,8 @@ export default function PayoutSetup() {
   const [zelleHandle, setZelleHandle] = useState('');
   const [venmoHandle, setVenmoHandle] = useState('');
   const [savingContacts, setSavingContacts] = useState(false);
+  // Methods the admin has enabled — executors only see/configure these
+  const [enabledMethods, setEnabledMethods] = useState<string[]>([]);
 
   const load = async () => {
     try {
@@ -50,6 +52,11 @@ export default function PayoutSetup() {
     } finally {
       setLoading(false);
     }
+    try {
+      const m = await api.getPaymentMethods();
+      const ids = (m?.methods || []).map((x: any) => x.id);
+      setEnabledMethods(ids);
+    } catch {}
     try {
       const c = await api.getTaskerPayoutContacts();
       setPaypalEmail(c?.paypal_email || '');
@@ -201,7 +208,8 @@ export default function PayoutSetup() {
           нічого не треба робити вручну.
         </Text>
 
-        {/* Stripe Connect — recommended */}
+        {/* Stripe Connect — recommended (only if admin enabled Stripe) */}
+        {enabledMethods.includes('stripe') && (
         <View style={[styles.connectCard, connectStatus?.charges_enabled && styles.connectCardActive]}>
           <View style={styles.connectHeader}>
             <View style={styles.connectIcon}>

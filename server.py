@@ -5271,6 +5271,137 @@ async def get_payment_status(session_id: str, current_user: User = Depends(get_c
     }
 
 
+async def _resolve_booking_commission(booking: Dict[str, Any]) -> float:
+    """Return the platform commission (platform_take) for a booking, recomputing
+    from the category rate if the snapshot is missing/zero. Commission is added
+    ON TOP of the executor's price (the platform's cut the client pays us)."""
+    platform_take = float(booking.get("platform_take") or 0)
+    if platform_take > 0:
+        return platform_take
+    executor_rate = (
+        float(booking.get("executor_rate") or 0)
+        or float(booking.get("provider_hourly_rate") or 0)
+        or float(booking.get("estimated_price") or 0)
+        or float(booking.get("total_price") or 0)
+    )
+    pricing = await compute_client_pricing(executor_rate, booking.get("category"))
+    return float(pricing["platform_take"])
+
+
+@api_router.post("/payments/commission-wallet-intent")
+async def create_commission_wallet_intent(
+    payload: Dict[str, Any] = Body(default={}),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a Stripe PaymentIntent for the PLATFORM COMMISSION only (no Connect).
+    Used by the inline Apple Pay / Google Pay (Payment Request Button) flow on web.
+    The executor's portion is paid directly to the executor via manual methods."""
+    booking_id = payload.get("booking_id")
+    if not booking_id:
+        raise HTTPException(status_code=422, detail="booking_id is required")
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking["client_id"] != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    api_key = await _get_stripe_secret_key()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Stripe не налаштовано — додай Secret Key в Адмін → Інтеграції")
+
+    keys = await _get_integration_keys()
+    publishable_key = keys.get("stripe_publishable_key")
+    if not publishable_key:
+        raise HTTPException(status_code=500, detail="Stripe Publishable Key не вказано в Адмін → Інтеграції")
+    currency = (keys.get("stripe_currency") or "usd").lower()
+
+    commission = await _resolve_booking_commission(booking)
+    if not commission or commission <= 0:
+        raise HTTPException(status_code=400, detail="Комісія дорівнює нулю — нема що оплачувати через Stripe")
+    amount_cents = int(round(float(commission) * 100))
+
+    import stripe as _stripe
+    _stripe.api_key = api_key
+    try:
+        intent = await asyncio.to_thread(
+            _stripe.PaymentIntent.create,
+            amount=amount_cents,
+            currency=currency,
+            automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
+            description=f"HandyHub commission — {booking.get('title') or booking_id}",
+            statement_descriptor_suffix="HANDYHUB",
+            metadata={
+                "booking_id": booking_id,
+                "user_id": current_user.user_id,
+                "kind": "platform_commission",
+                "platform": "handyhub",
+            },
+        )
+    except Exception as e:
+        logger.error("Stripe PaymentIntent create failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
+
+    transaction_id = f"txn_{uuid.uuid4().hex[:12]}"
+    await db.payment_transactions.insert_one(PaymentTransaction(
+        transaction_id=transaction_id,
+        booking_id=booking_id,
+        user_id=current_user.user_id,
+        amount=float(commission),
+        currency=currency,
+        session_id=intent.id,  # store the PaymentIntent id in session_id slot
+        payment_status="pending",
+        metadata={"kind": "platform_commission", "payment_intent_id": intent.id},
+    ).dict())
+
+    return {
+        "client_secret": intent.client_secret,
+        "publishable_key": publishable_key,
+        "payment_intent_id": intent.id,
+        "amount": float(commission),
+        "currency": currency,
+    }
+
+
+@api_router.post("/payments/commission-wallet-confirm")
+async def confirm_commission_wallet(
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+):
+    """After the wallet confirms the PaymentIntent client-side, verify it server-side
+    and mark the platform commission as paid on the booking."""
+    pi_id = payload.get("payment_intent_id")
+    if not pi_id:
+        raise HTTPException(status_code=422, detail="payment_intent_id is required")
+
+    api_key = await _get_stripe_secret_key()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Stripe не налаштовано")
+    import stripe as _stripe
+    _stripe.api_key = api_key
+    try:
+        intent = await asyncio.to_thread(_stripe.PaymentIntent.retrieve, pi_id)
+    except Exception as e:
+        logger.error("Stripe PaymentIntent.retrieve failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
+
+    status = intent.get("status")
+    txn = await db.payment_transactions.find_one({"session_id": pi_id}, {"_id": 0})
+    booking_id = (txn or {}).get("booking_id") or (intent.get("metadata") or {}).get("booking_id")
+
+    if status == "succeeded":
+        await db.payment_transactions.update_one(
+            {"session_id": pi_id},
+            {"$set": {"payment_status": "paid", "updated_at": datetime.now(timezone.utc)}},
+        )
+        if booking_id:
+            await db.bookings.update_one(
+                {"booking_id": booking_id},
+                {"$set": {"commission_paid": True, "commission_paid_at": datetime.now(timezone.utc)}},
+            )
+    return {"status": status, "paid": status == "succeeded", "booking_id": booking_id}
+
+
+
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
     """Handle Stripe webhook events (best-effort signature check if secret configured)."""
