@@ -7,7 +7,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
@@ -1447,19 +1447,23 @@ async def _send_email(to_email: str, subject: str, body_text: str) -> bool:
     return False
 
 
-async def _send_sms_twilio(to_phone: str, body: str) -> bool:
-    """Send an SMS via Twilio. Returns True on success, False on any failure."""
+async def _send_sms_twilio(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
+    """Send an SMS via Twilio. Returns (success, error_message).
+    error_message is a human-readable reason when success is False, else None."""
     if not to_phone:
-        return False
+        return False, "Номер телефону не вказано"
     keys = await _get_integration_keys()
     if not keys.get("enable_sms_notifications", True):
-        return False
+        return False, "SMS-сповіщення вимкнено в налаштуваннях адміністратора"
     sid = keys.get("twilio_account_sid")
     token = keys.get("twilio_auth_token")
     from_phone = keys.get("twilio_from_phone")
     if not sid or not token or not from_phone:
         logger.info("Twilio not configured — skipping SMS to %s", to_phone)
-        return False
+        return False, "Twilio не налаштовано (вкажіть Account SID, Auth Token та номер відправника в адмінці)"
+    # Twilio requires E.164 format (e.g. +14155551234)
+    if not to_phone.strip().startswith("+"):
+        return False, "Номер має бути у форматі E.164, напр. +14155551234"
     try:
         async with httpx.AsyncClient(timeout=10.0, auth=(sid, token)) as http:
             r = await http.post(
@@ -1467,13 +1471,30 @@ async def _send_sms_twilio(to_phone: str, body: str) -> bool:
                 data={"From": from_phone, "To": to_phone, "Body": body[:1500]},
             )
         if r.status_code >= 400:
-            logger.warning("Twilio SMS failed %s: %s", r.status_code, r.text[:200])
-            return False
+            logger.warning("Twilio SMS failed %s: %s", r.status_code, r.text[:400])
+            # Surface the real Twilio reason to the caller
+            err_msg = f"Twilio помилка {r.status_code}"
+            try:
+                data = r.json()
+                tw_code = data.get("code")
+                tw_message = data.get("message") or ""
+                if tw_code == 21608:
+                    err_msg = ("Trial-акаунт Twilio може надсилати SMS лише на номери, верифіковані "
+                               "у Twilio Console (Verified Caller IDs). Додайте номер або оновіть акаунт.")
+                elif tw_code == 21211:
+                    err_msg = "Невірний формат номера. Використовуйте E.164, напр. +14155551234"
+                elif tw_code == 21408 or tw_code == 21610:
+                    err_msg = "Twilio не може надіслати SMS на цей номер/регіон (перевірте дозволи в Geo Permissions)"
+                elif tw_message:
+                    err_msg = f"Twilio: {tw_message}"
+            except Exception:
+                pass
+            return False, err_msg
         logger.info("Twilio SMS sent to %s", to_phone)
-        return True
+        return True, None
     except Exception as e:
         logger.warning("Twilio SMS error: %s", e)
-        return False
+        return False, f"Помилка з'єднання з Twilio: {e}"
 
 
 async def _send_web_push_one(subscription: Dict[str, Any], payload: Dict[str, Any], vapid_priv: str, vapid_subject: str) -> bool:
@@ -1933,8 +1954,11 @@ async def send_phone_code(payload: Dict[str, Any] = Body(default={}), current_us
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
         "created_at": datetime.now(timezone.utc), "attempts": 0,
     })
-    sent = await _send_sms_twilio(phone, f"HandyHub: your verification code is {code}. It expires in 10 minutes.")
-    return {"ok": True, "sent": sent}
+    sent, sms_error = await _send_sms_twilio(phone, f"HandyHub: your verification code is {code}. It expires in 10 minutes.")
+    resp: Dict[str, Any] = {"ok": True, "sent": sent}
+    if not sent and sms_error:
+        resp["error"] = sms_error
+    return resp
 
 
 @api_router.post("/auth/verify-phone")

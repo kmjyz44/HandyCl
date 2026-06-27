@@ -31,13 +31,18 @@ export default function VerifyPhone() {
     setSending(true);
     setError('');
     try {
-      await api.sendPhoneCode({ phone });
-      setSent(true);
-      setCooldown(60);
-      Alert.alert('Надіслано', 'Код підтвердження надіслано у SMS');
+      const res = await api.sendPhoneCode({ phone });
+      if (res?.sent) {
+        setSent(true);
+        setCooldown(60);
+        Alert.alert('Надіслано', 'Код підтвердження надіслано у SMS');
+      } else {
+        // HTTP 200 but Twilio did not deliver — surface the real reason
+        setError(res?.error || 'Не вдалося надіслати SMS. Спробуйте пізніше.');
+      }
     } catch (e: any) {
-      const detail = e?.response?.data?.detail || 'Помилка';
-      if (detail.includes('60')) { setSent(true); setCooldown(60); }
+      const detail = e?.response?.data?.detail || e?.response?.data?.error || 'Помилка';
+      if (String(detail).includes('60')) { setSent(true); setCooldown(60); }
       setError(detail);
     } finally {
       setSending(false);
