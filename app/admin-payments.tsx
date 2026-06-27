@@ -145,6 +145,7 @@ export default function AdminPaymentsScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={{ maxHeight: 58 }}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -168,6 +169,7 @@ export default function AdminPaymentsScreen() {
           </TouchableOpacity>
         ))}
       </ScrollView>
+      </View>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -358,10 +360,10 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4, marginRight: 8 },
   title: { fontSize: 18, fontWeight: '800', color: '#111827', flex: 1 },
   refreshBtn: { padding: 4 },
-  tabs: { padding: 12, gap: 8 },
+  tabs: { padding: 12, gap: 8, alignItems: 'center' },
   tab: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb',
+    paddingHorizontal: 14, height: 34, justifyContent: 'center', alignSelf: 'center',
+    borderRadius: 17, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb',
   },
   tabText: { fontSize: 12, fontWeight: '700', color: '#374151' },
 
