@@ -219,10 +219,11 @@ function ProviderDashboard() {
 
       {/* Sub-filter chips — visible only on "Мої завдання" tab */}
       {activeTab === 'my' && (
+        <View style={{ maxHeight: 44, marginBottom: 10 }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
         >
           {([
             { id: 'all', label: 'Усі', icon: 'layers-outline', color: '#374151' },
@@ -245,8 +246,8 @@ function ProviderDashboard() {
               <TouchableOpacity
                 key={chip.id}
                 style={[
-                  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8,
-                    borderRadius: 999, backgroundColor: active ? chip.color : '#fff',
+                  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, height: 34,
+                    borderRadius: 17, backgroundColor: active ? chip.color : '#fff', alignSelf: 'center',
                     borderWidth: 1, borderColor: active ? chip.color : '#e5e7eb' },
                 ]}
                 onPress={() => setMyFilter(chip.id)}
@@ -260,6 +261,7 @@ function ProviderDashboard() {
             );
           })}
         </ScrollView>
+        </View>
       )}
 
       {/* Task list */}

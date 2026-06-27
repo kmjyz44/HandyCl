@@ -121,3 +121,10 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 - Last test: iteration_9.json - 70/70 tests passed (100%)
 - Frontend: Playwright e2e specs
 - Backend: pytest tests
+
+## 2026-06-27 — UI: компактні фільтри в дашборді виконавця
+- Виправлено баг RNW: чіпи-фільтри (Усі/Призначено/В роботі/Очікує оплати/Оплачено) у вкладці «Мої завдання» розтягувалися у велетенські овали (borderRadius:999 + stretch), займаючи ~250px і ховаючи список завдань.
+- Рішення: обгортка View з maxHeight:44, contentContainerStyle alignItems:center, фіксована висота чіпа 34px (borderRadius:17), alignSelf:center.
+- Файл: app/(tabs)/index.tsx (ProviderDashboard).
+- Перевірка: візуально після редеплою на Netlify (preview-под обслуговує CRA-заглушку, не Expo).
+
