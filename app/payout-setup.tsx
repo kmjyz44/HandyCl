@@ -42,6 +42,8 @@ export default function PayoutSetup() {
   const [savingContacts, setSavingContacts] = useState(false);
   // Methods the admin has enabled — executors only see/configure these
   const [enabledMethods, setEnabledMethods] = useState<string[]>([]);
+  const [finixStatus, setFinixStatus] = useState<any>(null);
+  const [finixLoading, setFinixLoading] = useState(false);
 
   const load = async () => {
     try {
@@ -56,6 +58,9 @@ export default function PayoutSetup() {
       const m = await api.getPaymentMethods();
       const ids = (m?.methods || []).map((x: any) => x.id);
       setEnabledMethods(ids);
+      if (ids.includes('finix')) {
+        try { setFinixStatus(await api.finixExecutorStatus()); } catch {}
+      }
     } catch {}
     try {
       const c = await api.getTaskerPayoutContacts();
@@ -63,6 +68,21 @@ export default function PayoutSetup() {
       setZelleHandle(c?.zelle_handle || '');
       setVenmoHandle(c?.venmo_handle || '');
     } catch {}
+  };
+
+  const onboardFinix = async () => {
+    setFinixLoading(true);
+    try {
+      const r = await api.finixOnboardExecutor();
+      setFinixStatus({ onboarded: true, merchant_id: r.merchant_id, onboarding_state: r.onboarding_state });
+      showAlert('Готово', r.onboarding_state === 'APPROVED'
+        ? 'Виплати Finix активовано — ви готові приймати платежі.'
+        : 'Заявку створено. Очікуйте підтвердження Finix (статус оновиться автоматично).');
+    } catch (e: any) {
+      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося підключити Finix');
+    } finally {
+      setFinixLoading(false);
+    }
   };
 
   const saveContacts = async () => {
@@ -247,6 +267,44 @@ export default function PayoutSetup() {
             </TouchableOpacity>
           )}
         </View>
+        )}
+
+        {/* Finix payouts onboarding (only if admin enabled Finix) */}
+        {enabledMethods.includes('finix') && (
+        <View style={[styles.connectCard, finixStatus?.onboarding_state === 'APPROVED' && styles.connectCardActive]}>
+          <View style={styles.connectHeader}>
+            <View style={[styles.connectIcon, { backgroundColor: '#1a8917' }]}>
+              <Ionicons name="card" size={22} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.connectTitle}>Finix (авто-split, США)</Text>
+              <Text style={styles.connectSub}>
+                {finixStatus?.onboarding_state === 'APPROVED'
+                  ? '✓ Активно — ваша частина надходитиме автоматично'
+                  : finixStatus?.onboarded
+                  ? '⏳ Заявку подано, очікує підтвердження Finix'
+                  : 'Підключіть один раз — і отримуйте свою частину автоматично'}
+              </Text>
+            </View>
+          </View>
+          {finixStatus?.onboarding_state !== 'APPROVED' && (
+            <TouchableOpacity
+              style={[styles.connectBtn, { backgroundColor: '#1a8917' }, finixLoading && { opacity: 0.6 }]}
+              onPress={onboardFinix}
+              disabled={finixLoading}
+              data-testid="finix-onboard-btn"
+            >
+              {finixLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.connectBtnText}>
+                  {finixStatus?.onboarded ? 'Перевірити статус' : 'Підключити виплати Finix →'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+        )}
 
         <Text style={styles.dividerLabel}>або зберегти реквізити вручну (для довідки)</Text>
 
@@ -256,6 +314,7 @@ export default function PayoutSetup() {
           <Text style={styles.altSub}>
             Якщо клієнт обирає PayPal / Zelle / Venmo — він буде надсилати тобі гроші напряму на ці акаунти.
           </Text>
+          {enabledMethods.includes('paypal') && (<>
           <Text style={styles.label}>PayPal email</Text>
           <TextInput
             value={paypalEmail}
@@ -266,6 +325,8 @@ export default function PayoutSetup() {
             style={styles.input}
             data-testid="paypal-email-input"
           />
+          </>)}
+          {enabledMethods.includes('zelle') && (<>
           <Text style={styles.label}>Zelle (email або телефон)</Text>
           <TextInput
             value={zelleHandle}
@@ -275,6 +336,8 @@ export default function PayoutSetup() {
             style={styles.input}
             data-testid="zelle-handle-input"
           />
+          </>)}
+          {enabledMethods.includes('venmo') && (<>
           <Text style={styles.label}>Venmo username (без @)</Text>
           <TextInput
             value={venmoHandle}
@@ -284,6 +347,7 @@ export default function PayoutSetup() {
             style={styles.input}
             data-testid="venmo-handle-input"
           />
+          </>)}
           <TouchableOpacity
             style={[styles.saveBtn, savingContacts && { opacity: 0.5 }, { marginTop: 12 }]}
             onPress={saveContacts}

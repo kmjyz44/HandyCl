@@ -510,6 +510,18 @@ export const api = {
     const res = await client.get('/payments/manual-instructions', { params: { booking_id: bookingId, method } });
     return res.data;
   },
+  finixOnboardExecutor: async (data?: { user_id?: string }) => {
+    const res = await client.post('/payments/finix/onboard-executor', data || {});
+    return res.data;
+  },
+  finixExecutorStatus: async () => {
+    const res = await client.get('/payments/finix/executor-status');
+    return res.data;
+  },
+  finixCharge: async (data: { booking_id: string; source: string }) => {
+    const res = await client.post('/payments/finix/charge', data);
+    return res.data;
+  },
   confirmManualPayment: async (data: { booking_id: string; method: string; note?: string; tip_amount?: number }) => {
     const res = await client.post('/payments/manual-confirm', data);
     return res.data;

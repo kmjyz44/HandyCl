@@ -140,3 +140,19 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 - Frontend: Finix.js токенізація + Apple/Google Pay; backend: split Transfer + вебхуки transfer.settled / merchant.provisioned.
 - Apple Pay на вебі: верифікація домену Netlify (.well-known файл з Finix Dashboard).
 
+
+## 2026-06-28 — Finix Етап 2: ПОВНА інтеграція (бекенд протестовано в sandbox)
+БЕКЕНД (перевірено curl у Finix sandbox — реальні виклики):
+- _finix_cfg/_finix_base_url/_finix_headers — конфіг з integration_keys (env sandbox/live).
+- POST /payments/finix/onboard-executor — створює SELLER Identity + BANK_ACCOUNT + Merchant (+ авто-verification у sandbox). Зберігає finix_identity_id/merchant_id/onboarding_state на user. ПЕРЕВІРЕНО.
+- GET /payments/finix/executor-status.
+- POST /payments/finix/charge — приймає Finix.js токен (TK) -> створює buyer Identity+PI -> Transfer зі split_transfers (executor_take виконавцю, platform_take платформі). Валюта USD. Використовує ГОТОВІ суми з booking (комісія НЕ перераховується). ПЕРЕВІРЕНО end-to-end: transfer SUCCEEDED, booking->paid, txn записано.
+- POST /webhook/finix — оновлення статусів transfer/merchant.
+- /payments/methods повертає finix (+application_id/environment для Finix.js) лише коли enabled+configured.
+ФРОНТЕНД (НЕ перевірено в поді — Expo білдиться лише на Netlify):
+- payout-setup.tsx: кнопка 'Підключити виплати Finix' + статус; поля PayPal/Zelle/Venmo тепер показуються лише для увімкнених адміном методів (1a).
+- task-detail.tsx: метод 'finix' відкриває модал з Finix.js v2 PaymentForm (cdn.finix.com/v/2), токенізація -> /payments/finix/charge -> review.
+- api.ts: finixOnboardExecutor/finixExecutorStatus/finixCharge.
+СТАН: enable_finix=OFF (увімкнути після редеплою+перевірки). Ключі/IDs збережено в integration_keys.
+ВІДКРИТЕ: у sandbox merchant онбордиться як PROVISIONING і стає APPROVED асинхронно (у проді — через вебхук). Apple/Google Pay на вебі — після підв'язки домену (зараз домену нема).
+

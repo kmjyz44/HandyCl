@@ -115,6 +115,82 @@ export default function TaskDetail() {
   const [manualInstructions, setManualInstructions] = useState<any>(null);
   // Tip the client decides to include with the manual payment (added on top of executor amount)
   const [manualTip, setManualTip] = useState<number>(0);
+  // Finix card / wallet payment (web only)
+  const [showFinix, setShowFinix] = useState(false);
+  const [finixProcessing, setFinixProcessing] = useState(false);
+  const [finixError, setFinixError] = useState('');
+  const finixFormRef = useRef<any>(null);
+
+  // Mount the Finix.js v2 PaymentForm when the Finix modal opens (web only)
+  useEffect(() => {
+    if (!showFinix || Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const cfg = enabledMethods.find((m: any) => m.id === 'finix');
+    if (!cfg?.application_id) return;
+    setFinixError('');
+    const bookingId = task?.booking_id || taskId;
+
+    const handleToken = async (err: any, res: any) => {
+      if (err) { setFinixError('Перевірте дані картки'); setFinixProcessing(false); return; }
+      const token = res?.data?.id;
+      if (!token) { setFinixError('Не вдалося отримати токен картки'); setFinixProcessing(false); return; }
+      try {
+        const r = await api.finixCharge({ booking_id: bookingId, source: token });
+        if (r?.state === 'SUCCEEDED' || r?.state === 'PENDING' || r?.ok) {
+          setShowFinix(false);
+          setShowPayment(false);
+          try { await loadTask(); } catch (_) {}
+          setTimeout(() => setShowReview(true), 400);
+        } else {
+          setFinixError('Платіж не пройшов. Спробуйте іншу картку.');
+        }
+      } catch (e: any) {
+        setFinixError(e?.response?.data?.detail || 'Помилка оплати Finix');
+      } finally {
+        setFinixProcessing(false);
+      }
+    };
+
+    const init = () => {
+      try {
+        const Finix = (window as any).Finix;
+        if (!Finix) return;
+        const env = cfg.environment === 'live' ? 'prod' : 'sandbox';
+        finixFormRef.current = new Finix.PaymentForm('finix-card-form', env, cfg.application_id, {
+          paymentMethods: ['card'],
+          onSubmit: handleToken,
+        });
+      } catch (e) {
+        setFinixError('Не вдалося завантажити форму оплати');
+      }
+    };
+
+    if ((window as any).Finix) {
+      setTimeout(init, 50);
+    } else {
+      const id = 'finix-js-sdk';
+      let s = document.getElementById(id) as HTMLScriptElement | null;
+      if (!s) {
+        s = document.createElement('script');
+        s.id = id;
+        s.src = 'https://cdn.finix.com/v/2/finix.js';
+        s.onload = () => setTimeout(init, 50);
+        document.body.appendChild(s);
+      } else {
+        s.addEventListener('load', () => setTimeout(init, 50));
+      }
+    }
+  }, [showFinix]);
+
+  const submitFinix = () => {
+    setFinixError('');
+    setFinixProcessing(true);
+    try {
+      finixFormRef.current?.submit();
+    } catch (e) {
+      setFinixError('Заповніть дані картки');
+      setFinixProcessing(false);
+    }
+  };
 
   // Load enabled payment methods from backend (configurable by admin)
   useEffect(() => {
@@ -265,6 +341,17 @@ export default function TaskDetail() {
       } catch (e: any) {
         showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося завантажити реквізити');
       } finally { setActionLoading(false); }
+      return;
+    }
+
+    if (method === 'finix') {
+      if (Platform.OS !== 'web' || typeof window === 'undefined') {
+        showAlert('Недоступно', 'Оплата карткою / Apple Pay / Google Pay доступна у веб-версії сайту.');
+        return;
+      }
+      const cfg = enabledMethods.find((m: any) => m.id === 'finix');
+      if (!cfg?.application_id) { showAlert('Помилка', 'Finix не налаштовано'); return; }
+      setShowFinix(true);
       return;
     }
 
@@ -1159,6 +1246,51 @@ export default function TaskDetail() {
           </View>
         </View>
       </Modal>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          FINIX CARD / WALLET MODAL (Client, web only)
+      ═══════════════════════════════════════════════════════════════ */}
+      <Modal visible={showFinix} animationType="slide" transparent>
+        <View style={s.overlay}>
+          <View style={s.modalBox}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Оплата карткою / гаманцем</Text>
+              <TouchableOpacity onPress={() => { if (!finixProcessing) setShowFinix(false); }} data-testid="finix-close-btn">
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={s.modalBody}>
+              <Text style={{ color: '#6b7280', fontSize: 13, marginBottom: 12 }}>
+                Оплата обробляється Finix. Частина одразу надходить виконавцю, комісія — платформі.
+              </Text>
+              {/* Finix.js mounts its secure fields into this container (web renders a div) */}
+              {Platform.OS === 'web'
+                ? React.createElement('div', { id: 'finix-card-form', style: { minHeight: 220 } })
+                : null}
+              {!!finixError && (
+                <Text style={{ color: '#dc2626', fontSize: 13, marginTop: 8 }} data-testid="finix-error">{finixError}</Text>
+              )}
+            </ScrollView>
+            <View style={s.modalFooter}>
+              <TouchableOpacity style={[s.modalBtn, s.cancelBtn]} onPress={() => { if (!finixProcessing) setShowFinix(false); }}>
+                <Text style={s.cancelBtnText}>Скасувати</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, s.submitBtn, { backgroundColor: '#1a8917' }, finixProcessing && s.btnDisabled]}
+                onPress={submitFinix}
+                disabled={finixProcessing}
+                data-testid="finix-pay-btn"
+              >
+                {finixProcessing
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.submitBtnText}>Сплатити</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
 
       {/* ═══════════════════════════════════════════════════════════════
           MANUAL SPLIT MODAL (PayPal / Zelle / Venmo)

@@ -5401,6 +5401,296 @@ async def confirm_commission_wallet(
     return {"status": status, "paid": status == "succeeded", "booking_id": booking_id}
 
 
+# ==================== FINIX (US marketplace split payments) ====================
+
+FINIX_VERSION = "2022-02-01"
+
+
+def _finix_base_url(env: Optional[str]) -> str:
+    return ("https://finix.live-payments-api.com"
+            if (env or "sandbox").lower() == "live"
+            else "https://finix.sandbox-payments-api.com")
+
+
+async def _finix_cfg() -> Optional[Dict[str, Any]]:
+    """Resolve Finix config from admin Integration Keys. None when disabled/unconfigured."""
+    keys = await _get_integration_keys()
+    if not keys.get("enable_finix"):
+        return None
+    username = keys.get("finix_api_username")
+    password = keys.get("finix_api_password")
+    app_id = keys.get("finix_application_id")
+    platform_merchant = keys.get("finix_platform_merchant_id")
+    if not (username and password and app_id and platform_merchant):
+        return None
+    env = (keys.get("finix_environment") or "sandbox").lower()
+    return {
+        "base_url": _finix_base_url(env),
+        "env": env,
+        "auth": (username, password),
+        "app_id": app_id,
+        "platform_merchant": platform_merchant,
+        "platform_identity": keys.get("finix_platform_identity_id"),
+    }
+
+
+def _finix_headers() -> Dict[str, str]:
+    return {"Finix-Version": FINIX_VERSION, "Content-Type": "application/json"}
+
+
+def _finix_err(resp) -> str:
+    try:
+        errs = resp.json().get("_embedded", {}).get("errors", [])
+        if errs:
+            return "; ".join(e.get("message") or e.get("code") or "error" for e in errs)
+    except Exception:
+        pass
+    return resp.text[:300]
+
+
+@api_router.post("/payments/finix/onboard-executor")
+async def finix_onboard_executor(
+    payload: Dict[str, Any] = Body(default={}),
+    current_user: User = Depends(get_current_user),
+):
+    """Onboard an executor as a Finix sub-merchant (Identity + bank + Merchant).
+    Provider onboards self; admin may pass {"user_id": "..."}. In sandbox the merchant
+    is auto-verified so it can immediately receive split funds."""
+    cfg = await _finix_cfg()
+    if not cfg:
+        raise HTTPException(status_code=503, detail="Finix не налаштовано або вимкнено")
+
+    target_id = payload.get("user_id") if current_user.role == "admin" else current_user.user_id
+    target = await db.users.find_one({"user_id": target_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.get("finix_merchant_id"):
+        return {"ok": True, "already_onboarded": True,
+                "merchant_id": target["finix_merchant_id"],
+                "onboarding_state": target.get("finix_onboarding_state")}
+
+    full_name = (target.get("name") or "Tasker User").strip()
+    parts = full_name.split(" ", 1)
+    first_name = payload.get("first_name") or parts[0]
+    last_name = payload.get("last_name") or (parts[1] if len(parts) > 1 else "Tasker")
+    addr = payload.get("address") or {"line1": "741 Douglass St", "city": "San Mateo",
+                                      "region": "CA", "postal_code": "94114", "country": "USA"}
+    dob = payload.get("dob") or {"year": 1990, "month": 1, "day": 1}
+    tax_id = payload.get("tax_id") or "123456789"
+    # Bank account where the executor will receive payouts
+    bank_account = payload.get("bank_account_number") or "123123123"
+    bank_routing = payload.get("bank_routing_number") or "122105155"
+
+    identity_payload = {"entity": {
+        "first_name": first_name, "last_name": last_name,
+        "email": target.get("email"), "phone": target.get("phone") or "+14155551234",
+        "personal_address": addr, "dob": dob,
+        "principal_percentage_ownership": 100, "title": "OWNER", "tax_id": tax_id,
+        "business_name": payload.get("business_name") or f"{first_name} {last_name}",
+        "business_type": payload.get("business_type") or "INDIVIDUAL_SOLE_PROPRIETORSHIP",
+        "doing_business_as": payload.get("business_name") or f"{first_name} {last_name}",
+        "business_phone": target.get("phone") or "+14155551234",
+        "business_tax_id": tax_id, "ownership_type": "PRIVATE",
+        "business_address": addr, "url": "https://hendyhub.netlify.app",
+        "incorporation_date": {"year": 2018, "month": 1, "day": 1},
+        "default_statement_descriptor": (first_name + " " + last_name)[:20],
+        "max_transaction_amount": 1000000, "mcc": "0742", "annual_card_volume": 1000000,
+    }}
+
+    import httpx
+    async with httpx.AsyncClient(timeout=40.0, auth=cfg["auth"], headers=_finix_headers()) as http:
+        r1 = await http.post(f"{cfg['base_url']}/identities", json=identity_payload)
+        if r1.status_code >= 400:
+            raise HTTPException(status_code=400, detail=f"Finix identity: {_finix_err(r1)}")
+        identity_id = r1.json()["id"]
+
+        r2 = await http.post(f"{cfg['base_url']}/payment_instruments", json={
+            "type": "BANK_ACCOUNT", "identity": identity_id, "account_type": "CHECKING",
+            "name": f"{first_name} {last_name}", "account_number": str(bank_account),
+            "bank_code": str(bank_routing),
+        })
+        if r2.status_code >= 400:
+            raise HTTPException(status_code=400, detail=f"Finix bank: {_finix_err(r2)}")
+        bank_pi = r2.json()["id"]
+
+        merchant_body: Dict[str, Any] = {}
+        if cfg["env"] == "sandbox":
+            merchant_body["processor"] = "DUMMY_V1"
+        r3 = await http.post(f"{cfg['base_url']}/identities/{identity_id}/merchants", json=merchant_body)
+        if r3.status_code >= 400:
+            raise HTTPException(status_code=400, detail=f"Finix merchant: {_finix_err(r3)}")
+        merchant = r3.json()
+        merchant_id = merchant["id"]
+        onboarding_state = merchant.get("onboarding_state")
+
+        # Sandbox: force-approve so it can receive splits right away
+        if cfg["env"] == "sandbox" and onboarding_state != "APPROVED":
+            try:
+                await http.post(f"{cfg['base_url']}/merchants/{merchant_id}/verifications",
+                                json={"processor": "DUMMY_V1"})
+            except Exception:
+                pass
+            m = await http.get(f"{cfg['base_url']}/merchants/{merchant_id}")
+            if m.status_code < 400:
+                onboarding_state = m.json().get("onboarding_state") or onboarding_state
+
+    await db.users.update_one({"user_id": target_id}, {"$set": {
+        "finix_identity_id": identity_id, "finix_merchant_id": merchant_id,
+        "finix_bank_pi": bank_pi, "finix_onboarding_state": onboarding_state,
+        "finix_onboarded_at": datetime.now(timezone.utc),
+    }})
+    return {"ok": True, "identity_id": identity_id, "merchant_id": merchant_id,
+            "onboarding_state": onboarding_state}
+
+
+@api_router.get("/payments/finix/executor-status")
+async def finix_executor_status(current_user: User = Depends(get_current_user)):
+    """Return the current executor's Finix onboarding state."""
+    u = await db.users.find_one({"user_id": current_user.user_id},
+                                {"_id": 0, "finix_merchant_id": 1, "finix_onboarding_state": 1})
+    return {
+        "onboarded": bool(u and u.get("finix_merchant_id")),
+        "merchant_id": (u or {}).get("finix_merchant_id"),
+        "onboarding_state": (u or {}).get("finix_onboarding_state"),
+    }
+
+
+@api_router.post("/payments/finix/charge")
+async def finix_charge(
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Charge the client via Finix and split the funds: executor share -> executor's
+    sub-merchant, commission -> platform. Amounts come from the booking's EXISTING
+    split (no commission recomputation). `source` is a Finix payment-instrument token
+    produced by Finix.js tokenization (card / Google Pay / Apple Pay) on the frontend."""
+    cfg = await _finix_cfg()
+    if not cfg:
+        raise HTTPException(status_code=503, detail="Finix не налаштовано або вимкнено")
+    booking_id = payload.get("booking_id")
+    source = payload.get("source")  # PIxxxx token
+    if not booking_id or not source:
+        raise HTTPException(status_code=422, detail="booking_id та source обов'язкові")
+
+    booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking["client_id"] != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Use the EXISTING computed split — do not recompute commission.
+    platform_take = float(booking.get("platform_take") or 0)
+    executor_take = float(booking.get("executor_take") or 0)
+    if platform_take <= 0 or executor_take <= 0:
+        raise HTTPException(status_code=400, detail="Сума розподілу не визначена для цього замовлення")
+    exec_cents = int(round(executor_take * 100))
+    plat_cents = int(round(platform_take * 100))
+    total_cents = exec_cents + plat_cents
+
+    provider_id = booking.get("provider_id")
+    prov = await db.users.find_one({"user_id": provider_id},
+                                   {"_id": 0, "finix_merchant_id": 1, "finix_onboarding_state": 1}) if provider_id else None
+    exec_merchant = (prov or {}).get("finix_merchant_id")
+    if not exec_merchant:
+        raise HTTPException(status_code=400, detail="Виконавець ще не підключив виплати Finix")
+    if (prov or {}).get("finix_onboarding_state") not in ("APPROVED", None):
+        raise HTTPException(status_code=400, detail="Акаунт виконавця у Finix ще не активовано (очікує APPROVED)")
+
+    keys = await _get_integration_keys()
+    currency = "USD"  # Finix is US-only and processes USD regardless of platform display currency
+
+    import httpx
+    # If the frontend passed a Finix.js token (TKxxx), exchange it for a PaymentInstrument
+    # linked to a buyer Identity (reused per client) before charging.
+    if isinstance(source, str) and source.startswith("TK"):
+        async with httpx.AsyncClient(timeout=40.0, auth=cfg["auth"], headers=_finix_headers()) as http:
+            buyer = await db.users.find_one({"user_id": current_user.user_id},
+                                            {"_id": 0, "finix_buyer_identity_id": 1, "name": 1, "email": 1})
+            buyer_identity = (buyer or {}).get("finix_buyer_identity_id")
+            if not buyer_identity:
+                nm = ((buyer or {}).get("name") or "Client User").split(" ", 1)
+                ri = await http.post(f"{cfg['base_url']}/identities", json={"entity": {
+                    "first_name": nm[0], "last_name": nm[1] if len(nm) > 1 else "Client",
+                    "email": (buyer or {}).get("email"),
+                }})
+                if ri.status_code >= 400:
+                    raise HTTPException(status_code=400, detail=f"Finix buyer: {_finix_err(ri)}")
+                buyer_identity = ri.json()["id"]
+                await db.users.update_one({"user_id": current_user.user_id},
+                                          {"$set": {"finix_buyer_identity_id": buyer_identity}})
+            rpi = await http.post(f"{cfg['base_url']}/payment_instruments",
+                                  json={"type": "TOKEN", "token": source, "identity": buyer_identity})
+            if rpi.status_code >= 400:
+                raise HTTPException(status_code=400, detail=f"Finix card: {_finix_err(rpi)}")
+            source = rpi.json()["id"]
+
+    transfer_body = {
+        "merchant": cfg["platform_merchant"], "currency": currency,
+        "amount": total_cents, "source": source,
+        "tags": {"booking_id": booking_id, "platform": "handyhub"},
+        "split_transfers": [
+            {"merchant": exec_merchant, "amount": exec_cents},
+            {"merchant": cfg["platform_merchant"], "amount": plat_cents},
+        ],
+    }
+    import httpx
+    async with httpx.AsyncClient(timeout=40.0, auth=cfg["auth"], headers=_finix_headers()) as http:
+        r = await http.post(f"{cfg['base_url']}/transfers", json=transfer_body)
+    if r.status_code >= 400:
+        logger.error("Finix transfer failed: %s", r.text[:400])
+        raise HTTPException(status_code=400, detail=f"Finix: {_finix_err(r)}")
+    tr = r.json()
+    state = tr.get("state")
+
+    transaction_id = f"txn_{uuid.uuid4().hex[:12]}"
+    await db.payment_transactions.insert_one(PaymentTransaction(
+        transaction_id=transaction_id, booking_id=booking_id, user_id=current_user.user_id,
+        amount=total_cents / 100.0, currency=currency.lower(), session_id=tr.get("id"),
+        payment_status="paid" if state in ("SUCCEEDED", "PENDING") else "failed",
+        metadata={"gateway": "finix", "transfer_id": tr.get("id"), "state": state,
+                  "executor_merchant": exec_merchant, "executor_amount": exec_cents,
+                  "platform_amount": plat_cents},
+    ).dict())
+
+    if state in ("SUCCEEDED", "PENDING"):
+        await db.bookings.update_one({"booking_id": booking_id},
+            {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc),
+                      "payment_gateway": "finix"}})
+
+    return {"ok": True, "transfer_id": tr.get("id"), "state": state,
+            "amount": total_cents / 100.0,
+            "split": {"executor": executor_take, "platform": platform_take}}
+
+
+@api_router.post("/webhook/finix")
+async def finix_webhook(request: Request):
+    """Best-effort Finix webhook: update transfer status & merchant onboarding state."""
+    try:
+        event = await request.json()
+    except Exception:
+        return {"received": True}
+    etype = (event.get("type") or "").lower()
+    entity = event.get("entity") or ""
+    obj = (event.get("_embedded") or {})
+    try:
+        if "transfer" in etype:
+            for t in obj.get("transfers", []):
+                st = t.get("state")
+                await db.payment_transactions.update_one(
+                    {"session_id": t.get("id")},
+                    {"$set": {"payment_status": "paid" if st == "SUCCEEDED" else st,
+                              "updated_at": datetime.now(timezone.utc)}})
+        elif "merchant" in etype or entity == "merchant":
+            for m in obj.get("merchants", []):
+                await db.users.update_one(
+                    {"finix_merchant_id": m.get("id")},
+                    {"$set": {"finix_onboarding_state": m.get("onboarding_state")}})
+    except Exception as e:
+        logger.warning("Finix webhook handling error: %s", e)
+    return {"received": True}
+
+
+
 
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
@@ -7817,6 +8107,8 @@ async def list_payment_methods():
             "auto_split": True,
             "platform_handle": None,
             "configured": finix_ready,
+            "application_id": keys.get("finix_application_id"),
+            "environment": (keys.get("finix_environment") or "sandbox"),
         })
     return {"methods": methods}
 
