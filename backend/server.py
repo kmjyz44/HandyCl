@@ -8120,10 +8120,11 @@ async def list_payment_methods():
     stripe_secret_present = bool(keys.get("stripe_secret_key"))
 
     methods = []
-    # Stripe — auto-split when provider connected. Show if secret is set unless
-    # admin EXPLICITLY disabled it (enable_stripe_method=False).
-    stripe_enabled = keys.get("enable_stripe_method")
-    if stripe_secret_present and stripe_enabled is not False:
+    # Stripe — show only when admin enabled it (enable_stripe_payments) AND secret is set.
+    stripe_enabled = keys.get("enable_stripe_payments")
+    if stripe_enabled is None:
+        stripe_enabled = keys.get("enable_stripe_method")  # backward compat
+    if stripe_secret_present and bool(stripe_enabled):
         methods.append({
             "id": "stripe",
             "label": "Картка (Stripe)",

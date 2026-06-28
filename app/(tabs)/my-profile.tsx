@@ -168,13 +168,39 @@ function ClientProfile() {
   };
 
   const handleAddPayment = async () => {
-    if (!cardNumber.trim() || !cardExpiry.trim() || !cardHolder.trim()) {
+    const digits = cardNumber.replace(/\D/g, '');
+    if (!digits || !cardExpiry.trim() || !cardHolder.trim()) {
       Alert.alert('Помилка', 'Заповніть всі поля картки');
+      return;
+    }
+    // Client-side Luhn check
+    const luhn = (n: string) => {
+      let sum = 0; let alt = false;
+      for (let i = n.length - 1; i >= 0; i--) {
+        let d = parseInt(n[i], 10);
+        if (alt) { d *= 2; if (d > 9) d -= 9; }
+        sum += d; alt = !alt;
+      }
+      return n.length >= 12 && sum % 10 === 0;
+    };
+    if (!luhn(digits)) {
+      Alert.alert('Помилка', 'Невірний номер картки');
+      return;
+    }
+    const em = cardExpiry.replace(/\s/g, '').match(/^(\d{2})\/(\d{2,4})$/);
+    if (!em || +em[1] < 1 || +em[1] > 12) {
+      Alert.alert('Помилка', 'Невірний термін дії (MM/YY)');
+      return;
+    }
+    const yr = em[2].length === 2 ? 2000 + +em[2] : +em[2];
+    const now = new Date();
+    if (yr < now.getFullYear() || (yr === now.getFullYear() && +em[1] < now.getMonth() + 1)) {
+      Alert.alert('Помилка', 'Термін дії картки вже минув');
       return;
     }
     try {
       await api.addPaymentMethod({
-        card_number: cardNumber.replace(/\s/g, ''),
+        card_number: digits,
         expiry: cardExpiry,
         card_holder: cardHolder,
         type: 'card',
