@@ -7713,6 +7713,7 @@ class IntegrationKeysUpdate(BaseModel):
     finix_api_password: Optional[str] = None  # secret
     finix_application_id: Optional[str] = None      # APxxxx
     finix_platform_merchant_id: Optional[str] = None  # MUxxxx (also used client-side for Google Pay)
+    finix_platform_identity_id: Optional[str] = None  # IDxxxx (platform's own identity)
     finix_environment: Optional[str] = None  # "sandbox" (default) or "live"
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None

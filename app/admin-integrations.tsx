@@ -94,6 +94,7 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
       { id: 'finix_api_password', label: 'API Password', placeholder: 'секретний пароль API-ключа', secret: true },
       { id: 'finix_application_id', label: 'Application ID', placeholder: 'APxxxxxxxxxxxxxxxxx' },
       { id: 'finix_platform_merchant_id', label: 'Platform Merchant ID', placeholder: 'MUxxxxxxxxxxxxxxxxx' },
+      { id: 'finix_platform_identity_id', label: 'Platform Identity ID', placeholder: 'IDxxxxxxxxxxxxxxxxx' },
     ],
   },
   {
