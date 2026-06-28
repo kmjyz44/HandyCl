@@ -522,6 +522,10 @@ export const api = {
     const res = await client.post('/payments/finix/charge', data);
     return res.data;
   },
+  getPaymentStats: async (params?: { year?: number; month?: number; sort?: string }) => {
+    const res = await client.get('/admin/payment-stats', { params });
+    return res.data;
+  },
   confirmManualPayment: async (data: { booking_id: string; method: string; note?: string; tip_amount?: number }) => {
     const res = await client.post('/payments/manual-confirm', data);
     return res.data;

@@ -323,6 +323,13 @@ export default function Services() {
             <Ionicons name="cash" size={20} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: '#7c3aed' }]}
+            onPress={() => router.push('/admin-payment-stats' as any)}
+            data-testid="open-admin-payment-stats-btn"
+          >
+            <Ionicons name="stats-chart" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.addButton, { backgroundColor: '#0ea5e9' }]}
             onPress={() => router.push('/admin-support-requests' as any)}
             data-testid="open-admin-support-btn"

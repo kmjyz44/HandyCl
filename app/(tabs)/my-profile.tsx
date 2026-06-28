@@ -186,7 +186,7 @@ function ClientProfile() {
       loadData();
       Alert.alert('Успіх', 'Картку додано');
     } catch (error: any) {
-      Alert.alert('Помилка', error.message || 'Не вдалося додати картку');
+      Alert.alert('Помилка', error?.response?.data?.detail || error?.message || 'Не вдалося додати картку');
     }
   };
 
@@ -356,8 +356,8 @@ function ClientProfile() {
                 <View style={styles.paymentCardLeft}>
                   <Ionicons name="card" size={28} color="#2563eb" />
                   <View style={styles.paymentCardInfo}>
-                    <Text style={styles.paymentCardNumber}>{maskCard(pm.card_number)}</Text>
-                    <Text style={styles.paymentCardHolder}>{pm.card_holder || pm.expiry}</Text>
+                    <Text style={styles.paymentCardNumber}>{pm.brand ? `${pm.brand} •••• ${pm.last4}` : maskCard(pm.card_number)}</Text>
+                    <Text style={styles.paymentCardHolder}>{[pm.card_holder, pm.expiry].filter(Boolean).join(' · ')}</Text>
                   </View>
                 </View>
                 <TouchableOpacity onPress={() => handleDeletePayment(pm._id || pm.id)}>

@@ -156,3 +156,15 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 СТАН: enable_finix=OFF (увімкнути після редеплою+перевірки). Ключі/IDs збережено в integration_keys.
 ВІДКРИТЕ: у sandbox merchant онбордиться як PROVISIONING і стає APPROVED асинхронно (у проді — через вебхук). Apple/Google Pay на вебі — після підв'язки домену (зараз домену нема).
 
+
+## 2026-06-28 — Картка в профілі + статистика платежів + сповіщення + фікс маскування
+БЕКЕНД (перевірено curl):
+- POST /users/payment-methods: тепер приймає card_number/expiry/card_holder, ВАЛІДАЦІЯ Luhn + термін дії + ім'я, визначає бренд, зберігає ЛИШЕ brand/last4/expiry/holder (без повного PAN). Невірний номер/прострочена → 422 зі зрозумілим повідомленням. (раніше модель вимагала last4 → 422, картка не зберігалась — ВИПРАВЛЕНО).
+- GET /admin/payment-stats?year=&month=&sort=: список платежів (клієнт→виконавець, завдання, дата, сума, комісія, метод), загальні суми, розбивка по місяцях, available_years. Сорт date/amount asc/desc.
+- PUT /admin/integration-keys: ЗАХИСТ — пропускає значення з '•' (масковані), щоб повторне збереження форми не псувало секрети (Finix/Stripe/Twilio ключі).
+- finix/charge: при успіху шле сповіщення (notify_user) клієнту + виконавцю + усім адмінам ('payment_received').
+ФРОНТЕНД (перевірка на Netlify):
+- app/admin-payment-stats.tsx — новий екран статистики (фільтри рік/місяць, сорт, summary, розбивка, список). Кнопка в services.tsx (admin panel).
+- my-profile.tsx: показ помилки картки (detail), відображення brand+last4.
+- api.ts: getPaymentStats.
+FINIX 'не налаштовано' на Railway: треба ввести API Username+Password у ЖИВІЙ адмінці (IDs недостатньо; configured вимагає 4 ключі). Після редеплою mask-protection не псуватиме ключі.

@@ -5656,6 +5656,24 @@ async def finix_charge(
         await db.bookings.update_one({"booking_id": booking_id},
             {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc),
                       "payment_gateway": "finix"}})
+        # Notify all parties that payment arrived
+        try:
+            title = "Оплата отримана"
+            ttl = booking.get("title") or "завдання"
+            await notify_user(current_user.user_id, "payment_received", title,
+                              f"Ваш платіж за «{ttl}» успішно проведено (${total_cents/100:.2f}).",
+                              related_id=booking_id, related_type="booking")
+            if provider_id:
+                await notify_user(provider_id, "payment_received", title,
+                                  f"Клієнт оплатив «{ttl}». Ваша частина ${executor_take:.2f} надійде на ваш рахунок.",
+                                  related_id=booking_id, related_type="booking")
+            admins = await db.users.find({"role": "admin"}, {"_id": 0, "user_id": 1}).to_list(50)
+            for a in admins:
+                await notify_user(a["user_id"], "payment_received", title,
+                                  f"Нова оплата (Finix): «{ttl}» — ${total_cents/100:.2f} (комісія ${platform_take:.2f}).",
+                                  related_id=booking_id, related_type="booking", channels=["inapp", "push"])
+        except Exception as e:
+            logger.warning("payment notify failed: %s", e)
 
     return {"ok": True, "transfer_id": tr.get("id"), "state": state,
             "amount": total_cents / 100.0,
@@ -7469,9 +7487,56 @@ async def update_profile_photo(
 # ==================== PAYMENT METHODS & SAVED ADDRESSES ====================
 
 class PaymentMethodCreate(BaseModel):
-    last4: str
-    type: str = "Visa"
-    name: Optional[str] = None
+    card_number: str
+    expiry: str            # "MM/YY" or "MM/YYYY"
+    card_holder: str
+    type: Optional[str] = "card"
+
+
+def _luhn_ok(num: str) -> bool:
+    digits = [int(d) for d in num if d.isdigit()]
+    if len(digits) < 12:
+        return False
+    checksum = 0
+    parity = len(digits) % 2
+    for i, d in enumerate(digits):
+        if i % 2 == parity:
+            d *= 2
+            if d > 9:
+                d -= 9
+        checksum += d
+    return checksum % 10 == 0
+
+
+def _card_brand(num: str) -> str:
+    n = "".join(ch for ch in num if ch.isdigit())
+    if n.startswith("4"):
+        return "Visa"
+    if n[:2] in {"34", "37"}:
+        return "Amex"
+    if n[:2] in {str(x) for x in range(51, 56)} or (len(n) >= 4 and 2221 <= int(n[:4]) <= 2720):
+        return "Mastercard"
+    if n[:4] == "6011" or n[:2] == "65":
+        return "Discover"
+    return "Card"
+
+
+def _parse_expiry(expiry: str) -> Tuple[int, int]:
+    """Return (month, year4). Raises ValueError if invalid or in the past."""
+    parts = expiry.replace(" ", "").split("/")
+    if len(parts) != 2:
+        raise ValueError("Невірний формат терміну дії (MM/YY)")
+    mm = int(parts[0])
+    yy = int(parts[1])
+    if yy < 100:
+        yy += 2000
+    if mm < 1 or mm > 12:
+        raise ValueError("Невірний місяць у терміні дії")
+    now = datetime.now(timezone.utc)
+    if (yy, mm) < (now.year, now.month):
+        raise ValueError("Термін дії картки вже минув")
+    return mm, yy
+
 
 class SavedAddressCreate(BaseModel):
     label: Optional[str] = "Home"
@@ -7490,12 +7555,29 @@ async def add_payment_method(
     data: PaymentMethodCreate,
     current_user: User = Depends(get_current_user)
 ):
-    """Add a payment method to user profile"""
+    """Validate a card (Luhn + expiry) and save it to the profile for later selection.
+    For PCI safety we store ONLY brand, last4, expiry and holder — never the full PAN."""
+    raw = "".join(ch for ch in (data.card_number or "") if ch.isdigit())
+    if not _luhn_ok(raw):
+        raise HTTPException(status_code=422, detail="Невірний номер картки")
+    if not (data.card_holder or "").strip():
+        raise HTTPException(status_code=422, detail="Вкажіть ім'я власника картки")
+    try:
+        exp_month, exp_year = _parse_expiry(data.expiry)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    brand = _card_brand(raw)
     new_pm = {
         "id": str(uuid.uuid4()),
-        "last4": data.last4,
-        "type": data.type,
-        "name": data.name
+        "type": "card",
+        "brand": brand,
+        "last4": raw[-4:],
+        "exp_month": exp_month,
+        "exp_year": exp_year,
+        "expiry": f"{exp_month:02d}/{str(exp_year)[-2:]}",
+        "card_holder": data.card_holder.strip(),
+        "card_number": f"•••• •••• •••• {raw[-4:]}",  # masked, for display only
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.update_one(
         {"user_id": current_user.user_id},
@@ -8629,6 +8711,103 @@ async def verify_manual_payment(
         return {"ok": True, "payment_status": "rejected"}
 
 
+@api_router.get("/admin/payment-stats")
+async def admin_payment_stats(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    sort: str = "date_desc",
+    current_user: User = Depends(require_admin),
+):
+    """Admin payment statistics: who paid, when, for which task, amounts, totals,
+    plus a per-month/year breakdown. Optional filters by year and month."""
+    query = {"payment_status": {"$in": ["paid", "admin_confirmed"]}}
+    txns = await db.payment_transactions.find(query, {"_id": 0}).to_list(2000)
+
+    # Cache lookups
+    booking_ids = list({t.get("booking_id") for t in txns if t.get("booking_id")})
+    bookings = {b["booking_id"]: b for b in await db.bookings.find(
+        {"booking_id": {"$in": booking_ids}}, {"_id": 0}).to_list(2000)} if booking_ids else {}
+    user_ids = set()
+    for t in txns:
+        if t.get("user_id"):
+            user_ids.add(t["user_id"])
+    for b in bookings.values():
+        if b.get("provider_id"):
+            user_ids.add(b["provider_id"])
+        if b.get("client_id"):
+            user_ids.add(b["client_id"])
+    users = {u["user_id"]: u for u in await db.users.find(
+        {"user_id": {"$in": list(user_ids)}}, {"_id": 0, "user_id": 1, "name": 1, "email": 1}).to_list(2000)} if user_ids else {}
+
+    def uname(uid):
+        u = users.get(uid) or {}
+        return u.get("name") or u.get("email") or "—"
+
+    payments = []
+    total_amount = 0.0
+    total_commission = 0.0
+    by_month: Dict[str, Dict[str, Any]] = {}
+
+    for t in txns:
+        dt = t.get("created_at")
+        if isinstance(dt, str):
+            try:
+                dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+            except Exception:
+                dt = None
+        if not isinstance(dt, datetime):
+            continue
+        if year and dt.year != year:
+            continue
+        if month and dt.month != month:
+            continue
+        b = bookings.get(t.get("booking_id"), {})
+        meta = t.get("metadata") or {}
+        gateway = meta.get("gateway") or b.get("payment_gateway") or ("stripe" if "stripe" in (meta.get("kind") or "") else "manual")
+        commission = (meta.get("platform_amount", 0) / 100.0) if meta.get("platform_amount") else float(b.get("platform_take") or 0)
+        amount = float(t.get("amount") or 0)
+        total_amount += amount
+        total_commission += commission
+        key = f"{dt.year}-{dt.month:02d}"
+        if key not in by_month:
+            by_month[key] = {"year": dt.year, "month": dt.month, "total": 0.0, "commission": 0.0, "count": 0}
+        by_month[key]["total"] += amount
+        by_month[key]["commission"] += commission
+        by_month[key]["count"] += 1
+        payments.append({
+            "transaction_id": t.get("transaction_id"),
+            "date": dt.isoformat(),
+            "client_name": uname(t.get("user_id") or b.get("client_id")),
+            "executor_name": uname(b.get("provider_id")) if b.get("provider_id") else "—",
+            "task_title": b.get("title") or "—",
+            "category": b.get("category"),
+            "amount": round(amount, 2),
+            "commission": round(commission, 2),
+            "currency": (t.get("currency") or "usd").upper(),
+            "method": gateway,
+            "status": t.get("payment_status"),
+        })
+
+    reverse = not sort.endswith("asc")
+    if sort.startswith("amount"):
+        payments.sort(key=lambda p: p["amount"], reverse=reverse)
+    else:
+        payments.sort(key=lambda p: p["date"], reverse=reverse)
+
+    months = sorted(by_month.values(), key=lambda m: (m["year"], m["month"]), reverse=True)
+    years = sorted({m["year"] for m in by_month.values()}, reverse=True)
+
+    return {
+        "payments": payments,
+        "total_amount": round(total_amount, 2),
+        "total_commission": round(total_commission, 2),
+        "total_count": len(payments),
+        "by_month": [{**m, "total": round(m["total"], 2), "commission": round(m["commission"], 2)} for m in months],
+        "available_years": years,
+        "filters": {"year": year, "month": month, "sort": sort},
+    }
+
+
 @api_router.get("/payments/reminders")
 async def get_payment_reminders(current_user: User = Depends(get_current_user)):
     """Return counts of pending payment-related actions for the current user.
@@ -9255,6 +9434,8 @@ async def set_integration_keys(payload: IntegrationKeysUpdate, current_user: Use
     for k, v in data.items():
         if v == "":
             continue  # skip empties — must set None explicitly to clear
+        if isinstance(v, str) and "•" in v:
+            continue  # skip masked values so re-saving the form never corrupts a secret
         update[k] = v
     if not update:
         return {"ok": True, "updated": []}
