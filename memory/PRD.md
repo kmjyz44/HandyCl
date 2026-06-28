@@ -168,3 +168,14 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 - my-profile.tsx: показ помилки картки (detail), відображення brand+last4.
 - api.ts: getPaymentStats.
 FINIX 'не налаштовано' на Railway: треба ввести API Username+Password у ЖИВІЙ адмінці (IDs недостатньо; configured вимагає 4 ключі). Після редеплою mask-protection не псуватиме ключі.
+
+## 2026-06-28 — Finix: повна KYC-форма онбордингу + НАСКРІЗНИЙ ТЕСТ (sandbox)
+НАСКРІЗНИЙ ТЕСТ ПРОЙДЕНО (curl, sandbox, реальні виклики):
+- Онбординг виконавця з повним KYC (ім'я, dob, SSN, адреса, банк) -> merchant -> APPROVED (~21с, у проді через вебхук).
+- Тестовий клієнт оплатив $100 тестовою карткою -> Finix transfer SUCCEEDED.
+- РОЗПОДІЛ підтверджено на боці Finix: 9000¢ виконавцю + 1000¢ платформі (90/10).
+- booking -> paid (finix); створено 4 сповіщення payment_received (клієнт+виконавець+адміни).
+ФРОНТЕНД (перевірка на Netlify):
+- payout-setup.tsx: кнопка 'Підключити виплати Finix' тепер відкриває KYC-форму (ім'я, DOB MM/DD/YYYY, SSN 9 цифр, адреса, банк account+routing) з валідацією; submit -> api.finixOnboardExecutor(payload). Якщо вже онбордений -> 'Перевірити статус'.
+- Бекенд onboard-executor вже приймав payload-поля (без змін цього разу).
+ПРИМІТКА: merchant у sandbox стає APPROVED асинхронно (~20-60с). У проді статус оновлює вебхук merchant.provisioned/underwriting -> /webhook/finix.

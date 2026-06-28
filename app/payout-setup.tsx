@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
@@ -44,6 +45,12 @@ export default function PayoutSetup() {
   const [enabledMethods, setEnabledMethods] = useState<string[]>([]);
   const [finixStatus, setFinixStatus] = useState<any>(null);
   const [finixLoading, setFinixLoading] = useState(false);
+  const [showFinixForm, setShowFinixForm] = useState(false);
+  const [kyc, setKyc] = useState({
+    first_name: '', last_name: '', dob: '', ssn: '',
+    line1: '', city: '', region: '', postal_code: '',
+    bank_account_number: '', bank_routing_number: '',
+  });
 
   const load = async () => {
     try {
@@ -71,13 +78,44 @@ export default function PayoutSetup() {
   };
 
   const onboardFinix = async () => {
+    // If already onboarded, just refresh status; otherwise collect KYC.
+    if (finixStatus?.onboarded) {
+      setFinixLoading(true);
+      try { setFinixStatus(await api.finixExecutorStatus()); } catch {}
+      setFinixLoading(false);
+      return;
+    }
+    setShowFinixForm(true);
+  };
+
+  const submitFinixOnboard = async () => {
+    const k = kyc;
+    if (!k.first_name.trim() || !k.last_name.trim()) return showAlert('Помилка', "Вкажіть ім'я та прізвище");
+    const dobMatch = k.dob.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!dobMatch) return showAlert('Помилка', 'Дата народження у форматі MM/DD/YYYY');
+    if (!/^\d{9}$/.test(k.ssn.replace(/\D/g, ''))) return showAlert('Помилка', 'SSN/Tax ID має містити 9 цифр');
+    if (!k.line1.trim() || !k.city.trim() || !k.region.trim() || !k.postal_code.trim())
+      return showAlert('Помилка', 'Заповніть адресу повністю');
+    if (!/^\d{6,17}$/.test(k.bank_account_number.replace(/\D/g, ''))) return showAlert('Помилка', 'Невірний номер рахунку');
+    if (!/^\d{9}$/.test(k.bank_routing_number.replace(/\D/g, ''))) return showAlert('Помилка', 'Routing number має містити 9 цифр');
+
     setFinixLoading(true);
     try {
-      const r = await api.finixOnboardExecutor();
+      const r = await api.finixOnboardExecutor({
+        first_name: k.first_name.trim(),
+        last_name: k.last_name.trim(),
+        dob: { month: Number(dobMatch[1]), day: Number(dobMatch[2]), year: Number(dobMatch[3]) },
+        tax_id: k.ssn.replace(/\D/g, ''),
+        business_type: 'INDIVIDUAL_SOLE_PROPRIETORSHIP',
+        address: { line1: k.line1.trim(), city: k.city.trim(), region: k.region.trim().toUpperCase(), postal_code: k.postal_code.trim(), country: 'USA' },
+        bank_account_number: k.bank_account_number.replace(/\D/g, ''),
+        bank_routing_number: k.bank_routing_number.replace(/\D/g, ''),
+      } as any);
       setFinixStatus({ onboarded: true, merchant_id: r.merchant_id, onboarding_state: r.onboarding_state });
+      setShowFinixForm(false);
       showAlert('Готово', r.onboarding_state === 'APPROVED'
         ? 'Виплати Finix активовано — ви готові приймати платежі.'
-        : 'Заявку створено. Очікуйте підтвердження Finix (статус оновиться автоматично).');
+        : 'Заявку подано. Finix перевіряє дані — статус оновиться автоматично (зазвичай за хвилину).');
     } catch (e: any) {
       showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося підключити Finix');
     } finally {
@@ -522,6 +560,64 @@ export default function PayoutSetup() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Finix KYC onboarding form */}
+      <Modal visible={showFinixForm} animationType="slide" transparent>
+        <View style={fx.overlay}>
+          <View style={fx.sheet}>
+            <View style={fx.sheetHeader}>
+              <Text style={fx.sheetTitle}>Підключення виплат Finix</Text>
+              <TouchableOpacity onPress={() => { if (!finixLoading) setShowFinixForm(false); }} data-testid="finix-form-close">
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ padding: 16 }}>
+              <Text style={fx.note}>Finix (США) вимагає ці дані для верифікації отримувача виплат. Дані передаються напряму у Finix.</Text>
+              <View style={fx.row2}>
+                <View style={{ flex: 1 }}>
+                  <Text style={fx.lbl}>Ім'я</Text>
+                  <TextInput style={fx.inp} value={kyc.first_name} onChangeText={(v) => setKyc({ ...kyc, first_name: v })} placeholder="Oleh" data-testid="kyc-first-name" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={fx.lbl}>Прізвище</Text>
+                  <TextInput style={fx.inp} value={kyc.last_name} onChangeText={(v) => setKyc({ ...kyc, last_name: v })} placeholder="Koval" data-testid="kyc-last-name" />
+                </View>
+              </View>
+              <Text style={fx.lbl}>Дата народження (MM/DD/YYYY)</Text>
+              <TextInput style={fx.inp} value={kyc.dob} onChangeText={(v) => setKyc({ ...kyc, dob: v })} placeholder="07/15/1988" keyboardType="numbers-and-punctuation" data-testid="kyc-dob" />
+              <Text style={fx.lbl}>SSN / Tax ID (9 цифр)</Text>
+              <TextInput style={fx.inp} value={kyc.ssn} onChangeText={(v) => setKyc({ ...kyc, ssn: v })} placeholder="123456789" keyboardType="number-pad" data-testid="kyc-ssn" />
+              <Text style={fx.lbl}>Адреса</Text>
+              <TextInput style={fx.inp} value={kyc.line1} onChangeText={(v) => setKyc({ ...kyc, line1: v })} placeholder="123 Market St" data-testid="kyc-line1" />
+              <View style={fx.row2}>
+                <View style={{ flex: 2 }}>
+                  <Text style={fx.lbl}>Місто</Text>
+                  <TextInput style={fx.inp} value={kyc.city} onChangeText={(v) => setKyc({ ...kyc, city: v })} placeholder="San Francisco" data-testid="kyc-city" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={fx.lbl}>Штат</Text>
+                  <TextInput style={fx.inp} value={kyc.region} onChangeText={(v) => setKyc({ ...kyc, region: v })} placeholder="CA" autoCapitalize="characters" maxLength={2} data-testid="kyc-region" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={fx.lbl}>ZIP</Text>
+                  <TextInput style={fx.inp} value={kyc.postal_code} onChangeText={(v) => setKyc({ ...kyc, postal_code: v })} placeholder="94103" keyboardType="number-pad" data-testid="kyc-zip" />
+                </View>
+              </View>
+              <Text style={[fx.lbl, { marginTop: 8, color: '#1a8917' }]}>Банк для виплат</Text>
+              <Text style={fx.lbl}>Номер рахунку</Text>
+              <TextInput style={fx.inp} value={kyc.bank_account_number} onChangeText={(v) => setKyc({ ...kyc, bank_account_number: v })} placeholder="123123123" keyboardType="number-pad" data-testid="kyc-account" />
+              <Text style={fx.lbl}>Routing number (9 цифр)</Text>
+              <TextInput style={fx.inp} value={kyc.bank_routing_number} onChangeText={(v) => setKyc({ ...kyc, bank_routing_number: v })} placeholder="122105155" keyboardType="number-pad" data-testid="kyc-routing" />
+            </ScrollView>
+            <View style={fx.footer}>
+              <TouchableOpacity style={[fx.btn, { backgroundColor: '#1a8917' }, finixLoading && { opacity: 0.6 }]} onPress={submitFinixOnboard} disabled={finixLoading} data-testid="kyc-submit">
+                {finixLoading ? <ActivityIndicator color="#fff" /> : <Text style={fx.btnText}>Підключити виплати</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -611,4 +707,19 @@ const styles = StyleSheet.create({
   },
   altTitle: { fontSize: 15, fontWeight: '800', color: '#111827' },
   altSub: { fontSize: 12, color: '#6b7280', marginTop: 4, marginBottom: 8, lineHeight: 17 },
+});
+
+
+const fx = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '92%' },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  sheetTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  note: { fontSize: 12, color: '#6b7280', marginBottom: 12, lineHeight: 17 },
+  row2: { flexDirection: 'row', gap: 8 },
+  lbl: { fontSize: 12, fontWeight: '600', color: '#374151', marginTop: 10, marginBottom: 4 },
+  inp: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: '#f9fafb' },
+  footer: { padding: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  btn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  btnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
