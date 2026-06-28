@@ -208,3 +208,15 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - BACKEND server.py: notifications (push/in-app), HTTPException details, PDF earnings/tax report (headers, $, MM/DD), help/faq seed, seed category names+descriptions, seed account names, Twilio/Stripe/Finix error messages, card validation messages — all EN. Verified via curl: /api/payments/methods labels EN, /api/help/faq EN. server.py synced to backend/server.py.
 - LEFT INTENTIONALLY UA: utils/i18n.tsx (UA dictionary for language toggle), utils/alert.ts (UA keyword detection for toast type), SKILL_TO_CATEGORY UA-key lookup in server.py (harmless; English ids also map).
 - NOTE: Preview pod serves a CRA wrapper, not Expo — visual verification must happen on Netlify after "Save to GitHub".
+
+## 2026-06-28 (cont.) — Legal pages wiring + category DB localization fix
+- Terms of Use & Privacy Policy: pages already existed (app/terms.tsx, app/privacy.tsx, US-adapted, testids terms-screen/privacy-screen). Wired menu links: profile.tsx (Terms+Privacy rows), my-profile.tsx (Terms + NEW Privacy row), register.tsx already linked. Registered routes in app/_layout.tsx.
+- Community Blog (P1) CONFIRMED COMPLETE: backend /api/blog/posts CRUD (list/create/get/like/comment/delete) + frontend community.tsx/blog-create.tsx/blog/[id].tsx.
+- Help Center (P1) CONFIRMED COMPLETE: /api/help/faq, /help/support-info, /help/support-request, /help/admin-contact + help-center.tsx, support-chat.tsx, admin-support-requests.tsx.
+- BACKEND TEST iteration_14: 15/15 after fix. Test file: /app/backend/tests/test_localization_backend.py (Cyrillic-detector regression test against preview URL).
+- FIX (HIGH): _seed_default_categories() was idempotent on category_id and never updated existing rows → 9 legacy Ukrainian default categories persisted in MongoDB. Changed seed to HEAL is_default rows (upsert name/description/icon/color/emoji when changed). Verified: GET /api/admin/categories returns all English, HAS_CYRILLIC=False. This will also self-heal the production DB on next deploy/restart.
+
+## REMAINING BACKLOG
+- P2: HTML email templates (Resend/SendGrid) — emails currently plain text.
+- P2: Apple Pay / Google Pay validation via Finix.js — BLOCKED in preview (needs live Netlify domain verification).
+- Code-quality: server.py is ~11.9k lines; consider extracting i18n strings/routes into modules.

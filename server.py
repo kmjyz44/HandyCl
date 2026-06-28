@@ -11846,9 +11846,21 @@ async def _seed_default_categories():
 
     try:
         created = 0
+        healed = 0
         for c in DEFAULT_CATEGORIES:
             existing = await db.categories.find_one({"category_id": c["category_id"]})
             if existing:
+                # Heal legacy/default rows so copy changes (e.g. localization) propagate.
+                if existing.get("is_default"):
+                    updates = {}
+                    for field in ("name", "description", "icon", "color", "emoji"):
+                        if field in c and existing.get(field) != c[field]:
+                            updates[field] = c[field]
+                    if updates:
+                        await db.categories.update_one(
+                            {"category_id": c["category_id"]}, {"$set": updates}
+                        )
+                        healed += 1
                 continue
             doc = {
                 **c,
@@ -11862,7 +11874,9 @@ async def _seed_default_categories():
             created += 1
         if created:
             print(f"[SEED] Seeded {created} default categories.")
-        else:
+        if healed:
+            print(f"[SEED] Healed {healed} default category copies (localization).")
+        if not created and not healed:
             print("[SEED] Default categories already present.")
     except Exception as e:
         print(f"[SEED] Failed to seed default categories: {e}")
