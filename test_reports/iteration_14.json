@@ -1,0 +1,52 @@
+{
+  "summary": "Backend-only regression verification after Ukrainian->English localization of ~150 strings in /app/server.py. 14/15 pytest cases pass against the preview backend (https://payment-flow-test-39.preview.emergentagent.com). All flows still return 200 and valid payloads; reportlab PDF generation (monthly/yearly/tax) works; help/faq, help/support-info, help/support-request, blog CRUD (list/create/get/like/comment/delete), payments/methods, admin category CRUD, and card validation all return English text. The ONE failure is that the live admin/categories endpoint still returns 9 SEEDED default categories with Ukrainian names + descriptions (e.g. 'Інше', 'IT та техніка', 'Прибирання'). The DEFAULT_CATEGORIES literal in server.py is correctly English, but _seed_default_categories() is idempotent on category_id and never overwrites existing rows, so the legacy Ukrainian docs persisted in MongoDB and are still served to clients.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/admin/categories (and any client-facing category listing)",
+        "issue": "All 9 default categories in the live DB are still in Ukrainian ('Інше', 'IT та техніка', 'Заходи та свята', 'Особиста допомога', 'Переїзд та доставка', 'Зовнішні роботи', 'Ремонт будинку', 'Прибирання', 'Збірка меблів' with matching Ukrainian descriptions). server.py:11772-11845 DEFAULT_CATEGORIES is now English, but _seed_default_categories() at line 11849-11852 only inserts when no row with the same category_id exists, so prior Ukrainian seeds are NEVER updated. End users still see Ukrainian category names.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "tested_features": {
+    "Auth (admin/client/provider)": "All 3 logins return 200 with session_token; emails echo back correctly.",
+    "GET /api/help/faq": "200; English content confirmed; 'HandyHub' present; no Cyrillic in payload.",
+    "GET /api/help/support-info": "200; English; contains email/phone keys.",
+    "POST /api/help/support-request": "200/201; English response; ticket created with TEST_ prefixed data.",
+    "GET /api/blog/posts": "200; list shape valid.",
+    "POST/GET/LIKE/COMMENT/DELETE /api/blog/posts": "Full CRUD as authenticated client succeeds; English responses; post deleted at end.",
+    "GET /api/payments/methods": "200; English labels confirmed including 'Card / bank transfer'; finix entry (if enabled) uses 'Card / Apple Pay / Google Pay (Finix)'.",
+    "GET /api/admin/categories": "200 but content is UKRAINIAN — see backend_issues.critical above.",
+    "POST/PUT/DELETE /api/admin/categories": "Create+update+hard-delete a TEST_LocalizationCat round-trip succeeds; English responses.",
+    "GET /api/earnings/report type=monthly|yearly|tax": "All three return HTTP 200 with content-type application/pdf and body starts with %PDF — reportlab path is intact, no exceptions from translated strings.",
+    "POST /api/users/payment-methods invalid card '1234'": "Returns 4xx with English detail 'Invalid card number' (server.py:7562 / 9885)."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_localization_backend.py",
+    "/app/test_reports/pytest/localization_results.xml"
+  ],
+  "action_items": [
+    "[HIGH] Migrate the 9 legacy Ukrainian default categories in MongoDB to the new English names+descriptions. Two options for the main agent: (a) make _seed_default_categories() upsert the name/description/icon for any doc where is_default=True so the next startup heals the data, OR (b) write a one-time migration script that runs an updateMany on db.categories matching the 9 known category_ids (assembly, cleaning, home_improvements, moving, outdoor, personal, events, it_tech, other) with the English values from DEFAULT_CATEGORIES.",
+    "[Optional/Code-quality] Remove the obsolete comment at server.py:6714 ('Register a Unicode-capable font (DejaVu or Liberation) for Ukrainian/Cyrillic chars') — keep the font registration code (still useful for any user-entered Cyrillic), but update the comment so it doesn't imply Ukrainian is still the target locale."
+  ],
+  "critical_code_review_comments": [
+    "_seed_default_categories() is idempotent only on category_id; this is the root cause of the persistent-Ukrainian-DB regression. After ANY string change to DEFAULT_CATEGORIES the function must do an upsert (or update existing is_default rows) for changes to propagate.",
+    "server.py is 11,922 lines (grew from 11,270 last iteration). File-size violation persists; localization touched ~150 strings spread across the monolith. Strongly recommend extracting i18n strings/templates into a separate module so future locale changes are reviewable in isolation.",
+    "Reportlab PDF generation still imports inside the handler (server.py:6702-6712). Acceptable for cold-start memory but slightly slower per-request. No functional issue.",
+    "Card validation message 'Invalid card number' is duplicated in two endpoints (lines 7562 and 9885). Worth extracting to a constant to avoid future drift.",
+    "The category-keyword map at server.py:3694-3751 still contains Ukrainian aliases (e.g. 'збірка меблів' -> 'assembly'). This is fine for backward compatibility but should be intentional — main agent should confirm it's still desired."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_localization_backend.py (new)"
+  ],
+  "success_rate": {"backend": "93% (14/15)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@handyhub.com / Admin2024!, client@handyhub.com / Client2024!, provider@handyhub.com / Provider2024! — all verified working.",
+  "seed_data_creation": "Test created and then deleted one TEST_ blog post + one TEST_LocalizationCat category. One TEST_ support request was created and left in DB (no delete endpoint exercised).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Localization regression test lives at /app/backend/tests/test_localization_backend.py — it uses a Cyrillic regex to detect any non-English user-facing strings and runs against the preview URL. After the main agent fixes the category-DB migration, simply re-run `pytest backend/tests/test_localization_backend.py -v` and expect 15/15 PASS. The DEFAULT_CATEGORIES literal at server.py:11772 is the source of truth for English category copy; any future copy changes will not propagate to the live DB until the seed function is upgraded to upsert on is_default=True. Reportlab generates correctly across all 3 report types — no further PDF testing needed unless main agent edits the report layout.",
+  "rca of the issue": "ROOT CAUSE — _seed_default_categories() (server.py line 11763) checks `existing = await db.categories.find_one({'category_id': c['category_id']})` and `continue`s on hit. The MongoDB instance already has 9 default categories that were seeded in Ukrainian during a prior deployment. When the main agent translated DEFAULT_CATEGORIES to English in this session and restarted the backend, the seed function found all 9 ids present and skipped every insert, leaving the Ukrainian rows in place. REPRODUCTION — login as admin, GET /api/admin/categories, observe Cyrillic in name+description for ids assembly/cleaning/home_improvements/moving/outdoor/personal/events/it_tech/other. MITIGATION — change the `if existing: continue` block to instead $set name/description/icon (and any other copy fields) onto the existing doc when is_default=True; alternatively run a one-off update_many() to overwrite the 9 known docs with the new English copy. Either fix is ~10 lines."
+}

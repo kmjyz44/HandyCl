@@ -492,10 +492,20 @@ function ClientProfile() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Terms of Use', 'Our Terms of Use will be available soon.')}
+            onPress={() => router.push('/terms' as any)}
+            data-testid="myprofile-terms-link"
           >
             <Ionicons name="document-text-outline" size={22} color="#6b7280" />
             <Text style={styles.menuText}>Terms of Use</Text>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/privacy' as any)}
+            data-testid="myprofile-privacy-link"
+          >
+            <Ionicons name="shield-checkmark-outline" size={22} color="#6b7280" />
+            <Text style={styles.menuText}>Privacy Policy</Text>
             <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
           </TouchableOpacity>
         </View>

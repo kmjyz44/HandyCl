@@ -233,7 +233,8 @@ export default function Profile() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Terms of Use coming soon')}
+            onPress={() => router.push('/terms' as any)}
+            data-testid="profile-terms-link"
           >
             <Ionicons name="document-text-outline" size={24} color="#6b7280" />
             <Text style={styles.menuText}>Terms of Use</Text>
@@ -242,7 +243,8 @@ export default function Profile() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Privacy Policy coming soon')}
+            onPress={() => router.push('/privacy' as any)}
+            data-testid="profile-privacy-link"
           >
             <Ionicons name="shield-checkmark-outline" size={24} color="#6b7280" />
             <Text style={styles.menuText}>Privacy Policy</Text>
