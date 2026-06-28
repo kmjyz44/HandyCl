@@ -85,6 +85,18 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
+    title: 'Finix (США — авто-split + Apple/Google Pay)',
+    toggle: 'enable_finix',
+    toggleLabel: 'Приймати оплату через Finix',
+    keys: [
+      { id: 'finix_environment', label: 'Середовище (sandbox / live)', placeholder: 'sandbox — за замовчуванням' },
+      { id: 'finix_api_username', label: 'API Username', placeholder: 'USxxxxxxxxxxxxxxxxx' },
+      { id: 'finix_api_password', label: 'API Password', placeholder: 'секретний пароль API-ключа', secret: true },
+      { id: 'finix_application_id', label: 'Application ID', placeholder: 'APxxxxxxxxxxxxxxxxx' },
+      { id: 'finix_platform_merchant_id', label: 'Platform Merchant ID', placeholder: 'MUxxxxxxxxxxxxxxxxx' },
+    ],
+  },
+  {
     title: 'Центр допомоги / Підтримка',
     keys: [
       { id: 'support_email', label: 'Email для зворотного зв\'язку', placeholder: 'support@yourbrand.com' },

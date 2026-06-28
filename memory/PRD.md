@@ -128,3 +128,15 @@ Create a "HandyHub" service marketplace (similar to TaskRabbit). The project inc
 - Файл: app/(tabs)/index.tsx (ProviderDashboard).
 - Перевірка: візуально після редеплою на Netlify (preview-под обслуговує CRA-заглушку, не Expo).
 
+
+## 2026-06-28 — Finix (Етап 1: адмін-конфіг) + дизайн-фікси
+- Finix додано як платіжний метод, керований адміном: модель IntegrationKeysUpdate (enable_finix + finix_api_username/password/application_id/platform_merchant_id/environment), пароль маскується, секція в admin-integrations.tsx, метод у /payments/methods (показ лише коли enabled+configured). Перевірено curl. Toggle OFF за замовч. до готовності Етапу 2.
+- Дизайн: виправлено баг велетенських овалів-фільтрів (RNW stretch) на двох екранах — дашборд виконавця (index.tsx) та 'Перевірка оплат' (admin-payments.tsx). Потребує редеплою на Netlify.
+- Бекенд: додано commission-wallet-intent / commission-wallet-confirm (PaymentIntent для комісії, без Connect) — для inline Apple/Google Pay; гейтинг методів виконавця адміном у payout-setup.tsx.
+
+### Finix Етап 2 (наступне, потребує дій користувача):
+- Бізнес-апрув Finix + sandbox-ключі (API username/password, App ID APxxx, Platform Merchant ID MUxxx).
+- Онбординг кожного виконавця як sub-merchant (Identity+Merchant, KYC).
+- Frontend: Finix.js токенізація + Apple/Google Pay; backend: split Transfer + вебхуки transfer.settled / merchant.provisioned.
+- Apple Pay на вебі: верифікація домену Netlify (.well-known файл з Finix Dashboard).
+

@@ -7707,6 +7707,13 @@ class IntegrationKeysUpdate(BaseModel):
     bank_platform_details: Optional[str] = None  # free-form (card number / bank / IBAN of platform)
     # Who pays the platform commission (default 'client' — added on top)
     commission_paid_by: Optional[str] = None  # "client" or "executor"
+    # Finix (US marketplace — split payments + Apple/Google Pay). Admin toggles on/off.
+    enable_finix: Optional[bool] = None
+    finix_api_username: Optional[str] = None
+    finix_api_password: Optional[str] = None  # secret
+    finix_application_id: Optional[str] = None      # APxxxx
+    finix_platform_merchant_id: Optional[str] = None  # MUxxxx (also used client-side for Google Pay)
+    finix_environment: Optional[str] = None  # "sandbox" (default) or "live"
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
     twilio_from_phone: Optional[str] = None
@@ -7794,6 +7801,21 @@ async def list_payment_methods():
             "auto_split": False,
             "platform_handle": keys.get("bank_platform_details"),
             "configured": bool(keys.get("bank_platform_details")),
+        })
+    # Finix — US marketplace gateway with automatic split + Apple/Google Pay.
+    if keys.get("enable_finix"):
+        finix_ready = bool(
+            keys.get("finix_api_username") and keys.get("finix_api_password")
+            and keys.get("finix_application_id") and keys.get("finix_platform_merchant_id")
+        )
+        methods.append({
+            "id": "finix",
+            "label": "Картка / Apple Pay / Google Pay (Finix)",
+            "icon": "card",
+            "mode": "auto",
+            "auto_split": True,
+            "platform_handle": None,
+            "configured": finix_ready,
         })
     return {"methods": methods}
 
@@ -8912,7 +8934,7 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
     out = {}
     secret_fields = {
         "sendgrid_api_key", "resend_api_key", "stripe_secret_key", "stripe_webhook_secret",
-        "twilio_auth_token", "vapid_private_key", "telegram_bot_token",
+        "twilio_auth_token", "vapid_private_key", "telegram_bot_token", "finix_api_password",
     }
     for k in IntegrationKeysUpdate.model_fields.keys():
         v = doc.get(k)
