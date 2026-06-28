@@ -11,39 +11,39 @@ import { showAlert } from '../utils/alert';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { label: string; color: string; icon: string }> = {
-  draft:                     { label: 'Чернетка',            color: '#9ca3af', icon: 'document-outline' },
-  posted:                    { label: 'Очікує виконавця',    color: '#3b82f6', icon: 'time-outline' },
-  offering:                  { label: 'Приймає пропозиції',  color: '#8b5cf6', icon: 'chatbubbles-outline' },
-  pending_acceptance:        { label: 'Очікує прийняття',    color: '#a855f7', icon: 'hourglass-outline' },
-  assigned:                  { label: 'Прийнято',            color: '#f59e0b', icon: 'checkmark-circle-outline' },
-  declined:                  { label: 'Відхилено виконавцем', color: '#dc2626', icon: 'close-circle-outline' },
-  on_the_way:                { label: 'Виконавець в дорозі', color: '#06b6d4', icon: 'car-outline' },
-  started:                   { label: 'Виконується',         color: '#f97316', icon: 'construct-outline' },
-  completed_pending_payment: { label: 'Завершено — очікує оплати', color: '#22c55e', icon: 'checkmark-done-circle-outline' },
-  paid:                      { label: 'Оплачено',            color: '#10b981', icon: 'card-outline' },
-  cancelled_by_client:       { label: 'Скасовано клієнтом',  color: '#ef4444', icon: 'close-circle-outline' },
-  cancelled_by_tasker:       { label: 'Скасовано виконавцем',color: '#ef4444', icon: 'close-circle-outline' },
+  draft:                     { label: 'Draft',               color: '#9ca3af', icon: 'document-outline' },
+  posted:                    { label: 'Awaiting pro',        color: '#3b82f6', icon: 'time-outline' },
+  offering:                  { label: 'Receiving offers',    color: '#8b5cf6', icon: 'chatbubbles-outline' },
+  pending_acceptance:        { label: 'Awaiting acceptance', color: '#a855f7', icon: 'hourglass-outline' },
+  assigned:                  { label: 'Accepted',            color: '#f59e0b', icon: 'checkmark-circle-outline' },
+  declined:                  { label: 'Declined by pro',     color: '#dc2626', icon: 'close-circle-outline' },
+  on_the_way:                { label: 'Pro on the way',      color: '#06b6d4', icon: 'car-outline' },
+  started:                   { label: 'In progress',         color: '#f97316', icon: 'construct-outline' },
+  completed_pending_payment: { label: 'Done — awaiting payment', color: '#22c55e', icon: 'checkmark-done-circle-outline' },
+  paid:                      { label: 'Paid',                color: '#10b981', icon: 'card-outline' },
+  cancelled_by_client:       { label: 'Cancelled by client', color: '#ef4444', icon: 'close-circle-outline' },
+  cancelled_by_tasker:       { label: 'Cancelled by pro',    color: '#ef4444', icon: 'close-circle-outline' },
 };
 
 // ─── 4 progress steps ────────────────────────────────────────────────────────
 const STEPS = [
-  { key: 'assigned',                  label: 'Прийняв',     icon: 'checkmark-circle',      color: '#f59e0b', tsField: 'accepted_at' },
-  { key: 'on_the_way',                label: 'Виїхав',      icon: 'car',                   color: '#06b6d4', tsField: 'on_the_way_at' },
-  { key: 'started',                   label: 'Почав',       icon: 'construct',             color: '#f97316', tsField: 'started_at' },
-  { key: 'completed_pending_payment', label: 'Закінчив',    icon: 'checkmark-done-circle', color: '#22c55e', tsField: 'completed_at' },
+  { key: 'assigned',                  label: 'Accepted',    icon: 'checkmark-circle',      color: '#f59e0b', tsField: 'accepted_at' },
+  { key: 'on_the_way',                label: 'On the way',  icon: 'car',                   color: '#06b6d4', tsField: 'on_the_way_at' },
+  { key: 'started',                   label: 'Started',     icon: 'construct',             color: '#f97316', tsField: 'started_at' },
+  { key: 'completed_pending_payment', label: 'Finished',    icon: 'checkmark-done-circle', color: '#22c55e', tsField: 'completed_at' },
 ];
 
 const STEP_ORDER = ['posted','offering','pending_acceptance','assigned','on_the_way','started','completed_pending_payment','paid'];
 
 // ─── Executor action buttons ──────────────────────────────────────────────────
 const EXEC_ACTIONS: Record<string, { action: string; label: string; color: string; icon: string }> = {
-  posted:              { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb', icon: 'checkmark-circle' },
-  offering:            { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb', icon: 'checkmark-circle' },
-  pending_acceptance:  { action: 'accept',     label: 'Прийняти завдання', color: '#2563eb', icon: 'checkmark-circle' },
-  assigned:            { action: 'on_the_way', label: 'Виїхав',            color: '#06b6d4', icon: 'car' },
-  on_the_way:          { action: 'start',      label: 'Почати роботу',     color: '#f97316', icon: 'construct' },
-  started:             { action: 'complete',   label: 'Закінчити роботу',  color: '#22c55e', icon: 'checkmark-done-circle' },
-  hold_placed:         { action: 'complete',   label: 'Закінчити роботу',  color: '#22c55e', icon: 'checkmark-done-circle' },
+  posted:              { action: 'accept',     label: 'Accept task',  color: '#2563eb', icon: 'checkmark-circle' },
+  offering:            { action: 'accept',     label: 'Accept task',  color: '#2563eb', icon: 'checkmark-circle' },
+  pending_acceptance:  { action: 'accept',     label: 'Accept task',  color: '#2563eb', icon: 'checkmark-circle' },
+  assigned:            { action: 'on_the_way', label: "I'm on the way",color: '#06b6d4', icon: 'car' },
+  on_the_way:          { action: 'start',      label: 'Start work',   color: '#f97316', icon: 'construct' },
+  started:             { action: 'complete',   label: 'Finish work',  color: '#22c55e', icon: 'checkmark-done-circle' },
+  hold_placed:         { action: 'complete',   label: 'Finish work',  color: '#22c55e', icon: 'checkmark-done-circle' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
