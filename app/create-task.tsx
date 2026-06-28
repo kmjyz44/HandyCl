@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '../utils/api';
+import AddressAutocomplete from '../components/AddressAutocomplete';
 
 const CATEGORIES = [
   { id: 'handyman_plumbing', name: 'Сантехніка', icon: 'water-outline' },
@@ -231,13 +232,13 @@ export default function CreateTask() {
         <Text style={styles.stepTitle}>Коли і де?</Text>
         <Text style={styles.stepSubtitle}>Вкажіть місце та час</Text>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Адреса</Text>
-          <TextInput
-            style={styles.input}
+        <View style={[styles.inputGroup, { zIndex: 50 }]}>
+          <Text style={styles.label}>Address</Text>
+          <AddressAutocomplete
             value={address}
             onChangeText={setAddress}
-            placeholder="Вулиця, будинок, квартира"
+            placeholder="Start typing a US address…"
+            testID="task-address-input"
           />
         </View>
 

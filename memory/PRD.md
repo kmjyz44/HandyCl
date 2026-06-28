@@ -189,3 +189,9 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - utils/format.ts: formatMoney($), formatDate(MM/DD/YYYY), formatTime(12h), formatDateTime, formatDistance(mi/ft), kmToMiles.
 - _layout.tsx обгорнуто LanguageProvider.
 - ПЛАН: повний переклад 40 файлів + застосування $/дати/одиниць — ПОЕТАПНО, екран за екраном (велика робота, не тестується в поді). Адреси: прості текстові поля US (State+ZIP) — згодом.
+
+## 2026-06-28 — Photon-адреси + старт перекладу (home)
+- Photon (komoot) автозаповнення адрес US: components/AddressAutocomplete.tsx (debounce, фільтр US, dropdown). Інтегровано в create-task.tsx (поле Address). Без API-ключа. Перевірено, що Photon віддає US-адреси.
+- Переклад home (app/(tabs)/index.tsx): SKILL_CATEGORIES (назви+скіли, id збережено!), STATUS_LABELS, days/months масиви, дашборд виконавця (greeting, stats New/Mine/Done, таби Available/My tasks, чіпи, empty states, $/hr). EN.
+- ЗАЛИШОК index.tsx (~69 рядків): клієнтський booking-flow, укр. міста (Київ/Харків...) -> треба US-міста або через Photon. + 39 інших файлів.
+- ПОРЯДОК далі: tasks.tsx (список) -> task-detail -> payment -> profile. Категорії дублюються в 6 файлах — варто винести в спільний catalog (TODO).

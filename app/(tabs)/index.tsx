@@ -32,49 +32,49 @@ const FALLBACK_COVERS: Record<string, string> = {
 
 const SKILL_CATEGORIES = [
   {
-    id: 'assembly', name: 'Збірка меблів', icon: 'cube-outline' as const,
+    id: 'assembly', name: 'Furniture Assembly', icon: 'cube-outline' as const,
     color: '#2563eb', bg: '#eff6ff',
-    skills: ['Збірка меблів IKEA', 'Збірка офісних меблів', 'Збірка ліжок', 'Збірка шаф', 'Монтаж полиць', 'Монтаж телевізора'],
+    skills: ['IKEA furniture assembly', 'Office furniture assembly', 'Bed assembly', 'Wardrobe assembly', 'Shelf mounting', 'TV mounting'],
   },
   {
-    id: 'cleaning', name: 'Прибирання', icon: 'sparkles-outline' as const,
+    id: 'cleaning', name: 'Cleaning', icon: 'sparkles-outline' as const,
     color: '#0891b2', bg: '#ecfeff',
-    skills: ['Прибирання будинку', 'Генеральне прибирання', 'Прибирання офісу', 'Прибирання при переїзді', 'Миття вікон', 'Чищення килимів'],
+    skills: ['House cleaning', 'Deep cleaning', 'Office cleaning', 'Move-out cleaning', 'Window washing', 'Carpet cleaning'],
   },
   {
-    id: 'home_improvements', name: 'Ремонт будинку', icon: 'hammer-outline' as const,
+    id: 'home_improvements', name: 'Home Improvements', icon: 'hammer-outline' as const,
     color: '#7c3aed', bg: '#f5f3ff',
-    skills: ['Встановлення техніки', 'Ремонт дверей та меблів', 'Фарбування', 'Укладання плитки', 'Укладання підлоги', 'Гіпсокартон', 'Сантехніка', 'Електрика'],
+    skills: ['Appliance installation', 'Door & furniture repair', 'Painting', 'Tiling', 'Flooring', 'Drywall', 'Plumbing', 'Electrical'],
   },
   {
-    id: 'moving', name: 'Переїзд та доставка', icon: 'car-outline' as const,
+    id: 'moving', name: 'Moving & Delivery', icon: 'car-outline' as const,
     color: '#d97706', bg: '#fffbeb',
-    skills: ['Допомога з переїздом', 'Пакування речей', 'Перенесення меблів', 'Доставка', 'Вивіз сміття'],
+    skills: ['Moving help', 'Packing', 'Furniture moving', 'Delivery', 'Junk removal'],
   },
   {
-    id: 'outdoor', name: 'Зовнішні роботи', icon: 'leaf-outline' as const,
+    id: 'outdoor', name: 'Outdoor Work', icon: 'leaf-outline' as const,
     color: '#16a34a', bg: '#f0fdf4',
-    skills: ['Догляд за газоном', 'Прибирання снігу', 'Садівництво', 'Миття під тиском', 'Встановлення огорожі'],
+    skills: ['Lawn care', 'Snow removal', 'Gardening', 'Pressure washing', 'Fence installation'],
   },
   {
-    id: 'personal', name: 'Особиста допомога', icon: 'person-outline' as const,
+    id: 'personal', name: 'Personal Assistance', icon: 'person-outline' as const,
     color: '#db2777', bg: '#fdf2f8',
-    skills: ['Доручення', 'Шопінг-асистент', 'Догляд за тваринами', 'Допомога літнім людям'],
+    skills: ['Errands', 'Shopping assistant', 'Pet care', 'Senior care'],
   },
   {
-    id: 'it_tech', name: 'IT та техніка', icon: 'laptop-outline' as const,
+    id: 'it_tech', name: 'IT & Tech', icon: 'laptop-outline' as const,
     color: '#0f766e', bg: '#f0fdfa',
-    skills: ['Налаштування комп\'ютера', 'Налаштування Smart TV', 'Ремонт телефонів', 'Налаштування мережі', 'Відновлення даних'],
+    skills: ['Computer setup', 'Smart TV setup', 'Phone repair', 'Network setup', 'Data recovery'],
   },
   {
-    id: 'events', name: 'Заходи та свята', icon: 'balloon-outline' as const,
+    id: 'events', name: 'Events & Parties', icon: 'balloon-outline' as const,
     color: '#9333ea', bg: '#faf5ff',
-    skills: ['Організація заходів', 'Фотографія', 'Допомога на кухні', 'Бармен'],
+    skills: ['Event setup', 'Photography', 'Kitchen help', 'Bartending'],
   },
   {
-    id: 'other', name: 'Інше', icon: 'ellipsis-horizontal-outline' as const,
+    id: 'other', name: 'Other', icon: 'ellipsis-horizontal-outline' as const,
     color: '#6b7280', bg: '#f9fafb',
-    skills: ['Майстер на всі руки', 'Репетиторство', 'Переклад', 'Водій'],
+    skills: ['Handyman', 'Tutoring', 'Translation', 'Driver'],
   },
 ];
 
@@ -103,8 +103,8 @@ const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '1
 
 function getDates() {
   const dates: { label: string; dayName: string; value: string }[] = [];
-  const days = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-  const months = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   for (let i = 0; i < 14; i++) {
     const d = new Date();
     d.setDate(d.getDate() + i);
@@ -119,15 +119,15 @@ function getDates() {
 
 // ─── PROVIDER DASHBOARD ─────────────────────────────────────────────────────
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  posted:                    { label: 'Нове',              color: '#2563eb', bg: '#eff6ff' },
-  offering:                  { label: 'Пропозиції',        color: '#7c3aed', bg: '#f5f3ff' },
-  assigned:                  { label: 'Призначено',        color: '#d97706', bg: '#fffbeb' },
-  hold_placed:               { label: 'Оплата підтвердж.', color: '#059669', bg: '#ecfdf5' },
-  on_the_way:                { label: 'В дорозі',          color: '#0891b2', bg: '#ecfeff' },
-  started:                   { label: 'В роботі',          color: '#ea580c', bg: '#fff7ed' },
-  completed_pending_payment: { label: 'Очікує оплати',     color: '#ca8a04', bg: '#fefce8' },
-  paid:                      { label: 'Оплачено',          color: '#16a34a', bg: '#f0fdf4' },
-  cancelled:                 { label: 'Скасовано',         color: '#dc2626', bg: '#fef2f2' },
+  posted:                    { label: 'New',              color: '#2563eb', bg: '#eff6ff' },
+  offering:                  { label: 'Offers',           color: '#7c3aed', bg: '#f5f3ff' },
+  assigned:                  { label: 'Assigned',         color: '#d97706', bg: '#fffbeb' },
+  hold_placed:               { label: 'Payment confirmed',color: '#059669', bg: '#ecfdf5' },
+  on_the_way:                { label: 'On the way',       color: '#0891b2', bg: '#ecfeff' },
+  started:                   { label: 'In progress',      color: '#ea580c', bg: '#fff7ed' },
+  completed_pending_payment: { label: 'Awaiting payment', color: '#ca8a04', bg: '#fefce8' },
+  paid:                      { label: 'Paid',             color: '#16a34a', bg: '#f0fdf4' },
+  cancelled:                 { label: 'Cancelled',        color: '#dc2626', bg: '#fef2f2' },
 };
 
 function ProviderDashboard() {
@@ -170,9 +170,9 @@ function ProviderDashboard() {
       {/* Header */}
       <View style={{ paddingTop: 56, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#fff' }}>
         <Text style={{ fontSize: 26, fontWeight: '800', color: '#111827' }}>
-          Привіт, {user?.name?.split(' ')[0] || 'Виконавцю'} 👋
+          Hi, {user?.name?.split(' ')[0] || 'Pro'} 👋
         </Text>
-        <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>Ваші завдання на сьогодні</Text>
+        <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>Your tasks for today</Text>
       </View>
 
       <PaymentReminderBanner />
@@ -181,9 +181,9 @@ function ProviderDashboard() {
       {/* Stats row — clickable tiles */}
       <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12 }}>
         {[
-          { label: 'Нові', count: tasks.length, color: '#2563eb', bg: '#eff6ff', tab: 'available' },
-          { label: 'Мої', count: myTasks.filter(t => ['assigned','on_the_way','started'].includes(t.status)).length, color: '#059669', bg: '#ecfdf5', tab: 'my' },
-          { label: 'Виконано', count: myTasks.filter(t => ['paid','completed_pending_payment','completed'].includes(t.status)).length, color: '#7c3aed', bg: '#f5f3ff', tab: 'done' },
+          { label: 'New', count: tasks.length, color: '#2563eb', bg: '#eff6ff', tab: 'available' },
+          { label: 'Mine', count: myTasks.filter(t => ['assigned','on_the_way','started'].includes(t.status)).length, color: '#059669', bg: '#ecfdf5', tab: 'my' },
+          { label: 'Done', count: myTasks.filter(t => ['paid','completed_pending_payment','completed'].includes(t.status)).length, color: '#7c3aed', bg: '#f5f3ff', tab: 'done' },
         ].map(stat => {
           const isActive = statFilter === stat.tab;
           return (
@@ -211,7 +211,7 @@ function ProviderDashboard() {
           <TouchableOpacity key={tab} style={[{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' }, activeTab === tab && { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }]}
             onPress={() => setActiveTab(tab)}>
             <Text style={{ fontSize: 14, fontWeight: '700', color: activeTab === tab ? '#111827' : '#6b7280' }}>
-              {tab === 'available' ? '🔍 Доступні' : '📋 Мої завдання'}
+              {tab === 'available' ? '🔍 Available' : '📋 My tasks'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -226,11 +226,11 @@ function ProviderDashboard() {
           contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
         >
           {([
-            { id: 'all', label: 'Усі', icon: 'layers-outline', color: '#374151' },
-            { id: 'assigned', label: 'Призначено', icon: 'briefcase-outline', color: '#f59e0b' },
-            { id: 'in_progress', label: 'В роботі', icon: 'time-outline', color: '#2563eb' },
-            { id: 'pending_pay', label: 'Очікує оплати', icon: 'card-outline', color: '#dc2626' },
-            { id: 'paid', label: 'Оплачено', icon: 'checkmark-circle-outline', color: '#059669' },
+            { id: 'all', label: 'All', icon: 'layers-outline', color: '#374151' },
+            { id: 'assigned', label: 'Assigned', icon: 'briefcase-outline', color: '#f59e0b' },
+            { id: 'in_progress', label: 'In progress', icon: 'time-outline', color: '#2563eb' },
+            { id: 'pending_pay', label: 'Awaiting payment', icon: 'card-outline', color: '#dc2626' },
+            { id: 'paid', label: 'Paid', icon: 'checkmark-circle-outline', color: '#059669' },
           ] as { id: typeof myFilter; label: string; icon: any; color: string }[]).map(chip => {
             const count = chip.id === 'all'
               ? myTasks.length
@@ -278,13 +278,13 @@ function ProviderDashboard() {
           {displayed.length === 0 ? (
             <View style={{ alignItems: 'center', paddingTop: 60, gap: 12 }}>
               <Ionicons name="clipboard-outline" size={56} color="#d1d5db" />
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#9ca3af' }}>Завдань немає</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#9ca3af' }}>No tasks</Text>
               <Text style={{ fontSize: 14, color: '#9ca3af', textAlign: 'center' }}>
                 {activeTab === 'available'
-                  ? 'Нових завдань у вашій зоні поки немає'
+                  ? 'No new tasks in your area yet'
                   : myFilter !== 'all'
-                  ? 'У цій категорії завдань немає. Спробуйте інший фільтр.'
-                  : 'Ви ще не прийняли жодного завдання'}
+                  ? 'No tasks in this category. Try another filter.'
+                  : 'You haven\'t accepted any tasks yet'}
               </Text>
             </View>
           ) : displayed.map(task => {
@@ -302,7 +302,7 @@ function ProviderDashboard() {
                 <View style={{ flexDirection: 'row', gap: 16 }}>
                   {task.address ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="location-outline" size={13} color="#9ca3af" /><Text style={{ fontSize: 12, color: '#9ca3af' }}>{task.address}</Text></View> : null}
                   {task.scheduled_date ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="calendar-outline" size={13} color="#9ca3af" /><Text style={{ fontSize: 12, color: '#9ca3af' }}>{task.scheduled_date}</Text></View> : null}
-                  {task.estimated_price ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="cash-outline" size={13} color="#9ca3af" /><Text style={{ fontSize: 12, color: '#9ca3af' }}>{task.estimated_price} ₴/год</Text></View> : null}
+                  {task.estimated_price ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="cash-outline" size={13} color="#9ca3af" /><Text style={{ fontSize: 12, color: '#9ca3af' }}>${task.estimated_price}/hr</Text></View> : null}
                 </View>
               </TouchableOpacity>
             );
