@@ -78,23 +78,23 @@ function ClientProfile() {
       else { router.replace('/login'); }
     };
     if (Platform.OS === 'web') {
-      if (window.confirm('Вийти з акаунту?')) doLogout();
+      if (window.confirm('Log out of your account?')) doLogout();
     } else {
-      Alert.alert('Вийти з акаунту', 'Ви впевнені, що хочете вийти?', [
-        { text: 'Скасувати', style: 'cancel' },
-        { text: 'Вийти', style: 'destructive', onPress: doLogout },
+      Alert.alert('Log out', 'Are you sure you want to log out?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log out', style: 'destructive', onPress: doLogout },
       ]);
     }
   };
 
   const pickProfilePhoto = async () => {
-    Alert.alert('Фото профілю', 'Оберіть опцію', [
+    Alert.alert('Profile photo', 'Choose an option', [
       {
-        text: 'Обрати з галереї',
+        text: 'Choose from gallery',
         onPress: async () => {
           const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (!permission.granted) {
-            Alert.alert('Помилка', 'Потрібен доступ до галереї');
+            Alert.alert('Error', 'Gallery access is required');
             return;
           }
           const result = await ImagePicker.launchImageLibraryAsync({
@@ -110,11 +110,11 @@ function ClientProfile() {
         },
       },
       {
-        text: 'Зробити фото',
+        text: 'Take a photo',
         onPress: async () => {
           const permission = await ImagePicker.requestCameraPermissionsAsync();
           if (!permission.granted) {
-            Alert.alert('Помилка', 'Потрібен доступ до камери');
+            Alert.alert('Error', 'Camera access is required');
             return;
           }
           const result = await ImagePicker.launchCameraAsync({
@@ -128,7 +128,7 @@ function ClientProfile() {
           }
         },
       },
-      { text: 'Скасувати', style: 'cancel' },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
@@ -138,9 +138,9 @@ function ClientProfile() {
       const picture = `data:image/jpeg;base64,${base64}`;
       const updatedUser = await api.updateProfile({ picture });
       setUser(updatedUser);
-      Alert.alert('Успіх', 'Фото профілю оновлено');
+      Alert.alert('Success', 'Profile photo updated');
     } catch (error: any) {
-      Alert.alert('Помилка', error.message || 'Не вдалося оновити фото');
+      Alert.alert('Error', error.message || 'Could not update photo');
     } finally {
       setUploadingPhoto(false);
     }
@@ -148,7 +148,7 @@ function ClientProfile() {
 
   const saveProfile = async () => {
     if (!editName.trim()) {
-      Alert.alert('Помилка', "Ім'я не може бути порожнім");
+      Alert.alert('Error', 'Name cannot be empty');
       return;
     }
     setSaving(true);
@@ -159,9 +159,9 @@ function ClientProfile() {
       });
       setUser(updatedUser);
       setEditModalVisible(false);
-      Alert.alert('Успіх', 'Профіль оновлено');
+      Alert.alert('Success', 'Profile updated');
     } catch (error: any) {
-      Alert.alert('Помилка', error.message || 'Не вдалося оновити профіль');
+      Alert.alert('Error', error.message || 'Could not update profile');
     } finally {
       setSaving(false);
     }
@@ -170,7 +170,7 @@ function ClientProfile() {
   const handleAddPayment = async () => {
     const digits = cardNumber.replace(/\D/g, '');
     if (!digits || !cardExpiry.trim() || !cardHolder.trim()) {
-      Alert.alert('Помилка', 'Заповніть всі поля картки');
+      Alert.alert('Error', 'Fill in all card fields');
       return;
     }
     // Client-side Luhn check
@@ -184,18 +184,18 @@ function ClientProfile() {
       return n.length >= 12 && sum % 10 === 0;
     };
     if (!luhn(digits)) {
-      Alert.alert('Помилка', 'Невірний номер картки');
+      Alert.alert('Error', 'Invalid card number');
       return;
     }
     const em = cardExpiry.replace(/\s/g, '').match(/^(\d{2})\/(\d{2,4})$/);
     if (!em || +em[1] < 1 || +em[1] > 12) {
-      Alert.alert('Помилка', 'Невірний термін дії (MM/YY)');
+      Alert.alert('Error', 'Invalid expiry date (MM/YY)');
       return;
     }
     const yr = em[2].length === 2 ? 2000 + +em[2] : +em[2];
     const now = new Date();
     if (yr < now.getFullYear() || (yr === now.getFullYear() && +em[1] < now.getMonth() + 1)) {
-      Alert.alert('Помилка', 'Термін дії картки вже минув');
+      Alert.alert('Error', 'The card has expired');
       return;
     }
     try {
@@ -210,24 +210,24 @@ function ClientProfile() {
       setCardHolder('');
       setAddPaymentVisible(false);
       loadData();
-      Alert.alert('Успіх', 'Картку додано');
+      Alert.alert('Success', 'Card added');
     } catch (error: any) {
-      Alert.alert('Помилка', error?.response?.data?.detail || error?.message || 'Не вдалося додати картку');
+      Alert.alert('Error', error?.response?.data?.detail || error?.message || 'Could not add card');
     }
   };
 
   const handleDeletePayment = (id: string) => {
-    Alert.alert('Видалити картку', 'Ви впевнені?', [
-      { text: 'Скасувати', style: 'cancel' },
+    Alert.alert('Delete card', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Видалити',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           try {
             await api.deletePaymentMethod(id);
             loadData();
           } catch (error: any) {
-            Alert.alert('Помилка', error.message || 'Не вдалося видалити');
+            Alert.alert('Error', error.message || 'Could not delete');
           }
         },
       },
@@ -236,12 +236,12 @@ function ClientProfile() {
 
   const handleAddAddress = async () => {
     if (!addressText.trim() || !addressCity.trim()) {
-      Alert.alert('Помилка', 'Введіть адресу та місто');
+      Alert.alert('Error', 'Enter the address and city');
       return;
     }
     try {
       await api.addSavedAddress({
-        label: addressLabel.trim() || 'Моя адреса',
+        label: addressLabel.trim() || 'My address',
         address: addressText.trim(),
         city: addressCity.trim(),
       });
@@ -250,24 +250,24 @@ function ClientProfile() {
       setAddressCity('');
       setAddAddressVisible(false);
       loadData();
-      Alert.alert('Успіх', 'Адресу додано');
+      Alert.alert('Success', 'Address added');
     } catch (error: any) {
-      Alert.alert('Помилка', error.message || 'Не вдалося додати адресу');
+      Alert.alert('Error', error.message || 'Could not add address');
     }
   };
 
   const handleDeleteAddress = (id: string) => {
-    Alert.alert('Видалити адресу', 'Ви впевнені?', [
-      { text: 'Скасувати', style: 'cancel' },
+    Alert.alert('Delete address', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Видалити',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           try {
             await api.deleteSavedAddress(id);
             loadData();
           } catch (error: any) {
-            Alert.alert('Помилка', error.message || 'Не вдалося видалити');
+            Alert.alert('Error', error.message || 'Could not delete');
           }
         },
       },
@@ -289,10 +289,10 @@ function ClientProfile() {
     <View style={styles.container}>
       {/* Header with logout */}
       <View style={styles.topBar}>
-        <Text style={styles.topBarTitle}>Мій профіль</Text>
+        <Text style={styles.topBarTitle}>My profile</Text>
         <TouchableOpacity style={styles.logoutTopBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={22} color="#ef4444" />
-          <Text style={styles.logoutTopText}>Вийти</Text>
+          <Text style={styles.logoutTopText}>Log out</Text>
         </TouchableOpacity>
       </View>
 
@@ -325,17 +325,17 @@ function ClientProfile() {
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={16} color="#f59e0b" />
               <Text style={styles.ratingText}>{avgRating}</Text>
-              <Text style={styles.ratingCount}>({reviews.length} відгуків)</Text>
+              <Text style={styles.ratingCount}>({reviews.length} reviews)</Text>
             </View>
           ) : (
             <View style={styles.ratingRow}>
               <Ionicons name="star-outline" size={16} color="#9ca3af" />
-              <Text style={styles.ratingEmpty}>Ще немає відгуків</Text>
+              <Text style={styles.ratingEmpty}>No reviews yet</Text>
             </View>
           )}
 
           <View style={styles.clientBadge}>
-            <Text style={styles.clientBadgeText}>КЛІЄНТ</Text>
+            <Text style={styles.clientBadgeText}>CLIENT</Text>
           </View>
         </View>
 
@@ -349,7 +349,7 @@ function ClientProfile() {
           }}
         >
           <Ionicons name="create-outline" size={20} color="#2563eb" />
-          <Text style={styles.editProfileText}>Редагувати профіль</Text>
+          <Text style={styles.editProfileText}>Edit profile</Text>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
 
@@ -358,7 +358,7 @@ function ClientProfile() {
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="card-outline" size={20} color="#2563eb" />
-              <Text style={styles.sectionTitle}>Способи оплати</Text>
+              <Text style={styles.sectionTitle}>Payment methods</Text>
             </View>
             <TouchableOpacity
               style={styles.addBtn}
@@ -373,8 +373,8 @@ function ClientProfile() {
           ) : paymentMethods.length === 0 ? (
             <View style={styles.emptyCard}>
               <Ionicons name="card-outline" size={32} color="#d1d5db" />
-              <Text style={styles.emptyText}>Немає збережених карток</Text>
-              <Text style={styles.emptySubtext}>Додайте картку для швидкої оплати</Text>
+              <Text style={styles.emptyText}>No saved cards</Text>
+              <Text style={styles.emptySubtext}>Add a card for quick payment</Text>
             </View>
           ) : (
             paymentMethods.map((pm: any) => (
@@ -399,7 +399,7 @@ function ClientProfile() {
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="location-outline" size={20} color="#10b981" />
-              <Text style={styles.sectionTitle}>Мої адреси</Text>
+              <Text style={styles.sectionTitle}>My addresses</Text>
             </View>
             <TouchableOpacity
               style={[styles.addBtn, { backgroundColor: '#10b981' }]}
@@ -414,8 +414,8 @@ function ClientProfile() {
           ) : addresses.length === 0 ? (
             <View style={styles.emptyCard}>
               <Ionicons name="location-outline" size={32} color="#d1d5db" />
-              <Text style={styles.emptyText}>Немає збережених адрес</Text>
-              <Text style={styles.emptySubtext}>Додайте адресу для швидкого замовлення</Text>
+              <Text style={styles.emptyText}>No saved addresses</Text>
+              <Text style={styles.emptySubtext}>Add an address for quick booking</Text>
             </View>
           ) : (
             addresses.map((addr: any) => (
@@ -425,7 +425,7 @@ function ClientProfile() {
                     <Ionicons name="location" size={20} color="#10b981" />
                   </View>
                   <View style={styles.addressInfo}>
-                    <Text style={styles.addressLabel}>{addr.label || 'Адреса'}</Text>
+                    <Text style={styles.addressLabel}>{addr.label || 'Address'}</Text>
                     <Text style={styles.addressText}>{addr.address}</Text>
                     <Text style={styles.addressCity}>{addr.city}</Text>
                   </View>
@@ -440,7 +440,7 @@ function ClientProfile() {
 
         {/* Account Verification */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Підтвердження акаунту</Text>
+          <Text style={styles.sectionTitle}>Account verification</Text>
           <TouchableOpacity
             style={styles.menuItem}
             disabled={(user as any)?.email_verified}
@@ -452,10 +452,10 @@ function ClientProfile() {
             {(user as any)?.email_verified ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="checkmark-circle" size={18} color="#059669" />
-                <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>Підтверджено</Text>
+                <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>Verified</Text>
               </View>
             ) : (
-              <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '600' }}>Підтвердити</Text>
+              <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '600' }}>Verify</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity
@@ -465,14 +465,14 @@ function ClientProfile() {
             data-testid="verify-phone-row"
           >
             <Ionicons name="call-outline" size={22} color={(user as any)?.phone_verified ? '#059669' : '#6b7280'} />
-            <Text style={styles.menuText}>Телефон</Text>
+            <Text style={styles.menuText}>Phone</Text>
             {(user as any)?.phone_verified ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="checkmark-circle" size={18} color="#059669" />
-                <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>Підтверджено</Text>
+                <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>Verified</Text>
               </View>
             ) : (
-              <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '600' }}>Підтвердити</Text>
+              <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '600' }}>Verify</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -480,22 +480,22 @@ function ClientProfile() {
 
         {/* Support */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Підтримка</Text>
+          <Text style={styles.sectionTitle}>Support</Text>
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => router.push('/help-center' as any)}
             data-testid="help-center-link"
           >
             <Ionicons name="help-circle-outline" size={22} color="#6b7280" />
-            <Text style={styles.menuText}>Центр допомоги</Text>
+            <Text style={styles.menuText}>Help Center</Text>
             <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Інфо', 'Умови використання')}
+            onPress={() => Alert.alert('Terms of Use', 'Our Terms of Use will be available soon.')}
           >
             <Ionicons name="document-text-outline" size={22} color="#6b7280" />
-            <Text style={styles.menuText}>Умови використання</Text>
+            <Text style={styles.menuText}>Terms of Use</Text>
             <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
           </TouchableOpacity>
         </View>
@@ -503,7 +503,7 @@ function ClientProfile() {
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={22} color="#ef4444" />
-          <Text style={styles.logoutBtnText}>Вийти з акаунту</Text>
+          <Text style={styles.logoutBtnText}>Log out</Text>
         </TouchableOpacity>
 
         <Text style={styles.version}>HandyHub v1.0.0</Text>
@@ -517,20 +517,20 @@ function ClientProfile() {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Редагувати профіль</Text>
+              <Text style={styles.modalTitle}>Edit profile</Text>
               <TouchableOpacity onPress={() => setEditModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
-              <Text style={styles.label}>Ім'я</Text>
+              <Text style={styles.label}>First name</Text>
               <TextInput
                 style={styles.input}
                 value={editName}
                 onChangeText={setEditName}
-                placeholder="Ваше ім'я"
+                placeholder="Your name"
               />
-              <Text style={styles.label}>Телефон</Text>
+              <Text style={styles.label}>Phone</Text>
               <TextInput
                 style={styles.input}
                 value={editPhone}
@@ -544,14 +544,14 @@ function ClientProfile() {
                 style={[styles.btn, styles.btnCancel]}
                 onPress={() => setEditModalVisible(false)}
               >
-                <Text style={styles.btnCancelText}>Скасувати</Text>
+                <Text style={styles.btnCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnSave]}
                 onPress={saveProfile}
                 disabled={saving}
               >
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Зберегти</Text>}
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Save</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -566,13 +566,13 @@ function ClientProfile() {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Додати картку</Text>
+              <Text style={styles.modalTitle}>Add card</Text>
               <TouchableOpacity onPress={() => setAddPaymentVisible(false)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
-              <Text style={styles.label}>Номер картки</Text>
+              <Text style={styles.label}>Card number</Text>
               <TextInput
                 style={styles.input}
                 value={cardNumber}
@@ -581,7 +581,7 @@ function ClientProfile() {
                 keyboardType="numeric"
                 maxLength={19}
               />
-              <Text style={styles.label}>Термін дії</Text>
+              <Text style={styles.label}>Expiry date</Text>
               <TextInput
                 style={styles.input}
                 value={cardExpiry}
@@ -589,7 +589,7 @@ function ClientProfile() {
                 placeholder="MM/YY"
                 maxLength={5}
               />
-              <Text style={styles.label}>Ім'я власника</Text>
+              <Text style={styles.label}>Cardholder name</Text>
               <TextInput
                 style={styles.input}
                 value={cardHolder}
@@ -603,10 +603,10 @@ function ClientProfile() {
                 style={[styles.btn, styles.btnCancel]}
                 onPress={() => setAddPaymentVisible(false)}
               >
-                <Text style={styles.btnCancelText}>Скасувати</Text>
+                <Text style={styles.btnCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={handleAddPayment}>
-                <Text style={styles.btnSaveText}>Додати</Text>
+                <Text style={styles.btnSaveText}>Add</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -621,32 +621,32 @@ function ClientProfile() {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Додати адресу</Text>
+              <Text style={styles.modalTitle}>Add address</Text>
               <TouchableOpacity onPress={() => setAddAddressVisible(false)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
-              <Text style={styles.label}>Назва (наприклад: Дім, Робота)</Text>
+              <Text style={styles.label}>Label (e.g., Home, Work)</Text>
               <TextInput
                 style={styles.input}
                 value={addressLabel}
                 onChangeText={setAddressLabel}
-                placeholder="Дім"
+                placeholder="Home"
               />
-              <Text style={styles.label}>Адреса</Text>
+              <Text style={styles.label}>Address</Text>
               <TextInput
                 style={styles.input}
                 value={addressText}
                 onChangeText={setAddressText}
-                placeholder="вул. Хрещатик, 1"
+                placeholder="123 Main St"
               />
-              <Text style={styles.label}>Місто</Text>
+              <Text style={styles.label}>City</Text>
               <TextInput
                 style={styles.input}
                 value={addressCity}
                 onChangeText={setAddressCity}
-                placeholder="Київ"
+                placeholder="New York"
               />
             </View>
             <View style={styles.modalFooter}>
@@ -654,10 +654,10 @@ function ClientProfile() {
                 style={[styles.btn, styles.btnCancel]}
                 onPress={() => setAddAddressVisible(false)}
               >
-                <Text style={styles.btnCancelText}>Скасувати</Text>
+                <Text style={styles.btnCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={handleAddAddress}>
-                <Text style={styles.btnSaveText}>Зберегти</Text>
+                <Text style={styles.btnSaveText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -673,130 +673,130 @@ function ClientProfile() {
 const SKILL_CATEGORIES = [
   {
     id: 'assembly',
-    name: 'Збірка меблів',
+    name: 'Furniture Assembly',
     icon: 'construct-outline' as const,
     color: '#2563eb',
     bg: '#eff6ff',
     skills: [
-      { id: 'furniture_assembly', name: 'Збірка меблів', tools: ['Викрутка', 'Дриль', 'Рівень', 'Молоток'], description: 'Збирайте меблі будь-якого типу — від IKEA до замовних виробів. Клієнти очікують акуратного монтажу без пошкоджень.' },
-      { id: 'ikea_assembly', name: 'Збірка IKEA', tools: ['Шестигранник', 'Молоток', 'Рівень', 'Викрутка'], description: 'Збірка та монтаж меблів IKEA будь-якої складності. Знання інструкцій IKEA обов\'язкове.' },
-      { id: 'shelving', name: 'Монтаж полиць', tools: ['Дриль', 'Дюбелі', 'Рівень', 'Олівець'], description: 'Встановлення полиць, стелажів та систем зберігання на стінах будь-якого типу.' },
-      { id: 'wardrobe', name: 'Збірка шаф', tools: ['Шуруповерт', 'Рівень', 'Молоток'], description: 'Збірка вбудованих та окремостоячих шаф, гардеробних систем.' },
-      { id: 'office_furniture', name: 'Офісні меблі', tools: ['Дриль', 'Викрутка', 'Рівень'], description: 'Збірка офісних столів, крісел, стелажів та перегородок.' },
-      { id: 'tv_mount', name: 'Монтаж телевізора', tools: ['Дриль', 'Дюбелі', 'Рівень', 'Кронштейн'], description: 'Встановлення телевізорів на стіну, підключення кабелів, приховування проводів.' },
+      { id: 'furniture_assembly', name: 'Furniture Assembly', tools: ['Screwdriver', 'Drill', 'Level', 'Hammer'], description: 'Assemble furniture of any type — from IKEA to custom pieces. Clients expect careful, damage-free assembly.' },
+      { id: 'ikea_assembly', name: 'IKEA Assembly', tools: ['Allen key', 'Hammer', 'Level', 'Screwdriver'], description: 'Assembly and installation of IKEA furniture of any complexity. Knowledge of IKEA instructions is required.' },
+      { id: 'shelving', name: 'Shelf Mounting', tools: ['Drill', 'Wall plugs', 'Level', 'Pencil'], description: 'Installing shelves, racks, and storage systems on walls of any type.' },
+      { id: 'wardrobe', name: 'Wardrobe Assembly', tools: ['Power drill', 'Level', 'Hammer'], description: 'Assembly of built-in and freestanding wardrobes and closet systems.' },
+      { id: 'office_furniture', name: 'Office Furniture', tools: ['Drill', 'Screwdriver', 'Level'], description: 'Assembly of office desks, chairs, shelving, and partitions.' },
+      { id: 'tv_mount', name: 'TV Mounting', tools: ['Drill', 'Wall plugs', 'Level', 'Bracket'], description: 'Mounting TVs on the wall, connecting cables, and concealing wires.' },
     ],
   },
   {
     id: 'cleaning',
-    name: 'Прибирання',
+    name: 'Cleaning',
     icon: 'sparkles-outline' as const,
     color: '#0891b2',
     bg: '#ecfeff',
     skills: [
-      { id: 'home_cleaning', name: 'Прибирання будинку', tools: ['Пилосос', 'Швабра', 'Засоби для чищення', 'Відро'], description: 'Генеральне або регулярне прибирання житлових приміщень. Включає миття підлог, вікон, санвузлів.' },
-      { id: 'office_cleaning', name: 'Прибирання офісу', tools: ['Пилосос', 'Серветки', 'Дезінфектор', 'Швабра'], description: 'Прибирання офісних та комерційних приміщень після робочого дня або тижня.' },
-      { id: 'deep_cleaning', name: 'Генеральне прибирання', tools: ['Парогенератор', 'Хімічні засоби', 'Щітки', 'Рукавички'], description: 'Глибоке очищення всіх поверхонь, включно з важкодоступними місцями, духовками, холодильниками.' },
-      { id: 'move_in_out', name: 'Прибирання при переїзді', tools: ['Пилосос', 'Швабра', 'Хімія', 'Серветки'], description: 'Прибирання квартири або будинку перед заїздом або після виїзду.' },
-      { id: 'window_cleaning', name: 'Миття вікон', tools: ['Скребок', 'Засіб для скла', 'Серветки', 'Відро'], description: 'Миття вікон зсередини та зовні, балконних дверей та вітрин.' },
-      { id: 'carpet_cleaning', name: 'Чищення килимів', tools: ['Пилосос', 'Парочистач', 'Засоби для килимів'], description: 'Глибоке чищення килимів та м\'яких меблів від бруду та плям.' },
+      { id: 'home_cleaning', name: 'House Cleaning', tools: ['Vacuum', 'Mop', 'Cleaning supplies', 'Bucket'], description: 'Deep or regular cleaning of homes. Includes washing floors, windows, and bathrooms.' },
+      { id: 'office_cleaning', name: 'Office Cleaning', tools: ['Vacuum', 'Wipes', 'Disinfectant', 'Mop'], description: 'Cleaning office and commercial spaces after a workday or week.' },
+      { id: 'deep_cleaning', name: 'Deep Cleaning', tools: ['Steam cleaner', 'Chemicals', 'Brushes', 'Gloves'], description: 'Deep cleaning of all surfaces, including hard-to-reach spots, ovens, and refrigerators.' },
+      { id: 'move_in_out', name: 'Move-in/out Cleaning', tools: ['Vacuum', 'Mop', 'Chemicals', 'Wipes'], description: 'Cleaning an apartment or house before move-in or after move-out.' },
+      { id: 'window_cleaning', name: 'Window Washing', tools: ['Squeegee', 'Glass cleaner', 'Wipes', 'Bucket'], description: 'Washing windows inside and out, balcony doors, and storefronts.' },
+      { id: 'carpet_cleaning', name: 'Carpet Cleaning', tools: ['Vacuum', 'Steam cleaner', 'Carpet cleaner'], description: 'Deep cleaning of carpets and upholstered furniture, removing dirt and stains.' },
     ],
   },
   {
     id: 'home_improvements',
-    name: 'Ремонт будинку',
+    name: 'Home Repair',
     icon: 'hammer-outline' as const,
     color: '#7c3aed',
     bg: '#f5f3ff',
     skills: [
-      { id: 'appliance_install', name: 'Встановлення техніки', tools: ['Дриль', 'Ключі', 'Рівень', 'Ізолента'], description: 'Підключення та встановлення побутової техніки: пральних машин, посудомийок, кондиціонерів.' },
-      { id: 'door_repair', name: 'Ремонт дверей та меблів', tools: ['Шуруповерт', 'Петлі', 'Клей', 'Стамеска'], description: 'Ремонт та регулювання дверей, шаф, ящиків. Заміна фурнітури.' },
-      { id: 'painting', name: 'Фарбування', tools: ['Валик', 'Пензлі', 'Малярна стрічка', 'Фарба', 'Лоток'], description: 'Фарбування стін, стель та інших поверхонь. Підготовка поверхні, ґрунтування, фінішне покриття.' },
-      { id: 'tiling', name: 'Укладання плитки', tools: ['Зубчастий шпатель', 'Плиткоріз', 'Рівень', 'Затирка'], description: 'Укладання керамічної плитки у ванних кімнатах, кухнях та інших приміщеннях.' },
-      { id: 'flooring', name: 'Укладання підлоги', tools: ['Молоток', 'Підбивання', 'Рівень', 'Пилка'], description: 'Укладання ламінату, паркету, лінолеуму та інших покриттів.' },
-      { id: 'drywall', name: 'Гіпсокартон', tools: ['Шуруповерт', 'Ніж', 'Рівень', 'Шпатель'], description: 'Монтаж гіпсокартонних перегородок, стель, ніш та арок.' },
-      { id: 'plumbing', name: 'Сантехніка', tools: ['Ключі', 'Фум-стрічка', 'Паяльник', 'Труби'], description: 'Встановлення та ремонт сантехніки: кранів, унітазів, раковин, душових кабін.' },
-      { id: 'electrical', name: 'Електрика', tools: ['Викрутка', 'Тестер', 'Плоскогубці', 'Ізолента'], description: 'Встановлення розеток, вимикачів, світильників. Базові електромонтажні роботи.' },
+      { id: 'appliance_install', name: 'Appliance Installation', tools: ['Drill', 'Wrenches', 'Level', 'Electrical tape'], description: 'Connecting and installing home appliances: washers, dishwashers, air conditioners.' },
+      { id: 'door_repair', name: 'Door & Furniture Repair', tools: ['Power drill', 'Hinges', 'Glue', 'Chisel'], description: 'Repairing and adjusting doors, cabinets, and drawers. Hardware replacement.' },
+      { id: 'painting', name: 'Painting', tools: ['Roller', 'Brushes', "Painter's tape", 'Paint', 'Tray'], description: 'Painting walls, ceilings, and other surfaces. Surface prep, priming, and finish coats.' },
+      { id: 'tiling', name: 'Tiling', tools: ['Notched trowel', 'Tile cutter', 'Level', 'Grout'], description: 'Laying ceramic tile in bathrooms, kitchens, and other rooms.' },
+      { id: 'flooring', name: 'Flooring', tools: ['Hammer', 'Tapping block', 'Level', 'Saw'], description: 'Installing laminate, hardwood, vinyl, and other flooring.' },
+      { id: 'drywall', name: 'Drywall', tools: ['Power drill', 'Knife', 'Level', 'Putty knife'], description: 'Installing drywall partitions, ceilings, niches, and arches.' },
+      { id: 'plumbing', name: 'Plumbing', tools: ['Wrenches', 'Teflon tape', 'Soldering iron', 'Pipes'], description: 'Installing and repairing plumbing: faucets, toilets, sinks, and showers.' },
+      { id: 'electrical', name: 'Electrical', tools: ['Screwdriver', 'Tester', 'Pliers', 'Electrical tape'], description: 'Installing outlets, switches, and light fixtures. Basic electrical work.' },
     ],
   },
   {
     id: 'moving',
-    name: 'Переїзд та доставка',
+    name: 'Moving & Delivery',
     icon: 'cube-outline' as const,
     color: '#d97706',
     bg: '#fffbeb',
     skills: [
-      { id: 'moving_help', name: 'Допомога з переїздом', tools: ['Вантажний автомобіль', 'Ремені', 'Захисна плівка', 'Ковдри'], description: 'Перевезення речей та меблів при переїзді. Акуратне завантаження та розвантаження.' },
-      { id: 'packing', name: 'Пакування речей', tools: ['Коробки', 'Скотч', 'Бульбашкова плівка', 'Маркер'], description: 'Акуратне пакування та підготовка речей до переїзду. Маркування коробок.' },
-      { id: 'furniture_moving', name: 'Перенесення меблів', tools: ['Ремені', 'Захисна плівка', 'Рукавички'], description: 'Переміщення важких меблів всередині приміщення або між поверхами.' },
-      { id: 'delivery', name: 'Доставка', tools: ['Автомобіль або велосипед', 'Телефон'], description: 'Доставка товарів, документів та посилок по місту.' },
-      { id: 'junk_removal', name: 'Вивіз сміття', tools: ['Вантажний автомобіль', 'Рукавички', 'Мішки'], description: 'Вивіз старих меблів, будівельного сміття та непотрібних речей.' },
+      { id: 'moving_help', name: 'Moving Help', tools: ['Truck', 'Straps', 'Protective film', 'Blankets'], description: 'Transporting belongings and furniture during a move. Careful loading and unloading.' },
+      { id: 'packing', name: 'Packing', tools: ['Boxes', 'Tape', 'Bubble wrap', 'Marker'], description: 'Careful packing and preparing belongings for a move. Labeling boxes.' },
+      { id: 'furniture_moving', name: 'Furniture Moving', tools: ['Straps', 'Protective film', 'Gloves'], description: 'Moving heavy furniture within a space or between floors.' },
+      { id: 'delivery', name: 'Delivery', tools: ['Car or bike', 'Phone'], description: 'Delivering goods, documents, and packages across town.' },
+      { id: 'junk_removal', name: 'Junk Removal', tools: ['Truck', 'Gloves', 'Bags'], description: 'Removing old furniture, construction debris, and unwanted items.' },
     ],
   },
   {
     id: 'outdoor',
-    name: 'Зовнішні роботи',
+    name: 'Outdoor Work',
     icon: 'leaf-outline' as const,
     color: '#16a34a',
     bg: '#f0fdf4',
     skills: [
-      { id: 'lawn_care', name: 'Догляд за газоном', tools: ['Газонокосарка', 'Тример', 'Граблі', 'Мішки'], description: 'Кошення трави, обрізка кущів, прибирання листя та догляд за садом.' },
-      { id: 'snow_removal', name: 'Прибирання снігу', tools: ['Лопата', 'Сніговидувач', 'Сіль', 'Пісок'], description: 'Прибирання снігу з доріжок, парковок, ганків та дахів.' },
-      { id: 'garden_planting', name: 'Садівництво', tools: ['Лопата', 'Граблі', 'Поливалка', 'Рукавички'], description: 'Посадка рослин, квітів, дерев та кущів. Догляд за городом.' },
-      { id: 'pressure_washing', name: 'Миття під тиском', tools: ['Мийка високого тиску', 'Шланг', 'Засоби'], description: 'Миття фасадів, доріжок, терас, парканів та автомобілів.' },
-      { id: 'fence_install', name: 'Встановлення огорожі', tools: ['Дриль', 'Лопата', 'Рівень', 'Бетон'], description: 'Встановлення та ремонт парканів, воріт та огорож різних типів.' },
+      { id: 'lawn_care', name: 'Lawn Care', tools: ['Lawn mower', 'Trimmer', 'Rake', 'Bags'], description: 'Mowing grass, trimming bushes, raking leaves, and yard care.' },
+      { id: 'snow_removal', name: 'Snow Removal', tools: ['Shovel', 'Snow blower', 'Salt', 'Sand'], description: 'Clearing snow from walkways, driveways, porches, and roofs.' },
+      { id: 'garden_planting', name: 'Gardening', tools: ['Shovel', 'Rake', 'Watering can', 'Gloves'], description: 'Planting flowers, trees, and shrubs. Garden maintenance.' },
+      { id: 'pressure_washing', name: 'Pressure Washing', tools: ['Pressure washer', 'Hose', 'Supplies'], description: 'Washing facades, walkways, patios, fences, and vehicles.' },
+      { id: 'fence_install', name: 'Fence Installation', tools: ['Drill', 'Shovel', 'Level', 'Concrete'], description: 'Installing and repairing fences, gates, and enclosures of various types.' },
     ],
   },
   {
     id: 'personal',
-    name: 'Особиста допомога',
+    name: 'Personal Assistance',
     icon: 'person-outline' as const,
     color: '#db2777',
     bg: '#fdf2f8',
     skills: [
-      { id: 'errand', name: 'Доручення', tools: ['Автомобіль', 'Телефон'], description: 'Виконання різноманітних доручень: покупки, черги, оформлення документів.' },
-      { id: 'shopping', name: 'Шопінг-асистент', tools: ['Автомобіль', 'Список покупок'], description: 'Допомога з покупками в магазинах, ринках та онлайн-замовленнями.' },
-      { id: 'pet_care', name: 'Догляд за тваринами', tools: ['Повідець', 'Корм', 'Іграшки'], description: 'Вигул собак, догляд за домашніми тваринами під час відсутності господарів.' },
-      { id: 'elderly_help', name: 'Допомога літнім людям', tools: ['Терпіння', 'Транспорт'], description: 'Супровід, допомога по господарству та виконання доручень для літніх людей.' },
+      { id: 'errand', name: 'Errands', tools: ['Car', 'Phone'], description: 'Running various errands: shopping, waiting in lines, paperwork.' },
+      { id: 'shopping', name: 'Shopping Assistant', tools: ['Car', 'Shopping list'], description: 'Help with shopping at stores, markets, and online orders.' },
+      { id: 'pet_care', name: 'Pet Care', tools: ['Leash', 'Food', 'Toys'], description: 'Dog walking and pet care while owners are away.' },
+      { id: 'elderly_help', name: 'Senior Care', tools: ['Patience', 'Transport'], description: 'Companionship, household help, and running errands for seniors.' },
     ],
   },
   {
     id: 'it_tech',
-    name: 'IT та техніка',
+    name: 'IT & Tech',
     icon: 'laptop-outline' as const,
     color: '#0f766e',
     bg: '#f0fdfa',
     skills: [
-      { id: 'computer_setup', name: 'Налаштування комп\'ютера', tools: ['Комп\'ютер', 'Інструменти', 'USB-носій'], description: 'Встановлення операційної системи, програм, антивірусу. Налаштування мережі.' },
-      { id: 'tv_setup', name: 'Налаштування Smart TV', tools: ['Пульт', 'HDMI-кабель', 'Інтернет'], description: 'Підключення та налаштування Smart TV, приставок, стрімінгових сервісів.' },
-      { id: 'phone_repair', name: 'Ремонт телефонів', tools: ['Набір викруток', 'Запчастини', 'Пінцет'], description: 'Заміна екранів, батарей та інших компонентів смартфонів.' },
-      { id: 'network_setup', name: 'Налаштування мережі', tools: ['Роутер', 'Кабелі', 'Тестер'], description: 'Встановлення та налаштування Wi-Fi роутерів, мережевого обладнання.' },
-      { id: 'data_recovery', name: 'Відновлення даних', tools: ['Комп\'ютер', 'Спеціальне ПЗ', 'Жорсткий диск'], description: 'Відновлення видалених файлів, фото та документів з різних носіїв.' },
+      { id: 'computer_setup', name: 'Computer Setup', tools: ['Computer', 'Tools', 'USB drive'], description: 'Installing operating systems, software, and antivirus. Network setup.' },
+      { id: 'tv_setup', name: 'Smart TV Setup', tools: ['Remote', 'HDMI cable', 'Internet'], description: 'Connecting and setting up Smart TVs, streaming boxes, and services.' },
+      { id: 'phone_repair', name: 'Phone Repair', tools: ['Screwdriver set', 'Spare parts', 'Tweezers'], description: 'Replacing screens, batteries, and other smartphone components.' },
+      { id: 'network_setup', name: 'Network Setup', tools: ['Router', 'Cables', 'Tester'], description: 'Installing and configuring Wi-Fi routers and network equipment.' },
+      { id: 'data_recovery', name: 'Data Recovery', tools: ['Computer', 'Special software', 'Hard drive'], description: 'Recovering deleted files, photos, and documents from various media.' },
     ],
   },
   {
     id: 'events',
-    name: 'Заходи та свята',
+    name: 'Events & Parties',
     icon: 'balloon-outline' as const,
     color: '#9333ea',
     bg: '#faf5ff',
     skills: [
-      { id: 'event_setup', name: 'Організація заходів', tools: ['Декор', 'Столи', 'Стільці', 'Освітлення'], description: 'Підготовка та оформлення приміщень для свят, корпоративів та вечірок.' },
-      { id: 'photography', name: 'Фотографія', tools: ['Фотоапарат', 'Спалах', 'Штатив'], description: 'Фотозйомка заходів, портретів, предметна та репортажна фотографія.' },
-      { id: 'catering_help', name: 'Допомога на кухні', tools: ['Кухонний інвентар', 'Фартух'], description: 'Допомога з приготуванням та подачею їжі на заходах.' },
-      { id: 'bartending', name: 'Бармен', tools: ['Шейкер', 'Барний інвентар', 'Посуд'], description: 'Приготування коктейлів та напоїв на заходах та вечірках.' },
+      { id: 'event_setup', name: 'Event Setup', tools: ['Decor', 'Tables', 'Chairs', 'Lighting'], description: 'Preparing and decorating spaces for celebrations, corporate events, and parties.' },
+      { id: 'photography', name: 'Photography', tools: ['Camera', 'Flash', 'Tripod'], description: 'Event, portrait, product, and documentary photography.' },
+      { id: 'catering_help', name: 'Kitchen Help', tools: ['Kitchen tools', 'Apron'], description: 'Help with preparing and serving food at events.' },
+      { id: 'bartending', name: 'Bartending', tools: ['Shaker', 'Bar tools', 'Glassware'], description: 'Mixing cocktails and drinks at events and parties.' },
     ],
   },
   {
     id: 'other',
-    name: 'Інше',
+    name: 'Other',
     icon: 'ellipsis-horizontal-outline' as const,
     color: '#6b7280',
     bg: '#f9fafb',
     skills: [
-      { id: 'handyman', name: 'Майстер на всі руки', tools: ['Набір інструментів', 'Матеріали'], description: 'Дрібний ремонт та різноманітні роботи по будинку, які не входять в інші категорії.' },
-      { id: 'tutoring', name: 'Репетиторство', tools: ['Підручники', 'Зошити', 'Комп\'ютер'], description: 'Навчання та підготовка учнів з різних предметів.' },
-      { id: 'translation', name: 'Переклад', tools: ['Комп\'ютер', 'Словники'], description: 'Усний та письмовий переклад документів та текстів.' },
-      { id: 'driving', name: 'Водій', tools: ['Автомобіль', 'Права'], description: 'Перевезення пасажирів та вантажів по місту та за його межами.' },
+      { id: 'handyman', name: 'Handyman', tools: ['Toolkit', 'Materials'], description: 'Minor repairs and various household tasks that do not fall into other categories.' },
+      { id: 'tutoring', name: 'Tutoring', tools: ['Textbooks', 'Notebooks', 'Computer'], description: 'Teaching and tutoring students in various subjects.' },
+      { id: 'translation', name: 'Translation', tools: ['Computer', 'Dictionaries'], description: 'Spoken and written translation of documents and texts.' },
+      { id: 'driving', name: 'Driver', tools: ['Car', "Driver's license"], description: 'Transporting passengers and cargo around town and beyond.' },
     ],
   },
 ];
@@ -954,11 +954,11 @@ function ProviderProfile() {
       else { router.replace('/login'); }
     };
     if (Platform.OS === 'web') {
-      if (window.confirm('Вийти з акаунту?')) doLogout();
+      if (window.confirm('Log out of your account?')) doLogout();
     } else {
-      Alert.alert('Вийти з акаунту', 'Ви впевнені?', [
-        { text: 'Скасувати', style: 'cancel' },
-        { text: 'Вийти', style: 'destructive', onPress: doLogout },
+      Alert.alert('Log out', 'Are you sure?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log out', style: 'destructive', onPress: doLogout },
       ]);
     }
   };
@@ -977,9 +977,9 @@ function ProviderProfile() {
             try {
               await api.updateProfilePhoto(ev.target.result);
               setUser({ ...user!, picture: ev.target.result });
-              Alert.alert('Успіх', 'Фото профілю оновлено');
+              Alert.alert('Success', 'Profile photo updated');
             } catch (err: any) {
-              Alert.alert('Помилка', err.message || 'Не вдалося оновити фото');
+              Alert.alert('Error', err.message || 'Could not update photo');
             } finally { setUploadingPhoto(false); }
           };
           reader.readAsDataURL(file);
@@ -989,7 +989,7 @@ function ProviderProfile() {
       return;
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { Alert.alert('Помилка', 'Потрібен доступ до галереї'); return; }
+    if (!permission.granted) { Alert.alert('Error', 'Gallery access is required'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true,
     });
@@ -999,8 +999,8 @@ function ProviderProfile() {
         const picture = `data:image/jpeg;base64,${result.assets[0].base64}`;
         await api.updateProfilePhoto(picture);
         setUser({ ...user!, picture });
-        Alert.alert('Успіх', 'Фото профілю оновлено');
-      } catch (e: any) { Alert.alert('Помилка', e.message || 'Не вдалося оновити фото'); }
+        Alert.alert('Success', 'Profile photo updated');
+      } catch (e: any) { Alert.alert('Error', e.message || 'Could not update photo'); }
       finally { setUploadingPhoto(false); }
     }
   };
@@ -1021,20 +1021,20 @@ function ProviderProfile() {
           };
           reader.readAsDataURL(file);
         });
-        if (files.length > 0) Alert.alert('Успіх', `Додано ${files.length} фото`);
+        if (files.length > 0) Alert.alert('Success', `Added ${files.length} photos`);
       };
       input.click();
       return;
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { Alert.alert('Помилка', 'Потрібен доступ до галереї'); return; }
+    if (!permission.granted) { Alert.alert('Error', 'Gallery access is required'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.7,
     });
     if (!result.canceled) {
       const newPhotos = [...portfolioPhotos, result.assets[0].uri];
       setPortfolioPhotos(newPhotos);
-      Alert.alert('Успіх', 'Фото додано до портфоліо');
+      Alert.alert('Success', 'Photo added to portfolio');
     }
   };
 
@@ -1044,7 +1044,7 @@ function ProviderProfile() {
       if (profile?.profile_id) { await api.updateExecutorProfile(updates); }
       else { await api.createExecutorProfile(updates); }
       await loadProfile();
-    } catch (e: any) { Alert.alert('Помилка', e.message || 'Не вдалося зберегти'); }
+    } catch (e: any) { Alert.alert('Error', e.message || 'Could not save'); }
     finally { setSaving(false); }
   };
 
@@ -1110,27 +1110,27 @@ function ProviderProfile() {
   const renderPerformance = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
       <View style={pStyles.statSection}>
-        <Text style={pStyles.statSectionTitle}>Заробіток</Text>
+        <Text style={pStyles.statSectionTitle}>Earnings</Text>
         <TouchableOpacity style={pStyles.statRow}>
           <View style={{ flex: 1 }}>
-            <Text style={pStyles.statLabel}>Сума за місяць</Text>
+            <Text style={pStyles.statLabel}>This month</Text>
             <Text style={pStyles.statValueGreen}>{stats.monthEarnings > 0 ? `₴${stats.monthEarnings.toFixed(2)}` : '₴0.00'}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
         <View style={pStyles.divider} />
         <View style={pStyles.statRow}>
-          <Text style={pStyles.statLabel}>Кількість завдань</Text>
+          <Text style={pStyles.statLabel}>Tasks completed</Text>
           <Text style={pStyles.statValueGreen}>{stats.taskCount}</Text>
         </View>
       </View>
 
       <View style={pStyles.statSection}>
-        <Text style={pStyles.statSectionTitle}>Відгуки</Text>
+        <Text style={pStyles.statSectionTitle}>Reviews</Text>
         <TouchableOpacity style={pStyles.statRow} onPress={() => setReviewsModalVisible(true)}>
           <View style={{ flex: 1 }}>
-            <Text style={pStyles.statValueLarge}>{stats.rating > 0 ? `${stats.rating.toFixed(1)} / 5` : 'Немає відгуків'}</Text>
-            {reviews.length > 0 && <Text style={pStyles.statSubLabel}>({reviews.length} відгуків • ❤️ {stats.positiveReviews} позитивних)</Text>}
+            <Text style={pStyles.statValueLarge}>{stats.rating > 0 ? `${stats.rating.toFixed(1)} / 5` : 'No reviews'}</Text>
+            {reviews.length > 0 && <Text style={pStyles.statSubLabel}>({reviews.length} reviews • ❤️ {stats.positiveReviews} positive)</Text>}
           </View>
           {stats.rating > 0 && <View style={{ flexDirection: 'row', gap: 2, marginRight: 8 }}>{renderStars(stats.rating)}</View>}
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
@@ -1138,32 +1138,32 @@ function ProviderProfile() {
       </View>
 
       <View style={pStyles.statSection}>
-        <Text style={pStyles.statSectionTitle}>Аналітика</Text>
-        <Text style={pStyles.statDescription}>Позиція в пошуку визначається кількістю позитивних відгуків і мінімальною кількістю негативних.</Text>
+        <Text style={pStyles.statSectionTitle}>Analytics</Text>
+        <Text style={pStyles.statDescription}>Search ranking is determined by the number of positive reviews and the minimum number of negative ones.</Text>
         <View style={[pStyles.statRow, { marginTop: 12 }]}>
           <View style={{ flex: 1 }}>
-            <Text style={pStyles.statLabel}>Позитивні відгуки (★ 4-5)</Text>
+            <Text style={pStyles.statLabel}>Positive reviews (★ 4-5)</Text>
           </View>
           <Text style={[pStyles.statValueGreen, { color: '#16a34a' }]}>{stats.positiveReviews}</Text>
         </View>
         <View style={pStyles.divider} />
         <View style={pStyles.statRow}>
-          <Text style={pStyles.statLabel}>Негативні відгуки (★ 1-2)</Text>
+          <Text style={pStyles.statLabel}>Negative reviews (★ 1-2)</Text>
           <Text style={[pStyles.statValueGreen, { color: stats.negativeReviews > 0 ? '#ef4444' : '#6b7280' }]}>{stats.negativeReviews}</Text>
         </View>
         <View style={pStyles.divider} />
         <View style={pStyles.statRow}>
-          <Text style={pStyles.statLabel}>Показано більше ніж</Text>
+          <Text style={pStyles.statLabel}>Shown more than</Text>
           <Text style={pStyles.statValueGreen}>{stats.shownPercent}%</Text>
         </View>
       </View>
 
       <View style={pStyles.statSection}>
-        <Text style={pStyles.statSectionTitle}>Навички та ставки</Text>
+        <Text style={pStyles.statSectionTitle}>Skills & rates</Text>
         <TouchableOpacity style={pStyles.statRow} onPress={() => setActiveTab('skills')}>
           <View style={{ flex: 1 }}>
-            <Text style={pStyles.statLabel}>Активних навичок: <Text style={pStyles.statValueGreen}>{stats.activatedSkillsCount}</Text></Text>
-            {stats.activatedSkillsCount === 0 && <Text style={pStyles.statSubLabel}>Додайте навички, щоб отримувати замовлення</Text>}
+            <Text style={pStyles.statLabel}>Active skills: <Text style={pStyles.statValueGreen}>{stats.activatedSkillsCount}</Text></Text>
+            {stats.activatedSkillsCount === 0 && <Text style={pStyles.statSubLabel}>Add skills to start receiving orders</Text>}
           </View>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
@@ -1179,10 +1179,10 @@ function ProviderProfile() {
         {skillsByCategory.length === 0 ? (
           <View style={pStyles.emptySkills}>
             <Ionicons name="construct-outline" size={56} color="#d1d5db" />
-            <Text style={pStyles.emptySkillsTitle}>Навичок ще немає</Text>
-            <Text style={pStyles.emptySkillsText}>Додайте навички, щоб почати отримувати замовлення від клієнтів</Text>
+            <Text style={pStyles.emptySkillsTitle}>No skills yet</Text>
+            <Text style={pStyles.emptySkillsText}>Add skills to start receiving orders from clients</Text>
             <TouchableOpacity style={[pStyles.agreeBtn, { marginTop: 24, paddingHorizontal: 32 }]} onPress={() => setAddSkillsVisible(true)}>
-              <Text style={pStyles.agreeBtnText}>+ Додати навички</Text>
+              <Text style={pStyles.agreeBtnText}>+ Add skills</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -1202,10 +1202,10 @@ function ProviderProfile() {
                     <Text style={pStyles.skillCardName}>{skill.name}</Text>
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
                       <View style={[pStyles.skillBadge, { backgroundColor: cat.color }]}>
-                        <Text style={pStyles.skillBadgeText}>₴{skill.hourly_rate}/ГОД</Text>
+                        <Text style={pStyles.skillBadgeText}>${skill.hourly_rate}/HR</Text>
                       </View>
                       <View style={[pStyles.skillBadge, { backgroundColor: skill.status === 'active' ? cat.color : '#9ca3af' }]}>
-                        <Text style={pStyles.skillBadgeText}>{skill.status === 'active' ? 'АКТИВНА' : 'В ПРОЦЕСІ'}</Text>
+                        <Text style={pStyles.skillBadgeText}>{skill.status === 'active' ? 'ACTIVE' : 'PENDING'}</Text>
                       </View>
                     </View>
                   </View>
@@ -1220,7 +1220,7 @@ function ProviderProfile() {
       {/* Add Skills FAB */}
       <TouchableOpacity style={pStyles.addSkillsFab} onPress={() => setAddSkillsVisible(true)}>
         <Ionicons name="add-circle-outline" size={22} color="#2563eb" />
-        <Text style={pStyles.addSkillsFabText}>Додати навички</Text>
+        <Text style={pStyles.addSkillsFabText}>Add skills</Text>
       </TouchableOpacity>
     </View>
   );
@@ -1230,12 +1230,12 @@ function ProviderProfile() {
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
       {/* ACCOUNT INFORMATION */}
-      <Text style={pStyles.menuSectionLabel}>ІНФОРМАЦІЯ ПРО АКАУНТ</Text>
+      <Text style={pStyles.menuSectionLabel}>ACCOUNT INFORMATION</Text>
 
       <TouchableOpacity style={pStyles.menuRow} onPress={() => { setAccountName(user?.full_name || user?.name || user?.username || ''); setAccountPhone(user?.phone || profile?.phone || ''); setAccountAddress(user?.address || profile?.address || ''); setEditingAccountDetails(false); setAccountDetailsVisible(true); }}>
         <Ionicons name="person-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>
-          <Text style={pStyles.menuRowText}>Деталі акаунту</Text>
+          <Text style={pStyles.menuRowText}>Account details</Text>
           <Text style={pStyles.menuRowSub}>{user?.full_name || user?.username || user?.email || ''}</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
@@ -1244,7 +1244,7 @@ function ProviderProfile() {
 
       <TouchableOpacity style={pStyles.menuRow} onPress={() => setServiceDetailVisible(true)}>
         <Ionicons name="briefcase-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Профіль виконавця</Text>
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Pro profile</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
@@ -1252,8 +1252,8 @@ function ProviderProfile() {
       <TouchableOpacity style={pStyles.menuRow} onPress={() => setPhotosModalVisible(true)}>
         <Ionicons name="images-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>
-          <Text style={pStyles.menuRowText}>Фото робіт</Text>
-          <Text style={pStyles.menuRowSub}>{portfolioPhotos.length > 0 ? `${portfolioPhotos.length} фото` : 'Додайте фото ваших робіт'}</Text>
+          <Text style={pStyles.menuRowText}>Work photos</Text>
+          <Text style={pStyles.menuRowSub}>{portfolioPhotos.length > 0 ? `${portfolioPhotos.length} photos` : 'Add photos of your work'}</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
@@ -1276,11 +1276,11 @@ function ProviderProfile() {
       <TouchableOpacity style={pStyles.menuRow} onPress={() => setServiceAreaVisible(true)}>
         <Ionicons name="map-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>
-          <Text style={pStyles.menuRowText}>Зона роботи</Text>
+          <Text style={pStyles.menuRowText}>Service area</Text>
           <Text style={pStyles.menuRowSub}>
             {profile?.service_radius_km
-              ? `Радіус: ${profile.service_radius_km} км`
-              : 'Встановіть зону обслуговування'}
+              ? `Radius: ${profile.service_radius_km} mi`
+              : 'Set your service area'}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
@@ -1288,28 +1288,28 @@ function ProviderProfile() {
       <View style={pStyles.menuDivider} />
 
       {/* INVITE */}
-      <TouchableOpacity style={[pStyles.menuRow, { backgroundColor: '#f0fdf4' }]} onPress={() => Alert.alert('Запросити друзів', 'Функція запрошень буде доступна в наступній версії')}>
+      <TouchableOpacity style={[pStyles.menuRow, { backgroundColor: '#f0fdf4' }]} onPress={() => Alert.alert('Invite friends', 'The referral feature will be available in the next version')}>
         <Ionicons name="gift-outline" size={22} color="#16a34a" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1, color: '#15803d' }]}>Запросити друзів, отримати бонус</Text>
+        <Text style={[pStyles.menuRowText, { flex: 1, color: '#15803d' }]}>Invite friends, get a bonus</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
       <TouchableOpacity style={pStyles.menuRow} onPress={() => { setSupportEmail(user?.email || ''); setSupportVisible(true); }}>
         <Ionicons name="help-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Підтримка</Text>
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Support</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
       {/* SETTINGS */}
-      <Text style={pStyles.menuSectionLabel}>НАЛАШТУВАННЯ</Text>
+      <Text style={pStyles.menuSectionLabel}>SETTINGS</Text>
 
       <TouchableOpacity style={pStyles.menuRow} onPress={() => { setTwoFaStep('choose'); setTwoFaVisible(true); }}>
         <Ionicons name="shield-checkmark-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>
-          <Text style={pStyles.menuRowText}>Безпека акаунту</Text>
-          <Text style={pStyles.menuRowSub}>{twoFaEnabled ? 'Двохфакторна аутентифікація включена' : 'Двохфакторна аутентифікація'}</Text>
+          <Text style={pStyles.menuRowText}>Account security</Text>
+          <Text style={pStyles.menuRowSub}>{twoFaEnabled ? 'Two-factor authentication enabled' : 'Two-factor authentication'}</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
@@ -1317,7 +1317,7 @@ function ProviderProfile() {
 
       <TouchableOpacity style={pStyles.menuRow} onPress={() => setAboutVisible(true)}>
         <Ionicons name="information-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Про додаток</Text>
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>About the app</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
@@ -1326,27 +1326,27 @@ function ProviderProfile() {
         const doSuspend = async () => {
           try {
             await api.updateExecutorProfile({ is_suspended: true });
-            Alert.alert('Призупинено', 'Ваш акаунт призупинено. Ви не будете відображатись клієнтам.');
-          } catch (e: any) { Alert.alert('Помилка', e.message || 'Не вдалося'); }
+            Alert.alert('Suspended', 'Your account is suspended. You will not be shown to clients.');
+          } catch (e: any) { Alert.alert('Error', e.message || 'Failed'); }
         };
         if (Platform.OS === 'web') {
-          if (window.confirm('Призупинити акаунт? Ви зникнете з видимості клієнтам.')) doSuspend();
+          if (window.confirm('Suspend account? You will become invisible to clients.')) doSuspend();
         } else {
-          Alert.alert('Призупинити акаунт', 'Ви зникнете з видимості клієнтам. Відновити можна в налаштуваннях.', [
-            { text: 'Скасувати', style: 'cancel' },
-            { text: 'Призупинити', style: 'destructive', onPress: doSuspend },
+          Alert.alert('Suspend account', 'You will become invisible to clients. You can reactivate it in settings.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Suspend', style: 'destructive', onPress: doSuspend },
           ]);
         }
       }}>
         <Ionicons name="pause-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Призупинити акаунт</Text>
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Suspend account</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
       <TouchableOpacity style={pStyles.menuRow} onPress={handleLogout}>
         <Ionicons name="log-out-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Вийти</Text>
+        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Log out</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
@@ -1362,15 +1362,15 @@ function ProviderProfile() {
           else { router.replace('/login'); }
         };
         if (Platform.OS === 'web') {
-          if (window.confirm('Видалити акаунт? Ця дія незворотня!')) doDelete();
+          if (window.confirm('Delete account? This action is irreversible!')) doDelete();
         } else {
-          Alert.alert('Видалити акаунт', 'Ця дія незворотня. Усі ваші дані будуть видалені.', [
-            { text: 'Скасувати', style: 'cancel' },
-            { text: 'Видалити', style: 'destructive', onPress: doDelete },
+          Alert.alert('Delete account', 'This action is irreversible. All your data will be deleted.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: doDelete },
           ]);
         }
       }}>
-        <Text style={[pStyles.menuRowText, { flex: 1, color: '#ef4444', fontWeight: '600' }]}>Видалити акаунт</Text>
+        <Text style={[pStyles.menuRowText, { flex: 1, color: '#ef4444', fontWeight: '600' }]}>Delete account</Text>
       </TouchableOpacity>
 
       <Text style={pStyles.versionText}>HandyHub v1.0.0</Text>
@@ -1381,10 +1381,10 @@ function ProviderProfile() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.topBar}>
-        <Text style={styles.topBarTitle}>Мій профіль</Text>
+        <Text style={styles.topBarTitle}>My profile</Text>
         <TouchableOpacity style={styles.logoutTopBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={22} color="#ef4444" />
-          <Text style={styles.logoutTopText}>Вийти</Text>
+          <Text style={styles.logoutTopText}>Log out</Text>
         </TouchableOpacity>
       </View>
 
@@ -1403,7 +1403,7 @@ function ProviderProfile() {
         <View style={{ flex: 1, marginLeft: 14 }}>
           <Text style={pStyles.avatarName}>{user?.name}</Text>
           <Text style={pStyles.avatarEmail}>{user?.email}</Text>
-          <View style={pStyles.badge}><Text style={pStyles.badgeText}>ВИКОНАВЕЦЬ</Text></View>
+          <View style={pStyles.badge}><Text style={pStyles.badgeText}>PRO</Text></View>
         </View>
       </View>
 
@@ -1412,7 +1412,7 @@ function ProviderProfile() {
         {(['performance', 'skills', 'service'] as const).map(tab => (
           <TouchableOpacity key={tab} style={[pStyles.tab, activeTab === tab && pStyles.tabActive]} onPress={() => setActiveTab(tab)}>
             <Text style={[pStyles.tabText, activeTab === tab && pStyles.tabTextActive]}>
-              {tab === 'performance' ? 'Статистика' : tab === 'skills' ? 'Навички' : 'Профіль'}
+              {tab === 'performance' ? 'Stats' : tab === 'skills' ? 'Skills' : 'Profile'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -1428,7 +1428,7 @@ function ProviderProfile() {
       <Modal visible={addSkillsVisible} animationType="slide" transparent={false}>
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
           <View style={pStyles.modalTopBar}>
-            <Text style={pStyles.modalTopTitle}>Додати навички</Text>
+            <Text style={pStyles.modalTopTitle}>Add skills</Text>
             <TouchableOpacity onPress={() => { setAddSkillsVisible(false); setExpandedCategory(null); }}>
               <Ionicons name="close" size={26} color="#111827" />
             </TouchableOpacity>
@@ -1488,10 +1488,10 @@ function ProviderProfile() {
                 <View style={{ width: 24 }} />
               </View>
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-                <Text style={pStyles.skillDetailHeading}>Що очікують клієнти</Text>
+                <Text style={pStyles.skillDetailHeading}>What clients expect</Text>
                 <Text style={pStyles.skillDetailBody}>{skill.description}</Text>
 
-                <Text style={[pStyles.skillDetailHeading, { marginTop: 24 }]}>Необхідні інструменти</Text>
+                <Text style={[pStyles.skillDetailHeading, { marginTop: 24 }]}>Required tools</Text>
                 {skill.tools.map((tool, i) => (
                   <View key={i} style={pStyles.toolRow}>
                     <View style={pStyles.toolDot} />
@@ -1501,14 +1501,14 @@ function ProviderProfile() {
 
                 <View style={pStyles.disclaimerBox}>
                   <Text style={pStyles.disclaimerText}>
-                    Додаючи цю навичку, ви підтверджуєте, що маєте необхідні знання та ліцензії для виконання відповідних робіт.
+                    By adding this skill, you confirm that you have the necessary knowledge and licenses to perform the related work.
                   </Text>
                   <Text style={[pStyles.disclaimerText, { marginTop: 10 }]}>
-                    Виконавці несуть відповідальність за наявність необхідних навичок та ліцензій. Залежно від виду робіт, певні юрисдикції можуть вимагати спеціального дозволу.
+                    Pros are responsible for having the required skills and licenses. Depending on the type of work, certain jurisdictions may require a special permit.
                   </Text>
                 </View>
 
-                <Text style={pStyles.skillDetailHeading}>Ваша погодинна ставка (₴/год)</Text>
+                <Text style={pStyles.skillDetailHeading}>Your hourly rate ($/hr)</Text>
                 <TextInput
                   style={pStyles.rateInput}
                   value={newSkillRate}
@@ -1522,15 +1522,15 @@ function ProviderProfile() {
                   style={pStyles.agreeBtn}
                   onPress={() => {
                     const rate = parseFloat(newSkillRate);
-                    if (isNaN(rate) || rate <= 0) { Alert.alert('Помилка', 'Введіть коректну ставку'); return; }
+                    if (isNaN(rate) || rate <= 0) { Alert.alert('Error', 'Enter a valid rate'); return; }
                     addSkill(selectedSkillDetail.categoryId, skill, rate);
                     setSelectedSkillDetail(null);
                     setAddSkillsVisible(false);
                     setExpandedCategory(null);
-                    Alert.alert('Успіх', `Навичку "${skill.name}" додано!`);
+                    Alert.alert('Success', `Skill "${skill.name}" added!`);
                   }}
                 >
-                  <Text style={pStyles.agreeBtnText}>Погодитись та продовжити</Text>
+                  <Text style={pStyles.agreeBtnText}>Agree and continue</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1550,9 +1550,9 @@ function ProviderProfile() {
                 </TouchableOpacity>
                 <Text style={[pStyles.modalTopTitle, { flex: 1, textAlign: 'center' }]}>{selectedProviderSkill.name}</Text>
                 <TouchableOpacity onPress={() => {
-                  Alert.alert('Видалити навичку', `Видалити "${selectedProviderSkill.name}"?`, [
-                    { text: 'Скасувати', style: 'cancel' },
-                    { text: 'Видалити', style: 'destructive', onPress: () => { removeSkill(selectedProviderSkill.id); setServiceDetailVisible(false); } },
+                  Alert.alert('Delete skill', `Delete "${selectedProviderSkill.name}"?`, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: () => { removeSkill(selectedProviderSkill.id); setServiceDetailVisible(false); } },
                   ]);
                 }}>
                   <Ionicons name="ellipsis-horizontal" size={24} color="#111827" />
@@ -1561,24 +1561,24 @@ function ProviderProfile() {
 
               <View style={pStyles.serviceDetailTabs}>
                 <View style={[pStyles.serviceDetailTab, pStyles.serviceDetailTabActive]}>
-                  <Text style={pStyles.serviceDetailTabTextActive}>Загальне</Text>
+                  <Text style={pStyles.serviceDetailTabTextActive}>General</Text>
                 </View>
                 <View style={pStyles.serviceDetailTab}>
-                  <Text style={pStyles.serviceDetailTabText}>Партнери</Text>
+                  <Text style={pStyles.serviceDetailTabText}>Partners</Text>
                 </View>
               </View>
 
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-                <Text style={pStyles.serviceSectionLabel}>СТРУКТУРА ЗАРОБІТКУ</Text>
+                <Text style={pStyles.serviceSectionLabel}>EARNINGS STRUCTURE</Text>
                 <TouchableOpacity style={[pStyles.earningCard, { marginTop: 8, backgroundColor: '#eff6ff' }]}>
                   <View style={[pStyles.earningCardIcon, { backgroundColor: '#dbeafe' }]}>
                     <Ionicons name="person-add-outline" size={28} color="#2563eb" />
                   </View>
-                  <Text style={[pStyles.earningCardTitle, { color: '#1e40af' }]}>Самостійна погодинна ставка</Text>
+                  <Text style={[pStyles.earningCardTitle, { color: '#1e40af' }]}>Your own hourly rate</Text>
                   <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
                 </TouchableOpacity>
 
-                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>ПОГОДИННА СТАВКА</Text>
+                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>HOURLY RATE</Text>
                 <View style={pStyles.rateEditRow}>
                   <TextInput
                     style={[pStyles.rateInput, { flex: 1, marginBottom: 0 }]}
@@ -1593,18 +1593,18 @@ function ProviderProfile() {
                       const rate = parseFloat(editingRate);
                       if (!isNaN(rate) && rate > 0) {
                         updateSkillRate(selectedProviderSkill.id, rate);
-                        Alert.alert('Збережено', 'Ставку оновлено');
+                        Alert.alert('Saved', 'Rate updated');
                         setServiceDetailVisible(false);
                       } else {
-                        Alert.alert('Помилка', 'Введіть коректну ставку');
+                        Alert.alert('Error', 'Enter a valid rate');
                       }
                     }}
                   >
-                    <Text style={pStyles.rateSaveBtnText}>Зберегти</Text>
+                    <Text style={pStyles.rateSaveBtnText}>Save</Text>
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>ФОТО РОБІТ</Text>
+                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>WORK PHOTOS</Text>
                 {portfolioPhotos.length > 0 ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
                     {portfolioPhotos.slice(0, 5).map((photo, i) => (
@@ -1614,14 +1614,14 @@ function ProviderProfile() {
                 ) : null}
                 <TouchableOpacity style={[pStyles.addPhotoBtn, { marginTop: 8 }]} onPress={pickPortfolioPhoto}>
                   <Ionicons name="camera-outline" size={20} color="#6b7280" />
-                  <Text style={pStyles.addPhotoBtnText}>Додати фото</Text>
+                  <Text style={pStyles.addPhotoBtnText}>Add photo</Text>
                 </TouchableOpacity>
 
-                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>ІНША ІНФОРМАЦІЯ</Text>
+                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>OTHER INFORMATION</Text>
                 <TouchableOpacity style={pStyles.infoRow} onPress={() => { setServiceDetailVisible(false); setTimeout(() => setBioModalVisible(true), 300); }}>
                   <Ionicons name="document-text-outline" size={22} color="#374151" />
                   <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={pStyles.infoRowText}>Опис досвіду</Text>
+                    <Text style={pStyles.infoRowText}>Experience description</Text>
                     {bio ? <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }} numberOfLines={1}>{bio}</Text> : null}
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
@@ -1639,15 +1639,15 @@ function ProviderProfile() {
             <TouchableOpacity onPress={() => setAccountDetailsVisible(false)}>
               <Ionicons name="arrow-back" size={24} color="#111827" />
             </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Деталі акаунту</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Account details</Text>
             <TouchableOpacity onPress={() => setEditingAccountDetails(!editingAccountDetails)}>
-              <Text style={{ fontSize: 16, color: '#2563eb', fontWeight: '600' }}>{editingAccountDetails ? 'Скасувати' : 'Редагувати'}</Text>
+              <Text style={{ fontSize: 16, color: '#2563eb', fontWeight: '600' }}>{editingAccountDetails ? 'Cancel' : 'Edit'}</Text>
             </TouchableOpacity>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
             {/* Avatar + name row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', flex: 1 }}>{user?.full_name || user?.username || 'Виконавець'}</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', flex: 1 }}>{user?.full_name || user?.username || 'Pro'}</Text>
               <TouchableOpacity onPress={pickProfilePhoto} style={{ position: 'relative' }}>
                 {uploadingPhoto ? (
                   <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: '#e5e7eb', alignItems: 'center', justifyContent: 'center' }}>
@@ -1667,10 +1667,10 @@ function ProviderProfile() {
             </View>
             {/* Fields */}
             {([
-              { label: 'Ім\'я', value: accountName, setter: setAccountName, key: 'name', editable: true },
+              { label: 'First name', value: accountName, setter: setAccountName, key: 'name', editable: true },
               { label: 'Email', value: user?.email || '', setter: null, key: 'email', editable: false },
-              { label: 'Мобільний телефон', value: accountPhone, setter: setAccountPhone, key: 'phone', editable: true },
-              { label: 'Адреса', value: accountAddress, setter: setAccountAddress, key: 'address', editable: true },
+              { label: 'Mobile phone', value: accountPhone, setter: setAccountPhone, key: 'phone', editable: true },
+              { label: 'Address', value: accountAddress, setter: setAccountAddress, key: 'address', editable: true },
             ] as { label: string; value: string; setter: ((v: string) => void) | null; key: string; editable: boolean }[]).map((field) => (
               <View key={field.key}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 }}>
@@ -1692,7 +1692,7 @@ function ProviderProfile() {
             {/* Info banner */}
             <View style={{ margin: 16, padding: 16, backgroundColor: '#fffbeb', borderRadius: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
               <Ionicons name="information-circle-outline" size={22} color="#d97706" />
-              <Text style={{ flex: 1, fontSize: 13, color: '#92400e' }}>Переїхали в нове місто? Зверніться до підтримки щоб оновити локацію.</Text>
+              <Text style={{ flex: 1, fontSize: 13, color: '#92400e' }}>Moved to a new city? Contact support to update your location.</Text>
             </View>
             {editingAccountDetails && (
               <TouchableOpacity
@@ -1702,15 +1702,15 @@ function ProviderProfile() {
                   try {
                     const updatedUser = await api.updateProfile({ full_name: accountName, name: accountName, phone: accountPhone, address: accountAddress });
                     if (updatedUser) setUser(updatedUser);
-                    Alert.alert('Збережено', 'Деталі акаунту оновлено');
+                    Alert.alert('Saved', 'Account details updated');
                     setEditingAccountDetails(false);
-                    // Keep modal open — button now shows 'Редагувати' again
+                    // Keep modal open — button now shows 'Edit' again
                   } catch (e: any) {
-                    Alert.alert('Помилка', e.message || 'Не вдалося зберегти');
+                    Alert.alert('Error', e.message || 'Could not save');
                   } finally { setSaving(false); }
                 }}
               >
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Зберегти зміни</Text>}
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Save changes</Text>}
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -1724,7 +1724,7 @@ function ProviderProfile() {
             <TouchableOpacity onPress={() => setServiceAreaVisible(false)}>
               <Ionicons name="arrow-back" size={24} color="#111827" />
             </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Зона роботи</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Service area</Text>
             <View style={{ width: 40 }} />
           </View>
           {Platform.OS === 'web' ? (
@@ -1746,9 +1746,9 @@ function ProviderProfile() {
                         }).then(() => {
                           loadProfile();
                           setServiceAreaVisible(false);
-                          Alert.alert('Збережено', `Зона роботи: ${data.radius} км`);
+                          Alert.alert('Saved', `Service area: ${data.radius} mi`);
                         }).catch((err: any) => {
-                          Alert.alert('Помилка', err.message || 'Не вдалося зберегти');
+                          Alert.alert('Error', err.message || 'Could not save');
                         });
                         window.removeEventListener('message', handler);
                       }
@@ -1762,10 +1762,10 @@ function ProviderProfile() {
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
               <View style={{ alignItems: 'center', paddingVertical: 32 }}>
                 <Ionicons name="map-outline" size={64} color="#2563eb" />
-                <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginTop: 16 }}>Карта зони роботи</Text>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginTop: 16 }}>Service area map</Text>
                 <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', marginTop: 8 }}>
-                  Ця функція доступна у веб-версії додатку.
-                  Відкрийте сайт в браузері для налаштування.
+                  This feature is available in the web version of the app.
+                  Open the website in a browser to configure it.
                 </Text>
               </View>
             </ScrollView>
@@ -1780,7 +1780,7 @@ function ProviderProfile() {
             <TouchableOpacity onPress={() => setPhotosModalVisible(false)}>
               <Ionicons name="arrow-back" size={24} color="#111827" />
             </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Фото робіт</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Work photos</Text>
             <TouchableOpacity
               onPress={async () => {
                 setSavingPhotos(true);
@@ -1794,22 +1794,22 @@ function ProviderProfile() {
                       );
                     } catch {}
                   }
-                  Alert.alert('Збережено', 'Фото робіт оновлено');
+                  Alert.alert('Saved', 'Work photos updated');
                   setPhotosModalVisible(false);
                 } catch (e: any) {
-                  Alert.alert('Помилка', e.message || 'Не вдалося зберегти');
+                  Alert.alert('Error', e.message || 'Could not save');
                 } finally { setSavingPhotos(false); }
               }}
             >
-              {savingPhotos ? <ActivityIndicator color="#2563eb" size="small" /> : <Text style={{ fontSize: 16, color: '#2563eb', fontWeight: '600' }}>Зберегти</Text>}
+              {savingPhotos ? <ActivityIndicator color="#2563eb" size="small" /> : <Text style={{ fontSize: 16, color: '#2563eb', fontWeight: '600' }}>Save</Text>}
             </TouchableOpacity>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
             {portfolioPhotos.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                 <Ionicons name="images-outline" size={64} color="#d1d5db" />
-                <Text style={{ fontSize: 16, color: '#9ca3af', marginTop: 12 }}>Фото ще не додано</Text>
-                <Text style={{ fontSize: 13, color: '#d1d5db', marginTop: 4 }}>Натисніть кнопку нижче</Text>
+                <Text style={{ fontSize: 16, color: '#9ca3af', marginTop: 12 }}>No photos added yet</Text>
+                <Text style={{ fontSize: 13, color: '#d1d5db', marginTop: 4 }}>Tap the button below</Text>
               </View>
             )}
             {portfolioPhotos.map((photo, i) => (
@@ -1829,7 +1829,7 @@ function ProviderProfile() {
                     }}
                     value={photoCaptions[i] || ''}
                     onChangeText={(text) => setPhotoCaptions(prev => ({ ...prev, [i]: text }))}
-                    placeholder="Короткий опис фото..."
+                    placeholder="Short photo description..."
                     placeholderTextColor="#9ca3af"
                     maxLength={120}
                     multiline
@@ -1848,7 +1848,7 @@ function ProviderProfile() {
                     }}
                   >
                     <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                    <Text style={{ fontSize: 13, color: '#ef4444' }}>Видалити</Text>
+                    <Text style={{ fontSize: 13, color: '#ef4444' }}>Delete</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1858,7 +1858,7 @@ function ProviderProfile() {
               onPress={pickPortfolioPhoto}
             >
               <Ionicons name="add-circle-outline" size={24} color="#2563eb" />
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#2563eb' }}>Додати фото</Text>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#2563eb' }}>Add photo</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -1871,24 +1871,24 @@ function ProviderProfile() {
             <TouchableOpacity onPress={() => setReviewsModalVisible(false)}>
               <Ionicons name="arrow-back" size={24} color="#111827" />
             </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Відгуки клієнтів</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Client reviews</Text>
             <View style={{ width: 40 }} />
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
             {reviews.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 60 }}>
                 <Ionicons name="chatbubble-outline" size={64} color="#d1d5db" />
-                <Text style={{ fontSize: 16, color: '#9ca3af', marginTop: 12 }}>Немає відгуків</Text>
-                <Text style={{ fontSize: 13, color: '#d1d5db', marginTop: 4 }}>Відгуки появляться після виконання завдань</Text>
+                <Text style={{ fontSize: 16, color: '#9ca3af', marginTop: 12 }}>No reviews</Text>
+                <Text style={{ fontSize: 13, color: '#d1d5db', marginTop: 4 }}>Reviews will appear after you complete tasks</Text>
               </View>
             ) : reviews.map((rev: any, i: number) => (
               <View key={i} style={{ backgroundColor: '#f9fafb', borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                   <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#dbeafe', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#2563eb' }}>{(rev.client_name || rev.reviewer_name || 'К')?.charAt(0).toUpperCase()}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#2563eb' }}>{(rev.client_name || rev.reviewer_name || 'C')?.charAt(0).toUpperCase()}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>{rev.client_name || rev.reviewer_name || 'Клієнт'}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>{rev.client_name || rev.reviewer_name || 'Client'}</Text>
                     <Text style={{ fontSize: 12, color: '#9ca3af' }}>{rev.created_at ? new Date(rev.created_at).toLocaleDateString('uk-UA') : ''}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 2 }}>
@@ -1899,7 +1899,7 @@ function ProviderProfile() {
                 {rev.tip_amount && rev.tip_amount > 0 ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#fffbeb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start' }}>
                     <Ionicons name="gift-outline" size={14} color="#f59e0b" />
-                    <Text style={{ fontSize: 13, color: '#92400e', fontWeight: '600' }}>Чайові: {rev.tip_amount} ₴</Text>
+                    <Text style={{ fontSize: 13, color: '#92400e', fontWeight: '600' }}>Tip: ${rev.tip_amount}</Text>
                   </View>
                 ) : null}
               </View>
@@ -1913,7 +1913,7 @@ function ProviderProfile() {
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Безпека акаунту</Text>
+              <Text style={styles.modalTitle}>Account security</Text>
               <TouchableOpacity onPress={() => { setTwoFaVisible(false); setTwoFaCode(''); setTwoFaStep('choose'); }}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
@@ -1922,16 +1922,16 @@ function ProviderProfile() {
               {twoFaStep === 'choose' ? (
                 <>
                   <Text style={{ fontSize: 15, color: '#374151', marginBottom: 16, lineHeight: 22 }}>
-                    Двохфакторна аутентифікація (ДФА) захищає ваш акаунт від несанкціонованого доступу.
+                    Two-factor authentication (2FA) protects your account from unauthorized access.
                   </Text>
-                  <Text style={styles.label}>Оберіть спосіб підтвердження</Text>
+                  <Text style={styles.label}>Choose a verification method</Text>
                   <TouchableOpacity
                     style={[{ flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 2, marginBottom: 10, gap: 12 }, twoFaMethod === 'email' ? { borderColor: '#2563eb', backgroundColor: '#eff6ff' } : { borderColor: '#e5e7eb', backgroundColor: '#fff' }]}
                     onPress={() => setTwoFaMethod('email')}
                   >
                     <Ionicons name="mail-outline" size={24} color={twoFaMethod === 'email' ? '#2563eb' : '#6b7280'} />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '600', color: twoFaMethod === 'email' ? '#1e40af' : '#111827' }}>Через Email</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: twoFaMethod === 'email' ? '#1e40af' : '#111827' }}>Via Email</Text>
                       <Text style={{ fontSize: 12, color: '#6b7280' }}>{user?.email || ''}</Text>
                     </View>
                     {twoFaMethod === 'email' && <Ionicons name="checkmark-circle" size={22} color="#2563eb" />}
@@ -1942,8 +1942,8 @@ function ProviderProfile() {
                   >
                     <Ionicons name="phone-portrait-outline" size={24} color={twoFaMethod === 'phone' ? '#2563eb' : '#6b7280'} />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '600', color: twoFaMethod === 'phone' ? '#1e40af' : '#111827' }}>Через SMS</Text>
-                      <Text style={{ fontSize: 12, color: '#6b7280' }}>{user?.phone || 'Додайте номер телефону'}</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: twoFaMethod === 'phone' ? '#1e40af' : '#111827' }}>Via SMS</Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>{user?.phone || 'Add a phone number'}</Text>
                     </View>
                     {twoFaMethod === 'phone' && <Ionicons name="checkmark-circle" size={22} color="#2563eb" />}
                   </TouchableOpacity>
@@ -1951,9 +1951,9 @@ function ProviderProfile() {
               ) : (
                 <>
                   <Text style={{ fontSize: 15, color: '#374151', marginBottom: 16 }}>
-                    Код підтвердження надіслано на {twoFaMethod === 'email' ? user?.email : user?.phone}.
+                    A verification code was sent to {twoFaMethod === 'email' ? user?.email : user?.phone}.
                   </Text>
-                  <Text style={styles.label}>Введіть 6-значний код</Text>
+                  <Text style={styles.label}>Enter the 6-digit code</Text>
                   <TextInput
                     style={[styles.input, { fontSize: 24, letterSpacing: 8, textAlign: 'center' }]}
                     value={twoFaCode}
@@ -1967,25 +1967,25 @@ function ProviderProfile() {
             </View>
             <View style={styles.modalFooter}>
               <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => { setTwoFaVisible(false); setTwoFaCode(''); setTwoFaStep('choose'); }}>
-                <Text style={styles.btnCancelText}>Скасувати</Text>
+                <Text style={styles.btnCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnSave]}
                 onPress={() => {
                   if (twoFaStep === 'choose') {
                     setTwoFaStep('verify');
-                    Alert.alert('Код надіслано', `Перевірте ${twoFaMethod === 'email' ? 'електронну пошту' : 'SMS'} і введіть код.`);
+                    Alert.alert('Code sent', `Check your ${twoFaMethod === 'email' ? 'email' : 'SMS'} and enter the code.`);
                   } else {
-                    if (twoFaCode.length < 4) { Alert.alert('Помилка', 'Введіть коректний код'); return; }
+                    if (twoFaCode.length < 4) { Alert.alert('Error', 'Enter a valid code'); return; }
                     setTwoFaEnabled(true);
                     setTwoFaVisible(false);
                     setTwoFaCode('');
                     setTwoFaStep('choose');
-                    Alert.alert('Успіх', 'ДФА успішно включено!');
+                    Alert.alert('Success', '2FA enabled successfully!');
                   }
                 }}
               >
-                <Text style={styles.btnSaveText}>{twoFaStep === 'choose' ? 'Надіслати код' : 'Підтвердити'}</Text>
+                <Text style={styles.btnSaveText}>{twoFaStep === 'choose' ? 'Send code' : 'Confirm'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1999,7 +1999,7 @@ function ProviderProfile() {
             <TouchableOpacity onPress={() => setSupportVisible(false)}>
               <Ionicons name="arrow-back" size={24} color="#111827" />
             </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Підтримка</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Support</Text>
             <View style={{ width: 40 }} />
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
@@ -2007,12 +2007,12 @@ function ProviderProfile() {
             <View style={{ backgroundColor: '#eff6ff', borderRadius: 14, padding: 16, marginBottom: 20, flexDirection: 'row', gap: 12 }}>
               <Ionicons name="mail-outline" size={24} color="#2563eb" />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e40af' }}>Email підтримки</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e40af' }}>Support email</Text>
                 <Text style={{ fontSize: 14, color: '#2563eb', marginTop: 2 }}>support@handyhub.com</Text>
               </View>
             </View>
 
-            <Text style={styles.label}>Ваш email</Text>
+            <Text style={styles.label}>Your email</Text>
             <TextInput
               style={styles.input}
               value={supportEmail}
@@ -2021,12 +2021,12 @@ function ProviderProfile() {
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <Text style={styles.label}>Повідомлення</Text>
+            <Text style={styles.label}>Message</Text>
             <TextInput
               style={[styles.input, { height: 140, textAlignVertical: 'top' }]}
               value={supportMessage}
               onChangeText={setSupportMessage}
-              placeholder="Опишіть вашу проблему або запитання..."
+              placeholder="Describe your issue or question..."
               multiline
             />
 
@@ -2034,21 +2034,21 @@ function ProviderProfile() {
               style={[pStyles.agreeBtn, sendingSupport && { opacity: 0.6 }]}
               disabled={sendingSupport}
               onPress={async () => {
-                if (!supportMessage.trim()) { Alert.alert('Помилка', 'Введіть повідомлення'); return; }
+                if (!supportMessage.trim()) { Alert.alert('Error', 'Enter a message'); return; }
                 setSendingSupport(true);
                 try {
                   await api.sendSupportMessage({ email: supportEmail, message: supportMessage }).catch(() => {});
-                  Alert.alert('Надіслано!', 'Ваше повідомлення отримано. Ми відповімо протягом 24 годин.');
+                  Alert.alert('Sent!', 'Your message has been received. We will reply within 24 hours.');
                   setSupportMessage('');
                   setSupportVisible(false);
                 } catch {
-                  Alert.alert('Надіслано!', 'Ваше повідомлення отримано. Ми відповімо протягом 24 годин.');
+                  Alert.alert('Sent!', 'Your message has been received. We will reply within 24 hours.');
                   setSupportMessage('');
                   setSupportVisible(false);
                 } finally { setSendingSupport(false); }
               }}
             >
-              {sendingSupport ? <ActivityIndicator color="#fff" /> : <Text style={pStyles.agreeBtnText}>Надіслати</Text>}
+              {sendingSupport ? <ActivityIndicator color="#fff" /> : <Text style={pStyles.agreeBtnText}>Send</Text>}
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -2061,7 +2061,7 @@ function ProviderProfile() {
             <TouchableOpacity onPress={() => setAboutVisible(false)}>
               <Ionicons name="arrow-back" size={24} color="#111827" />
             </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Про додаток</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>About the app</Text>
             <View style={{ width: 40 }} />
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
@@ -2074,17 +2074,17 @@ function ProviderProfile() {
             </View>
 
             {[{
-              icon: 'information-circle-outline' as const, title: 'Що таке HandyHub?',
-              text: 'HandyHub — платформа для пошуку перевірених виконавців поблизу. Клієнти розміщують завдання, виконавці приймають їх та виконують роботу.'
+              icon: 'information-circle-outline' as const, title: 'What is HandyHub?',
+              text: 'HandyHub is a platform for finding trusted pros near you. Clients post tasks, and pros accept and complete them.'
             }, {
-              icon: 'list-outline' as const, title: 'Як це працює?',
-              text: '1. Клієнт створює замовлення (букінг)\n2. Виконавці бачать замовлення і приймають їх\n3. Виконавець виїжджає до клієнта і виконує роботу\n4. Клієнт оплачує та залишає відгук\n5. Виплата надходить виконавцю автоматично'
+              icon: 'list-outline' as const, title: 'How does it work?',
+              text: '1. The client creates an order (booking)\n2. Pros see the order and accept it\n3. The pro travels to the client and does the work\n4. The client pays and leaves a review\n5. The payout reaches the pro automatically'
             }, {
-              icon: 'wallet-outline' as const, title: 'Оплата та виплати',
-              text: 'Оплата проходить через додаток. Виплати виконавцю надходять після підтвердження оплати. Чайові передаються виконавцю повністю.'
+              icon: 'wallet-outline' as const, title: 'Payments & payouts',
+              text: 'Payment goes through the app. Payouts reach the pro after the payment is confirmed. Tips are passed to the pro in full.'
             }, {
-              icon: 'star-outline' as const, title: 'Рейтинг і позиція',
-              text: 'Виконавці з більшою кількістю позитивних відгуків (★ 4-5) і меншою кількістю негативних займають вищу позицію в пошуку.'
+              icon: 'star-outline' as const, title: 'Rating & ranking',
+              text: 'Pros with more positive reviews (★ 4-5) and fewer negative ones rank higher in search.'
             }].map((item, i) => (
               <View key={i} style={{ marginBottom: 20, backgroundColor: '#f9fafb', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -2103,21 +2103,21 @@ function ProviderProfile() {
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Опис досвіду</Text>
+              <Text style={styles.modalTitle}>Experience description</Text>
               <TouchableOpacity onPress={() => setBioModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
-              <Text style={styles.label}>Про мене</Text>
+              <Text style={styles.label}>About me</Text>
               <TextInput
                 style={[styles.input, { height: 120, textAlignVertical: 'top' }]}
                 value={bio}
                 onChangeText={setBio}
-                placeholder="Розкажіть про свій досвід, спеціалізацію та підхід до роботи..."
+                placeholder="Tell us about your experience, specialty, and approach to work..."
                 multiline
               />
-              <Text style={styles.label}>Роки досвіду</Text>
+              <Text style={styles.label}>Years of experience</Text>
               <TextInput
                 style={styles.input}
                 value={experienceYears}
@@ -2128,17 +2128,17 @@ function ProviderProfile() {
             </View>
             <View style={styles.modalFooter}>
               <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setBioModalVisible(false)}>
-                <Text style={styles.btnCancelText}>Скасувати</Text>
+                <Text style={styles.btnCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnSave]}
                 onPress={() => {
                   saveProfile({ bio, experience_years: experienceYears ? parseInt(experienceYears) : undefined });
                   setBioModalVisible(false);
-                  Alert.alert('Збережено', 'Опис досвіду оновлено');
+                  Alert.alert('Saved', 'Experience description updated');
                 }}
               >
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Зберегти</Text>}
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Save</Text>}
               </TouchableOpacity>
             </View>
           </View>

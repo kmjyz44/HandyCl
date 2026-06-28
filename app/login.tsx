@@ -19,7 +19,7 @@ export default function Login() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setErrorMsg('Заповніть всі поля');
+      setErrorMsg('Fill in all fields');
       return;
     }
     setErrorMsg('');
@@ -34,9 +34,9 @@ export default function Login() {
       const hasPendingBooking = typeof window !== 'undefined' && !!window.localStorage.getItem('pending_booking_draft');
       router.replace(hasPendingBooking ? '/(tabs)/' : '/(tabs)');
     } catch (error: any) {
-      let msg = error.message || 'Помилка входу';
-      if (msg.includes('Invalid credentials')) msg = 'Невірний email або пароль.';
-      if (msg.includes('Network') || msg.includes('fetch')) msg = 'Не вдалося підключитися до сервера.';
+      let msg = error.message || 'Login error';
+      if (msg.includes('Invalid credentials')) msg = 'Invalid email or password.';
+      if (msg.includes('Network') || msg.includes('fetch')) msg = 'Could not connect to the server.';
       setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -49,7 +49,7 @@ export default function Login() {
         <View style={styles.header}>
           <Ionicons name="hammer" size={64} color="#2563eb" />
           <Text style={styles.title}>HandyHub</Text>
-          <Text style={styles.subtitle}>Сервіси майстрів та прибирання</Text>
+          <Text style={styles.subtitle}>Handyman & cleaning services</Text>
         </View>
         <View style={styles.form}>
           {errorMsg ? (
@@ -63,19 +63,19 @@ export default function Login() {
           </View>
           <View style={styles.inputContainer}>
             <Ionicons name="lock-closed-outline" size={20} color="#6b7280" style={styles.inputIcon} />
-            <TextInput style={styles.input} placeholder="Пароль" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} autoCapitalize="none" />
+            <TextInput style={styles.input} placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} autoCapitalize="none" />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
               <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#6b7280" />
             </TouchableOpacity>
           </View>
           <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleLogin} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Увійти</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Log in</Text>}
           </TouchableOpacity>
 
           {/* OAuth divider */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 16 }}>
             <View style={{ flex: 1, height: 1, backgroundColor: '#e5e7eb' }} />
-            <Text style={{ marginHorizontal: 12, fontSize: 12, color: '#9ca3af' }}>або</Text>
+            <Text style={{ marginHorizontal: 12, fontSize: 12, color: '#9ca3af' }}>or</Text>
             <View style={{ flex: 1, height: 1, backgroundColor: '#e5e7eb' }} />
           </View>
 
@@ -96,11 +96,11 @@ export default function Login() {
             data-testid="google-login-btn"
           >
             <Ionicons name="logo-google" size={20} color="#ea4335" />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>Увійти через Google</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>Sign in with Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.push('/register')} style={styles.linkContainer}>
-            <Text style={styles.linkText}>Немає акаунту? <Text style={styles.link}>Зареєструватися</Text></Text>
+            <Text style={styles.linkText}>Don't have an account? <Text style={styles.link}>Sign up</Text></Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

@@ -35,30 +35,30 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  draft:                     'Чернетка',
-  pending:                   'Очікує',
-  posted:                    'Очікує виконавця',
-  offering:                  'Приймає пропозиції',
-  confirmed:                 'Підтверджено',
-  assigned:                  'Прийнято виконавцем',
-  hold_placed:               'Виконавець призначено',
-  on_the_way:                'Виконавець в дорозі',
-  in_progress:               'Виконується',
-  started:                   'Виконується',
-  completed_pending_payment: 'Завершено — очікує оплати',
-  paid:                      'Оплачено',
-  completed:                 'Виконано',
-  cancelled:                 'Скасовано',
-  cancelled_by_client:       'Скасовано клієнтом',
-  cancelled_by_tasker:       'Скасовано виконавцем',
-  dispute:                   'Спір',
+  draft:                     'Draft',
+  pending:                   'Pending',
+  posted:                    'Awaiting a pro',
+  offering:                  'Receiving offers',
+  confirmed:                 'Confirmed',
+  assigned:                  'Accepted by pro',
+  hold_placed:               'Pro assigned',
+  on_the_way:                'Pro on the way',
+  in_progress:               'In progress',
+  started:                   'In progress',
+  completed_pending_payment: 'Done — awaiting payment',
+  paid:                      'Paid',
+  completed:                 'Completed',
+  cancelled:                 'Cancelled',
+  cancelled_by_client:       'Cancelled by client',
+  cancelled_by_tasker:       'Cancelled by pro',
+  dispute:                   'Dispute',
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
-  unpaid: 'Не оплачено',
-  paid: 'Оплачено',
-  refunded: 'Повернено',
-  pending: 'Очікує',
+  unpaid: 'Unpaid',
+  paid: 'Paid',
+  refunded: 'Refunded',
+  pending: 'Pending',
 };
 
 export default function BookingDetail() {
@@ -74,7 +74,7 @@ export default function BookingDetail() {
     if (bookingId) {
       loadBookingDetails();
     } else {
-      setError('Не вказано ID бронювання');
+      setError('No booking ID provided');
       setLoading(false);
     }
   }, [bookingId]);
@@ -94,7 +94,7 @@ export default function BookingDetail() {
         }
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Не вдалося завантажити бронювання';
+      const msg = err?.response?.data?.detail || err?.message || 'Could not load the booking';
       setError(msg);
     } finally {
       setLoading(false);
@@ -105,7 +105,7 @@ export default function BookingDetail() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>Завантаження...</Text>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
@@ -117,17 +117,17 @@ export default function BookingDetail() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#111827" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Деталі бронювання</Text>
+          <Text style={styles.headerTitle}>Booking details</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
-          <Text style={styles.errorText}>{error || 'Бронювання не знайдено'}</Text>
+          <Text style={styles.errorText}>{error || 'Booking not found'}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadBookingDetails}>
-            <Text style={styles.retryButtonText}>Спробувати знову</Text>
+            <Text style={styles.retryButtonText}>Try again</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.backLink} onPress={() => router.back()}>
-            <Text style={styles.backLinkText}>Назад до списку</Text>
+            <Text style={styles.backLinkText}>Back to list</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -136,7 +136,7 @@ export default function BookingDetail() {
 
   const statusColor = STATUS_COLORS[booking.status] || '#6b7280';
   const statusLabel = STATUS_LABELS[booking.status] || booking.status;
-  const paymentLabel = PAYMENT_LABELS[booking.payment_status] || booking.payment_status || 'Невідомо';
+  const paymentLabel = PAYMENT_LABELS[booking.payment_status] || booking.payment_status || 'Unknown';
   const photos = booking.problem_photos || booking.photos || [];
 
   return (
@@ -145,7 +145,7 @@ export default function BookingDetail() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Деталі бронювання</Text>
+        <Text style={styles.headerTitle}>Booking details</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -153,13 +153,13 @@ export default function BookingDetail() {
         {/* Status Banner */}
         <View style={[styles.statusBanner, { backgroundColor: statusColor }]}>
           <Ionicons name="checkmark-circle" size={20} color="#fff" />
-          <Text style={styles.statusBannerText}>Статус: {statusLabel}</Text>
+          <Text style={styles.statusBannerText}>Status: {statusLabel}</Text>
         </View>
 
         {/* Service Info */}
         {service && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Послуга</Text>
+            <Text style={styles.sectionTitle}>Service</Text>
             <View style={styles.serviceCard}>
               {service.image && (
                 <Image source={{ uri: service.image }} style={styles.serviceImage} resizeMode="cover" />
@@ -174,14 +174,14 @@ export default function BookingDetail() {
 
         {/* Booking Info */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Інформація про бронювання</Text>
+          <Text style={styles.sectionTitle}>Booking information</Text>
           <View style={styles.infoCard}>
             {booking.date && (
               <View style={styles.infoRow}>
                 <Ionicons name="calendar" size={20} color="#6b7280" />
-                <Text style={styles.infoLabel}>Дата і час:</Text>
+                <Text style={styles.infoLabel}>Date & time:</Text>
                 <Text style={styles.infoValue}>
-                  {booking.date}{booking.time ? ` о ${booking.time}` : ''}
+                  {booking.date}{booking.time ? ` at ${booking.time}` : ''}
                 </Text>
               </View>
             )}
@@ -189,7 +189,7 @@ export default function BookingDetail() {
             {booking.address && (
               <View style={styles.infoRow}>
                 <Ionicons name="location" size={20} color="#6b7280" />
-                <Text style={styles.infoLabel}>Адреса:</Text>
+                <Text style={styles.infoLabel}>Address:</Text>
                 <Text style={styles.infoValue}>{booking.address}</Text>
               </View>
             )}
@@ -197,14 +197,14 @@ export default function BookingDetail() {
             {(booking.total_price !== undefined && booking.total_price !== null) && (
               <View style={styles.infoRow}>
                 <Ionicons name="cash" size={20} color="#6b7280" />
-                <Text style={styles.infoLabel}>Сума:</Text>
-                <Text style={styles.infoValue}>{Math.round(Number(booking.total_price) * 1.15)} грн</Text>
+                <Text style={styles.infoLabel}>Amount:</Text>
+                <Text style={styles.infoValue}>${Math.round(Number(booking.total_price) * 1.15)}</Text>
               </View>
             )}
 
             <View style={styles.infoRow}>
               <Ionicons name="card" size={20} color="#6b7280" />
-              <Text style={styles.infoLabel}>Оплата:</Text>
+              <Text style={styles.infoLabel}>Payment:</Text>
               <Text style={[
                 styles.infoValue,
                 { color: booking.payment_status === 'paid' ? '#10b981' : '#f59e0b' }
@@ -226,7 +226,7 @@ export default function BookingDetail() {
         {/* Problem Description */}
         {booking.problem_description && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Опис проблеми</Text>
+            <Text style={styles.sectionTitle}>Problem description</Text>
             <View style={styles.infoCard}>
               <Text style={styles.problemText}>{booking.problem_description}</Text>
             </View>
@@ -236,7 +236,7 @@ export default function BookingDetail() {
         {/* Photos */}
         {photos.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Фото ({photos.length})</Text>
+            <Text style={styles.sectionTitle}>Photos ({photos.length})</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.photosContainer}>
                 {photos.map((photo: string, index: number) => (
@@ -255,7 +255,7 @@ export default function BookingDetail() {
         {/* Notes */}
         {booking.notes && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Додаткові нотатки</Text>
+            <Text style={styles.sectionTitle}>Additional notes</Text>
             <View style={styles.infoCard}>
               <Text style={styles.notesText}>{booking.notes}</Text>
             </View>
@@ -265,7 +265,7 @@ export default function BookingDetail() {
         {/* Provider Info */}
         {booking.provider_id && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Виконавець</Text>
+            <Text style={styles.sectionTitle}>Pro</Text>
             <View style={styles.infoCard}>
               <View style={styles.infoRow}>
                 <Ionicons name="person" size={20} color="#6b7280" />
@@ -284,7 +284,7 @@ export default function BookingDetail() {
               onPress={() => router.push({ pathname: '/task-detail', params: { id: booking.booking_id } })}
             >
               <Ionicons name="eye" size={20} color="#fff" />
-              <Text style={styles.payButtonText}>Деталі завдання</Text>
+              <Text style={styles.payButtonText}>Task details</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -297,7 +297,7 @@ export default function BookingDetail() {
               onPress={() => router.push({ pathname: '/task-detail', params: { id: booking.booking_id } })}
             >
               <Ionicons name="card" size={20} color="#fff" />
-              <Text style={styles.payButtonText}>Оплатити завдання</Text>
+              <Text style={styles.payButtonText}>Pay for task</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -308,26 +308,26 @@ export default function BookingDetail() {
             {booking.payment_status !== 'paid' && (
               <TouchableOpacity style={styles.payButton}>
                 <Ionicons name="card" size={20} color="#fff" />
-                <Text style={styles.payButtonText}>Оплатити</Text>
+                <Text style={styles.payButtonText}>Pay</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => {
                 if (Platform.OS === 'web') {
-                  if (window.confirm('Скасувати бронювання?')) {
+                  if (window.confirm('Cancel booking?')) {
                     // TODO: cancel booking API call
                   }
                 } else {
-                  Alert.alert('Скасування', 'Скасувати бронювання?', [
-                    { text: 'Ні', style: 'cancel' },
-                    { text: 'Так', style: 'destructive' },
+                  Alert.alert('Cancellation', 'Cancel booking?', [
+                    { text: 'No', style: 'cancel' },
+                    { text: 'Yes', style: 'destructive' },
                   ]);
                 }
               }}
             >
               <Ionicons name="close-circle" size={20} color="#ef4444" />
-              <Text style={styles.cancelButtonText}>Скасувати</Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         )}

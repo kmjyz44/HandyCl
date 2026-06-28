@@ -38,7 +38,7 @@ interface Executor {
   };
 }
 
-const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function Executors() {
   const router = useRouter();
@@ -77,7 +77,7 @@ export default function Executors() {
         setExecutors(Array.isArray(data) ? data : []);
       } catch {
         if (Platform.OS !== 'web') {
-          Alert.alert('Помилка', 'Не вдалося завантажити список виконавців');
+          Alert.alert('Error', 'Could not load the list of pros');
         }
       }
     } finally {
@@ -153,8 +153,8 @@ export default function Executors() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Виконавці</Text>
-        <Text style={styles.headerSubtitle}>Знайдіть найкращого спеціаліста</Text>
+        <Text style={styles.headerTitle}>Pros</Text>
+        <Text style={styles.headerSubtitle}>Find the best specialist</Text>
       </View>
 
       {/* Tabs */}
@@ -164,7 +164,7 @@ export default function Executors() {
           onPress={() => setActiveTab('all')}
         >
           <Ionicons name="people-outline" size={16} color={activeTab === 'all' ? '#2563eb' : '#6b7280'} />
-          <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>Всі</Text>
+          <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>All</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'favorites' && styles.tabActive]}
@@ -172,7 +172,7 @@ export default function Executors() {
         >
           <Ionicons name="heart" size={16} color={activeTab === 'favorites' ? '#ef4444' : '#6b7280'} />
           <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>
-            {`Обрані${favorites.length > 0 ? ' (' + favorites.length + ')' : ''}`}
+            {`Favorites${favorites.length > 0 ? ' (' + favorites.length + ')' : ''}`}
           </Text>
         </TouchableOpacity>
       </View>
@@ -182,7 +182,7 @@ export default function Executors() {
         <Ionicons name="search-outline" size={20} color="#6b7280" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Пошук за іменем або навичкою..."
+          placeholder="Search by name or skill..."
           placeholderTextColor="#9ca3af"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -207,7 +207,7 @@ export default function Executors() {
             style={[styles.chip, selectedDay === null && styles.chipActive]}
             onPress={() => setSelectedDay(null)}
           >
-            <Text style={[styles.chipText, selectedDay === null && styles.chipTextActive]}>📅 Всі дні</Text>
+            <Text style={[styles.chipText, selectedDay === null && styles.chipTextActive]}>📅 All days</Text>
           </TouchableOpacity>
           {DAYS.map((day, index) => (
             <TouchableOpacity
@@ -225,7 +225,7 @@ export default function Executors() {
             style={[styles.chip, minRating === null && styles.chipActive]}
             onPress={() => setMinRating(null)}
           >
-            <Text style={[styles.chipText, minRating === null && styles.chipTextActive]}>⭐ Будь-який</Text>
+            <Text style={[styles.chipText, minRating === null && styles.chipTextActive]}>⭐ Any</Text>
           </TouchableOpacity>
           {[3, 4, 4.5].map((rating) => (
             <TouchableOpacity
@@ -252,12 +252,12 @@ export default function Executors() {
               color="#d1d5db"
             />
             <Text style={styles.emptyText}>
-              {activeTab === 'favorites' ? 'Немає обраних виконавців' : 'Виконавців не знайдено'}
+              {activeTab === 'favorites' ? 'No favorite pros' : 'No pros found'}
             </Text>
             <Text style={styles.emptySubtext}>
               {activeTab === 'favorites'
-                ? 'Натисніть серце на картці виконавця щоб додати в обрані'
-                : 'Спробуйте змінити фільтри'}
+                ? 'Tap the heart on a pro card to add to favorites'
+                : 'Try changing the filters'}
             </Text>
           </View>
         ) : (
@@ -286,19 +286,19 @@ export default function Executors() {
                   <View style={styles.ratingContainer}>
                     {renderStars(executor.average_rating || 0)}
                     <Text style={styles.ratingText}>
-                      {(executor.average_rating || 0).toFixed(1)} ({executor.total_reviews || 0} відгуків)
+                      {(executor.average_rating || 0).toFixed(1)} ({executor.total_reviews || 0} reviews)
                     </Text>
                   </View>
                   {executor.profile?.experience_years ? (
-                    <Text style={styles.experience}>{executor.profile.experience_years} років досвіду</Text>
+                    <Text style={styles.experience}>{executor.profile.experience_years} years of experience</Text>
                   ) : null}
                 </View>
                 <View style={styles.cardActions}>
                   {executor.pricing?.hourly_rate ? (
                     <View style={styles.priceContainer}>
-                      <Text style={styles.priceLabel}>від</Text>
-                      <Text style={styles.price}>₴{Math.round(executor.pricing.hourly_rate * 1.15)}</Text>
-                      <Text style={styles.priceUnit}>/год</Text>
+                      <Text style={styles.priceLabel}>from</Text>
+                      <Text style={styles.price}>${Math.round(executor.pricing.hourly_rate * 1.15)}</Text>
+                      <Text style={styles.priceUnit}>/hr</Text>
                     </View>
                   ) : null}
                   <TouchableOpacity
@@ -334,7 +334,7 @@ export default function Executors() {
                 <View style={styles.availabilityContainer}>
                   <Ionicons name="calendar-outline" size={14} color="#10b981" />
                   <Text style={styles.availabilityText}>
-                    Доступний: {executor.availability.map((slot: any) => DAYS[slot.day_of_week]).join(', ')}
+                    Available: {executor.availability.map((slot: any) => DAYS[slot.day_of_week]).join(', ')}
                   </Text>
                 </View>
               ) : null}
@@ -343,7 +343,7 @@ export default function Executors() {
                   style={styles.viewProfileButton}
                   onPress={() => router.push(`/executor/${executor.user_id}` as any)}
                 >
-                  <Text style={styles.viewProfileText}>Переглянути профіль</Text>
+                  <Text style={styles.viewProfileText}>View profile</Text>
                   <Ionicons name="chevron-forward" size={18} color="#2563eb" />
                 </TouchableOpacity>
               </View>

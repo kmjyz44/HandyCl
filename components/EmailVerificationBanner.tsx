@@ -24,8 +24,8 @@ export default function EmailVerificationBanner() {
         <Ionicons name="mail-unread-outline" size={20} color="#b45309" />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={s.title}>Підтвердіть свій email</Text>
-        <Text style={s.sub}>Натисніть, щоб ввести код підтвердження</Text>
+        <Text style={s.title}>Verify your email</Text>
+        <Text style={s.sub}>Tap to enter the verification code</Text>
       </View>
       <TouchableOpacity onPress={() => setDismissed(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} data-testid="email-verify-dismiss">
         <Ionicons name="close" size={18} color="#92400e" />

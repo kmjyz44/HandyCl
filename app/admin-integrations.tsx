@@ -19,95 +19,95 @@ type KeyDef = { id: string; label: string; placeholder: string; secret?: boolean
 
 const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: KeyDef[] }[] = [
   {
-    title: 'Resend (Email — за замовчуванням)',
+    title: 'Resend (Email — default)',
     toggle: 'enable_email_notifications',
-    toggleLabel: 'Увімкнути email-сповіщення',
+    toggleLabel: 'Enable email notifications',
     keys: [
-      { id: 'email_provider', label: 'Провайдер email (resend / sendgrid)', placeholder: 'resend — за замовчуванням; sendgrid — резервний' },
+      { id: 'email_provider', label: 'Email provider (resend / sendgrid)', placeholder: 'resend — default; sendgrid — fallback' },
       { id: 'resend_api_key', label: 'Resend API Key', placeholder: 're_xxxxxxxxxxxxxxxxxxxx', secret: true },
-      { id: 'resend_from_email', label: 'From email (підтверджений домен)', placeholder: 'onboarding@resend.dev або noreply@your-domain.com' },
+      { id: 'resend_from_email', label: 'From email (verified domain)', placeholder: 'onboarding@resend.dev or noreply@your-domain.com' },
     ],
   },
   {
-    title: 'SendGrid (Email — резервний)',
+    title: 'SendGrid (Email — fallback)',
     keys: [
       { id: 'sendgrid_api_key', label: 'API Key', placeholder: 'SG.xxxxxxxxxxxxxxxxxxxx', secret: true },
       { id: 'sendgrid_from_email', label: 'From email', placeholder: 'noreply@your-domain.com' },
     ],
   },
   {
-    title: 'Stripe (Платежі)',
+    title: 'Stripe (Payments)',
     toggle: 'enable_stripe_payments',
-    toggleLabel: 'Приймати платежі через Stripe',
+    toggleLabel: 'Accept payments via Stripe',
     keys: [
-      { id: 'stripe_secret_key', label: 'Secret Key', placeholder: 'sk_test_xxx або sk_live_xxx', secret: true },
-      { id: 'stripe_publishable_key', label: 'Publishable Key', placeholder: 'pk_test_xxx або pk_live_xxx' },
+      { id: 'stripe_secret_key', label: 'Secret Key', placeholder: 'sk_test_xxx or sk_live_xxx', secret: true },
+      { id: 'stripe_publishable_key', label: 'Publishable Key', placeholder: 'pk_test_xxx or pk_live_xxx' },
       { id: 'stripe_webhook_secret', label: 'Webhook Signing Secret', placeholder: 'whsec_xxxxxxxxxxxx', secret: true },
-      { id: 'stripe_currency', label: 'Валюта (3 літери ISO)', placeholder: 'usd, uah, eur — за замовчуванням usd' },
+      { id: 'stripe_currency', label: 'Currency (3-letter ISO)', placeholder: 'usd, eur — default usd' },
     ],
   },
   {
-    title: 'Комісія платформи',
+    title: 'Platform commission',
     keys: [
-      { id: 'commission_paid_by', label: 'Хто оплачує комісію (client / executor)', placeholder: 'client — додається клієнту зверху; executor — віднімається з виконавця' },
+      { id: 'commission_paid_by', label: 'Who pays the commission (client / executor)', placeholder: 'client — added on top for the client; executor — deducted from the pro' },
     ],
   },
   {
     title: 'PayPal (manual split)',
     toggle: 'enable_paypal',
-    toggleLabel: 'Приймати оплату через PayPal',
+    toggleLabel: 'Accept payments via PayPal',
     keys: [
-      { id: 'paypal_platform_email', label: 'PayPal email платформи', placeholder: 'admin@yourbrand.com' },
+      { id: 'paypal_platform_email', label: 'Platform PayPal email', placeholder: 'admin@yourbrand.com' },
     ],
   },
   {
     title: 'Zelle',
     toggle: 'enable_zelle',
-    toggleLabel: 'Приймати оплату через Zelle',
+    toggleLabel: 'Accept payments via Zelle',
     keys: [
-      { id: 'zelle_platform_handle', label: 'Zelle email або телефон платформи', placeholder: 'admin@yourbrand.com або +1234567890' },
+      { id: 'zelle_platform_handle', label: 'Platform Zelle email or phone', placeholder: 'admin@yourbrand.com or +1234567890' },
     ],
   },
   {
     title: 'Venmo',
     toggle: 'enable_venmo',
-    toggleLabel: 'Приймати оплату через Venmo',
+    toggleLabel: 'Accept payments via Venmo',
     keys: [
-      { id: 'venmo_platform_handle', label: 'Venmo username платформи (без @)', placeholder: 'handyhub-platform' },
+      { id: 'venmo_platform_handle', label: 'Platform Venmo username (without @)', placeholder: 'handyhub-platform' },
     ],
   },
   {
-    title: 'Переказ на картку / банк (manual)',
+    title: 'Card / bank transfer (manual)',
     toggle: 'enable_bank_transfer',
-    toggleLabel: 'Приймати прямі перекази на картку/рахунок',
+    toggleLabel: 'Accept direct transfers to a card/account',
     keys: [
-      { id: 'bank_platform_details', label: 'Реквізити платформи (картка/банк/IBAN)', placeholder: 'PrivatBank 4149 0000 0000 0000 (Іван Петренко)' },
+      { id: 'bank_platform_details', label: 'Platform details (card/bank/routing)', placeholder: 'Bank of America 1234 5678 9012 (John Doe)' },
     ],
   },
   {
-    title: 'Finix (США — авто-split + Apple/Google Pay)',
+    title: 'Finix (USA — auto-split + Apple/Google Pay)',
     toggle: 'enable_finix',
-    toggleLabel: 'Приймати оплату через Finix',
+    toggleLabel: 'Accept payments via Finix',
     keys: [
-      { id: 'finix_environment', label: 'Середовище (sandbox / live)', placeholder: 'sandbox — за замовчуванням' },
+      { id: 'finix_environment', label: 'Environment (sandbox / live)', placeholder: 'sandbox — default' },
       { id: 'finix_api_username', label: 'API Username', placeholder: 'USxxxxxxxxxxxxxxxxx' },
-      { id: 'finix_api_password', label: 'API Password', placeholder: 'секретний пароль API-ключа', secret: true },
+      { id: 'finix_api_password', label: 'API Password', placeholder: 'secret API key password', secret: true },
       { id: 'finix_application_id', label: 'Application ID', placeholder: 'APxxxxxxxxxxxxxxxxx' },
       { id: 'finix_platform_merchant_id', label: 'Platform Merchant ID', placeholder: 'MUxxxxxxxxxxxxxxxxx' },
       { id: 'finix_platform_identity_id', label: 'Platform Identity ID', placeholder: 'IDxxxxxxxxxxxxxxxxx' },
     ],
   },
   {
-    title: 'Центр допомоги / Підтримка',
+    title: 'Help Center / Support',
     keys: [
-      { id: 'support_email', label: 'Email для зворотного зв\'язку', placeholder: 'support@yourbrand.com' },
-      { id: 'support_phone', label: 'Телефон підтримки (опціонально)', placeholder: '+38 050 000 0000' },
+      { id: 'support_email', label: 'Contact email', placeholder: 'support@yourbrand.com' },
+      { id: 'support_phone', label: 'Support phone (optional)', placeholder: '+1 555 000 0000' },
     ],
   },
   {
     title: 'Twilio (SMS)',
     toggle: 'enable_sms_notifications',
-    toggleLabel: 'Увімкнути SMS-сповіщення',
+    toggleLabel: 'Enable SMS notifications',
     keys: [
       { id: 'twilio_account_sid', label: 'Account SID', placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
       { id: 'twilio_auth_token', label: 'Auth Token', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', secret: true },
@@ -117,7 +117,7 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
   {
     title: 'Web Push (VAPID)',
     toggle: 'enable_push_notifications',
-    toggleLabel: 'Увімкнути браузерні Push-сповіщення',
+    toggleLabel: 'Enable browser push notifications',
     keys: [
       { id: 'vapid_public_key', label: 'Public Key', placeholder: 'BLxxxxxxxxxxxxxxxxxxxxxx' },
       { id: 'vapid_private_key', label: 'Private Key', placeholder: 'xxxxxxxxxxxxxxxxxxxxxx', secret: true },
@@ -125,9 +125,9 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
-    title: 'Telegram (Бот)',
+    title: 'Telegram (Bot)',
     toggle: 'enable_telegram_notifications',
-    toggleLabel: 'Увімкнути Telegram-сповіщення',
+    toggleLabel: 'Enable Telegram notifications',
     keys: [
       { id: 'telegram_bot_token', label: 'Bot Token', placeholder: '7234567890:AAxxxxxxxxxxxxx', secret: true },
     ],
@@ -146,7 +146,7 @@ export default function AdminIntegrations() {
       const data = await api.adminGetIntegrationKeys();
       setValues(data || {});
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося завантажити налаштування');
+      showAlert('Error', e?.response?.data?.detail || 'Could not load settings');
     } finally { setLoading(false); }
   };
 
@@ -163,10 +163,10 @@ export default function AdminIntegrations() {
         patch[k] = v;
       }
       await api.adminUpdateIntegrationKeys(patch);
-      showAlert('Збережено', 'Інтеграційні ключі оновлені');
+      showAlert('Saved', 'Integration keys updated');
       load();
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося зберегти');
+      showAlert('Error', e?.response?.data?.detail || 'Could not save');
     } finally { setSaving(false); }
   };
 
@@ -176,7 +176,7 @@ export default function AdminIntegrations() {
     <View style={s.root}>
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="chevron-back" size={26} color="#111827" /></TouchableOpacity>
-        <Text style={s.title}>Інтеграції та ключі</Text>
+        <Text style={s.title}>Integrations & keys</Text>
         <View style={{ width: 26 }} />
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
@@ -202,7 +202,7 @@ export default function AdminIntegrations() {
                 <View key={k.id} style={{ marginBottom: 12 }}>
                   <Text style={s.label}>
                     {k.label}
-                    {isSetField && isSet ? <Text style={{ color: '#16a34a', fontSize: 12 }}>  ✓ збережено</Text> : null}
+                    {isSetField && isSet ? <Text style={{ color: '#16a34a', fontSize: 12 }}>  ✓ saved</Text> : null}
                   </Text>
                   <TextInput
                     style={[s.input, masked && { color: '#9ca3af' }]}
@@ -216,7 +216,7 @@ export default function AdminIntegrations() {
                   />
                   {masked ? (
                     <TouchableOpacity onPress={() => setVal(k.id, '')} style={s.clearBtn}>
-                      <Text style={s.clearBtnText}>Очистити поле і ввести новий ключ</Text>
+                      <Text style={s.clearBtnText}>Clear field and enter a new key</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -225,10 +225,10 @@ export default function AdminIntegrations() {
           </View>
         ))}
         <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.5 }]} onPress={save} disabled={saving} data-testid="save-integrations-btn">
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>Зберегти всі зміни</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>Save all changes</Text>}
         </TouchableOpacity>
         <Text style={s.help}>
-          🔒 Секретні ключі зберігаються тільки на сервері. У відповіді UI показує лише останні 4 символи. Щоб замінити ключ — натисніть «Очистити» і введіть новий.
+          🔒 Secret keys are stored only on the server. The UI shows only the last 4 characters. To replace a key — tap "Clear" and enter a new one.
         </Text>
       </ScrollView>
     </View>

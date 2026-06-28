@@ -19,20 +19,20 @@ function fmt(ts: string) {
   try {
     const d = new Date(ts);
     const diff = (Date.now() - d.getTime()) / 1000;
-    if (diff < 60) return 'щойно';
-    if (diff < 3600) return `${Math.floor(diff / 60)} хв тому`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} год тому`;
-    if (diff < 7 * 86400) return `${Math.floor(diff / 86400)} дн тому`;
-    return d.toLocaleDateString('uk-UA');
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 7 * 86400) return `${Math.floor(diff / 86400)}d ago`;
+    return d.toLocaleDateString('en-US');
   } catch {
     return '';
   }
 }
 
 const ROLE_LABEL: Record<string, { text: string; color: string }> = {
-  client:   { text: 'Клієнт',     color: '#3b82f6' },
-  provider: { text: 'Виконавець', color: '#16a34a' },
-  admin:    { text: 'Адмін',      color: '#a855f7' },
+  client:   { text: 'Client',   color: '#3b82f6' },
+  provider: { text: 'Pro',      color: '#16a34a' },
+  admin:    { text: 'Admin',    color: '#a855f7' },
 };
 
 export default function BlogFeed() {
@@ -57,7 +57,7 @@ export default function BlogFeed() {
   useEffect(() => { load(); }, [load]);
 
   const onLike = async (post: any) => {
-    if (!user) { showAlert('Увійди', 'Щоб ставити лайки, треба увійти в обліковий запис'); return; }
+    if (!user) { showAlert('Log in', 'You need to log in to like posts'); return; }
     // optimistic
     const liked = !post.liked_by_me;
     setPosts((arr) => arr.map((p) => p.post_id === post.post_id
@@ -76,7 +76,7 @@ export default function BlogFeed() {
         ? { ...p, liked_by_me: !liked, likes_count: post.likes_count }
         : p
       ));
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+      showAlert('Error', e?.response?.data?.detail || 'Failed');
     }
   };
 
@@ -84,7 +84,7 @@ export default function BlogFeed() {
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          title: 'Спільнота',
+          title: 'Community',
           headerRight: () => user ? (
             <TouchableOpacity
               onPress={() => router.push('/blog-create' as any)}
@@ -92,7 +92,7 @@ export default function BlogFeed() {
               style={{ paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 4 }}
             >
               <Ionicons name="add-circle" size={22} color="#2563eb" />
-              <Text style={{ color: '#2563eb', fontSize: 13, fontWeight: '700' }}>Створити</Text>
+              <Text style={{ color: '#2563eb', fontSize: 13, fontWeight: '700' }}>Create</Text>
             </TouchableOpacity>
           ) : null,
         }}
@@ -108,9 +108,9 @@ export default function BlogFeed() {
           contentContainerStyle={posts.length === 0 ? styles.emptyWrap : { paddingBottom: 24 }}
           ListHeaderComponent={
             <View style={styles.intro}>
-              <Text style={styles.introTitle}>Стрічка спільноти</Text>
+              <Text style={styles.introTitle}>Community feed</Text>
               <Text style={styles.introSub}>
-                Виконавці та клієнти діляться результатами робіт, фото, порадами та відгуками.
+                Pros and clients share work results, photos, tips, and reviews.
               </Text>
               {user && (
                 <TouchableOpacity
@@ -119,7 +119,7 @@ export default function BlogFeed() {
                   data-testid="blog-create-cta"
                 >
                   <Ionicons name="image" size={18} color="#fff" />
-                  <Text style={styles.createCtaText}>Поділитись своїм досвідом</Text>
+                  <Text style={styles.createCtaText}>Share your experience</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -127,8 +127,8 @@ export default function BlogFeed() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="newspaper-outline" size={48} color="#9ca3af" />
-              <Text style={styles.emptyText}>Поки немає публікацій</Text>
-              <Text style={styles.emptySub}>Стань першим — поділись фото своєї роботи!</Text>
+              <Text style={styles.emptyText}>No posts yet</Text>
+              <Text style={styles.emptySub}>Be the first — share a photo of your work!</Text>
             </View>
           }
           renderItem={({ item }) => {
@@ -152,7 +152,7 @@ export default function BlogFeed() {
                       </View>
                     )}
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.authorName}>{item.author_name || 'Користувач'}</Text>
+                      <Text style={styles.authorName}>{item.author_name || 'User'}</Text>
                       <Text style={styles.authorMeta}>
                         <Text style={[styles.roleTag, { color: role.color }]}>{role.text}</Text>
                         {' · '}{fmt(item.created_at)}

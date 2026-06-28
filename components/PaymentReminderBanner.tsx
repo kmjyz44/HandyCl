@@ -46,8 +46,8 @@ export default function PaymentReminderBanner() {
   let testId = '';
 
   if (data.role === 'client' && (data.needs_pay || 0) > 0) {
-    title = `Оплатіть завдання (${data.needs_pay})`;
-    message = 'Виконавці чекають на оплату виконаних робіт';
+    title = `Pay for tasks (${data.needs_pay})`;
+    message = 'Pros are waiting for payment for completed work';
     icon = 'card-outline';
     color = '#dc2626';
     bg = '#fef2f2';
@@ -63,8 +63,8 @@ export default function PaymentReminderBanner() {
     };
     testId = 'reminder-client-pay';
   } else if (data.role === 'provider' && (data.needs_executor_confirm || 0) > 0) {
-    title = `Підтвердьте отримання (${data.needs_executor_confirm})`;
-    message = 'Клієнт повідомив про оплату — перевірте і підтвердьте';
+    title = `Confirm receipt (${data.needs_executor_confirm})`;
+    message = 'The client reported a payment — check and confirm';
     icon = 'cash-outline';
     color = '#059669';
     bg = '#ecfdf5';
@@ -80,11 +80,11 @@ export default function PaymentReminderBanner() {
   } else if (data.role === 'admin' && ((data.needs_admin_verify || 0) > 0 || (data.disputed || 0) > 0)) {
     const total = (data.needs_admin_verify || 0) + (data.disputed || 0);
     title = (data.disputed || 0) > 0
-      ? `Перевірте платежі (${total}) ⚠`
-      : `Перевірте платежі (${total})`;
+      ? `Review payments (${total}) ⚠`
+      : `Review payments (${total})`;
     message = (data.disputed || 0) > 0
-      ? `${data.disputed} спір очікує розгляду`
-      : 'Платежі чекають на підтвердження';
+      ? `${data.disputed} dispute awaiting review`
+      : 'Payments awaiting confirmation';
     icon = 'shield-checkmark-outline';
     color = (data.disputed || 0) > 0 ? '#dc2626' : '#2563eb';
     bg = (data.disputed || 0) > 0 ? '#fef2f2' : '#eff6ff';

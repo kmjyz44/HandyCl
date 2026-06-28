@@ -42,13 +42,13 @@ export default function PaymentSuccess() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Оплата', headerShown: false }} />
+      <Stack.Screen options={{ title: 'Payment', headerShown: false }} />
       <View style={styles.card}>
         {status === 'checking' && (
           <>
             <ActivityIndicator size="large" color="#2563eb" />
-            <Text style={styles.title}>Перевіряємо платіж...</Text>
-            <Text style={styles.sub}>Це займе кілька секунд.</Text>
+            <Text style={styles.title}>Verifying payment...</Text>
+            <Text style={styles.sub}>This will take a few seconds.</Text>
           </>
         )}
         {status === 'paid' && (
@@ -56,13 +56,13 @@ export default function PaymentSuccess() {
             <View style={[styles.iconWrap, { backgroundColor: '#dcfce7' }]}>
               <Ionicons name="checkmark-circle" size={64} color="#16a34a" />
             </View>
-            <Text style={styles.title}>Оплачено!</Text>
+            <Text style={styles.title}>Paid!</Text>
             <Text style={styles.sub}>
-              Дякуємо! Платіж на суму{' '}
+              Thank you! Your payment of{' '}
               <Text style={{ fontWeight: '700' }}>
                 {details?.amount} {(details?.currency || '').toUpperCase()}
               </Text>{' '}
-              успішно отримано.
+              was received successfully.
             </Text>
           </>
         )}
@@ -71,8 +71,8 @@ export default function PaymentSuccess() {
             <View style={[styles.iconWrap, { backgroundColor: '#fef3c7' }]}>
               <Ionicons name="time" size={64} color="#d97706" />
             </View>
-            <Text style={styles.title}>Платіж обробляється</Text>
-            <Text style={styles.sub}>Це може зайняти ще декілька хвилин. Ми надішлемо сповіщення, коли все буде готово.</Text>
+            <Text style={styles.title}>Payment is processing</Text>
+            <Text style={styles.sub}>This may take a few more minutes. We'll notify you when it's done.</Text>
           </>
         )}
         {status === 'failed' && (
@@ -80,12 +80,12 @@ export default function PaymentSuccess() {
             <View style={[styles.iconWrap, { backgroundColor: '#fee2e2' }]}>
               <Ionicons name="close-circle" size={64} color="#dc2626" />
             </View>
-            <Text style={styles.title}>Не вдалося перевірити платіж</Text>
-            <Text style={styles.sub}>Спробуй оновити сторінку або повернутись до завдання.</Text>
+            <Text style={styles.title}>Could not verify the payment</Text>
+            <Text style={styles.sub}>Try refreshing the page or returning to the task.</Text>
           </>
         )}
         <TouchableOpacity style={styles.btn} onPress={() => router.replace('/(tabs)' as any)} data-testid="back-to-app-btn">
-          <Text style={styles.btnText}>Повернутись до застосунку</Text>
+          <Text style={styles.btnText}>Back to the app</Text>
         </TouchableOpacity>
       </View>
     </View>

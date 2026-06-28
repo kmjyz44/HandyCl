@@ -16,8 +16,8 @@ import { useRouter } from 'expo-router';
 import { api } from '../../utils/api';
 import { useAuthStore } from '../../store/authStore';
 
-const MONTHS_UA = ['Січень','Лютий','Березень','Квітень','Травень','Червень',
-  'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+const MONTHS_UA = ['January','February','March','April','May','June',
+  'July','August','September','October','November','December'];
 
 export default function Earnings() {
   const router = useRouter();
@@ -50,13 +50,13 @@ export default function Earnings() {
   const onRefresh = () => { setRefreshing(true); loadData(); };
 
   const fmt = (val: number | undefined | null) =>
-    val && val > 0 ? `${Math.round(val)} ₴` : '0 ₴';
+    val && val > 0 ? `$${Math.round(val)}` : '$0';
 
   const fmtDate = (iso?: string) => {
     if (!iso) return '—';
     try {
       const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
-      return d.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short', year: 'numeric' });
+      return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
     } catch { return '—'; }
   };
 
@@ -162,15 +162,15 @@ export default function Earnings() {
         const path = `${(FileSystem as any).cacheDirectory}${filename}`;
         await (FileSystem as any).writeAsStringAsync(path, base64, { encoding: 'base64' });
         if (await (Sharing as any).isAvailableAsync()) {
-          await (Sharing as any).shareAsync(path, { mimeType: 'application/pdf', dialogTitle: 'Звіт про заробіток' });
+          await (Sharing as any).shareAsync(path, { mimeType: 'application/pdf', dialogTitle: 'Earnings report' });
         } else {
-          Alert.alert('Звіт збережено', path);
+          Alert.alert('Report saved', path);
         }
       }
       setReportModalVisible(false);
     } catch (e: any) {
       console.error('Report download error', e);
-      Alert.alert('Помилка', e?.response?.data?.detail || e?.message || 'Не вдалося завантажити звіт');
+      Alert.alert('Error', e?.response?.data?.detail || e?.message || 'Could not download the report');
     } finally {
       setDownloading(false);
     }
@@ -183,8 +183,8 @@ export default function Earnings() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Заробіток</Text>
-        <Text style={styles.headerSub}>Ваші фінансові показники</Text>
+        <Text style={styles.headerTitle}>Earnings</Text>
+        <Text style={styles.headerSub}>Your financial overview</Text>
       </View>
 
       <ScrollView
@@ -200,7 +200,7 @@ export default function Earnings() {
                 {selectedMonth ? (() => {
                   const [y, m] = selectedMonth.split('-');
                   return `${MONTHS_UA[parseInt(m) - 1]} ${y}`;
-                })() : 'Зароблено всього'}
+                })() : 'Total earned'}
               </Text>
               <Text style={styles.mainCardValue}>{fmt(totalEarned + totalTips)}</Text>
             </View>
@@ -210,17 +210,17 @@ export default function Earnings() {
             <View style={styles.mainCardStat}>
               <Ionicons name="gift-outline" size={18} color="rgba(255,255,255,0.8)" />
               <Text style={styles.mainCardStatVal}>{fmt(totalTips)}</Text>
-              <Text style={styles.mainCardStatLbl}>Чайові</Text>
+              <Text style={styles.mainCardStatLbl}>Tips</Text>
             </View>
             <View style={styles.mainCardStat}>
               <Ionicons name="briefcase-outline" size={18} color="rgba(255,255,255,0.8)" />
               <Text style={styles.mainCardStatVal}>{totalJobs}</Text>
-              <Text style={styles.mainCardStatLbl}>Завдань</Text>
+              <Text style={styles.mainCardStatLbl}>Tasks</Text>
             </View>
             <View style={styles.mainCardStat}>
               <Ionicons name="hourglass-outline" size={18} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.mainCardStatVal}>{totalHours > 0 ? `${totalHours.toFixed(1)} год` : '0'}</Text>
-              <Text style={styles.mainCardStatLbl}>Годин</Text>
+              <Text style={styles.mainCardStatVal}>{totalHours > 0 ? `${totalHours.toFixed(1)} hr` : '0'}</Text>
+              <Text style={styles.mainCardStatLbl}>Hours</Text>
             </View>
           </View>
         </View>
@@ -236,8 +236,8 @@ export default function Earnings() {
               <Ionicons name="document-text-outline" size={24} color="#7c3aed" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.reportsTitle}>Звіти та податкова</Text>
-              <Text style={styles.reportsSub}>Завантажити PDF за місяць або рік</Text>
+              <Text style={styles.reportsTitle}>Reports & taxes</Text>
+              <Text style={styles.reportsSub}>Download a PDF for a month or year</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
@@ -249,8 +249,8 @@ export default function Earnings() {
             <View style={styles.pendingLeft}>
               <Ionicons name="time-outline" size={28} color="#d97706" />
               <View style={{ marginLeft: 12 }}>
-                <Text style={styles.pendingLabel}>Очікує виплати</Text>
-                <Text style={styles.pendingSubLabel}>Завдання виконано, оплата в обробці</Text>
+                <Text style={styles.pendingLabel}>Awaiting payout</Text>
+                <Text style={styles.pendingSubLabel}>Task completed, payment processing</Text>
               </View>
             </View>
             <Text style={styles.pendingValue}>{fmt(totalPending)}</Text>
@@ -268,8 +268,8 @@ export default function Earnings() {
               <Ionicons name="card-outline" size={24} color="#2563eb" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.payoutSetupTitle}>Куди отримувати кошти</Text>
-              <Text style={styles.payoutSetupSub}>Додайте картку або банківський рахунок</Text>
+              <Text style={styles.payoutSetupTitle}>Where to receive funds</Text>
+              <Text style={styles.payoutSetupSub}>Add a card or bank account</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
@@ -277,17 +277,17 @@ export default function Earnings() {
 
         {/* Breakdown */}
         <View style={styles.breakdownCard}>
-          <Text style={styles.sectionTitle}>Деталі заробітку</Text>
+          <Text style={styles.sectionTitle}>Earnings details</Text>
           <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>Оплата за роботу</Text>
+            <Text style={styles.breakdownLabel}>Labor pay</Text>
             <Text style={styles.breakdownValue}>{fmt(totalEarned)}</Text>
           </View>
           <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>Чайові від клієнтів</Text>
+            <Text style={styles.breakdownLabel}>Tips from clients</Text>
             <Text style={[styles.breakdownValue, { color: '#f59e0b' }]}>{fmt(totalTips)}</Text>
           </View>
           <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 8, paddingTop: 8 }]}>
-            <Text style={[styles.breakdownLabel, { fontWeight: '700', color: '#111827' }]}>Загальна сума</Text>
+            <Text style={[styles.breakdownLabel, { fontWeight: '700', color: '#111827' }]}>Total amount</Text>
             <Text style={[styles.breakdownValue, { color: '#10b981', fontWeight: '800' }]}>{fmt(totalEarned + totalTips)}</Text>
           </View>
         </View>
@@ -295,7 +295,7 @@ export default function Earnings() {
         {/* Monthly bar chart */}
         {monthlyStats.length > 0 && (
           <View style={styles.chartCard}>
-            <Text style={styles.sectionTitle}>Статистика по місяцях</Text>
+            <Text style={styles.sectionTitle}>Monthly statistics</Text>
             <View style={styles.barChart}>
               {monthlyStats.map(([key, val]) => {
                 const [y, m] = key.split('-');
@@ -307,12 +307,12 @@ export default function Earnings() {
                     style={styles.barCol}
                     onPress={() => setSelectedMonth(isSelected ? null : key)}
                   >
-                    <Text style={styles.barAmount}>{val.earned > 0 ? `${Math.round(val.earned / 1000)}к` : ''}</Text>
+                    <Text style={styles.barAmount}>{val.earned > 0 ? `${Math.round(val.earned / 1000)}k` : ''}</Text>
                     <View style={[styles.bar, { height: barH, backgroundColor: isSelected ? '#2563eb' : '#93c5fd' }]} />
                     <Text style={[styles.barLabel, isSelected && { color: '#2563eb', fontWeight: '700' }]}>
                       {MONTHS_UA[parseInt(m) - 1].slice(0, 3)}
                     </Text>
-                    <Text style={styles.barJobs}>{val.jobs} зав</Text>
+                    <Text style={styles.barJobs}>{val.jobs} jobs</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -320,7 +320,7 @@ export default function Earnings() {
             {selectedMonth && (
               <TouchableOpacity style={styles.clearFilter} onPress={() => setSelectedMonth(null)}>
                 <Ionicons name="close-circle" size={16} color="#6b7280" />
-                <Text style={styles.clearFilterText}>Показати всі місяці</Text>
+                <Text style={styles.clearFilterText}>Show all months</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -334,7 +334,7 @@ export default function Earnings() {
                 style={[styles.monthPill, !selectedMonth && styles.monthPillActive]}
                 onPress={() => setSelectedMonth(null)}
               >
-                <Text style={[styles.monthPillText, !selectedMonth && styles.monthPillTextActive]}>Всі</Text>
+                <Text style={[styles.monthPillText, !selectedMonth && styles.monthPillTextActive]}>All</Text>
               </TouchableOpacity>
               {availableMonths.map(key => {
                 const [y, m] = key.split('-');
@@ -356,16 +356,16 @@ export default function Earnings() {
         {/* History */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            Історія {selectedMonth ? (() => {
+            History {selectedMonth ? (() => {
               const [y, m] = selectedMonth.split('-');
               return `— ${MONTHS_UA[parseInt(m) - 1]} ${y}`;
-            })() : 'виплат'}
+            })() : 'payouts'}
           </Text>
 
           {/* Pending items first (only when no month filter) */}
           {!selectedMonth && pendingItems.length > 0 && (
             <>
-              <Text style={styles.groupLabel}>⏳ Очікує оплати</Text>
+              <Text style={styles.groupLabel}>⏳ Awaiting payment</Text>
               {pendingItems.map(item => (
                 <TouchableOpacity
                   key={item.task_id}
@@ -382,7 +382,7 @@ export default function Earnings() {
                   </View>
                   <View style={styles.historyAmount}>
                     <Text style={[styles.amountValue, { color: '#d97706' }]}>{fmt(item.final_price)}</Text>
-                    <Text style={styles.pendingBadge}>очікує</Text>
+                    <Text style={styles.pendingBadge}>pending</Text>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -393,7 +393,7 @@ export default function Earnings() {
           {paidItems.length > 0 ? (
             <>
               {!selectedMonth && pendingItems.length > 0 && (
-                <Text style={[styles.groupLabel, { marginTop: 12 }]}>✅ Оплачено</Text>
+                <Text style={[styles.groupLabel, { marginTop: 12 }]}>✅ Paid</Text>
               )}
               {paidItems.map(item => (
                 <TouchableOpacity
@@ -409,13 +409,13 @@ export default function Earnings() {
                     <Text style={styles.historyDate}>{fmtDate(item.completed_at || item.paid_at)}</Text>
                     {item.client?.name && <Text style={styles.historyClient}>{item.client.name}</Text>}
                     {(item.actual_hours || 0) > 0 && (
-                      <Text style={styles.historyHours}>{item.actual_hours} год × {item.hourly_rate || 0} ₴/год</Text>
+                      <Text style={styles.historyHours}>{item.actual_hours} hr × ${item.hourly_rate || 0}/hr</Text>
                     )}
                   </View>
                   <View style={styles.historyAmount}>
                     <Text style={styles.amountValue}>{fmt(item.final_price || item.provider_payout)}</Text>
                     {(item.tip_amount || 0) > 0 && (
-                      <Text style={styles.tipValue}>+{fmt(item.tip_amount)} чай</Text>
+                      <Text style={styles.tipValue}>+{fmt(item.tip_amount)} tip</Text>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -425,7 +425,7 @@ export default function Earnings() {
             <View style={styles.emptyState}>
               <Ionicons name="receipt-outline" size={48} color="#d1d5db" />
               <Text style={styles.emptyText}>
-                {selectedMonth ? 'Немає завдань за цей місяць' : 'Поки немає завершених завдань'}
+                {selectedMonth ? 'No tasks this month' : 'No completed tasks yet'}
               </Text>
             </View>
           )}
@@ -439,16 +439,16 @@ export default function Earnings() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Завантажити звіт</Text>
+              <Text style={styles.modalTitle}>Download report</Text>
               <TouchableOpacity onPress={() => setReportModalVisible(false)} disabled={downloading} data-testid="close-reports-modal-btn">
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ padding: 16 }}>
-              <Text style={styles.modalSectionLabel}>📅 Місячний звіт (PDF)</Text>
+              <Text style={styles.modalSectionLabel}>📅 Monthly report (PDF)</Text>
               {availableMonths.length === 0 ? (
-                <Text style={styles.modalEmpty}>Поки немає оплачених завдань.</Text>
+                <Text style={styles.modalEmpty}>No paid tasks yet.</Text>
               ) : (
                 availableMonths.map(key => {
                   const [y, m] = key.split('-');
@@ -469,7 +469,7 @@ export default function Earnings() {
                 })
               )}
 
-              <Text style={[styles.modalSectionLabel, { marginTop: 20 }]}>📊 Річний звіт (PDF)</Text>
+              <Text style={[styles.modalSectionLabel, { marginTop: 20 }]}>📊 Annual report (PDF)</Text>
               {availableYears.map(yr => (
                 <TouchableOpacity
                   key={`y-${yr}`}
@@ -479,12 +479,12 @@ export default function Earnings() {
                   data-testid={`download-yearly-${yr}`}
                 >
                   <Ionicons name="bar-chart-outline" size={20} color="#059669" />
-                  <Text style={styles.reportRowText}>{yr} рік — всі завдання</Text>
+                  <Text style={styles.reportRowText}>{yr} — all tasks</Text>
                   <Ionicons name="download-outline" size={18} color="#6b7280" />
                 </TouchableOpacity>
               ))}
 
-              <Text style={[styles.modalSectionLabel, { marginTop: 20 }]}>🧾 Податковий звіт (PDF)</Text>
+              <Text style={[styles.modalSectionLabel, { marginTop: 20 }]}>🧾 Tax report (PDF)</Text>
               {availableYears.map(yr => (
                 <TouchableOpacity
                   key={`t-${yr}`}
@@ -495,8 +495,8 @@ export default function Earnings() {
                 >
                   <Ionicons name="receipt-outline" size={20} color="#b45309" />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.reportRowText}>Податковий за {yr} рік</Text>
-                    <Text style={styles.reportRowHint}>З сумою брутто, комісією та нетто</Text>
+                    <Text style={styles.reportRowText}>Tax report for {yr}</Text>
+                    <Text style={styles.reportRowHint}>With gross, commission, and net amounts</Text>
                   </View>
                   <Ionicons name="download-outline" size={18} color="#92400e" />
                 </TouchableOpacity>
@@ -505,7 +505,7 @@ export default function Earnings() {
               {downloading && (
                 <View style={{ alignItems: 'center', marginTop: 20 }}>
                   <ActivityIndicator color="#2563eb" />
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>Генеруємо PDF…</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>Generating PDF…</Text>
                 </View>
               )}
             </ScrollView>

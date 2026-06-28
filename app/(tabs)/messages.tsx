@@ -48,7 +48,7 @@ export default function Messages() {
       const chatItems: ChatItem[] = await Promise.all(
         tasks.map(async (t: any) => {
           const taskId = t.task_id || t.task?.task_id || t.booking_id;
-          const title = t.title || t.service_name || t.category || 'Завдання';
+          const title = t.title || t.service_name || t.category || 'Task';
           let lastMessage = '';
           let lastMessageTime = '';
           let unreadCount = 0;
@@ -58,8 +58,8 @@ export default function Messages() {
             const msgList = Array.isArray(msgs) ? msgs : (msgs?.messages ?? []);
             if (msgList.length > 0) {
               const last = msgList[msgList.length - 1];
-              lastMessage = last.text || (last.image_url ? '📷 Фото' : '');
-              lastMessageTime = last.created_at ? new Date(last.created_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : '';
+              lastMessage = last.text || (last.image_url ? '📷 Photo' : '');
+              lastMessageTime = last.created_at ? new Date(last.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
               unreadCount = msgList.filter(
                 (m: any) => !m.read && m.from_user_id !== user?.user_id
               ).length;
@@ -69,9 +69,9 @@ export default function Messages() {
           // Determine other party name
           let otherPartyName = '';
           if (user?.role === 'client') {
-            otherPartyName = t.provider_name || t.executor_name || 'Виконавець';
+            otherPartyName = t.provider_name || t.executor_name || 'Pro';
           } else {
-            otherPartyName = t.client_name || 'Клієнт';
+            otherPartyName = t.client_name || 'Client';
           }
 
           return {
@@ -150,7 +150,7 @@ export default function Messages() {
           </Text>
         )}
         <Text style={[styles.chatLastMsg, item.unreadCount > 0 && styles.chatLastMsgUnread]} numberOfLines={1}>
-          {item.lastMessage || 'Натисніть щоб відкрити чат'}
+          {item.lastMessage || 'Tap to open the chat'}
         </Text>
       </View>
 
@@ -169,15 +169,15 @@ export default function Messages() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Повідомлення</Text>
-        <Text style={styles.headerSubtitle}>Чати по вашим завданням</Text>
+        <Text style={styles.headerTitle}>Messages</Text>
+        <Text style={styles.headerSubtitle}>Chats for your tasks</Text>
       </View>
 
       {chats.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="chatbubbles-outline" size={64} color="#d1d5db" />
-          <Text style={styles.emptyText}>Немає повідомлень</Text>
-          <Text style={styles.emptySubtext}>Чати з'являться після бронювання</Text>
+          <Text style={styles.emptyText}>No messages</Text>
+          <Text style={styles.emptySubtext}>Chats appear after a booking</Text>
         </View>
       ) : (
         <FlatList

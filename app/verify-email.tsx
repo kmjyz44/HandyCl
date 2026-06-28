@@ -24,7 +24,7 @@ export default function VerifyEmail() {
 
   const verify = async () => {
     if (code.length !== 6) {
-      setError('Введіть 6-значний код');
+      setError('Enter the 6-digit code');
       return;
     }
     setLoading(true);
@@ -32,10 +32,10 @@ export default function VerifyEmail() {
     try {
       await api.verifyEmail({ email, code });
       if (user) setUser({ ...user, email_verified: true } as any);
-      Alert.alert('Готово!', 'Email підтверджено.');
+      Alert.alert('Done!', 'Your email is verified.');
       router.replace('/(tabs)');
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Помилка');
+      setError(e?.response?.data?.detail || 'Error');
     } finally {
       setLoading(false);
     }
@@ -48,9 +48,9 @@ export default function VerifyEmail() {
     try {
       await api.resendVerification({ email });
       setCooldown(60);
-      Alert.alert('Надіслано', 'Новий код надіслано на email');
+      Alert.alert('Sent', 'A new code was sent to your email');
     } catch (e: any) {
-      const detail = e?.response?.data?.detail || 'Помилка';
+      const detail = e?.response?.data?.detail || 'Error';
       if (detail.includes('60')) setCooldown(60);
       setError(detail);
     } finally {
@@ -64,15 +64,15 @@ export default function VerifyEmail() {
         <TouchableOpacity onPress={() => router.back()} style={s.back}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={s.title}>Підтвердіть email</Text>
+        <Text style={s.title}>Verify your email</Text>
       </View>
       <View style={s.body}>
         <View style={s.iconCircle}>
           <Ionicons name="mail-open-outline" size={48} color="#2563eb" />
         </View>
-        <Text style={s.h1}>Перевірте пошту</Text>
+        <Text style={s.h1}>Check your inbox</Text>
         <Text style={s.subtitle}>
-          Ми надіслали 6-значний код на{'\n'}
+          We sent a 6-digit code to{'\n'}
           <Text style={{ fontWeight: '700', color: '#111827' }}>{email}</Text>
         </Text>
         <TextInput
@@ -93,15 +93,15 @@ export default function VerifyEmail() {
           disabled={loading || code.length !== 6}
           data-testid="verify-submit-btn"
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Підтвердити</Text>}
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Confirm</Text>}
         </TouchableOpacity>
         <TouchableOpacity onPress={resend} disabled={resending || cooldown > 0} data-testid="resend-code-btn">
           <Text style={s.resend}>
-            {cooldown > 0 ? `Надіслати знов через ${cooldown}с` : resending ? 'Надсилаю…' : 'Не отримали код? Надіслати знов'}
+            {cooldown > 0 ? `Resend in ${cooldown}s` : resending ? 'Sending…' : "Didn't get the code? Resend"}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={{ marginTop: 20 }} data-testid="skip-verify-btn">
-          <Text style={s.skip}>Пропустити поки що</Text>
+          <Text style={s.skip}>Skip for now</Text>
         </TouchableOpacity>
       </View>
     </View>

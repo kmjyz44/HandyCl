@@ -199,3 +199,12 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 ## 2026-06-28 — Переклад: tasks.tsx (список завдань) DONE
 - app/(tabs)/tasks.tsx повністю EN: CATEGORIES, STATUS_LABELS, таби (Available/Mine/Confirm/Done), картки завдань, ціни ($, /hr, hours), 2-крокове підтвердження (Executor/Admin), empty states, doneSummary (Hours/Amount/Tips/Total $). 0 UA рядків.
 - Наступне за порядком: task-detail.tsx -> payment flow -> profile. Потім решта файлів + укр.міста в index.tsx.
+
+## 2026-06-28 — US Adaptation: FULL UI + backend translation to English (COMPLETE)
+- Re-audited with Unicode-aware grep (prior agent's [А-Яа-я] grep gave false "0" due to C-locale byte ranges). ~40 frontend files + server.py still had Ukrainian — now ALL translated to US English.
+- FRONTEND (40 .tsx/.ts files): task-detail, payment-success/cancelled, payout-setup, my-profile (incl. full skill catalog: names/tools/descriptions), index (booking flow + hero + steps), dashboard, booking-detail, bookings, earnings, create-task, profile, executors, executor/[id], availability, notifications, community, messages, support-inbox, admin-integrations, admin-payments, admin-support-requests, admin-payment-stats, users, help-center, blog-create, blog/[id], _layout, verify-phone, task-chat, verify-email, support-chat, login, register, services, PaymentReminderBanner, EmailVerificationBanner, ConfirmHost, api.ts. All validated with @babel/parser (jsx+typescript) — ALL_OK 40/40.
+- FORMATTING: currency грн/₴ → $; rates → $X/hr; hours → hr; dates uk-UA → en-US (MM/DD), 12h clock; distances км → mi; DAYS arrays → Mon..Sun / Monday..Sunday; month arrays → English.
+- index.tsx US DEFAULTS: userCountry default 'US' (was 'UA'), quickCities default = US cities (New York, LA, Chicago, Houston, Phoenix, Philadelphia); IP fallback 'US'; UA city map transliterated to Latin (Kyiv/Kharkiv/...).
+- BACKEND server.py: notifications (push/in-app), HTTPException details, PDF earnings/tax report (headers, $, MM/DD), help/faq seed, seed category names+descriptions, seed account names, Twilio/Stripe/Finix error messages, card validation messages — all EN. Verified via curl: /api/payments/methods labels EN, /api/help/faq EN. server.py synced to backend/server.py.
+- LEFT INTENTIONALLY UA: utils/i18n.tsx (UA dictionary for language toggle), utils/alert.ts (UA keyword detection for toast type), SKILL_TO_CATEGORY UA-key lookup in server.py (harmless; English ids also map).
+- NOTE: Preview pod serves a CRA wrapper, not Expo — visual verification must happen on Netlify after "Save to GitHub".

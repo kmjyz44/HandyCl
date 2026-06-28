@@ -6,10 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { api } from '../utils/api';
 
-const MONTHS = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const METHOD_LABEL: Record<string, string> = {
-  finix: 'Finix', stripe: 'Stripe', manual: 'Вручну', zelle: 'Zelle', venmo: 'Venmo', paypal: 'PayPal',
+  finix: 'Finix', stripe: 'Stripe', manual: 'Manual', zelle: 'Zelle', venmo: 'Venmo', paypal: 'PayPal',
 };
 
 export default function AdminPaymentStats() {
@@ -47,7 +47,7 @@ export default function AdminPaymentStats() {
         <TouchableOpacity onPress={() => router.back()} data-testid="stats-back-btn">
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.title}>Статистика платежів</Text>
+        <Text style={styles.title}>Payment statistics</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -59,7 +59,7 @@ export default function AdminPaymentStats() {
             onPress={() => { setYear(undefined); setMonth(undefined); }}
             data-testid="filter-year-all"
           >
-            <Text style={[styles.chipText, !year && styles.chipTextActive]}>Усі роки</Text>
+            <Text style={[styles.chipText, !year && styles.chipTextActive]}>All years</Text>
           </TouchableOpacity>
           {(data?.available_years || []).map((y: number) => (
             <TouchableOpacity key={y} style={[styles.chip, year === y && styles.chipActive]} onPress={() => setYear(y)} data-testid={`filter-year-${y}`}>
@@ -68,7 +68,7 @@ export default function AdminPaymentStats() {
           ))}
           <View style={styles.sep} />
           <TouchableOpacity style={[styles.chip, !month && styles.chipActive]} onPress={() => setMonth(undefined)} data-testid="filter-month-all">
-            <Text style={[styles.chipText, !month && styles.chipTextActive]}>Усі міс.</Text>
+            <Text style={[styles.chipText, !month && styles.chipTextActive]}>All months</Text>
           </TouchableOpacity>
           {MONTHS.map((m, i) => (
             <TouchableOpacity key={m} style={[styles.chip, month === i + 1 && styles.chipActive]} onPress={() => setMonth(i + 1)} data-testid={`filter-month-${i + 1}`}>
@@ -91,26 +91,26 @@ export default function AdminPaymentStats() {
             <View style={styles.summaryRow}>
               <View style={[styles.summaryCard, { backgroundColor: '#ecfdf5' }]} data-testid="stat-total">
                 <Text style={styles.summaryVal}>{fmt(data?.total_amount)}</Text>
-                <Text style={styles.summaryLabel}>Загальна сума</Text>
+                <Text style={styles.summaryLabel}>Total amount</Text>
               </View>
               <View style={[styles.summaryCard, { backgroundColor: '#eff6ff' }]} data-testid="stat-commission">
                 <Text style={styles.summaryVal}>{fmt(data?.total_commission)}</Text>
-                <Text style={styles.summaryLabel}>Комісія платформи</Text>
+                <Text style={styles.summaryLabel}>Platform commission</Text>
               </View>
               <View style={[styles.summaryCard, { backgroundColor: '#fef3c7' }]} data-testid="stat-count">
                 <Text style={styles.summaryVal}>{data?.total_count || 0}</Text>
-                <Text style={styles.summaryLabel}>Платежів</Text>
+                <Text style={styles.summaryLabel}>Payments</Text>
               </View>
             </View>
 
             {/* Sort */}
             <View style={styles.sortRow}>
-              <Text style={styles.sortLabel}>Сортувати:</Text>
+              <Text style={styles.sortLabel}>Sort:</Text>
               {[
-                { id: 'date_desc', label: 'Нові' },
-                { id: 'date_asc', label: 'Старі' },
-                { id: 'amount_desc', label: 'Сума ↓' },
-                { id: 'amount_asc', label: 'Сума ↑' },
+                { id: 'date_desc', label: 'Newest' },
+                { id: 'date_asc', label: 'Oldest' },
+                { id: 'amount_desc', label: 'Amount ↓' },
+                { id: 'amount_asc', label: 'Amount ↑' },
               ].map((o) => (
                 <TouchableOpacity key={o.id} style={[styles.sortChip, sort === o.id && styles.sortChipActive]} onPress={() => setSort(o.id)} data-testid={`sort-${o.id}`}>
                   <Text style={[styles.sortChipText, sort === o.id && { color: '#fff' }]}>{o.label}</Text>
@@ -121,13 +121,13 @@ export default function AdminPaymentStats() {
             {/* Monthly breakdown */}
             {(data?.by_month || []).length > 0 && (
               <View style={styles.block}>
-                <Text style={styles.blockTitle}>По місяцях</Text>
+                <Text style={styles.blockTitle}>By month</Text>
                 {data.by_month.map((m: any) => (
                   <View key={`${m.year}-${m.month}`} style={styles.monthRow} data-testid={`month-${m.year}-${m.month}`}>
                     <Text style={styles.monthName}>{MONTHS[m.month - 1]} {m.year}</Text>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={styles.monthTotal}>{fmt(m.total)}</Text>
-                      <Text style={styles.monthSub}>комісія {fmt(m.commission)} · {m.count} пл.</Text>
+                      <Text style={styles.monthSub}>commission {fmt(m.commission)} · {m.count} pmts</Text>
                     </View>
                   </View>
                 ))}
@@ -136,9 +136,9 @@ export default function AdminPaymentStats() {
 
             {/* Payments list */}
             <View style={styles.block}>
-              <Text style={styles.blockTitle}>Платежі ({data?.payments?.length || 0})</Text>
+              <Text style={styles.blockTitle}>Payments ({data?.payments?.length || 0})</Text>
               {(data?.payments || []).length === 0 ? (
-                <Text style={styles.empty}>Платежів за обраний період немає</Text>
+                <Text style={styles.empty}>No payments for the selected period</Text>
               ) : (
                 data.payments.map((p: any) => (
                   <View key={p.transaction_id} style={styles.payRow} data-testid={`payment-${p.transaction_id}`}>
@@ -149,7 +149,7 @@ export default function AdminPaymentStats() {
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={styles.payAmount}>{fmt(p.amount, p.currency)}</Text>
-                      <Text style={styles.payCommission}>комісія {fmt(p.commission, p.currency)}</Text>
+                      <Text style={styles.payCommission}>commission {fmt(p.commission, p.currency)}</Text>
                     </View>
                   </View>
                 ))

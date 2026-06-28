@@ -33,11 +33,11 @@ export default function Profile() {
   const handleLogout = async () => {
     // On web, Alert.alert with buttons doesn't work — use window.confirm instead
     const confirmed = Platform.OS === 'web'
-      ? window.confirm('Ви впевнені, що хочете вийти?')
+      ? window.confirm('Are you sure you want to log out?')
       : await new Promise<boolean>((resolve) => {
-          Alert.alert('Вийти', 'Ви впевнені, що хочете вийти?', [
-            { text: 'Скасувати', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Вийти', style: 'destructive', onPress: () => resolve(true) },
+          Alert.alert('Log out', 'Are you sure you want to log out?', [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Log out', style: 'destructive', onPress: () => resolve(true) },
           ]);
         });
     if (!confirmed) return;
@@ -46,18 +46,18 @@ export default function Profile() {
       await logout();
       router.replace('/login');
     } catch (error: any) {
-      Alert.alert('Помилка', error.message || 'Не вдалося вийти');
+      Alert.alert('Error', error.message || 'Could not log out');
     }
   };
 
   const pickProfilePhoto = async () => {
-    Alert.alert('Фото профілю', 'Оберіть опцію', [
+    Alert.alert('Profile photo', 'Choose an option', [
       {
-        text: 'Зробити фото',
+        text: 'Take a photo',
         onPress: async () => {
           const permission = await ImagePicker.requestCameraPermissionsAsync();
           if (!permission.granted) {
-            Alert.alert('Помилка', 'Потрібен доступ до камери');
+            Alert.alert('Error', 'Camera access is required');
             return;
           }
 
@@ -74,11 +74,11 @@ export default function Profile() {
         },
       },
       {
-        text: 'Обрати з галереї',
+        text: 'Choose from gallery',
         onPress: async () => {
           const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (!permission.granted) {
-            Alert.alert('Помилка', 'Потрібен доступ до галереї');
+            Alert.alert('Error', 'Gallery access is required');
             return;
           }
 
@@ -96,13 +96,13 @@ export default function Profile() {
         },
       },
       {
-        text: 'Видалити фото',
+        text: 'Delete photo',
         style: 'destructive',
         onPress: async () => {
           await uploadPhoto('');
         },
       },
-      { text: 'Скасувати', style: 'cancel' },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
@@ -112,9 +112,9 @@ export default function Profile() {
       const picture = base64 ? `data:image/jpeg;base64,${base64}` : '';
       const updatedUser = await api.updateProfile({ picture });
       setUser(updatedUser);
-      Alert.alert('Успіх', base64 ? 'Фото оновлено' : 'Фото видалено');
+      Alert.alert('Success', base64 ? 'Photo updated' : 'Photo deleted');
     } catch (error: any) {
-      Alert.alert('Помилка', error.message || 'Не вдалося оновити фото');
+      Alert.alert('Error', error.message || 'Could not update photo');
     } finally {
       setUploadingPhoto(false);
     }
@@ -128,7 +128,7 @@ export default function Profile() {
 
   const saveProfile = async () => {
     if (!editName.trim()) {
-      Alert.alert('Помилка', "Ім'я не може бути порожнім");
+      Alert.alert('Error', 'Name cannot be empty');
       return;
     }
 
@@ -140,9 +140,9 @@ export default function Profile() {
       });
       setUser(updatedUser);
       setEditModalVisible(false);
-      Alert.alert('Успіх', 'Профіль оновлено');
+      Alert.alert('Success', 'Profile updated');
     } catch (error: any) {
-      Alert.alert('Помилка', error.message || 'Не вдалося оновити профіль');
+      Alert.alert('Error', error.message || 'Could not update profile');
     } finally {
       setSaving(false);
     }
@@ -150,9 +150,9 @@ export default function Profile() {
 
   const getRoleLabel = (role: string) => {
     switch (role) {
-      case 'admin': return 'АДМІН';
-      case 'provider': return 'ВИКОНАВЕЦЬ';
-      case 'client': return 'КЛІЄНТ';
+      case 'admin': return 'ADMIN';
+      case 'provider': return 'PRO';
+      case 'client': return 'CLIENT';
       default: return role?.toUpperCase();
     }
   };
@@ -192,70 +192,70 @@ export default function Profile() {
 
       <ScrollView style={styles.content}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Акаунт</Text>
+          <Text style={styles.sectionTitle}>Account</Text>
 
           <TouchableOpacity style={styles.menuItem} onPress={openEditModal}>
             <Ionicons name="person-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Редагувати профіль</Text>
+            <Text style={styles.menuText}>Edit profile</Text>
             <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Інфо', 'Налаштування сповіщень скоро')}
+            onPress={() => Alert.alert('Info', 'Notification settings coming soon')}
           >
             <Ionicons name="notifications-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Сповіщення</Text>
+            <Text style={styles.menuText}>Notifications</Text>
             <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Інфо', 'Telegram сповіщення скоро')}
+            onPress={() => Alert.alert('Info', 'Telegram notifications coming soon')}
           >
             <Ionicons name="paper-plane-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Telegram сповіщення</Text>
+            <Text style={styles.menuText}>Telegram notifications</Text>
             <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Підтримка</Text>
+          <Text style={styles.sectionTitle}>Support</Text>
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Допомога', 'Зверніться до support@handyhub.com')}
+            onPress={() => Alert.alert('Help', 'Contact support@handyhub.com')}
           >
             <Ionicons name="help-circle-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Допомога</Text>
+            <Text style={styles.menuText}>Help</Text>
             <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Інфо', 'Умови використання скоро')}
+            onPress={() => Alert.alert('Info', 'Terms of Use coming soon')}
           >
             <Ionicons name="document-text-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Умови використання</Text>
+            <Text style={styles.menuText}>Terms of Use</Text>
             <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Інфо', 'Політика конфіденційності скоро')}
+            onPress={() => Alert.alert('Info', 'Privacy Policy coming soon')}
           >
             <Ionicons name="shield-checkmark-outline" size={24} color="#6b7280" />
-            <Text style={styles.menuText}>Політика конфіденційності</Text>
+            <Text style={styles.menuText}>Privacy Policy</Text>
             <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={24} color="#ef4444" />
-          <Text style={styles.logoutText}>Вийти</Text>
+          <Text style={styles.logoutText}>Log out</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>Версія 1.0.0</Text>
+        <Text style={styles.version}>Version 1.0.0</Text>
       </ScrollView>
 
       {/* Edit Profile Modal */}
@@ -266,22 +266,22 @@ export default function Profile() {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Редагувати профіль</Text>
+              <Text style={styles.modalTitle}>Edit profile</Text>
               <TouchableOpacity onPress={() => setEditModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.label}>Ім'я</Text>
+              <Text style={styles.label}>Name</Text>
               <TextInput
                 style={styles.input}
                 value={editName}
                 onChangeText={setEditName}
-                placeholder="Ваше ім'я"
+                placeholder="Your name"
               />
 
-              <Text style={styles.label}>Телефон</Text>
+              <Text style={styles.label}>Phone</Text>
               <TextInput
                 style={styles.input}
                 value={editPhone}
@@ -296,7 +296,7 @@ export default function Profile() {
                 style={[styles.button, styles.cancelButton]}
                 onPress={() => setEditModalVisible(false)}
               >
-                <Text style={styles.cancelButtonText}>Скасувати</Text>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.button, styles.saveButton]}
@@ -306,7 +306,7 @@ export default function Profile() {
                 {saving ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Зберегти</Text>
+                  <Text style={styles.saveButtonText}>Save</Text>
                 )}
               </TouchableOpacity>
             </View>

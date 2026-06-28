@@ -9,10 +9,10 @@ import { api } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
 
 const ROLE_LABELS: Record<string, string> = {
-  client:    'Клієнт',
-  provider:  'Виконавець',
-  admin:     'Адмін',
-  moderator: 'Модератор',
+  client:    'Client',
+  provider:  'Pro',
+  admin:     'Admin',
+  moderator: 'Moderator',
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -74,7 +74,7 @@ function pickImageWeb(): Promise<string | null> {
       const file = input.files?.[0];
       if (!file) { resolve(null); return; }
       if (file.size > 5 * 1024 * 1024) {
-        Alert.alert('Файл занадто великий', 'Максимальний розмір фото — 5 МБ');
+        Alert.alert('File too large', 'Maximum photo size is 5 MB');
         resolve(null);
         return;
       }
@@ -124,11 +124,11 @@ export default function TaskChat() {
           const othersNewMsgs = newMsgs.filter((m: any) => m.from_user_id !== user?.user_id);
           if (othersNewMsgs.length > 0) {
             const lastNew = othersNewMsgs[othersNewMsgs.length - 1];
-            const senderName = lastNew.sender?.name || 'Новe повідомлення';
+            const senderName = lastNew.sender?.name || 'New message';
             playNotificationSound();
             showBrowserNotification(
               senderName,
-              lastNew.text || (lastNew.image_url ? '📷 Фото' : 'Нове повідомлення')
+              lastNew.text || (lastNew.image_url ? '📷 Photo' : 'New message')
             );
           }
         }
@@ -172,7 +172,7 @@ export default function TaskChat() {
     } catch (e: any) {
       setText(msgText);
       setPendingImage(imgData);
-      Alert.alert('Помилка', e?.response?.data?.detail || e.message || 'Не вдалося відправити');
+      Alert.alert('Error', e?.response?.data?.detail || e.message || 'Could not send');
     } finally {
       setSending(false);
     }
@@ -183,13 +183,13 @@ export default function TaskChat() {
       const img = await pickImageWeb();
       if (img) setPendingImage(img);
     } else {
-      Alert.alert('Фото', 'Функція доступна у веб-версії додатку');
+      Alert.alert('Photo', 'This feature is available in the web version');
     }
   };
 
   const renderMessage = ({ item }: { item: any }) => {
     const isMe = item.from_user_id === user?.user_id;
-    const senderName = item.sender?.name || 'Користувач';
+    const senderName = item.sender?.name || 'User';
     const senderRole = item.sender?.role || 'client';
     const senderPhoto = item.sender?.picture;
     const roleColor = ROLE_COLORS[senderRole] || '#6b7280';
@@ -260,9 +260,9 @@ export default function TaskChat() {
         </TouchableOpacity>
         <View style={s.headerInfo}>
           <Text style={s.headerTitle} numberOfLines={1}>
-            {taskTitle || 'Чат завдання'}
+            {taskTitle || 'Task chat'}
           </Text>
-          <Text style={s.headerSub}>Клієнт · Виконавець · Підтримка</Text>
+          <Text style={s.headerSub}>Client · Pro · Support</Text>
         </View>
         <View style={s.headerAvatars}>
           {['client', 'provider', 'admin'].map((role) => (
@@ -290,8 +290,8 @@ export default function TaskChat() {
           ListEmptyComponent={
             <View style={s.emptyBox}>
               <Ionicons name="chatbubbles-outline" size={48} color="#d1d5db" />
-              <Text style={s.emptyText}>Поки немає повідомлень</Text>
-              <Text style={s.emptyHint}>Напишіть першим!</Text>
+              <Text style={s.emptyText}>No messages yet</Text>
+              <Text style={s.emptyHint}>Be the first to write!</Text>
             </View>
           }
         />
@@ -304,7 +304,7 @@ export default function TaskChat() {
           <TouchableOpacity style={s.pendingImgRemove} onPress={() => setPendingImage(null)}>
             <Ionicons name="close-circle" size={22} color="#ef4444" />
           </TouchableOpacity>
-          <Text style={s.pendingImgLabel}>Фото готове до відправки</Text>
+          <Text style={s.pendingImgLabel}>Photo ready to send</Text>
         </View>
       )}
 
@@ -319,7 +319,7 @@ export default function TaskChat() {
           style={s.input}
           value={text}
           onChangeText={setText}
-          placeholder="Написати повідомлення..."
+          placeholder="Write a message..."
           placeholderTextColor="#9ca3af"
           multiline
           maxLength={1000}

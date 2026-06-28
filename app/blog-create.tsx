@@ -10,8 +10,8 @@ import { api } from '../utils/api';
 import { showAlert } from '../utils/alert';
 
 const SUGGESTED_TAGS = [
-  'ремонт', 'прибирання', 'сантехніка', 'електрика', 'меблі',
-  'переїзд', 'дизайн', 'до-і-після', 'порада', 'відгук',
+  'repair', 'cleaning', 'plumbing', 'electrical', 'furniture',
+  'moving', 'design', 'before-after', 'tip', 'review',
 ];
 
 export default function BlogCreate() {
@@ -25,13 +25,13 @@ export default function BlogCreate() {
 
   const pickImage = async () => {
     if (images.length >= 10) {
-      showAlert('Ліміт', 'Максимум 10 зображень на пост');
+      showAlert('Limit', 'Maximum 10 images per post');
       return;
     }
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted && Platform.OS !== 'web') {
-        showAlert('Дозвіл', 'Потрібен доступ до галереї');
+        showAlert('Permission', 'Gallery access is required');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -47,7 +47,7 @@ export default function BlogCreate() {
         .filter(Boolean) as string[];
       setImages((prev) => [...prev, ...added].slice(0, 10));
     } catch (e: any) {
-      showAlert('Помилка', e?.message || 'Не вдалось вибрати фото');
+      showAlert('Error', e?.message || 'Could not select a photo');
     }
   };
 
@@ -68,8 +68,8 @@ export default function BlogCreate() {
   };
 
   const submit = async () => {
-    if (title.trim().length < 3) { showAlert('Помилка', 'Заголовок мінімум 3 символи'); return; }
-    if (description.trim().length < 10) { showAlert('Помилка', 'Опис мінімум 10 символів'); return; }
+    if (title.trim().length < 3) { showAlert('Error', 'Title must be at least 3 characters'); return; }
+    if (description.trim().length < 10) { showAlert('Error', 'Description must be at least 10 characters'); return; }
     setSaving(true);
     try {
       const r = await api.createBlogPost({
@@ -78,10 +78,10 @@ export default function BlogCreate() {
         images,
         tags,
       });
-      showAlert('Готово', 'Пост опубліковано!');
+      showAlert('Done', 'Post published!');
       router.replace(`/blog/${r.post_id}` as any);
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось опублікувати');
+      showAlert('Error', e?.response?.data?.detail || 'Could not publish');
     } finally {
       setSaving(false);
     }
@@ -91,7 +91,7 @@ export default function BlogCreate() {
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <Stack.Screen
         options={{
-          title: 'Нова публікація',
+          title: 'New post',
           headerRight: () => (
             <TouchableOpacity
               onPress={submit}
@@ -101,14 +101,14 @@ export default function BlogCreate() {
             >
               {saving
                 ? <ActivityIndicator color="#2563eb" size="small" />
-                : <Text style={{ color: '#2563eb', fontWeight: '700', fontSize: 14 }}>Публікувати</Text>}
+                : <Text style={{ color: '#2563eb', fontWeight: '700', fontSize: 14 }}>Publish</Text>}
             </TouchableOpacity>
           ),
         }}
       />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
         {/* Images */}
-        <Text style={styles.label}>Фото ({images.length}/10)</Text>
+        <Text style={styles.label}>Photos ({images.length}/10)</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {images.map((img, i) => (
             <View key={i} style={styles.imageWrap}>
@@ -121,28 +121,28 @@ export default function BlogCreate() {
           {images.length < 10 && (
             <TouchableOpacity onPress={pickImage} style={styles.addImg} data-testid="add-image-btn">
               <Ionicons name="add" size={32} color="#9ca3af" />
-              <Text style={styles.addImgText}>Додати</Text>
+              <Text style={styles.addImgText}>Add</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
 
         {/* Title */}
-        <Text style={styles.label}>Заголовок</Text>
+        <Text style={styles.label}>Title</Text>
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="До і після: відновили старі двері"
+          placeholder="Before and after: restored old doors"
           style={styles.input}
           maxLength={200}
           data-testid="title-input"
         />
 
         {/* Description */}
-        <Text style={styles.label}>Опис / історія</Text>
+        <Text style={styles.label}>Description / story</Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
-          placeholder="Розкажи що робив, які матеріали, скільки часу зайняло, який результат..."
+          placeholder="Tell what you did, what materials, how long it took, and the result..."
           style={[styles.input, styles.textarea]}
           multiline
           numberOfLines={6}
@@ -151,7 +151,7 @@ export default function BlogCreate() {
         />
 
         {/* Tags */}
-        <Text style={styles.label}>Теги ({tags.length}/10)</Text>
+        <Text style={styles.label}>Tags ({tags.length}/10)</Text>
         <View style={styles.tagRow}>
           {tags.map((t) => (
             <TouchableOpacity key={t} onPress={() => removeTag(t)} style={styles.tagChip} data-testid={`tag-${t}`}>
@@ -165,7 +165,7 @@ export default function BlogCreate() {
             value={tagInput}
             onChangeText={setTagInput}
             onSubmitEditing={() => addTag(tagInput)}
-            placeholder="Додати тег..."
+            placeholder="Add a tag..."
             style={[styles.input, { flex: 1 }]}
             data-testid="tag-input"
           />
@@ -174,7 +174,7 @@ export default function BlogCreate() {
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.sub, { marginTop: 8 }]}>Підказки:</Text>
+        <Text style={[styles.sub, { marginTop: 8 }]}>Suggestions:</Text>
         <View style={styles.tagRow}>
           {SUGGESTED_TAGS.filter((t) => !tags.includes(t)).map((t) => (
             <TouchableOpacity key={t} onPress={() => addTag(t)} style={styles.tagSuggest}>
@@ -189,7 +189,7 @@ export default function BlogCreate() {
           disabled={saving}
           data-testid="publish-bottom-btn"
         >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.publishBtnText}>Опублікувати</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.publishBtnText}>Publish</Text>}
         </TouchableOpacity>
       </ScrollView>
     </View>

@@ -25,9 +25,9 @@ export default function ServiceAreaScreen() {
             service_radius_km: data.radius,
           }).then(() => {
             loadProfile();
-            Alert.alert('Збережено', `Зона роботи: ${data.radius} км`);
+            Alert.alert('Saved', `Service area: ${data.radius} mi`);
           }).catch((err: any) => {
-            Alert.alert('Помилка', err.message || 'Не вдалося зберегти');
+            Alert.alert('Error', err.message || 'Could not save');
           });
         }
       } catch {}
@@ -58,9 +58,9 @@ export default function ServiceAreaScreen() {
   if (Platform.OS !== 'web') {
     return (
       <View style={styles.center}>
-        <Text style={styles.title}>Зона роботи</Text>
+        <Text style={styles.title}>Service area</Text>
         <Text style={styles.subtitle}>
-          Відкрийте сайт у браузері для налаштування зони роботи на карті.
+          Open the website in a browser to set your service area on the map.
         </Text>
       </View>
     );

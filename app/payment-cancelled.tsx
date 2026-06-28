@@ -7,15 +7,15 @@ export default function PaymentCancelled() {
   const router = useRouter();
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Оплата скасована', headerShown: false }} />
+      <Stack.Screen options={{ title: 'Payment cancelled', headerShown: false }} />
       <View style={styles.card}>
         <View style={styles.iconWrap}>
           <Ionicons name="close-circle" size={64} color="#dc2626" />
         </View>
-        <Text style={styles.title}>Оплату скасовано</Text>
-        <Text style={styles.sub}>Ти повернувся з Stripe без завершення платежу. Завдання залишається у статусі «очікує оплати».</Text>
+        <Text style={styles.title}>Payment cancelled</Text>
+        <Text style={styles.sub}>You returned from Stripe without completing the payment. The task remains in the "awaiting payment" status.</Text>
         <TouchableOpacity style={styles.btn} onPress={() => router.replace('/(tabs)' as any)} data-testid="back-to-app-btn">
-          <Text style={styles.btnText}>Повернутись</Text>
+          <Text style={styles.btnText}>Go back</Text>
         </TouchableOpacity>
       </View>
     </View>

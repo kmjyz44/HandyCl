@@ -12,7 +12,7 @@ import { showAlert } from '../utils/alert';
 function fmt(ts: string) {
   try {
     const d = new Date(ts);
-    return d.toLocaleString('uk-UA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
+    return d.toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', hour12: true });
   } catch { return ''; }
 }
 
@@ -32,7 +32,7 @@ export default function SupportChat() {
       const msgs = await api.getDirectMessages(a.user_id);
       setMessages(Array.isArray(msgs) ? msgs : []);
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось завантажити чат');
+      showAlert('Error', e?.response?.data?.detail || 'Could not load the chat');
     } finally {
       setLoading(false);
     }
@@ -40,7 +40,7 @@ export default function SupportChat() {
 
   useEffect(() => {
     if (!user) {
-      showAlert('Увійди', 'Щоб писати у підтримку, треба увійти в обліковий запис');
+      showAlert('Log in', 'You need to log in to message support');
       setLoading(false);
       return;
     }
@@ -66,7 +66,7 @@ export default function SupportChat() {
       setText('');
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось надіслати');
+      showAlert('Error', e?.response?.data?.detail || 'Could not send');
     } finally {
       setSending(false);
     }
@@ -79,7 +79,7 @@ export default function SupportChat() {
     return (
       <View style={styles.center}>
         <Ionicons name="lock-closed-outline" size={48} color="#9ca3af" />
-        <Text style={styles.empty}>Увійди, щоб писати в підтримку</Text>
+        <Text style={styles.empty}>Log in to message support</Text>
       </View>
     );
   }
@@ -87,7 +87,7 @@ export default function SupportChat() {
     return (
       <View style={styles.center}>
         <Ionicons name="alert-circle-outline" size={48} color="#9ca3af" />
-        <Text style={styles.empty}>Адміна поки не призначено</Text>
+        <Text style={styles.empty}>No admin assigned yet</Text>
       </View>
     );
   }
@@ -96,7 +96,7 @@ export default function SupportChat() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#f3f4f6' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen
         options={{
-          title: admin.name || 'Підтримка',
+          title: admin.name || 'Support',
           headerTitle: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {admin.avatar ? (
@@ -108,7 +108,7 @@ export default function SupportChat() {
               )}
               <View>
                 <Text style={styles.headerName}>{admin.name}</Text>
-                <Text style={styles.headerStatus}>Підтримка HandyHub</Text>
+                <Text style={styles.headerStatus}>HandyHub Support</Text>
               </View>
             </View>
           ),
@@ -125,10 +125,10 @@ export default function SupportChat() {
             <View style={styles.introIcon}>
               <Ionicons name="chatbubbles" size={28} color="#fff" />
             </View>
-            <Text style={styles.introTitle}>Привіт! 👋</Text>
+            <Text style={styles.introTitle}>Hi! 👋</Text>
             <Text style={styles.introText}>
-              Напиши коротко, що сталось — наш адмін прочитає й відповість тут.
-              Зазвичай відповідаємо протягом кількох годин.
+              Briefly describe what happened — our admin will read and reply here.
+              We usually reply within a few hours.
             </Text>
           </View>
         }
@@ -150,7 +150,7 @@ export default function SupportChat() {
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="Опиши свою проблему..."
+          placeholder="Describe your issue..."
           style={styles.input}
           multiline
           data-testid="support-chat-input"

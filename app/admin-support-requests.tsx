@@ -9,15 +9,15 @@ import { api } from '../utils/api';
 import { showAlert } from '../utils/alert';
 
 const STATUSES = [
-  { id: '',            label: 'Усі',         color: '#6b7280' },
-  { id: 'new',         label: 'Нові',        color: '#2563eb' },
-  { id: 'in_progress', label: 'В роботі',    color: '#d97706' },
-  { id: 'resolved',    label: 'Вирішено',    color: '#16a34a' },
-  { id: 'closed',      label: 'Закрито',     color: '#6b7280' },
+  { id: '',            label: 'All',        color: '#6b7280' },
+  { id: 'new',         label: 'New',        color: '#2563eb' },
+  { id: 'in_progress', label: 'In progress', color: '#d97706' },
+  { id: 'resolved',    label: 'Resolved',   color: '#16a34a' },
+  { id: 'closed',      label: 'Closed',     color: '#6b7280' },
 ];
 
 const CATEGORY_LABEL: Record<string, string> = {
-  bug: 'Помилка', billing: 'Платежі', feature: 'Ідея', other: 'Інше',
+  bug: 'Bug', billing: 'Billing', feature: 'Idea', other: 'Other',
 };
 
 function fmt(ts: string) {
@@ -39,7 +39,7 @@ export default function AdminSupportRequests() {
       const r = await api.listSupportRequests({ status: filter || undefined, limit: 100 });
       setItems(r?.items || []);
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось завантажити');
+      showAlert('Error', e?.response?.data?.detail || 'Could not load');
     } finally {
       setLoading(false);
     }
@@ -52,11 +52,11 @@ export default function AdminSupportRequests() {
     setSaving(true);
     try {
       await api.updateSupportRequest(selected.request_id, { status, notes });
-      showAlert('Готово', 'Статус оновлено');
+      showAlert('Done', 'Status updated');
       setSelected(null);
       load();
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+      showAlert('Error', e?.response?.data?.detail || 'Failed');
     } finally {
       setSaving(false);
     }
@@ -64,7 +64,7 @@ export default function AdminSupportRequests() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Звернення підтримки' }} />
+      <Stack.Screen options={{ title: 'Support requests' }} />
 
       {/* Filter chips */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterBar} contentContainerStyle={{ gap: 6, paddingHorizontal: 12 }}>
@@ -90,7 +90,7 @@ export default function AdminSupportRequests() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="mail-open-outline" size={48} color="#9ca3af" />
-              <Text style={styles.emptyText}>Поки немає звернень</Text>
+              <Text style={styles.emptyText}>No requests yet</Text>
             </View>
           }
           renderItem={({ item }) => {
@@ -108,7 +108,7 @@ export default function AdminSupportRequests() {
                   <Text style={styles.catLabel}>{CATEGORY_LABEL[item.category] || item.category}</Text>
                   <Text style={styles.time}>{fmt(item.created_at)}</Text>
                 </View>
-                <Text style={styles.subject}>{item.subject || '(без теми)'}</Text>
+                <Text style={styles.subject}>{item.subject || '(no subject)'}</Text>
                 <Text style={styles.from}>{item.name} · {item.email}</Text>
                 <Text style={styles.preview} numberOfLines={2}>{item.message}</Text>
               </TouchableOpacity>
@@ -122,30 +122,30 @@ export default function AdminSupportRequests() {
         <View style={styles.modalBg}>
           <View style={styles.modal}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{selected?.subject || 'Звернення'}</Text>
+              <Text style={styles.modalTitle}>{selected?.subject || 'Request'}</Text>
               <TouchableOpacity onPress={() => setSelected(null)} data-testid="close-detail-btn">
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             {selected && (
               <ScrollView style={{ maxHeight: 500 }}>
-                <Text style={styles.label}>Від</Text>
+                <Text style={styles.label}>From</Text>
                 <Text style={styles.value}>{selected.name}</Text>
                 <TouchableOpacity onPress={() => Linking.openURL(`mailto:${selected.email}`)} data-testid="reply-email-btn">
                   <Text style={[styles.value, { color: '#2563eb', textDecorationLine: 'underline' }]}>{selected.email}</Text>
                 </TouchableOpacity>
 
-                <Text style={styles.label}>Категорія</Text>
+                <Text style={styles.label}>Category</Text>
                 <Text style={styles.value}>{CATEGORY_LABEL[selected.category] || selected.category}</Text>
 
-                <Text style={styles.label}>Повідомлення</Text>
+                <Text style={styles.label}>Message</Text>
                 <Text style={styles.msgFull}>{selected.message}</Text>
 
-                <Text style={styles.label}>Внутрішні нотатки</Text>
+                <Text style={styles.label}>Internal notes</Text>
                 <TextInput
                   value={notes}
                   onChangeText={setNotes}
-                  placeholder="Що зробив, що вирішив, кому пересилаю..."
+                  placeholder="What you did, what you decided, who you're forwarding to..."
                   multiline
                   numberOfLines={4}
                   style={styles.notes}
@@ -162,13 +162,13 @@ export default function AdminSupportRequests() {
 
             <View style={styles.actionRow}>
               <TouchableOpacity style={[styles.actBtn, { backgroundColor: '#2563eb' }]} onPress={() => updateStatus('in_progress')} disabled={saving} data-testid="mark-progress-btn">
-                <Text style={styles.actBtnText}>В роботу</Text>
+                <Text style={styles.actBtnText}>Start</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.actBtn, { backgroundColor: '#16a34a' }]} onPress={() => updateStatus('resolved')} disabled={saving} data-testid="mark-resolved-btn">
-                <Text style={styles.actBtnText}>Вирішено</Text>
+                <Text style={styles.actBtnText}>Resolved</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.actBtn, { backgroundColor: '#6b7280' }]} onPress={() => updateStatus('closed')} disabled={saving} data-testid="mark-closed-btn">
-                <Text style={styles.actBtnText}>Закрити</Text>
+                <Text style={styles.actBtnText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>

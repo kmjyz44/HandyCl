@@ -54,7 +54,7 @@ function fmtTime(iso?: string | null): string {
     const normalized = /[Z+]/.test(iso) ? iso : iso + 'Z';
     const d = new Date(normalized);
     const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(d.getDate())}.${p(d.getMonth()+1)} о ${p(d.getHours())}:${p(d.getMinutes())}`;
+    return `${p(d.getMonth()+1)}/${p(d.getDate())} ${((d.getHours()%12)||12)}:${p(d.getMinutes())} ${d.getHours()<12?'AM':'PM'}`;
   } catch { return '—'; }
 }
 
@@ -68,19 +68,19 @@ function calcDuration(start?: string | null, end?: string | null): string {
     if (diff <= 0) return '—';
     const h = Math.floor(diff / 3600000);
     const m = Math.round((diff % 3600000) / 60000);
-    if (h === 0) return `${m} хв`;
-    if (m === 0) return `${h} год`;
-    return `${h} год ${m} хв`;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
   } catch { return '—'; }
 }
 
 // ─── Payment methods by country ───────────────────────────────────────────────
 const UA_METHODS = [
-  { id: 'stripe',      label: 'Картка (Stripe — тестова)', icon: 'card', color: '#635bff' },
+  { id: 'stripe',      label: 'Card (Stripe — test)', icon: 'card', color: '#635bff' },
   { id: 'monobank',    label: 'Monobank',    icon: 'card', color: '#1a1a2e' },
-  { id: 'privatbank',  label: 'ПриватБанк',  icon: 'card', color: '#007bff' },
-  { id: 'cash',        label: 'Готівка',     icon: 'cash', color: '#22c55e' },
-  { id: 'other_ua',    label: 'Інший банк',  icon: 'wallet', color: '#6b7280' },
+  { id: 'privatbank',  label: 'PrivatBank',  icon: 'card', color: '#007bff' },
+  { id: 'cash',        label: 'Cash',     icon: 'cash', color: '#22c55e' },
+  { id: 'other_ua',    label: 'Other bank',  icon: 'wallet', color: '#6b7280' },
 ];
 const US_METHODS = [
   { id: 'stripe', label: 'Credit/Debit Card (Stripe)', icon: 'card',   color: '#635bff' },
@@ -104,7 +104,7 @@ export default function TaskDetail() {
   const [showInvoice, setShowInvoice] = useState(false);
   const [hours, setHours] = useState('');
   const [materials, setMaterials] = useState('');
-  const [closingMsg, setClosingMsg] = useState('Дякую за довіру! Якщо вам сподобалась робота — залиште відгук.');
+  const [closingMsg, setClosingMsg] = useState('Thank you for your trust! If you liked the work, please leave a review.');
   const [ongoingJob, setOngoingJob] = useState(false);
 
   // Payment modal
@@ -130,9 +130,9 @@ export default function TaskDetail() {
     const bookingId = task?.booking_id || taskId;
 
     const handleToken = async (err: any, res: any) => {
-      if (err) { setFinixError('Перевірте дані картки'); setFinixProcessing(false); return; }
+      if (err) { setFinixError('Please check your card details'); setFinixProcessing(false); return; }
       const token = res?.data?.id;
-      if (!token) { setFinixError('Не вдалося отримати токен картки'); setFinixProcessing(false); return; }
+      if (!token) { setFinixError('Could not get card token'); setFinixProcessing(false); return; }
       try {
         const r = await api.finixCharge({ booking_id: bookingId, source: token });
         if (r?.state === 'SUCCEEDED' || r?.state === 'PENDING' || r?.ok) {
@@ -141,10 +141,10 @@ export default function TaskDetail() {
           try { await loadTask(); } catch (_) {}
           setTimeout(() => setShowReview(true), 400);
         } else {
-          setFinixError('Платіж не пройшов. Спробуйте іншу картку.');
+          setFinixError('Payment failed. Please try another card.');
         }
       } catch (e: any) {
-        setFinixError(e?.response?.data?.detail || 'Помилка оплати Finix');
+        setFinixError(e?.response?.data?.detail || 'Finix payment error');
       } finally {
         setFinixProcessing(false);
       }
@@ -160,7 +160,7 @@ export default function TaskDetail() {
           onSubmit: handleToken,
         });
       } catch (e) {
-        setFinixError('Не вдалося завантажити форму оплати');
+        setFinixError('Could not load the payment form');
       }
     };
 
@@ -187,7 +187,7 @@ export default function TaskDetail() {
     try {
       finixFormRef.current?.submit();
     } catch (e) {
-      setFinixError('Заповніть дані картки');
+      setFinixError('Please fill in your card details');
       setFinixProcessing(false);
     }
   };
@@ -232,7 +232,7 @@ export default function TaskDetail() {
         setTaskId(data.task_id);
       }
     } catch (e: any) {
-      Alert.alert('Помилка', 'Не вдалося завантажити завдання');
+      Alert.alert('Error', 'Could not load the task');
       router.back();
     } finally {
       setLoading(false);
@@ -252,23 +252,23 @@ export default function TaskDetail() {
             const newId = res.new_task_id || res.task_id;
             setTaskId(newId);
           }
-          Alert.alert('Успіх', 'Ви прийняли завдання!');
+          Alert.alert('Success', 'You accepted the task!');
           break;
         case 'on_the_way':
           res = await api.onTheWayTask(taskId);
           if (res?.task_id) setTaskId(res.task_id);
-          Alert.alert('Успіх', 'Статус: Виїхав');
+          Alert.alert('Success', 'Status: On the way');
           break;
         case 'start':
           res = await api.startTask(taskId);
           if (res?.task_id) setTaskId(res.task_id);
-          Alert.alert('Успіх', 'Роботу розпочато!');
+          Alert.alert('Success', 'Work started!');
           break;
       }
       await loadTask();
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || e.message || 'Помилка';
-      Alert.alert('Помилка', msg);
+      const msg = e?.response?.data?.detail || e.message || 'Error';
+      Alert.alert('Error', msg);
     } finally {
       setActionLoading(false);
     }
@@ -285,18 +285,18 @@ export default function TaskDetail() {
       const hrs = res?.actual_hours ?? hours ?? '—';
       setShowInvoice(false);
       if (Platform.OS === 'web') {
-        window.alert(`✅ Завдання завершено!\nВідпрацьовано: ${hrs} год\nКлієнт отримає сповіщення про оплату.`);
+        window.alert(`✅ Task completed!\nHours worked: ${hrs} hr\nThe client will be notified to pay.`);
         router.replace('/(tabs)/bookings');
       } else {
         Alert.alert(
-          'Завдання завершено!',
-          `Відпрацьовано: ${hrs} год\nКлієнт отримає сповіщення про оплату.`,
-          [{ text: 'ОК', onPress: () => router.replace('/(tabs)/bookings') }]
+          'Task completed!',
+          `Hours worked: ${hrs} hr\nThe client will be notified to pay.`,
+          [{ text: 'OK', onPress: () => router.replace('/(tabs)/bookings') }]
         );
       }
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || e.message || 'Помилка';
-      Alert.alert('Помилка', msg);
+      const msg = e?.response?.data?.detail || e.message || 'Error';
+      Alert.alert('Error', msg);
     } finally {
       setActionLoading(false);
     }
@@ -310,14 +310,14 @@ export default function TaskDetail() {
 
   const submitPayment = async (forceMethod?: string) => {
     const method = forceMethod || selectedMethod;
-    if (!method) { showAlert('Оберіть спосіб оплати', ''); return; }
+    if (!method) { showAlert('Select a payment method', ''); return; }
     const bookingId = task?.booking_id || taskId;
 
     if (method === 'stripe') {
       setActionLoading(true);
       try {
         const r = await api.startStripeCheckout(bookingId);
-        if (!r?.url) throw new Error('Stripe: не отримано URL для оплати');
+        if (!r?.url) throw new Error('Stripe: no checkout URL received');
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           window.location.href = r.url;
         } else {
@@ -326,7 +326,7 @@ export default function TaskDetail() {
         }
         return;
       } catch (e: any) {
-        showAlert('Помилка оплати', e?.response?.data?.detail || e?.message || 'Не вдалося розпочати оплату через Stripe');
+        showAlert('Payment error', e?.response?.data?.detail || e?.message || 'Could not start Stripe checkout');
         return;
       } finally { setActionLoading(false); }
     }
@@ -339,18 +339,18 @@ export default function TaskDetail() {
         setManualTip(0);
         setShowManualSplit(true);
       } catch (e: any) {
-        showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося завантажити реквізити');
+        showAlert('Error', e?.response?.data?.detail || 'Could not load payment details');
       } finally { setActionLoading(false); }
       return;
     }
 
     if (method === 'finix') {
       if (Platform.OS !== 'web' || typeof window === 'undefined') {
-        showAlert('Недоступно', 'Оплата карткою / Apple Pay / Google Pay доступна у веб-версії сайту.');
+        showAlert('Unavailable', 'Card / Apple Pay / Google Pay payments are available on the website (web version).');
         return;
       }
       const cfg = enabledMethods.find((m: any) => m.id === 'finix');
-      if (!cfg?.application_id) { showAlert('Помилка', 'Finix не налаштовано'); return; }
+      if (!cfg?.application_id) { showAlert('Error', 'Finix is not configured'); return; }
       setShowFinix(true);
       return;
     }
@@ -375,17 +375,17 @@ export default function TaskDetail() {
       });
       setShowManualSplit(false);
       setShowPayment(false);
-      const tipMsg = manualTip > 0 ? ` Ваші чайові +${manualTip} ₴ враховано в сумі переказу виконавцю.` : '';
+      const tipMsg = manualTip > 0 ? ` Your tip of +$${manualTip} is included in the transfer to the pro.` : '';
       Alert.alert(
-        'Дякуємо!',
-        `Адмін перевірить ваш переказ і підтвердить оплату.${tipMsg} Ви отримаєте сповіщення. Залишіть, будь ласка, відгук про виконавця.`,
+        'Thank you!',
+        `The admin will verify your transfer and confirm the payment.${tipMsg} You will be notified. Please leave a review for the pro.`,
       );
       setManualTip(0);
       try { await loadTask(); } catch (_) {}
       // Auto-open the review modal so client can rate the executor immediately
       setTimeout(() => setShowReview(true), 350);
     } catch (e: any) {
-      Alert.alert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+      Alert.alert('Error', e?.response?.data?.detail || 'Failed');
     } finally {
       setActionLoading(false);
     }
@@ -394,7 +394,7 @@ export default function TaskDetail() {
   // Helper: open an external payment app via deep link (web + native)
   const openPaymentApp = (method: string, handle: string, amount: number) => {
     if (!handle) {
-      Alert.alert('Неможливо відкрити', 'Виконавець ще не вказав свій акаунт');
+      Alert.alert('Cannot open', 'The pro has not provided their account yet');
       return;
     }
     const note = encodeURIComponent('HandyHub');
@@ -429,7 +429,7 @@ export default function TaskDetail() {
       if (typeof window !== 'undefined') window.open(url, '_blank');
     } else {
       const { Linking } = require('react-native');
-      Linking.openURL(url).catch(() => Alert.alert('Помилка', `Не вдалося відкрити ${appName}. Додаток встановлений?`));
+      Linking.openURL(url).catch(() => Alert.alert('Error', `Could not open ${appName}. Is the app installed?`));
     }
   };
 
@@ -455,37 +455,37 @@ export default function TaskDetail() {
           const id = `copy-toast-${Date.now()}`;
           const div = document.createElement('div');
           div.id = id;
-          div.textContent = `Скопійовано: ${label || text.slice(0, 30)}`;
+          div.textContent = `Copied: ${label || text.slice(0, 30)}`;
           div.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;z-index:99999;opacity:0;transition:opacity .2s;';
           document.body.appendChild(div);
           requestAnimationFrame(() => { div.style.opacity = '1'; });
           setTimeout(() => { div.style.opacity = '0'; setTimeout(() => div.remove(), 250); }, 1500);
         }
       } else {
-        Alert.alert('Скопійовано', `${label || text}`);
+        Alert.alert('Copied', `${label || text}`);
       }
     } catch (e: any) {
-      Alert.alert('Помилка', 'Не вдалося скопіювати');
+      Alert.alert('Error', 'Could not copy');
     }
   };
 
   const executorConfirmReceipt = async (action: 'confirm' | 'reject') => {
     const bookingId = task?.booking_id || task?.booking?.booking_id || taskId;
     if (!bookingId) {
-      Alert.alert('Помилка', 'Не вдалося знайти ID бронювання');
+      Alert.alert('Error', 'Could not find the booking ID');
       return;
     }
     if (action === 'reject') {
       const confirmed = Platform.OS === 'web'
         // eslint-disable-next-line no-alert
-        ? (typeof window !== 'undefined' && window.confirm('Підтвердити, що ви НЕ отримали платіж? Адмін відкриє спір і зв\'яжеться з клієнтом.'))
+        ? (typeof window !== 'undefined' && window.confirm('Confirm that you did NOT receive the payment? The admin will open a dispute and contact the client.'))
         : await new Promise<boolean>(resolve => {
             Alert.alert(
-              'Не отримано платежу?',
-              'Адмін відкриє спір і зв\'яжеться з клієнтом для з\'ясування.',
+              'Payment not received?',
+              'The admin will open a dispute and contact the client to clarify.',
               [
-                { text: 'Скасувати', style: 'cancel', onPress: () => resolve(false) },
-                { text: 'Так, не отримав', style: 'destructive', onPress: () => resolve(true) },
+                { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                { text: 'Yes, not received', style: 'destructive', onPress: () => resolve(true) },
               ]
             );
           });
@@ -495,20 +495,20 @@ export default function TaskDetail() {
     try {
       await api.executorConfirmPayment({ booking_id: bookingId, action });
       if (action === 'confirm') {
-        Alert.alert('Дякуємо!', 'Ви підтвердили отримання. Адмін зробить фінальне підтвердження.');
+        Alert.alert('Thank you!', 'You confirmed receipt. The admin will make the final confirmation.');
       } else {
-        Alert.alert('Спір відкрито', 'Адмін зв\'яжеться з вами для з\'ясування.');
+        Alert.alert('Dispute opened', 'The admin will contact you to clarify.');
       }
       try { await loadTask(); } catch (_) {}
     } catch (e: any) {
-      Alert.alert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+      Alert.alert('Error', e?.response?.data?.detail || 'Failed');
     } finally {
       setActionLoading(false);
     }
   };
 
   const submitReview = async () => {
-    if (reviewRating < 1 || reviewRating > 5) { Alert.alert('Оберіть оцінку від 1 до 5'); return; }
+    if (reviewRating < 1 || reviewRating > 5) { Alert.alert('Please select a rating from 1 to 5'); return; }
     setReviewSubmitting(true);
     try {
       // Use booking_id if available, otherwise task_id
@@ -520,17 +520,17 @@ export default function TaskDetail() {
       });
       setShowReview(false);
       if (Platform.OS === 'web') {
-        window.alert('Дякуємо за відгук! Ваша оцінка допоможе іншим клієнтам.');
+        window.alert('Thank you for your review! Your rating helps other clients.');
       } else {
-        Alert.alert('Дякуємо!', 'Ваш відгук збережено.', [{ text: 'ОК' }]);
+        Alert.alert('Thank you!', 'Your review has been saved.', [{ text: 'OK' }]);
       }
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || e.message || 'Помилка';
+      const msg = e?.response?.data?.detail || e.message || 'Error';
       // If already reviewed, just close
-      if (msg.includes('already reviewed') || msg.includes('вже')) {
+      if (msg.includes('already reviewed') || msg.includes('already')) {
         setShowReview(false);
       } else {
-        Alert.alert('Помилка', msg);
+        Alert.alert('Error', msg);
       }
     } finally {
       setReviewSubmitting(false);
@@ -539,7 +539,7 @@ export default function TaskDetail() {
 
   const handleDecline = async () => {
     if (!declineReason.trim()) {
-      Alert.alert('Вкажіть причину', 'Будь ласка, вкажіть коротку причину відмови.');
+      Alert.alert('Please provide a reason', 'Please provide a short reason for declining.');
       return;
     }
     setDecliningLoading(true);
@@ -549,17 +549,17 @@ export default function TaskDetail() {
       setShowDecline(false);
       setDeclineReason('');
       if (Platform.OS === 'web') {
-        window.alert('Завдання відхилено. Клієнт отримає сповіщення.');
+        window.alert('Task declined. The client will be notified.');
         router.replace('/(tabs)/tasks');
       } else {
-        Alert.alert('Відхилено', 'Завдання відхилено. Клієнт отримає сповіщення.', [
-          { text: 'ОК', onPress: () => router.replace('/(tabs)/tasks') },
+        Alert.alert('Declined', 'Task declined. The client will be notified.', [
+          { text: 'OK', onPress: () => router.replace('/(tabs)/tasks') },
         ]);
       }
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || e.message || 'Помилка';
-      if (Platform.OS === 'web') window.alert('Помилка: ' + msg);
-      else Alert.alert('Помилка', msg);
+      const msg = e?.response?.data?.detail || e.message || 'Error';
+      if (Platform.OS === 'web') window.alert('Error: ' + msg);
+      else Alert.alert('Error', msg);
     } finally {
       setDecliningLoading(false);
     }
@@ -583,7 +583,7 @@ export default function TaskDetail() {
   const adminAlreadyConfirmed = !!task.admin_confirmed;
   const showPayBtn = isClient && status === 'completed_pending_payment' && task.client_id === user?.user_id && !isPaymentPending;
   const showPendingPaymentCard = isClient && status === 'completed_pending_payment' && isPaymentPending;
-  // For provider: show "Я отримав свою частку" CTA when client has marked payment as sent
+  // For provider: show "I received my share" CTA when client has marked payment as sent
   // and provider has not yet self-confirmed.
   const showExecutorConfirmCard = isProvider && isMyTask && isPaymentPending && !executorAlreadyConfirmed;
   const showExecutorWaitingCard = isProvider && isMyTask && isPaymentPending && executorAlreadyConfirmed && !adminAlreadyConfirmed;
@@ -606,7 +606,7 @@ export default function TaskDetail() {
   const platformFee = Math.round(totalEarnings * 0.15 * 100) / 100;
   const providerEarnings = Math.round((totalEarnings - platformFee) * 100) / 100;
 
-  const clientName = task.client?.name || 'Клієнт';
+  const clientName = task.client?.name || 'Client';
   const clientPhoto = task.client?.picture || task.client?.photo_url;
   const taskPhotos = [...(task.photos || []), ...(task.problem_photos || [])];
   const stepIdx = STEP_ORDER.indexOf(status);
@@ -621,16 +621,16 @@ export default function TaskDetail() {
   };
   // Only show methods returned by /api/payments/methods (admin-controlled).
   // Fallback to Stripe-only if the API call hasn't completed yet — never to
-  // hard-coded Monobank/ПриватБанк list (those were removed per admin request).
+  // hard-coded Monobank/PrivatBank list (those were removed per admin request).
   const payMethods = enabledMethods.length > 0
     ? enabledMethods.map((m) => ({
         id: m.id,
-        label: m.label + (m.configured === false ? '  (не налаштовано)' : ''),
+        label: m.label + (m.configured === false ? '  (not configured)' : ''),
         icon: ICON_BY_ID[m.id]?.icon || 'wallet',
         color: ICON_BY_ID[m.id]?.color || '#6b7280',
         configured: m.configured !== false,
       }))
-    : [{ id: 'stripe', label: 'Картка (Stripe — тестова)', icon: 'card', color: '#635bff', configured: true }];
+    : [{ id: 'stripe', label: 'Card (Stripe — test)', icon: 'card', color: '#635bff', configured: true }];
 
   return (
     <View style={s.container}>
@@ -639,7 +639,7 @@ export default function TaskDetail() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Деталі завдання</Text>
+        <Text style={s.headerTitle}>Task details</Text>
         <TouchableOpacity
           style={s.chatBtn}
           onPress={() => router.push({ pathname: '/task-chat', params: { taskId, taskTitle: task.title } })}
@@ -657,14 +657,14 @@ export default function TaskDetail() {
 
         {/* ── Title ── */}
         <View style={s.section}>
-          <Text style={s.title}>{task.title || 'Без назви'}</Text>
+          <Text style={s.title}>{task.title || 'Untitled'}</Text>
           {!!task.description && <Text style={s.desc}>{task.description}</Text>}
         </View>
 
         {/* ── 4-Step Progress Bar ── */}
         {stepIdx >= STEP_ORDER.indexOf('assigned') && (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Прогрес завдання</Text>
+            <Text style={s.sectionTitle}>Task progress</Text>
             <View style={s.stepsRow}>
               {STEPS.map((step, idx) => {
                 const reached = stepIdx >= STEP_ORDER.indexOf(step.key);
@@ -695,7 +695,7 @@ export default function TaskDetail() {
         {/* ── Timeline / Chronology ── */}
         {(task.accepted_at || task.on_the_way_at || task.started_at || task.completed_at) && (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Хронологія</Text>
+            <Text style={s.sectionTitle}>Timeline</Text>
             <View style={s.timeline}>
               {STEPS.map((step, idx) => {
                 const ts = task[step.tsField];
@@ -730,7 +730,7 @@ export default function TaskDetail() {
                   {task.on_the_way_at && (
                     <View style={s.durRow}>
                       <Ionicons name="car-outline" size={16} color="#06b6d4" />
-                      <Text style={s.durLabel}>Час в дорозі</Text>
+                      <Text style={s.durLabel}>Travel time</Text>
                       <Text style={[s.durVal, { color: '#06b6d4' }]}>
                         {calcDuration(task.on_the_way_at, task.started_at)}
                       </Text>
@@ -739,18 +739,18 @@ export default function TaskDetail() {
                   {task.started_at && (
                     <View style={s.durRow}>
                       <Ionicons name="construct-outline" size={16} color="#f97316" />
-                      <Text style={s.durLabel}>Час роботи</Text>
+                      <Text style={s.durLabel}>Work time</Text>
                       <Text style={[s.durVal, { color: '#f97316' }]}>
                         {calcDuration(task.started_at, task.completed_at)}
-                        {!task.completed_at ? ' (зараз)' : ''}
+                        {!task.completed_at ? ' (now)' : ''}
                       </Text>
                     </View>
                   )}
                   {task.actual_hours != null && (
                     <View style={s.durRow}>
                       <Ionicons name="hourglass-outline" size={16} color="#2563eb" />
-                      <Text style={s.durLabel}>Відпрацьовано</Text>
-                      <Text style={[s.durVal, { color: '#2563eb' }]}>{task.actual_hours} год</Text>
+                      <Text style={s.durLabel}>Hours worked</Text>
+                      <Text style={[s.durVal, { color: '#2563eb' }]}>{task.actual_hours} hr</Text>
                     </View>
                   )}
                 </View>
@@ -761,12 +761,12 @@ export default function TaskDetail() {
 
         {/* ── Details ── */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Деталі</Text>
+          <Text style={s.sectionTitle}>Details</Text>
           {!!task.address && (
             <View style={s.detailRow}>
               <Ionicons name="location-outline" size={20} color="#6b7280" />
               <View style={s.detailContent}>
-                <Text style={s.detailLabel}>Адреса</Text>
+                <Text style={s.detailLabel}>Address</Text>
                 <Text style={s.detailVal}>{task.address}</Text>
               </View>
             </View>
@@ -775,10 +775,10 @@ export default function TaskDetail() {
             <View style={s.detailRow}>
               <Ionicons name="calendar-outline" size={20} color="#6b7280" />
               <View style={s.detailContent}>
-                <Text style={s.detailLabel}>Дата та час</Text>
+                <Text style={s.detailLabel}>Date & time</Text>
                 <Text style={s.detailVal}>
                   {task.scheduled_date || task.date || ''}
-                  {(task.scheduled_date || task.date) && (task.scheduled_time || task.time) ? ' о ' : ''}
+                  {(task.scheduled_date || task.date) && (task.scheduled_time || task.time) ? ' at ' : ''}
                   {task.scheduled_time || task.time || ''}
                 </Text>
               </View>
@@ -788,46 +788,46 @@ export default function TaskDetail() {
 
         {/* ── Pricing ── */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Вартість</Text>
+          <Text style={s.sectionTitle}>Price</Text>
           <View style={s.priceCard}>
             {/* After completion — show full breakdown */}
             {!!task.final_price && (
               <>
                 {!!task.actual_hours && (
                   <View style={s.priceRow}>
-                    <Text style={s.priceLabel}>Відпрацьовано</Text>
-                    <Text style={s.priceLabel}>{task.actual_hours} год × {task.hourly_rate || 0} грн/год</Text>
+                    <Text style={s.priceLabel}>Hours worked</Text>
+                    <Text style={s.priceLabel}>{task.actual_hours} hr × ${task.hourly_rate || 0}/hr</Text>
                   </View>
                 )}
                 {!!task.labor_cost && (
                   <View style={s.priceRow}>
-                    <Text style={s.priceLabel}>Вартість роботи</Text>
-                    <Text style={s.priceLabel}>{task.labor_cost} грн</Text>
+                    <Text style={s.priceLabel}>Labor cost</Text>
+                    <Text style={s.priceLabel}>${task.labor_cost}</Text>
                   </View>
                 )}
                 {!!task.materials_cost && task.materials_cost > 0 && (
                   <View style={s.priceRow}>
-                    <Text style={s.priceLabel}>Матеріали</Text>
-                    <Text style={s.priceLabel}>{task.materials_cost} грн</Text>
+                    <Text style={s.priceLabel}>Materials</Text>
+                    <Text style={s.priceLabel}>${task.materials_cost}</Text>
                   </View>
                 )}
                 {!isProvider && (
                   <View style={[s.priceRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 8, paddingTop: 8 }]}>
-                    <Text style={[s.priceLabel, { fontWeight: '700', fontSize: 15 }]}>До оплати</Text>
-                    <Text style={[s.priceGreen, { fontSize: 22, fontWeight: '800' }]}>{task.final_price} грн</Text>
+                    <Text style={[s.priceLabel, { fontWeight: '700', fontSize: 15 }]}>Total due</Text>
+                    <Text style={[s.priceGreen, { fontSize: 22, fontWeight: '800' }]}>${task.final_price}</Text>
                   </View>
                 )}
                 {/* Provider sees their payout — without showing commission */}
                 {isProvider && isMyTask && !!task.provider_payout && (
                   <View style={[s.priceRow, { backgroundColor: '#f0fdf4', borderRadius: 8, padding: 8, marginTop: 8 }]}>
-                    <Text style={[s.priceLabel, { color: '#16a34a' }]}>Ваш заробіток</Text>
-                    <Text style={[s.priceGreen, { color: '#16a34a', fontSize: 22, fontWeight: '800' }]}>{task.provider_payout} грн</Text>
+                    <Text style={[s.priceLabel, { color: '#16a34a' }]}>Your earnings</Text>
+                    <Text style={[s.priceGreen, { color: '#16a34a', fontSize: 22, fontWeight: '800' }]}>${task.provider_payout}</Text>
                   </View>
                 )}
               </>
             )}
             {!task.final_price && !price && (
-              <Text style={s.noPrice}>Ціна буде розрахована після завершення</Text>
+              <Text style={s.noPrice}>Price will be calculated after completion</Text>
             )}
           </View>
         </View>
@@ -835,7 +835,7 @@ export default function TaskDetail() {
         {/* ── Client ── */}
         {task.client && (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Клієнт</Text>
+            <Text style={s.sectionTitle}>Client</Text>
             <View style={s.clientCard}>
               {clientPhoto
                 ? <Image source={{ uri: clientPhoto }} style={s.avatar} />
@@ -856,7 +856,7 @@ export default function TaskDetail() {
         {/* ── Photos ── */}
         {taskPhotos.length > 0 && (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Фото завдання</Text>
+            <Text style={s.sectionTitle}>Task photos</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {taskPhotos.map((p: string, i: number) => (
                 <Image
@@ -872,7 +872,7 @@ export default function TaskDetail() {
         {/* ── Provider notes ── */}
         {!!task.provider_notes && (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Коментар виконавця</Text>
+            <Text style={s.sectionTitle}>Pro's note</Text>
             <View style={s.notesCard}>
               <Text style={s.notesText}>{task.provider_notes}</Text>
             </View>
@@ -890,7 +890,7 @@ export default function TaskDetail() {
           onPress={() => router.push({ pathname: '/task-chat', params: { taskId, taskTitle: task.title } })}
         >
           <Ionicons name="chatbubble-ellipses" size={20} color="#2563eb" />
-          <Text style={s.chatFooterText}>Чат</Text>
+          <Text style={s.chatFooterText}>Chat</Text>
         </TouchableOpacity>
 
         {/* Executor action + decline stacked vertically */}
@@ -917,7 +917,7 @@ export default function TaskDetail() {
                 onPress={() => setShowDecline(true)}
               >
                 <Ionicons name="close-circle-outline" size={18} color="#ef4444" />
-                <Text style={s.declineBtnText}>Відхилити завдання</Text>
+                <Text style={s.declineBtnText}>Decline task</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -936,21 +936,21 @@ export default function TaskDetail() {
             <Ionicons name="time-outline" size={24} color="#b45309" />
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e' }}>
-                Очікує підтвердження оплати
+                Awaiting payment confirmation
               </Text>
               <Text style={{ fontSize: 12, color: '#92400e', marginTop: 2, lineHeight: 16 }}>
                 {executorAlreadyConfirmed
-                  ? 'Виконавець підтвердив отримання. Чекаємо на адміністратора.'
+                  ? 'The pro confirmed receipt. Waiting for the admin.'
                   : adminAlreadyConfirmed
-                  ? 'Адмін підтвердив комісію. Чекаємо на виконавця.'
-                  : `Адмін і виконавець перевіряють ваш переказ (${(task.payment_method || '').toUpperCase()}).`}
+                  ? 'The admin confirmed the commission. Waiting for the pro.'
+                  : `The admin and the pro are verifying your transfer (${(task.payment_method || '').toUpperCase()}).`}
               </Text>
               <View style={{ flexDirection: 'row', marginTop: 6, gap: 12 }}>
                 <Text style={{ fontSize: 11, color: executorAlreadyConfirmed ? '#059669' : '#92400e', fontWeight: '600' }}>
-                  {executorAlreadyConfirmed ? '✓ Виконавець' : '○ Виконавець'}
+                  {executorAlreadyConfirmed ? '✓ Pro' : '○ Pro'}
                 </Text>
                 <Text style={{ fontSize: 11, color: adminAlreadyConfirmed ? '#059669' : '#92400e', fontWeight: '600' }}>
-                  {adminAlreadyConfirmed ? '✓ Адмін' : '○ Адмін'}
+                  {adminAlreadyConfirmed ? '✓ Admin' : '○ Admin'}
                 </Text>
               </View>
             </View>
@@ -969,11 +969,11 @@ export default function TaskDetail() {
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <Ionicons name="cash-outline" size={22} color="#059669" />
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#065f46', marginLeft: 8 }}>
-                Клієнт повідомив про оплату
+                Client reported the payment
               </Text>
             </View>
             <Text style={{ fontSize: 12, color: '#065f46', lineHeight: 17, marginBottom: 12 }}>
-              Метод: {(task.payment_method || '').toUpperCase()}. Перевірте свій {(task.payment_method || '').toUpperCase()}-рахунок і підтвердьте отримання.
+              Method: {(task.payment_method || '').toUpperCase()}. Check your {(task.payment_method || '').toUpperCase()} account and confirm receipt.
             </Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
@@ -987,7 +987,7 @@ export default function TaskDetail() {
                 data-testid="executor-confirm-receipt-btn"
               >
                 <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Я отримав</Text>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>I received it</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={{
@@ -1000,7 +1000,7 @@ export default function TaskDetail() {
                 data-testid="executor-reject-receipt-btn"
               >
                 <Ionicons name="close-circle-outline" size={18} color="#dc2626" />
-                <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>Не отримав</Text>
+                <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>Not received</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1019,10 +1019,10 @@ export default function TaskDetail() {
             <Ionicons name="checkmark-circle" size={24} color="#2563eb" />
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e3a8a' }}>
-                Ви підтвердили отримання
+                You confirmed receipt
               </Text>
               <Text style={{ fontSize: 12, color: '#1e3a8a', marginTop: 2, lineHeight: 16 }}>
-                Очікуємо фінальне підтвердження адміністратора.
+                Awaiting final confirmation from the admin.
               </Text>
             </View>
           </View>
@@ -1036,7 +1036,7 @@ export default function TaskDetail() {
             data-testid="pay-task-btn"
           >
             <Ionicons name="card" size={22} color="#fff" />
-            <Text style={s.actionBtnText}>Оплатити завдання</Text>
+            <Text style={s.actionBtnText}>Pay for task</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1048,7 +1048,7 @@ export default function TaskDetail() {
         <View style={s.overlay}>
           <View style={s.modalBox}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Закрити завдання</Text>
+              <Text style={s.modalTitle}>Close task</Text>
               <TouchableOpacity onPress={() => setShowInvoice(false)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
@@ -1057,33 +1057,33 @@ export default function TaskDetail() {
             <ScrollView style={s.modalBody}>
               {/* Client */}
               <View style={s.invoiceRow}>
-                <Text style={s.invoiceLabel}>Клієнт</Text>
+                <Text style={s.invoiceLabel}>Client</Text>
                 <Text style={s.invoiceVal}>{clientName}</Text>
               </View>
 
               {/* Hours */}
               <View style={s.invoiceRow}>
-                <Text style={s.invoiceLabel}>Відпрацьовано годин</Text>
+                <Text style={s.invoiceLabel}>Hours worked</Text>
                 <View style={s.invoiceInput}>
                   <TextInput
                     style={s.invoiceInputText}
                     value={hours}
                     onChangeText={setHours}
                     keyboardType="numeric"
-                    placeholder={task.started_at ? 'авто' : '0'}
+                    placeholder={task.started_at ? 'auto' : '0'}
                     placeholderTextColor="#9ca3af"
                   />
                 </View>
               </View>
               {task.started_at && !hours && (
                 <Text style={s.autoHint}>
-                  Авто: {calcDuration(task.started_at, undefined)}
+                  Auto: {calcDuration(task.started_at, undefined)}
                 </Text>
               )}
 
               {/* Materials */}
               <View style={s.invoiceRow}>
-                <Text style={s.invoiceLabel}>Витрати на матеріали</Text>
+                <Text style={s.invoiceLabel}>Materials cost</Text>
                 <View style={s.invoiceInput}>
                   <TextInput
                     style={s.invoiceInputText}
@@ -1098,48 +1098,48 @@ export default function TaskDetail() {
 
               {/* Earnings preview — executor sees ONLY their own earnings (commission is added to client total, not deducted from executor) */}
               <View style={s.earningsCard}>
-                <Text style={s.earningsTitle}>Розрахунок заробітку</Text>
+                <Text style={s.earningsTitle}>Earnings breakdown</Text>
                 <View style={s.earningsRow}>
-                  <Text style={s.earningsLabel}>Погодинна ставка</Text>
-                  <Text style={s.earningsVal}>{hourlyRate} грн/год</Text>
+                  <Text style={s.earningsLabel}>Hourly rate</Text>
+                  <Text style={s.earningsVal}>${hourlyRate}/hr</Text>
                 </View>
                 <View style={s.earningsRow}>
-                  <Text style={s.earningsLabel}>Праця ({parsedHours.toFixed(2)} год)</Text>
-                  <Text style={s.earningsVal}>{laborCost} грн</Text>
+                  <Text style={s.earningsLabel}>Labor ({parsedHours.toFixed(2)} hr)</Text>
+                  <Text style={s.earningsVal}>${laborCost}</Text>
                 </View>
                 {matCost > 0 && (
                   <View style={s.earningsRow}>
-                    <Text style={s.earningsLabel}>Матеріали</Text>
-                    <Text style={s.earningsVal}>{matCost} грн</Text>
+                    <Text style={s.earningsLabel}>Materials</Text>
+                    <Text style={s.earningsVal}>${matCost}</Text>
                   </View>
                 )}
                 {/* Big highlighted payout — full amount, no commission deduction */}
                 <View style={s.earningsPayoutBox}>
-                  <Text style={s.earningsPayoutLabel}>Ваш заробіток</Text>
-                  <Text style={s.earningsPayoutValue}>{(parseFloat(laborCost) + matCost).toFixed(2)} грн</Text>
+                  <Text style={s.earningsPayoutLabel}>Your earnings</Text>
+                  <Text style={s.earningsPayoutValue}>${(parseFloat(laborCost) + matCost).toFixed(2)}</Text>
                 </View>
               </View>
 
               {/* Closing message */}
-              <Text style={s.inputLabel}>Повідомлення клієнту</Text>
+              <Text style={s.inputLabel}>Message to client</Text>
               <TextInput
                 style={[s.input, s.textArea]}
                 value={closingMsg}
                 onChangeText={setClosingMsg}
                 multiline
-                placeholder="Повідомлення після закриття завдання..."
+                placeholder="Message after closing the task..."
               />
 
               {/* Ongoing job toggle */}
               <View style={s.toggleRow}>
-                <Text style={s.toggleLabel}>Постійна робота</Text>
+                <Text style={s.toggleLabel}>Recurring job</Text>
                 <Switch value={ongoingJob} onValueChange={setOngoingJob} trackColor={{ true: '#22c55e' }} />
               </View>
             </ScrollView>
 
             <View style={s.modalFooter}>
               <TouchableOpacity style={[s.modalBtn, s.cancelBtn]} onPress={() => setShowInvoice(false)}>
-                <Text style={s.cancelBtnText}>Скасувати</Text>
+                <Text style={s.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.modalBtn, s.submitBtn, actionLoading && s.btnDisabled]}
@@ -1148,7 +1148,7 @@ export default function TaskDetail() {
               >
                 {actionLoading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.submitBtnText}>Надіслати рахунок</Text>
+                  : <Text style={s.submitBtnText}>Send invoice</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -1163,7 +1163,7 @@ export default function TaskDetail() {
         <View style={s.overlay}>
           <View style={s.modalBox}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Оплата завдання</Text>
+              <Text style={s.modalTitle}>Pay for task</Text>
               <TouchableOpacity onPress={() => setShowPayment(false)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
@@ -1185,24 +1185,24 @@ export default function TaskDetail() {
                   <>
                     <View style={s.paymentSummary}>
                       <View style={s.payRow}>
-                        <Text style={s.payLabel}>Виконавець</Text>
-                        <Text style={s.payVal}>{task.provider?.name || 'Виконавець'}</Text>
+                        <Text style={s.payLabel}>Pro</Text>
+                        <Text style={s.payVal}>{task.provider?.name || 'Pro'}</Text>
                       </View>
                       {ah != null && (
                         <View style={s.payRow}>
-                          <Text style={s.payLabel}>Відпрацьовано</Text>
-                          <Text style={[s.payVal, { color: '#2563eb' }]}>{ah} год × {hr} грн/год = {Math.round(ah * hr)} грн</Text>
+                          <Text style={s.payLabel}>Hours worked</Text>
+                          <Text style={[s.payVal, { color: '#2563eb' }]}>{ah} hr × ${hr}/hr = ${Math.round(ah * hr)}</Text>
                         </View>
                       )}
                       {mc > 0 && (
                         <View style={s.payRow}>
-                          <Text style={s.payLabel}>Матеріали</Text>
-                          <Text style={s.payVal}>{mc} грн</Text>
+                          <Text style={s.payLabel}>Materials</Text>
+                          <Text style={s.payVal}>${mc}</Text>
                         </View>
                       )}
                       <View style={[s.payRow, s.payTotal]}>
-                        <Text style={s.payTotalLabel}>Сума до оплати</Text>
-                        <Text style={[s.payTotalVal, { color: '#10b981', fontSize: 24, fontWeight: '700' }]}>{clientTotal > 0 ? clientTotal : '—'} грн</Text>
+                        <Text style={s.payTotalLabel}>Total due</Text>
+                        <Text style={[s.payTotalVal, { color: '#10b981', fontSize: 24, fontWeight: '700' }]}>{clientTotal > 0 ? '$' + clientTotal : '—'}</Text>
                       </View>
                     </View>
                   </>
@@ -1210,7 +1210,7 @@ export default function TaskDetail() {
               })()}
 
               {/* Payment methods */}
-              <Text style={[s.inputLabel, { marginTop: 16 }]}>Спосіб оплати</Text>
+              <Text style={[s.inputLabel, { marginTop: 16 }]}>Payment method</Text>
               {payMethods.map((m) => (
                 <TouchableOpacity
                   key={m.id}
@@ -1230,7 +1230,7 @@ export default function TaskDetail() {
 
             <View style={s.modalFooter}>
               <TouchableOpacity style={[s.modalBtn, s.cancelBtn]} onPress={() => setShowPayment(false)}>
-                <Text style={s.cancelBtnText}>Скасувати</Text>
+                <Text style={s.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.modalBtn, s.submitBtn, { backgroundColor: '#10b981' }, actionLoading && s.btnDisabled]}
@@ -1239,7 +1239,7 @@ export default function TaskDetail() {
               >
                 {actionLoading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.submitBtnText}>Підтвердити оплату</Text>
+                  : <Text style={s.submitBtnText}>Confirm payment</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -1254,14 +1254,14 @@ export default function TaskDetail() {
         <View style={s.overlay}>
           <View style={s.modalBox}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Оплата карткою / гаманцем</Text>
+              <Text style={s.modalTitle}>Pay by card / wallet</Text>
               <TouchableOpacity onPress={() => { if (!finixProcessing) setShowFinix(false); }} data-testid="finix-close-btn">
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <ScrollView style={s.modalBody}>
               <Text style={{ color: '#6b7280', fontSize: 13, marginBottom: 12 }}>
-                Оплата обробляється Finix. Частина одразу надходить виконавцю, комісія — платформі.
+                Payment is processed by Finix. Part goes to the pro instantly, the commission goes to the platform.
               </Text>
               {/* Finix.js mounts its secure fields into this container (web renders a div) */}
               {Platform.OS === 'web'
@@ -1273,7 +1273,7 @@ export default function TaskDetail() {
             </ScrollView>
             <View style={s.modalFooter}>
               <TouchableOpacity style={[s.modalBtn, s.cancelBtn]} onPress={() => { if (!finixProcessing) setShowFinix(false); }}>
-                <Text style={s.cancelBtnText}>Скасувати</Text>
+                <Text style={s.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.modalBtn, s.submitBtn, { backgroundColor: '#1a8917' }, finixProcessing && s.btnDisabled]}
@@ -1283,7 +1283,7 @@ export default function TaskDetail() {
               >
                 {finixProcessing
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.submitBtnText}>Сплатити</Text>
+                  : <Text style={s.submitBtnText}>Pay</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -1299,14 +1299,14 @@ export default function TaskDetail() {
         <View style={s.overlay}>
           <View style={s.modalBox}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Реквізити для оплати ({(manualInstructions?.method || '').toUpperCase()})</Text>
+              <Text style={s.modalTitle}>Payment details ({(manualInstructions?.method || '').toUpperCase()})</Text>
               <TouchableOpacity onPress={() => setShowManualSplit(false)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <ScrollView style={s.modalBody}>
               <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 12, lineHeight: 18 }}>
-                Платіж розділений на 2 частини. Будь ласка, надішли обидві суми відповідним отримувачам у застосунку{' '}
+                The payment is split into 2 parts. Please send both amounts to the respective recipients in the app{' '}
                 <Text style={{ fontWeight: '700' }}>{(manualInstructions?.method || '').toUpperCase()}</Text>.
               </Text>
 
@@ -1330,7 +1330,7 @@ export default function TaskDetail() {
                       {displayAmount.toFixed(2)} {manualInstructions?.currency}
                     </Text>
                     <TouchableOpacity
-                      onPress={() => copyToClipboard(displayAmount.toFixed(2), `Сума: ${displayAmount.toFixed(2)}`)}
+                      onPress={() => copyToClipboard(displayAmount.toFixed(2), `Amount: ${displayAmount.toFixed(2)}`)}
                       style={{
                         flexDirection: 'row', alignItems: 'center', gap: 4,
                         backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
@@ -1339,12 +1339,12 @@ export default function TaskDetail() {
                       data-testid={`copy-amount-${sp.to}`}
                     >
                       <Ionicons name="copy-outline" size={14} color="#2563eb" />
-                      <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '700' }}>Копія</Text>
+                      <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '700' }}>Copy</Text>
                     </TouchableOpacity>
                   </View>
                   {sp.to === 'executor' && manualTip > 0 && (
                     <Text style={{ fontSize: 11, color: '#059669', marginTop: 2 }}>
-                      = {sp.amount.toFixed(2)} + {manualTip.toFixed(2)} чайові
+                      = ${sp.amount.toFixed(2)} + ${manualTip.toFixed(2)} tip
                     </Text>
                   )}
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
@@ -1362,13 +1362,13 @@ export default function TaskDetail() {
                         data-testid={`copy-handle-${sp.to}`}
                       >
                         <Ionicons name="copy-outline" size={14} color="#2563eb" />
-                        <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '700' }}>Копія</Text>
+                        <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '700' }}>Copy</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                   {sp.missing_handle && (
                     <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 6 }}>
-                      ⚠ Виконавець ще не вказав свій акаунт. Зв'яжись із ним у чаті.
+                      ⚠ The pro has not provided their account yet. Contact them in chat.
                     </Text>
                   )}
                   {!sp.missing_handle && sp.to === 'executor' &&
@@ -1388,7 +1388,7 @@ export default function TaskDetail() {
                         color="#fff"
                       />
                       <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
-                        Відкрити у {manualInstructions.method === 'venmo' ? 'Venmo' : 'PayPal'}
+                        Open in {manualInstructions.method === 'venmo' ? 'Venmo' : 'PayPal'}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1407,11 +1407,11 @@ export default function TaskDetail() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                   <Ionicons name="gift-outline" size={18} color="#b45309" />
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e', marginLeft: 8 }}>
-                    Чайові виконавцю (необов'язково)
+                    Tip for the pro (optional)
                   </Text>
                 </View>
                 <Text style={{ fontSize: 12, color: '#92400e', marginBottom: 10, lineHeight: 17 }}>
-                  Додайте суму понад ставку — 100% піде виконавцю разом з основним переказом.
+                  Add an amount above the rate — 100% goes to the pro together with the main transfer.
                 </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {[0, 50, 100, 200, 500].map(val => {
@@ -1432,7 +1432,7 @@ export default function TaskDetail() {
                           fontSize: 13, fontWeight: '700',
                           color: active ? '#fff' : '#92400e',
                         }}>
-                          {val === 0 ? 'Без чайових' : `+${val} ₴`}
+                          {val === 0 ? 'No tip' : `+$${val}`}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1441,8 +1441,8 @@ export default function TaskDetail() {
               </View>
 
               <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4, lineHeight: 17 }}>
-                💡 Після того як надішлеш обидва платежі, натисни кнопку нижче — адмін перевірить надходження
-                на твоєму банківському рахунку і підтвердить замовлення.
+                💡 After you send both payments, tap the button below — the admin will verify the funds
+                in your bank account and confirm the order.
               </Text>
             </ScrollView>
             <View style={{ flexDirection: 'row', gap: 8, padding: 16 }}>
@@ -1451,7 +1451,7 @@ export default function TaskDetail() {
                 onPress={() => setShowManualSplit(false)}
                 data-testid="manual-cancel-btn"
               >
-                <Text style={s.cancelBtnText}>Скасувати</Text>
+                <Text style={s.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.modalBtn, s.confirmBtn, actionLoading && { opacity: 0.5 }]}
@@ -1461,7 +1461,7 @@ export default function TaskDetail() {
               >
                 {actionLoading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.confirmBtnText}>Я надіслав обидва платежі</Text>}
+                  : <Text style={s.confirmBtnText}>I sent both payments</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -1475,7 +1475,7 @@ export default function TaskDetail() {
         <View style={s.overlay}>
           <View style={s.modalBox}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Відгук про виконавця</Text>
+              <Text style={s.modalTitle}>Review the pro</Text>
               <TouchableOpacity onPress={() => setShowReview(false)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
@@ -1489,18 +1489,18 @@ export default function TaskDetail() {
                 ) : (
                   <View style={[s.reviewAvatar, s.reviewAvatarPlaceholder]}>
                     <Text style={s.reviewAvatarInitial}>
-                      {(task.provider?.name || 'В')[0].toUpperCase()}
+                      {(task.provider?.name || 'P')[0].toUpperCase()}
                     </Text>
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text style={s.reviewProviderName}>{task.provider?.name || 'Виконавець'}</Text>
-                  <Text style={s.reviewProviderSub}>{task.title || 'Завдання'}</Text>
+                  <Text style={s.reviewProviderName}>{task.provider?.name || 'Pro'}</Text>
+                  <Text style={s.reviewProviderSub}>{task.title || 'Task'}</Text>
                 </View>
               </View>
 
               {/* Star rating */}
-              <Text style={[s.inputLabel, { marginTop: 20, marginBottom: 12 }]}>Оцінка виконавця</Text>
+              <Text style={[s.inputLabel, { marginTop: 20, marginBottom: 12 }]}>Rate the pro</Text>
               <View style={s.starsRow}>
                 {[1, 2, 3, 4, 5].map((star) => (
                   <TouchableOpacity key={star} onPress={() => setReviewRating(star)} style={s.starBtn}>
@@ -1513,17 +1513,17 @@ export default function TaskDetail() {
                 ))}
               </View>
               <Text style={s.ratingLabel}>
-                {reviewRating === 1 ? 'Погано' : reviewRating === 2 ? 'Нижче середнього' : reviewRating === 3 ? 'Нормально' : reviewRating === 4 ? 'Добре' : 'Відмінно'}
+                {reviewRating === 1 ? 'Poor' : reviewRating === 2 ? 'Below average' : reviewRating === 3 ? 'Okay' : reviewRating === 4 ? 'Good' : 'Excellent'}
               </Text>
 
               {/* Comment */}
-              <Text style={[s.inputLabel, { marginTop: 20 }]}>Коментар (необов’язково)</Text>
+              <Text style={[s.inputLabel, { marginTop: 20 }]}>Comment (optional)</Text>
               <TextInput
                 style={[s.input, s.textArea]}
                 value={reviewComment}
                 onChangeText={setReviewComment}
                 multiline
-                placeholder="Напишіть ваш відгук..."
+                placeholder="Write your review..."
                 placeholderTextColor="#9ca3af"
               />
             </ScrollView>
@@ -1533,7 +1533,7 @@ export default function TaskDetail() {
                 style={[s.modalBtn, s.cancelBtn]}
                 onPress={() => setShowReview(false)}
               >
-                <Text style={s.cancelBtnText}>Пропустити</Text>
+                <Text style={s.cancelBtnText}>Skip</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.modalBtn, s.submitBtn, { backgroundColor: '#f59e0b' }, reviewSubmitting && s.btnDisabled]}
@@ -1542,7 +1542,7 @@ export default function TaskDetail() {
               >
                 {reviewSubmitting
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.submitBtnText}>Надіслати відгук</Text>
+                  : <Text style={s.submitBtnText}>Submit review</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -1557,20 +1557,20 @@ export default function TaskDetail() {
         <View style={s.overlay}>
           <View style={[s.modalBox, { maxHeight: 380 }]}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Відхилити завдання</Text>
+              <Text style={s.modalTitle}>Decline task</Text>
               <TouchableOpacity onPress={() => { setShowDecline(false); setDeclineReason(''); }}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
             <View style={s.modalBody}>
-              <Text style={[s.inputLabel, { marginBottom: 8 }]}>Причина відмови *</Text>
+              <Text style={[s.inputLabel, { marginBottom: 8 }]}>Reason for declining *</Text>
               <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
-                Клієнт отримає сповіщення з причиною відмови.
+                The client will be notified with the reason.
               </Text>
               {/* Quick reason chips */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                {['Зайнятий', 'Не моя спеціалізація', 'Незручна адреса', 'Інша причина'].map(r => (
+                {['Busy', 'Not my specialty', 'Inconvenient address', 'Other reason'].map(r => (
                   <TouchableOpacity
                     key={r}
                     style={[s.tipAmtBtn, declineReason === r && s.tipAmtBtnActive, { borderColor: '#ef4444' }]}
@@ -1585,7 +1585,7 @@ export default function TaskDetail() {
                 value={declineReason}
                 onChangeText={setDeclineReason}
                 multiline
-                placeholder="Або напишіть свою причину..."
+                placeholder="Or write your own reason..."
                 placeholderTextColor="#9ca3af"
               />
             </View>
@@ -1595,7 +1595,7 @@ export default function TaskDetail() {
                 style={[s.modalBtn, s.cancelBtn]}
                 onPress={() => { setShowDecline(false); setDeclineReason(''); }}
               >
-                <Text style={s.cancelBtnText}>Скасувати</Text>
+                <Text style={s.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.modalBtn, { backgroundColor: '#ef4444', flex: 1 }, decliningLoading && s.btnDisabled]}
@@ -1604,7 +1604,7 @@ export default function TaskDetail() {
               >
                 {decliningLoading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.submitBtnText}>Відхилити</Text>
+                  : <Text style={s.submitBtnText}>Decline</Text>
                 }
               </TouchableOpacity>
             </View>

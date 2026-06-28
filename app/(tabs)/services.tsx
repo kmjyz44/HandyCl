@@ -200,13 +200,13 @@ export default function Services() {
     setCatFormSuccess(null);
 
     if (!catName || !catName.trim()) {
-      setCatFormError('Назва категорії обов\u2019язкова');
+      setCatFormError('Category name is required');
       return;
     }
 
     const commissionVal = parseFloat(catCommission);
     if (isNaN(commissionVal) || commissionVal < 0 || commissionVal > 100) {
-      setCatFormError('Комісія повинна бути числом від 0 до 100');
+      setCatFormError('Commission must be a number from 0 to 100');
       return;
     }
 
@@ -215,7 +215,7 @@ export default function Services() {
     if (recommendedRaw !== '') {
       recommendedVal = parseFloat(recommendedRaw);
       if (isNaN(recommendedVal) || recommendedVal < 0) {
-        setCatFormError('Рекомендована ціна повинна бути числом ≥ 0');
+        setCatFormError('Recommended price must be a number ≥ 0');
         return;
       }
     }
@@ -239,7 +239,7 @@ export default function Services() {
         await api.createCategory(data);
       }
 
-      setCatFormSuccess(editingCategory ? 'Категорію збережено' : 'Категорію створено');
+      setCatFormSuccess(editingCategory ? 'Category saved' : 'Category created');
       await loadData();
       // Close after short delay so user sees success message
       setTimeout(() => {
@@ -247,7 +247,7 @@ export default function Services() {
         setCatFormSuccess(null);
       }, 700);
     } catch (error: any) {
-      const detail = error?.response?.data?.detail || error?.message || 'Не вдалося зберегти категорію';
+      const detail = error?.response?.data?.detail || error?.message || 'Could not save the category';
       setCatFormError(typeof detail === 'string' ? detail : JSON.stringify(detail));
     } finally {
       setCatSaving(false);
@@ -554,7 +554,7 @@ export default function Services() {
               data-testid="save-category-btn"
             >
               <Text style={styles.saveBtnText}>
-                {catSaving ? 'Збереження…' : 'Save Category'}
+                {catSaving ? 'Saving…' : 'Save Category'}
               </Text>
             </TouchableOpacity>
 

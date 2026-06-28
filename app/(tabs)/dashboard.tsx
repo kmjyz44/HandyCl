@@ -14,18 +14,18 @@ const ALL_STATUSES = [
 ];
 
 const STATUS_LABELS: Record<string, string> = {
-  '': 'Всі',
-  posted: 'Очікує',
-  offering: 'Пропозиції',
-  assigned: 'Призначено',
-  hold_placed: 'Підтверджено',
-  on_the_way: 'В дорозі',
-  started: 'Виконується',
-  completed_pending_payment: 'Очікує оплати',
-  paid: 'Оплачено',
-  declined: 'Відхилено',
-  cancelled_by_client: 'Скасовано клієнтом',
-  cancelled_by_tasker: 'Скасовано виконавцем',
+  '': 'All',
+  posted: 'Pending',
+  offering: 'Offers',
+  assigned: 'Assigned',
+  hold_placed: 'Confirmed',
+  on_the_way: 'On the way',
+  started: 'In progress',
+  completed_pending_payment: 'Awaiting payment',
+  paid: 'Paid',
+  declined: 'Declined',
+  cancelled_by_client: 'Cancelled by client',
+  cancelled_by_tasker: 'Cancelled by pro',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -36,16 +36,16 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const CATEGORIES: Record<string, string> = {
-  '': 'Всі категорії',
-  assembly: 'Збірка меблів',
-  cleaning: 'Прибирання',
-  repair: 'Ремонт',
-  moving: 'Переїзд',
-  outdoor: 'Двір',
-  personal: 'Особисте',
-  it_tech: 'IT/Техніка',
-  events: 'Заходи',
-  other: 'Інше',
+  '': 'All categories',
+  assembly: 'Furniture Assembly',
+  cleaning: 'Cleaning',
+  repair: 'Repair',
+  moving: 'Moving',
+  outdoor: 'Outdoor',
+  personal: 'Personal',
+  it_tech: 'IT/Tech',
+  events: 'Events',
+  other: 'Other',
 };
 
 export default function Dashboard() {
@@ -86,9 +86,9 @@ export default function Dashboard() {
       setTotal(tasksRes.total || 0);
       setStats(dashRes);
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || e.message || 'Помилка';
-      if (Platform.OS === 'web') window.alert('Помилка: ' + msg);
-      else Alert.alert('Помилка', msg);
+      const msg = e?.response?.data?.detail || e.message || 'Error';
+      if (Platform.OS === 'web') window.alert('Error: ' + msg);
+      else Alert.alert('Error', msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -104,17 +104,17 @@ export default function Dashboard() {
         setTasks(prev => prev.filter(t => t.task_id !== task.task_id));
         setTotal(prev => prev - 1);
       }).catch(e => {
-        const msg = e?.response?.data?.detail || e.message || 'Помилка';
+        const msg = e?.response?.data?.detail || e.message || 'Error';
         if (Platform.OS === 'web') window.alert(msg);
-        else Alert.alert('Помилка', msg);
+        else Alert.alert('Error', msg);
       });
     };
     if (Platform.OS === 'web') {
-      if (window.confirm(`Видалити завдання "${task.title}"?`)) confirm();
+      if (window.confirm(`Delete task "${task.title}"?`)) confirm();
     } else {
-      Alert.alert('Видалити?', `Видалити завдання "${task.title}"?`, [
-        { text: 'Скасувати', style: 'cancel' },
-        { text: 'Видалити', style: 'destructive', onPress: confirm },
+      Alert.alert('Delete?', `Delete task "${task.title}"?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: confirm },
       ]);
     }
   };
@@ -141,9 +141,9 @@ export default function Dashboard() {
       ));
       setEditTask(null);
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || e.message || 'Помилка';
+      const msg = e?.response?.data?.detail || e.message || 'Error';
       if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Помилка', msg);
+      else Alert.alert('Error', msg);
     } finally {
       setEditLoading(false);
     }
@@ -158,12 +158,12 @@ export default function Dashboard() {
       {/* Header */}
       <View style={s.header}>
         <View>
-          <Text style={s.headerTitle}>Адмін-панель</Text>
-          <Text style={s.headerSub}>Всього завдань: {total}</Text>
+          <Text style={s.headerTitle}>Admin panel</Text>
+          <Text style={s.headerSub}>Total tasks: {total}</Text>
         </View>
         <TouchableOpacity style={s.filterBtn} onPress={() => setShowFilters(!showFilters)}>
           <Ionicons name="filter" size={20} color="#2563eb" />
-          <Text style={s.filterBtnText}>Фільтри</Text>
+          <Text style={s.filterBtnText}>Filters</Text>
         </TouchableOpacity>
       </View>
 
@@ -172,19 +172,19 @@ export default function Dashboard() {
         <View style={s.statsRow}>
           <View style={s.statChip}>
             <Text style={s.statNum}>{stats.total_users || 0}</Text>
-            <Text style={s.statLbl}>Користувачів</Text>
+            <Text style={s.statLbl}>Users</Text>
           </View>
           <View style={s.statChip}>
             <Text style={s.statNum}>{stats.total_bookings || 0}</Text>
-            <Text style={s.statLbl}>Замовлень</Text>
+            <Text style={s.statLbl}>Orders</Text>
           </View>
           <View style={s.statChip}>
             <Text style={s.statNum}>{tasks.filter(t => t.status === 'started').length}</Text>
-            <Text style={s.statLbl}>В роботі</Text>
+            <Text style={s.statLbl}>In progress</Text>
           </View>
           <View style={s.statChip}>
             <Text style={s.statNum}>{tasks.filter(t => t.status === 'completed_pending_payment').length}</Text>
-            <Text style={s.statLbl}>Очік. оплати</Text>
+            <Text style={s.statLbl}>Awaiting pay</Text>
           </View>
         </View>
       )}
@@ -219,21 +219,21 @@ export default function Dashboard() {
           <View style={s.filterRow}>
             <TextInput
               style={s.filterInput}
-              placeholder="ID виконавця..."
+              placeholder="Pro ID..."
               value={filterProvider}
               onChangeText={setFilterProvider}
               placeholderTextColor="#9ca3af"
             />
             <TextInput
               style={s.filterInput}
-              placeholder="ID клієнта..."
+              placeholder="Client ID..."
               value={filterClient}
               onChangeText={setFilterClient}
               placeholderTextColor="#9ca3af"
             />
           </View>
           <TouchableOpacity style={s.applyBtn} onPress={() => { setShowFilters(false); loadData(); }}>
-            <Text style={s.applyBtnText}>Застосувати фільтри</Text>
+            <Text style={s.applyBtnText}>Apply filters</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -246,7 +246,7 @@ export default function Dashboard() {
         {tasks.length === 0 ? (
           <View style={s.emptyBox}>
             <Ionicons name="clipboard-outline" size={48} color="#d1d5db" />
-            <Text style={s.emptyText}>Завдань не знайдено</Text>
+            <Text style={s.emptyText}>No tasks found</Text>
           </View>
         ) : tasks.map(task => {
           const statusColor = STATUS_COLORS[task.status] || '#6b7280';
@@ -260,7 +260,7 @@ export default function Dashboard() {
               <View style={s.cardBody}>
                 {/* Title + status */}
                 <View style={s.cardTop}>
-                  <Text style={s.taskTitle} numberOfLines={1}>{task.title || 'Без назви'}</Text>
+                  <Text style={s.taskTitle} numberOfLines={1}>{task.title || 'Untitled'}</Text>
                   <View style={[s.badge, { backgroundColor: statusColor + '22' }]}>
                     <Text style={[s.badgeText, { color: statusColor }]}>{statusLabel}</Text>
                   </View>
@@ -270,20 +270,20 @@ export default function Dashboard() {
                 <View style={s.metaRow}>
                   <Ionicons name="person-outline" size={13} color="#6b7280" />
                   <Text style={s.metaText}>
-                    Клієнт: {task.client?.name || task.client_id?.slice(-6) || '—'}
+                    Client: {task.client?.name || task.client_id?.slice(-6) || '—'}
                   </Text>
                 </View>
                 <View style={s.metaRow}>
                   <Ionicons name="construct-outline" size={13} color="#6b7280" />
                   <Text style={s.metaText}>
-                    Виконавець: {task.provider?.name || (task.provider_id ? task.provider_id.slice(-6) : '—')}
+                    Pro: {task.provider?.name || (task.provider_id ? task.provider_id.slice(-6) : '—')}
                   </Text>
                 </View>
                 {calcPrice && (
                   <View style={s.metaRow}>
                     <Ionicons name="cash-outline" size={13} color="#10b981" />
                     <Text style={[s.metaText, { color: '#10b981' }]}>
-                      {hrs ? `${hrs} год × ${rate} грн = ` : ''}{calcPrice} грн
+                      {hrs ? `${hrs} hr × $${rate} = ` : ''}${calcPrice}
                     </Text>
                   </View>
                 )}
@@ -301,28 +301,28 @@ export default function Dashboard() {
                     onPress={() => router.push(`/task-detail?id=${task.task_id}`)}
                   >
                     <Ionicons name="eye-outline" size={16} color="#2563eb" />
-                    <Text style={[s.actionText, { color: '#2563eb' }]}>Деталі</Text>
+                    <Text style={[s.actionText, { color: '#2563eb' }]}>Details</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={s.actionBtn}
                     onPress={() => router.push(`/task-chat?task_id=${task.task_id}`)}
                   >
                     <Ionicons name="chatbubble-outline" size={16} color="#8b5cf6" />
-                    <Text style={[s.actionText, { color: '#8b5cf6' }]}>Чат</Text>
+                    <Text style={[s.actionText, { color: '#8b5cf6' }]}>Chat</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={s.actionBtn}
                     onPress={() => openEdit(task)}
                   >
                     <Ionicons name="create-outline" size={16} color="#f59e0b" />
-                    <Text style={[s.actionText, { color: '#f59e0b' }]}>Змінити</Text>
+                    <Text style={[s.actionText, { color: '#f59e0b' }]}>Edit</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={s.actionBtn}
                     onPress={() => handleDelete(task)}
                   >
                     <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                    <Text style={[s.actionText, { color: '#ef4444' }]}>Видалити</Text>
+                    <Text style={[s.actionText, { color: '#ef4444' }]}>Delete</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -337,13 +337,13 @@ export default function Dashboard() {
         <View style={s.overlay}>
           <View style={s.modalBox}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Редагувати завдання</Text>
+              <Text style={s.modalTitle}>Edit task</Text>
               <TouchableOpacity onPress={() => setEditTask(null)}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <ScrollView style={s.modalBody}>
-              <Text style={s.label}>Статус</Text>
+              <Text style={s.label}>Status</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
                 {ALL_STATUSES.filter(s => s !== '').map(st => (
                   <TouchableOpacity
@@ -357,28 +357,28 @@ export default function Dashboard() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <Text style={s.label}>Години (actual_hours)</Text>
+              <Text style={s.label}>Hours (actual_hours)</Text>
               <TextInput
                 style={s.input}
                 value={editHours}
                 onChangeText={setEditHours}
                 keyboardType="decimal-pad"
-                placeholder="напр. 2.5"
+                placeholder="e.g. 2.5"
                 placeholderTextColor="#9ca3af"
               />
-              <Text style={s.label}>Сума до оплати (final_price)</Text>
+              <Text style={s.label}>Amount due (final_price)</Text>
               <TextInput
                 style={s.input}
                 value={editPrice}
                 onChangeText={setEditPrice}
                 keyboardType="decimal-pad"
-                placeholder="напр. 250"
+                placeholder="e.g. 250"
                 placeholderTextColor="#9ca3af"
               />
             </ScrollView>
             <View style={s.modalFooter}>
               <TouchableOpacity style={s.cancelBtn} onPress={() => setEditTask(null)}>
-                <Text style={s.cancelText}>Скасувати</Text>
+                <Text style={s.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.saveBtn, editLoading && { opacity: 0.6 }]}
@@ -387,7 +387,7 @@ export default function Dashboard() {
               >
                 {editLoading
                   ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={s.saveText}>Зберегти</Text>
+                  : <Text style={s.saveText}>Save</Text>
                 }
               </TouchableOpacity>
             </View>

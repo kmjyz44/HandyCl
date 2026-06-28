@@ -47,7 +47,7 @@ export default function AdminPaymentsScreen() {
       const data = await api.adminListPendingPayments();
       setItems((data?.items as Pending[]) || []);
     } catch (e: any) {
-      Alert.alert('Помилка', e?.response?.data?.detail || e?.message || 'Не вдалося завантажити');
+      Alert.alert('Error', e?.response?.data?.detail || e?.message || 'Could not load');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -56,7 +56,7 @@ export default function AdminPaymentsScreen() {
 
   useEffect(() => {
     if (user && user.role !== 'admin') {
-      Alert.alert('Доступ заборонено', 'Тільки для адміністратора', [
+      Alert.alert('Access denied', 'Admins only', [
         { text: 'OK', onPress: () => router.back() },
       ]);
       return;
@@ -66,19 +66,19 @@ export default function AdminPaymentsScreen() {
 
   const onApprove = async (item: Pending) => {
     if (!item.transaction_id) {
-      Alert.alert('Помилка', 'Транзакція не знайдена');
+      Alert.alert('Error', 'Transaction not found');
       return;
     }
     setBusy(item.booking_id);
     try {
       const r = await api.adminVerifyPayment(item.transaction_id, 'approve');
-      Alert.alert('Готово', r.payment_status === 'paid'
-        ? 'Завдання повністю оплачено ✅'
-        : 'Адмін підтвердив. Чекаємо на виконавця.'
+      Alert.alert('Done', r.payment_status === 'paid'
+        ? 'Task fully paid ✅'
+        : 'Admin confirmed. Waiting for the pro.'
       );
       await load();
     } catch (e: any) {
-      Alert.alert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+      Alert.alert('Error', e?.response?.data?.detail || 'Failed');
     } finally {
       setBusy(null);
     }
@@ -86,25 +86,25 @@ export default function AdminPaymentsScreen() {
 
   const onReject = async (item: Pending) => {
     if (!item.transaction_id) {
-      Alert.alert('Помилка', 'Транзакція не знайдена');
+      Alert.alert('Error', 'Transaction not found');
       return;
     }
     const confirmed = Platform.OS === 'web'
-      ? typeof window !== 'undefined' && window.confirm('Відхилити платіж? Бронювання перейде у статус "Спір".')
+      ? typeof window !== 'undefined' && window.confirm('Reject payment? The booking will move to "Dispute" status.')
       : await new Promise<boolean>(resolve => {
-          Alert.alert('Відхилити платіж?', 'Бронювання перейде у спір.', [
-            { text: 'Скасувати', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Так, відхилити', style: 'destructive', onPress: () => resolve(true) },
+          Alert.alert('Reject payment?', 'The booking will move to a dispute.', [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Yes, reject', style: 'destructive', onPress: () => resolve(true) },
           ]);
         });
     if (!confirmed) return;
     setBusy(item.booking_id);
     try {
       await api.adminVerifyPayment(item.transaction_id, 'reject');
-      Alert.alert('Відхилено', 'Спір відкрито. Зв\'яжіться з клієнтом.');
+      Alert.alert('Rejected', 'A dispute has been opened. Contact the client.');
       await load();
     } catch (e: any) {
-      Alert.alert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+      Alert.alert('Error', e?.response?.data?.detail || 'Failed');
     } finally {
       setBusy(null);
     }
@@ -139,7 +139,7 @@ export default function AdminPaymentsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} data-testid="back-btn">
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.title}>Перевірка оплат</Text>
+        <Text style={styles.title}>Payment verification</Text>
         <TouchableOpacity onPress={load} disabled={refreshing} style={styles.refreshBtn} data-testid="refresh-btn">
           <Ionicons name="refresh" size={22} color="#2563eb" />
         </TouchableOpacity>
@@ -152,10 +152,10 @@ export default function AdminPaymentsScreen() {
         contentContainerStyle={styles.tabs}
       >
         {([
-          { id: 'all', label: 'Всі', color: '#374151' },
-          { id: 'awaiting_admin', label: 'Чекає на адміна', color: '#b45309' },
-          { id: 'awaiting_executor', label: 'Чекає на виконавця', color: '#2563eb' },
-          { id: 'disputed', label: 'Спір', color: '#dc2626' },
+          { id: 'all', label: 'All', color: '#374151' },
+          { id: 'awaiting_admin', label: 'Awaiting admin', color: '#b45309' },
+          { id: 'awaiting_executor', label: 'Awaiting pro', color: '#2563eb' },
+          { id: 'disputed', label: 'Dispute', color: '#dc2626' },
         ] as { id: FilterTab; label: string; color: string }[]).map(t => (
           <TouchableOpacity
             key={t.id}
@@ -184,7 +184,7 @@ export default function AdminPaymentsScreen() {
         {filtered.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="checkmark-circle-outline" size={64} color="#d1d5db" />
-            <Text style={styles.emptyText}>Немає платежів на перевірку</Text>
+            <Text style={styles.emptyText}>No payments to verify</Text>
           </View>
         ) : (
           filtered.map(item => {
@@ -199,7 +199,7 @@ export default function AdminPaymentsScreen() {
                 <View style={styles.cardHead}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.cardTitle} numberOfLines={1}>
-                      {item.title || 'Завдання'}
+                      {item.title || 'Task'}
                     </Text>
                     <Text style={styles.cardSub}>
                       {item.payment_method?.toUpperCase()} · {item.category}
@@ -213,31 +213,31 @@ export default function AdminPaymentsScreen() {
                       styles.statusBadgeText,
                       isDisputed && { color: '#dc2626' },
                     ]}>
-                      {isDisputed ? '⚠ Спір' : 'В очікуванні'}
+                      {isDisputed ? '⚠ Dispute' : 'Pending'}
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.amountRow}>
                   <View style={styles.amountBox}>
-                    <Text style={styles.amountLabel}>Клієнт сплачує</Text>
+                    <Text style={styles.amountLabel}>Client pays</Text>
                     <Text style={styles.amountValue}>
-                      {(item.total_price || 0).toFixed(2)} ₴
+                      ${(item.total_price || 0).toFixed(2)}
                     </Text>
                   </View>
                   <View style={styles.amountBox}>
-                    <Text style={styles.amountLabel}>Платформі</Text>
+                    <Text style={styles.amountLabel}>To platform</Text>
                     <Text style={[styles.amountValue, { color: '#059669' }]}>
-                      {(item.platform_take || 0).toFixed(2)} ₴
+                      ${(item.platform_take || 0).toFixed(2)}
                     </Text>
                   </View>
                   <View style={styles.amountBox}>
-                    <Text style={styles.amountLabel}>Виконавцю</Text>
+                    <Text style={styles.amountLabel}>To pro</Text>
                     <Text style={styles.amountValue}>
-                      {((item.executor_take || 0) + (item.tip_amount || 0)).toFixed(2)} ₴
+                      ${((item.executor_take || 0) + (item.tip_amount || 0)).toFixed(2)}
                     </Text>
                     {!!item.tip_amount && item.tip_amount > 0 && (
-                      <Text style={styles.tipBadge}>+{item.tip_amount.toFixed(0)} ₴ чайові</Text>
+                      <Text style={styles.tipBadge}>+${item.tip_amount.toFixed(0)} tip</Text>
                     )}
                   </View>
                 </View>
@@ -250,7 +250,7 @@ export default function AdminPaymentsScreen() {
                       color={item.executor_confirmed ? '#059669' : '#9ca3af'}
                     />
                     <Text style={[styles.confirmText, item.executor_confirmed && { color: '#059669' }]}>
-                      Виконавець
+                      Pro
                     </Text>
                   </View>
                   <View style={[styles.confirmPill, item.admin_confirmed && styles.confirmPillOK]}>
@@ -260,14 +260,14 @@ export default function AdminPaymentsScreen() {
                       color={item.admin_confirmed ? '#059669' : '#9ca3af'}
                     />
                     <Text style={[styles.confirmText, item.admin_confirmed && { color: '#059669' }]}>
-                      Адмін
+                      Admin
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.peopleBlock}>
                   <View style={styles.personRow}>
-                    <Text style={styles.personLabel}>Клієнт:</Text>
+                    <Text style={styles.personLabel}>Client:</Text>
                     <Text style={styles.personValue} numberOfLines={1}>
                       {item.client?.name || item.client?.email || '—'}
                     </Text>
@@ -279,7 +279,7 @@ export default function AdminPaymentsScreen() {
                     <Text style={styles.personContact}>📞 {item.client.phone}</Text>
                   )}
                   <View style={[styles.personRow, { marginTop: 8 }]}>
-                    <Text style={styles.personLabel}>Виконавець:</Text>
+                    <Text style={styles.personLabel}>Pro:</Text>
                     <Text style={styles.personValue} numberOfLines={1}>
                       {item.provider?.name || item.provider?.email || '—'}
                     </Text>
@@ -311,7 +311,7 @@ export default function AdminPaymentsScreen() {
                       ) : (
                         <>
                           <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                          <Text style={styles.btnText}>Підтвердити отримання</Text>
+                          <Text style={styles.btnText}>Confirm receipt</Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -322,7 +322,7 @@ export default function AdminPaymentsScreen() {
                       data-testid={`reject-${item.booking_id}`}
                     >
                       <Ionicons name="close-circle" size={18} color="#dc2626" />
-                      <Text style={[styles.btnText, { color: '#dc2626' }]}>Відхилити</Text>
+                      <Text style={[styles.btnText, { color: '#dc2626' }]}>Reject</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -330,7 +330,7 @@ export default function AdminPaymentsScreen() {
                 {item.admin_confirmed && !fullyConfirmed && (
                   <View style={styles.infoBox}>
                     <Text style={styles.infoText}>
-                      ✅ Ви підтвердили. Чекаємо на виконавця.
+                      ✅ You confirmed. Waiting for the pro.
                     </Text>
                   </View>
                 )}
@@ -338,7 +338,7 @@ export default function AdminPaymentsScreen() {
                 {isDisputed && (
                   <View style={[styles.infoBox, { backgroundColor: '#fef2f2', borderColor: '#fca5a5' }]}>
                     <Text style={[styles.infoText, { color: '#dc2626' }]}>
-                      ⚠ Спір — зв'яжіться з клієнтом та виконавцем для з'ясування.
+                      ⚠ Dispute — contact the client and pro to clarify.
                     </Text>
                   </View>
                 )}

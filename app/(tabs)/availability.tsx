@@ -15,8 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../utils/api';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
-const DAYS_FULL = ['Понеділок', 'Вівторок', 'Середа', 'Четвер', "П'ятниця", 'Субота', 'Неділя'];
+const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAYS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const ACCENT = '#2563eb';
 
 // Hours 06:00 – 23:00 in 30-min steps
@@ -63,7 +63,7 @@ function TimePicker({ label, value, onChange, filterAfter }: {
     <View style={tp.wrap}>
       <Text style={tp.label}>{label}</Text>
       <TouchableOpacity style={tp.btn} onPress={() => setOpen(true)}>
-        <Text style={[tp.btnText, !value && tp.placeholder]}>{value || 'Вибрати'}</Text>
+        <Text style={[tp.btnText, !value && tp.placeholder]}>{value || 'Select'}</Text>
         <Ionicons name="chevron-down" size={16} color="#6b7280" />
       </TouchableOpacity>
       <Modal visible={open} transparent animationType="fade">
@@ -125,7 +125,7 @@ export default function Availability() {
 
   // Service area
   const [mapVisible, setMapVisible] = useState(false);
-  const [areaLabel, setAreaLabel] = useState('Не вказано');
+  const [areaLabel, setAreaLabel] = useState('Not set');
   const [areaRadius, setAreaRadius] = useState(10);
   const [areaLat, setAreaLat] = useState(50.45);
   const [areaLng, setAreaLng] = useState(30.52);
@@ -193,10 +193,10 @@ export default function Availability() {
   };
 
   const handleSave = async () => {
-    if (!formStart || !formEnd) { webAlert('Помилка', 'Вкажіть час початку і закінчення'); return; }
-    if (formStart >= formEnd) { webAlert('Помилка', 'Час закінчення має бути пізніше початку'); return; }
+    if (!formStart || !formEnd) { webAlert('Error', 'Specify start and end times'); return; }
+    if (formStart >= formEnd) { webAlert('Error', 'End time must be later than start time'); return; }
     if (hasOverlap(formDay, formStart, formEnd, editingSlot?.slot_id)) {
-      webAlert('Перетин часу', `На ${DAYS_FULL[formDay]} вже є слот, що перетинається з ${formStart}–${formEnd}.`);
+      webAlert('Time overlap', `${DAYS_FULL[formDay]} already has a slot overlapping ${formStart}–${formEnd}.`);
       return;
     }
     setSaving(true);
@@ -206,7 +206,7 @@ export default function Availability() {
       else await api.createAvailabilitySlot(data);
       setModalVisible(false);
       load();
-    } catch (err: any) { webAlert('Помилка', err.message || 'Не вдалося зберегти'); }
+    } catch (err: any) { webAlert('Error', err.message || 'Could not save'); }
     finally { setSaving(false); }
   };
 
@@ -214,11 +214,11 @@ export default function Availability() {
     if (Platform.OS === 'web') {
       setConfirmDeleteSlot(slot);
     } else {
-      Alert.alert('Видалити', `${DAYS_FULL[slot.day_of_week]} ${slot.start_time}–${slot.end_time}`, [
-        { text: 'Скасувати', style: 'cancel' },
-        { text: 'Видалити', style: 'destructive', onPress: async () => {
+      Alert.alert('Delete', `${DAYS_FULL[slot.day_of_week]} ${slot.start_time}–${slot.end_time}`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
           try { await api.deleteAvailabilitySlot(slot.slot_id); load(); }
-          catch (err: any) { webAlert('Помилка', err.message || 'Не вдалося видалити'); }
+          catch (err: any) { webAlert('Error', err.message || 'Could not delete'); }
         }},
       ]);
     }
@@ -227,7 +227,7 @@ export default function Availability() {
   const confirmDeleteExecute = async () => {
     if (!confirmDeleteSlot) return;
     try { await api.deleteAvailabilitySlot(confirmDeleteSlot.slot_id); load(); }
-    catch (err: any) { webAlert('Помилка', err.message || 'Не вдалося видалити'); }
+    catch (err: any) { webAlert('Error', err.message || 'Could not delete'); }
     finally { setConfirmDeleteSlot(null); }
   };
 
@@ -247,7 +247,7 @@ export default function Availability() {
     <View style={s.root}>
       {/* ── Header ── */}
       <View style={s.header}>
-        <Text style={s.headerTitle}>Мій графік</Text>
+        <Text style={s.headerTitle}>My schedule</Text>
         <TouchableOpacity style={s.addFab} onPress={() => openAdd()}>
           <Ionicons name="add" size={22} color="#fff" />
         </TouchableOpacity>
@@ -256,8 +256,8 @@ export default function Availability() {
       {/* ── Service area banner ── */}
       <TouchableOpacity style={s.areaBanner} onPress={() => setMapVisible(true)}>
         <Ionicons name="location" size={18} color={ACCENT} />
-        <Text style={s.areaText}>{areaLabel} · {areaRadius} км</Text>
-        <Text style={s.areaEdit}>Змінити</Text>
+        <Text style={s.areaText}>{areaLabel} · {areaRadius} mi</Text>
+        <Text style={s.areaEdit}>Edit</Text>
       </TouchableOpacity>
 
       {/* ── Week strip ── */}
@@ -281,7 +281,7 @@ export default function Availability() {
         <Text style={s.dayLabel}>{DAYS_FULL[selectedDay]}</Text>
         <TouchableOpacity style={s.addDayBtn} onPress={() => openAdd(selectedDay)}>
           <Ionicons name="add" size={16} color={ACCENT} />
-          <Text style={s.addDayBtnText}>Додати</Text>
+          <Text style={s.addDayBtnText}>Add</Text>
         </TouchableOpacity>
       </View>
 
@@ -306,7 +306,7 @@ export default function Availability() {
             return (
               <View key={slot.slot_id} style={[s.slotBlock, { top, height, opacity: slot.is_active ? 1 : 0.45 }]}>
                 <View style={s.slotInner}>
-                  <Text style={s.slotTitle}>Доступний</Text>
+                  <Text style={s.slotTitle}>Available</Text>
                   <Text style={s.slotTime}>{slot.start_time} – {slot.end_time}</Text>
                 </View>
                 <View style={s.slotActions}>
@@ -335,7 +335,7 @@ export default function Availability() {
           {daySlots.length === 0 && (
             <TouchableOpacity style={s.emptyBlock} onPress={() => openAdd(selectedDay)}>
               <Ionicons name="add-circle-outline" size={32} color="#d1d5db" />
-              <Text style={s.emptyText}>Натисніть щоб додати доступність</Text>
+              <Text style={s.emptyText}>Tap to add availability</Text>
             </TouchableOpacity>
           )}
 
@@ -350,14 +350,14 @@ export default function Availability() {
           <View style={m.sheet}>
             <View style={m.handle} />
             <View style={m.header}>
-              <Text style={m.title}>{editingSlot ? 'Редагувати' : 'Додати доступність'}</Text>
+              <Text style={m.title}>{editingSlot ? 'Edit' : 'Add availability'}</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={m.closeBtn}>
                 <Ionicons name="close" size={20} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
             {/* Day selector */}
-            <Text style={m.sectionLabel}>ДЕНЬ</Text>
+            <Text style={m.sectionLabel}>DAY</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={m.dayScroll}>
               {DAYS_SHORT.map((d, i) => (
                 <TouchableOpacity key={i} style={[m.dayChip, formDay === i && m.dayChipActive]} onPress={() => setFormDay(i)}>
@@ -367,11 +367,11 @@ export default function Availability() {
             </ScrollView>
 
             {/* Time pickers */}
-            <Text style={m.sectionLabel}>ЧАС</Text>
+            <Text style={m.sectionLabel}>TIME</Text>
             <View style={m.timeRow}>
-              <TimePicker label="З" value={formStart} onChange={v => { setFormStart(v); if (formEnd && formEnd <= v) setFormEnd(''); }} />
-              <View style={m.timeSep}><Text style={m.timeSepText}>до</Text></View>
-              <TimePicker label="ДО" value={formEnd} onChange={setFormEnd} filterAfter={formStart || undefined} />
+              <TimePicker label="From" value={formStart} onChange={v => { setFormStart(v); if (formEnd && formEnd <= v) setFormEnd(''); }} />
+              <View style={m.timeSep}><Text style={m.timeSepText}>to</Text></View>
+              <TimePicker label="To" value={formEnd} onChange={setFormEnd} filterAfter={formStart || undefined} />
             </View>
 
             {/* Summary */}
@@ -385,14 +385,14 @@ export default function Availability() {
             {/* Buttons */}
             <View style={m.footer}>
               <TouchableOpacity style={m.discardBtn} onPress={() => setModalVisible(false)}>
-                <Text style={m.discardText}>Скасувати</Text>
+                <Text style={m.discardText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[m.saveBtn, (!formStart || !formEnd || saving) && m.saveBtnDisabled]}
                 onPress={handleSave}
                 disabled={!formStart || !formEnd || saving}
               >
-                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={m.saveText}>{editingSlot ? 'Зберегти' : 'Додати'}</Text>}
+                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={m.saveText}>{editingSlot ? 'Save' : 'Add'}</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -403,7 +403,7 @@ export default function Availability() {
       <Modal visible={!!confirmDeleteSlot} transparent animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 }}>Видалити слот?</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 }}>Delete slot?</Text>
             <Text style={{ fontSize: 15, color: '#6b7280', marginBottom: 24 }}>
               {confirmDeleteSlot ? `${DAYS_FULL[confirmDeleteSlot.day_of_week]}: ${confirmDeleteSlot.start_time} – ${confirmDeleteSlot.end_time}` : ''}
             </Text>
@@ -412,13 +412,13 @@ export default function Availability() {
                 style={{ flex: 1, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', alignItems: 'center' }}
                 onPress={() => setConfirmDeleteSlot(null)}
               >
-                <Text style={{ fontSize: 15, color: '#374151', fontWeight: '600' }}>Скасувати</Text>
+                <Text style={{ fontSize: 15, color: '#374151', fontWeight: '600' }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={{ flex: 1, padding: 14, borderRadius: 10, backgroundColor: '#ef4444', alignItems: 'center' }}
                 onPress={confirmDeleteExecute}
               >
-                <Text style={{ fontSize: 15, color: '#fff', fontWeight: '700' }}>Видалити</Text>
+                <Text style={{ fontSize: 15, color: '#fff', fontWeight: '700' }}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -432,7 +432,7 @@ export default function Availability() {
             <TouchableOpacity onPress={() => setMapVisible(false)} style={s.mapBack}>
               <Ionicons name="arrow-back" size={22} color="#111827" />
             </TouchableOpacity>
-            <Text style={s.mapHeaderTitle}>Зона роботи</Text>
+            <Text style={s.mapHeaderTitle}>Service area</Text>
           </View>
           {Platform.OS === 'web' ? (
             <iframe title="map" src={`/map.html?lat=${areaLat}&lng=${areaLng}&radius=${areaRadius}`}
@@ -440,7 +440,7 @@ export default function Availability() {
           ) : (
             <View style={s.mapNative}>
               <Ionicons name="map" size={64} color={ACCENT} />
-              <Text style={s.mapNativeTitle}>Карта доступна у веб-версії</Text>
+              <Text style={s.mapNativeTitle}>The map is available in the web version</Text>
             </View>
           )}
         </View>

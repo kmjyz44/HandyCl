@@ -72,22 +72,22 @@ export default function NotificationsScreen() {
         return;
       }
       if (!info.hasServiceWorker || !info.hasPushManager) {
-        setPushStatus('Push не підтримується цим браузером');
+        setPushStatus('Push is not supported by this browser');
         return;
       }
       if (info.permission === 'denied') {
-        setPushStatus('Push заблоковано в налаштуваннях браузера');
+        setPushStatus('Push is blocked in browser settings');
         return;
       }
       if (info.permission !== 'granted') {
-        setPushStatus('Push не активовано');
+        setPushStatus('Push is not enabled');
         return;
       }
       if (!info.hasSubscription) {
-        setPushStatus('Не підписано на push');
+        setPushStatus('Not subscribed to push');
         return;
       }
-      setPushStatus('Push активний ✓');
+      setPushStatus('Push active ✓');
     });
   }, []);
 
@@ -112,10 +112,10 @@ export default function NotificationsScreen() {
   const onEnablePush = async () => {
     const r = await registerWebPush();
     if (r.ok) {
-      setPushStatus('Push активний ✓');
-      showAlert('Готово', 'Push сповіщення увімкнено для цього браузера.');
+      setPushStatus('Push active ✓');
+      showAlert('Done', 'Push notifications are enabled for this browser.');
     } else {
-      showAlert('Не вдалося увімкнути', `Причина: ${r.reason || 'невідома'}`);
+      showAlert('Could not enable', `Reason: ${r.reason || 'unknown'}`);
     }
   };
 
@@ -123,11 +123,11 @@ export default function NotificationsScreen() {
     try {
       const r = await api.testPush();
       showAlert(
-        'Тест відправлено',
-        `Підписок: ${r.subscriptions}. Доставлено: ${r.sent}.\n${r.sent === 0 ? 'Якщо 0 — перевір що Push активний і дозволено в браузері.' : 'Push мав прийти миттєво.'}`
+        'Test sent',
+        `Subscriptions: ${r.subscriptions}. Delivered: ${r.sent}.\n${r.sent === 0 ? 'If 0 — check that Push is active and allowed in the browser.' : 'Push should arrive instantly.'}`
       );
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || e?.message || 'Не вдалося');
+      showAlert('Error', e?.response?.data?.detail || e?.message || 'Failed');
     }
   };
 
@@ -135,10 +135,10 @@ export default function NotificationsScreen() {
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          title: 'Сповіщення',
+          title: 'Notifications',
           headerRight: () => (
             <TouchableOpacity onPress={onMarkAll} data-testid="mark-all-read-btn" style={{ paddingHorizontal: 12 }}>
-              <Text style={{ color: '#2563eb', fontSize: 13, fontWeight: '600' }}>Прочитати все</Text>
+              <Text style={{ color: '#2563eb', fontSize: 13, fontWeight: '600' }}>Mark all read</Text>
             </TouchableOpacity>
           ),
         }}
@@ -147,14 +147,14 @@ export default function NotificationsScreen() {
       {Platform.OS === 'web' && (
         <View style={styles.pushBanner}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.pushBannerTitle}>Push сповіщення</Text>
-            <Text style={styles.pushBannerSub}>{pushStatus || 'Перевіряю...'}</Text>
+            <Text style={styles.pushBannerTitle}>Push notifications</Text>
+            <Text style={styles.pushBannerSub}>{pushStatus || 'Checking...'}</Text>
           </View>
           <TouchableOpacity style={styles.pushBtn} onPress={onEnablePush} data-testid="enable-push-btn">
-            <Text style={styles.pushBtnText}>Увімкнути</Text>
+            <Text style={styles.pushBtnText}>Enable</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.pushBtn, { backgroundColor: '#f3f4f6' }]} onPress={onTestPush} data-testid="test-push-btn">
-            <Text style={[styles.pushBtnText, { color: '#374151' }]}>Тест</Text>
+            <Text style={[styles.pushBtnText, { color: '#374151' }]}>Test</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -172,8 +172,8 @@ export default function NotificationsScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="notifications-off-outline" size={48} color="#9ca3af" />
-              <Text style={styles.emptyText}>Сповіщень поки немає</Text>
-              <Text style={styles.emptySub}>Як тільки виконавець прийме замовлення, ти отримаєш сповіщення тут (і у браузері).</Text>
+              <Text style={styles.emptyText}>No notifications yet</Text>
+              <Text style={styles.emptySub}>As soon as a pro accepts your order, you'll get a notification here (and in your browser).</Text>
             </View>
           }
           renderItem={({ item }) => {

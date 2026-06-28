@@ -19,18 +19,18 @@ import { api } from '../utils/api';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 
 const CATEGORIES = [
-  { id: 'handyman_plumbing', name: 'Сантехніка', icon: 'water-outline' },
-  { id: 'handyman_electrical', name: 'Електрика', icon: 'flash-outline' },
-  { id: 'handyman_carpentry', name: 'Столярні роботи', icon: 'hammer-outline' },
-  { id: 'handyman_painting', name: 'Фарбування', icon: 'color-palette-outline' },
-  { id: 'handyman_assembly', name: 'Збирання меблів', icon: 'construct-outline' },
-  { id: 'handyman_mounting', name: 'Монтаж', icon: 'build-outline' },
-  { id: 'cleaning_regular', name: 'Прибирання', icon: 'sparkles-outline' },
-  { id: 'cleaning_deep', name: 'Глибоке прибирання', icon: 'sparkles' },
-  { id: 'moving_local', name: 'Переїзд', icon: 'car-outline' },
-  { id: 'delivery', name: 'Доставка', icon: 'cube-outline' },
-  { id: 'gardening', name: 'Садівництво', icon: 'leaf-outline' },
-  { id: 'other', name: 'Інше', icon: 'ellipsis-horizontal-outline' },
+  { id: 'handyman_plumbing', name: 'Plumbing', icon: 'water-outline' },
+  { id: 'handyman_electrical', name: 'Electrical', icon: 'flash-outline' },
+  { id: 'handyman_carpentry', name: 'Carpentry', icon: 'hammer-outline' },
+  { id: 'handyman_painting', name: 'Painting', icon: 'color-palette-outline' },
+  { id: 'handyman_assembly', name: 'Furniture Assembly', icon: 'construct-outline' },
+  { id: 'handyman_mounting', name: 'Mounting', icon: 'build-outline' },
+  { id: 'cleaning_regular', name: 'Cleaning', icon: 'sparkles-outline' },
+  { id: 'cleaning_deep', name: 'Deep Cleaning', icon: 'sparkles' },
+  { id: 'moving_local', name: 'Moving', icon: 'car-outline' },
+  { id: 'delivery', name: 'Delivery', icon: 'cube-outline' },
+  { id: 'gardening', name: 'Gardening', icon: 'leaf-outline' },
+  { id: 'other', name: 'Other', icon: 'ellipsis-horizontal-outline' },
 ];
 
 export default function CreateTask() {
@@ -71,31 +71,31 @@ export default function CreateTask() {
     switch (step) {
       case 1:
         if (!category) {
-          Alert.alert('Помилка', 'Оберіть категорію');
+          Alert.alert('Error', 'Select a category');
           return false;
         }
         break;
       case 2:
         if (!title.trim()) {
-          Alert.alert('Помилка', 'Введіть назву завдання');
+          Alert.alert('Error', 'Enter a task title');
           return false;
         }
         if (!description.trim()) {
-          Alert.alert('Помилка', 'Опишіть завдання');
+          Alert.alert('Error', 'Describe the task');
           return false;
         }
         break;
       case 3:
         if (!address.trim()) {
-          Alert.alert('Помилка', 'Введіть адресу');
+          Alert.alert('Error', 'Enter an address');
           return false;
         }
         if (!date) {
-          Alert.alert('Помилка', 'Оберіть дату');
+          Alert.alert('Error', 'Select a date');
           return false;
         }
         if (!time) {
-          Alert.alert('Помилка', 'Оберіть час');
+          Alert.alert('Error', 'Select a time');
           return false;
         }
         break;
@@ -138,8 +138,8 @@ export default function CreateTask() {
 
   const renderStep1 = () => (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Оберіть категорію</Text>
-      <Text style={styles.stepSubtitle}>Що потрібно зробити?</Text>
+      <Text style={styles.stepTitle}>Choose a category</Text>
+      <Text style={styles.stepSubtitle}>What needs to be done?</Text>
 
       <View style={styles.categoriesGrid}>
         {CATEGORIES.map((cat) => (
@@ -173,27 +173,27 @@ export default function CreateTask() {
   const renderStep2 = () => (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={styles.stepContent}>
-        <Text style={styles.stepTitle}>Опишіть завдання</Text>
-        <Text style={styles.stepSubtitle}>Чим детальніше, тим краще</Text>
+        <Text style={styles.stepTitle}>Describe the task</Text>
+        <Text style={styles.stepSubtitle}>The more detail, the better</Text>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Назва завдання</Text>
+          <Text style={styles.label}>Task title</Text>
           <TextInput
             style={styles.input}
             value={title}
             onChangeText={setTitle}
-            placeholder="Наприклад: Полагодити кран"
+            placeholder="E.g., Fix a faucet"
             maxLength={100}
           />
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Опис</Text>
+          <Text style={styles.label}>Description</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={description}
             onChangeText={setDescription}
-            placeholder="Опишіть детально що потрібно зробити..."
+            placeholder="Describe in detail what needs to be done..."
             multiline
             numberOfLines={5}
             maxLength={1000}
@@ -201,7 +201,7 @@ export default function CreateTask() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Фото (опціонально)</Text>
+          <Text style={styles.label}>Photos (optional)</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {photos.map((photo, index) => (
               <View key={index} style={styles.photoContainer}>
@@ -217,7 +217,7 @@ export default function CreateTask() {
             {photos.length < 5 && (
               <TouchableOpacity style={styles.addPhotoBtn} onPress={pickImage}>
                 <Ionicons name="camera-outline" size={32} color="#6b7280" />
-                <Text style={styles.addPhotoText}>Додати</Text>
+                <Text style={styles.addPhotoText}>Add</Text>
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -229,8 +229,8 @@ export default function CreateTask() {
   const renderStep3 = () => (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={styles.stepContent}>
-        <Text style={styles.stepTitle}>Коли і де?</Text>
-        <Text style={styles.stepSubtitle}>Вкажіть місце та час</Text>
+        <Text style={styles.stepTitle}>When and where?</Text>
+        <Text style={styles.stepSubtitle}>Specify the place and time</Text>
 
         <View style={[styles.inputGroup, { zIndex: 50 }]}>
           <Text style={styles.label}>Address</Text>
@@ -244,7 +244,7 @@ export default function CreateTask() {
 
         <View style={styles.row}>
           <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>Дата</Text>
+            <Text style={styles.label}>Date</Text>
             <TextInput
               style={styles.input}
               value={date}
@@ -253,7 +253,7 @@ export default function CreateTask() {
             />
           </View>
           <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>Час</Text>
+            <Text style={styles.label}>Time</Text>
             <TextInput
               style={styles.input}
               value={time}
@@ -264,7 +264,7 @@ export default function CreateTask() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Орієнтовна тривалість (години)</Text>
+          <Text style={styles.label}>Estimated duration (hours)</Text>
           <TextInput
             style={styles.input}
             value={estimatedHours}
@@ -279,8 +279,8 @@ export default function CreateTask() {
 
   const renderStep4 = () => (
     <ScrollView style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Як знайти виконавця?</Text>
-      <Text style={styles.stepSubtitle}>Оберіть спосіб</Text>
+      <Text style={styles.stepTitle}>How to find a pro?</Text>
+      <Text style={styles.stepSubtitle}>Choose a method</Text>
 
       <TouchableOpacity
         style={[styles.optionCard, !allowOffers && styles.optionCardActive]}
@@ -295,10 +295,10 @@ export default function CreateTask() {
         </View>
         <View style={styles.optionContent}>
           <Text style={[styles.optionTitle, !allowOffers && styles.optionTitleActive]}>
-            Обрати виконавця
+            Choose a pro
           </Text>
           <Text style={[styles.optionDesc, !allowOffers && styles.optionDescActive]}>
-            Перегляньте профілі та оберіть самостійно
+            Browse profiles and choose yourself
           </Text>
         </View>
         {!allowOffers && (
@@ -319,10 +319,10 @@ export default function CreateTask() {
         </View>
         <View style={styles.optionContent}>
           <Text style={[styles.optionTitle, allowOffers && styles.optionTitleActive]}>
-            Отримати пропозиції
+            Get offers
           </Text>
           <Text style={[styles.optionDesc, allowOffers && styles.optionDescActive]}>
-            Виконавці надішлють свої пропозиції з ціною
+            Pros will send their offers with prices
           </Text>
         </View>
         {allowOffers && (
@@ -332,24 +332,24 @@ export default function CreateTask() {
 
       {/* Summary */}
       <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Підсумок</Text>
+        <Text style={styles.summaryTitle}>Summary</Text>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Категорія:</Text>
+          <Text style={styles.summaryLabel}>Category:</Text>
           <Text style={styles.summaryValue}>
             {CATEGORIES.find(c => c.id === category)?.name}
           </Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Завдання:</Text>
+          <Text style={styles.summaryLabel}>Task:</Text>
           <Text style={styles.summaryValue}>{title}</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Адреса:</Text>
+          <Text style={styles.summaryLabel}>Address:</Text>
           <Text style={styles.summaryValue}>{address}</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Дата:</Text>
-          <Text style={styles.summaryValue}>{date} о {time}</Text>
+          <Text style={styles.summaryLabel}>Date:</Text>
+          <Text style={styles.summaryValue}>{date} at {time}</Text>
         </View>
       </View>
     </ScrollView>
@@ -362,7 +362,7 @@ export default function CreateTask() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Нове завдання</Text>
+        <Text style={styles.headerTitle}>New task</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -391,7 +391,7 @@ export default function CreateTask() {
       <View style={styles.footer}>
         {step > 1 && (
           <TouchableOpacity style={styles.backButton} onPress={prevStep}>
-            <Text style={styles.backButtonText}>Назад</Text>
+            <Text style={styles.backButtonText}>Back</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -403,7 +403,7 @@ export default function CreateTask() {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.nextButtonText}>
-              {step === 4 ? 'Створити завдання' : 'Далі'}
+              {step === 4 ? 'Create task' : 'Next'}
             </Text>
           )}
         </TouchableOpacity>

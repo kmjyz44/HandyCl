@@ -10,10 +10,10 @@ import { useAuthStore } from '../store/authStore';
 import { showAlert } from '../utils/alert';
 
 const CATEGORIES = [
-  { id: 'bug',     label: 'Помилка / Баг',   icon: 'bug' as const },
-  { id: 'billing', label: 'Платежі',         icon: 'card' as const },
-  { id: 'feature', label: 'Ідея / Покращення', icon: 'bulb' as const },
-  { id: 'other',   label: 'Інше',            icon: 'help-circle' as const },
+  { id: 'bug',     label: 'Bug / Error',     icon: 'bug' as const },
+  { id: 'billing', label: 'Billing',         icon: 'card' as const },
+  { id: 'feature', label: 'Idea / Improvement', icon: 'bulb' as const },
+  { id: 'other',   label: 'Other',           icon: 'help-circle' as const },
 ];
 
 export default function HelpCenter() {
@@ -47,15 +47,15 @@ export default function HelpCenter() {
   }, []);
 
   const submit = async () => {
-    if (name.trim().length < 2) { showAlert('Помилка', 'Введи своє ім\'я'); return; }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { showAlert('Помилка', 'Невірний email'); return; }
-    if (message.trim().length < 10) { showAlert('Помилка', 'Опиши проблему — мінімум 10 символів'); return; }
+    if (name.trim().length < 2) { showAlert('Error', 'Enter your name'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { showAlert('Error', 'Invalid email'); return; }
+    if (message.trim().length < 10) { showAlert('Error', 'Describe the issue — at least 10 characters'); return; }
     setSending(true);
     try {
       await api.submitSupportRequest({
         name: name.trim(),
         email: email.trim(),
-        subject: subject.trim() || 'Запит з форми',
+        subject: subject.trim() || 'Form request',
         message: message.trim(),
         category,
       });
@@ -63,7 +63,7 @@ export default function HelpCenter() {
       setMessage('');
       setSubject('');
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося надіслати');
+      showAlert('Error', e?.response?.data?.detail || 'Could not send');
     } finally {
       setSending(false);
     }
@@ -71,15 +71,15 @@ export default function HelpCenter() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#f9fafb' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{ title: 'Центр допомоги' }} />
+      <Stack.Screen options={{ title: 'Help Center' }} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         {/* Header */}
         <View style={styles.hero}>
           <View style={styles.heroIcon}>
             <Ionicons name="help-buoy" size={28} color="#fff" />
           </View>
-          <Text style={styles.h1}>Як ми можемо допомогти?</Text>
-          <Text style={styles.heroSub}>Знайди відповідь у часто запитуваному, або напиши нам напряму — відповімо протягом 24 годин.</Text>
+          <Text style={styles.h1}>How can we help?</Text>
+          <Text style={styles.heroSub}>Find an answer in the FAQ, or message us directly — we'll reply within 24 hours.</Text>
 
           <View style={styles.heroLinks}>
             <TouchableOpacity
@@ -92,7 +92,7 @@ export default function HelpCenter() {
               data-testid="open-support-chat-btn"
             >
               <Ionicons name="chatbubbles" size={16} color="#fff" />
-              <Text style={styles.heroLinkPrimaryText}>Написати в чат адміну</Text>
+              <Text style={styles.heroLinkPrimaryText}>Message the admin in chat</Text>
             </TouchableOpacity>
             {supportInfo.support_email && (
               <TouchableOpacity
@@ -118,7 +118,7 @@ export default function HelpCenter() {
         </View>
 
         {/* FAQ */}
-        <Text style={styles.sectionH}>Часті запитання</Text>
+        <Text style={styles.sectionH}>Frequently asked questions</Text>
         {loading ? (
           <ActivityIndicator color="#2563eb" />
         ) : (
@@ -149,20 +149,20 @@ export default function HelpCenter() {
         )}
 
         {/* Contact form */}
-        <Text style={styles.sectionH}>Не знайшов відповіді? Напиши нам</Text>
+        <Text style={styles.sectionH}>Didn't find an answer? Write to us</Text>
         <View style={styles.formCard}>
           {sent ? (
             <View style={styles.successBox}>
               <Ionicons name="checkmark-circle" size={56} color="#16a34a" />
-              <Text style={styles.successTitle}>Дякуємо!</Text>
-              <Text style={styles.successText}>Твоє повідомлення надіслано. Відповімо найближчим часом на {email}.</Text>
+              <Text style={styles.successTitle}>Thank you!</Text>
+              <Text style={styles.successText}>Your message was sent. We'll reply soon to {email}.</Text>
               <TouchableOpacity style={styles.successBtn} onPress={() => setSent(false)} data-testid="send-another-btn">
-                <Text style={styles.successBtnText}>Надіслати ще одне</Text>
+                <Text style={styles.successBtnText}>Send another</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <>
-              <Text style={styles.formLabel}>Категорія</Text>
+              <Text style={styles.formLabel}>Category</Text>
               <View style={styles.catRow}>
                 {CATEGORIES.map((c) => (
                   <TouchableOpacity
@@ -177,20 +177,20 @@ export default function HelpCenter() {
                 ))}
               </View>
 
-              <Text style={styles.formLabel}>Ім'я</Text>
-              <TextInput value={name} onChangeText={setName} placeholder="Як до тебе звертатись" style={styles.input} data-testid="support-name-input" />
+              <Text style={styles.formLabel}>Name</Text>
+              <TextInput value={name} onChangeText={setName} placeholder="What should we call you" style={styles.input} data-testid="support-name-input" />
 
-              <Text style={styles.formLabel}>Email для відповіді</Text>
+              <Text style={styles.formLabel}>Reply email</Text>
               <TextInput value={email} onChangeText={setEmail} placeholder="your@email.com" autoCapitalize="none" keyboardType="email-address" style={styles.input} data-testid="support-email-input" />
 
-              <Text style={styles.formLabel}>Тема (опціонально)</Text>
-              <TextInput value={subject} onChangeText={setSubject} placeholder="Коротко в чому суть" style={styles.input} data-testid="support-subject-input" />
+              <Text style={styles.formLabel}>Subject (optional)</Text>
+              <TextInput value={subject} onChangeText={setSubject} placeholder="Briefly, what's it about" style={styles.input} data-testid="support-subject-input" />
 
-              <Text style={styles.formLabel}>Повідомлення</Text>
+              <Text style={styles.formLabel}>Message</Text>
               <TextInput
                 value={message}
                 onChangeText={setMessage}
-                placeholder="Опиши детально що сталось, що ти очікував, що трапилось замість того..."
+                placeholder="Describe in detail what happened, what you expected, and what happened instead..."
                 style={[styles.input, styles.textarea]}
                 multiline
                 numberOfLines={6}
@@ -206,7 +206,7 @@ export default function HelpCenter() {
                 {sending ? <ActivityIndicator color="#fff" /> : (
                   <>
                     <Ionicons name="send" size={16} color="#fff" />
-                    <Text style={styles.submitBtnText}>Надіслати</Text>
+                    <Text style={styles.submitBtnText}>Send</Text>
                   </>
                 )}
               </TouchableOpacity>

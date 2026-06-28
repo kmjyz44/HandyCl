@@ -16,11 +16,11 @@ import { showConfirm, showAlert } from '../../utils/alert';
 import { useAuthStore } from '../../store/authStore';
 
 const ROLE_OPTIONS = [
-  { value: 'client', label: 'Клієнт', icon: 'person-outline', color: '#10b981' },
-  { value: 'provider', label: 'Виконавець', icon: 'briefcase-outline', color: '#2563eb' },
-  { value: 'admin', label: 'Адміністратор', icon: 'shield-checkmark-outline', color: '#f59e0b' },
-  { value: 'moderator', label: 'Модератор', icon: 'ribbon-outline', color: '#8b5cf6' },
-  { value: 'support', label: 'Техпідтримка', icon: 'headset-outline', color: '#0ea5e9' },
+  { value: 'client', label: 'Client', icon: 'person-outline', color: '#10b981' },
+  { value: 'provider', label: 'Pro', icon: 'briefcase-outline', color: '#2563eb' },
+  { value: 'admin', label: 'Administrator', icon: 'shield-checkmark-outline', color: '#f59e0b' },
+  { value: 'moderator', label: 'Moderator', icon: 'ribbon-outline', color: '#8b5cf6' },
+  { value: 'support', label: 'Support', icon: 'headset-outline', color: '#0ea5e9' },
 ] as const;
 
 const roleMeta = (role: string) => ROLE_OPTIONS.find((r) => r.value === role) || ROLE_OPTIONS[0];
@@ -51,7 +51,7 @@ export default function Users() {
     }
     try {
       await api.changeUserRole(roleTarget.user_id, newRole);
-      showAlert('Успіх', `Роль змінено на «${roleMeta(newRole).label}»`);
+      showAlert('Success', `Role changed to "${roleMeta(newRole).label}"`);
       setRoleModalVisible(false);
       const becameModerator = newRole === 'moderator';
       const target = roleTarget;
@@ -59,7 +59,7 @@ export default function Users() {
       await loadUsers();
       if (becameModerator) openModulesModal({ ...target, role: 'moderator' });
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || e.message || 'Не вдалося змінити роль');
+      showAlert('Error', e?.response?.data?.detail || e.message || 'Could not change role');
     }
   };
 
@@ -68,23 +68,23 @@ export default function Users() {
   const [modModules, setModModules] = useState<string[]>([]);
   const ALL_MODULES = ['tasks','bookings','users','payments','reviews','messages','services','analytics','settings'];
   const MODULE_LABELS: Record<string,string> = {
-    tasks:'Завдання', bookings:'Бронювання', users:'Користувачі',
-    payments:'Оплати', reviews:'Відгуки', messages:'Повідомлення',
-    services:'Послуги', analytics:'Аналітика', settings:'Налаштування'
+    tasks:'Tasks', bookings:'Bookings', users:'Users',
+    payments:'Payments', reviews:'Reviews', messages:'Messages',
+    services:'Services', analytics:'Analytics', settings:'Settings'
   };
 
   const handleSetModerator = async (user: any) => {
-    showConfirm('Зробити модератором', `Надати ${user.name} роль модератора?`, async () => {
-      try { await api.setModerator(user.user_id); showAlert('Успіх', `${user.name} тепер модератор`); loadUsers(); }
-      catch (e: any) { showAlert('Помилка', e?.response?.data?.detail || e.message); }
-    }, 'Підтвердити', 'Скасувати');
+    showConfirm('Make moderator', `Grant ${user.name} the moderator role?`, async () => {
+      try { await api.setModerator(user.user_id); showAlert('Success', `${user.name} is now a moderator`); loadUsers(); }
+      catch (e: any) { showAlert('Error', e?.response?.data?.detail || e.message); }
+    }, 'Confirm', 'Cancel');
   };
 
   const handleRemoveModerator = async (user: any) => {
-    showConfirm('Зняти модератора', `Забрати у ${user.name} роль модератора?`, async () => {
-      try { await api.removeModerator(user.user_id); showAlert('Успіх', 'Роль модератора знято'); loadUsers(); }
-      catch (e: any) { showAlert('Помилка', e?.response?.data?.detail || e.message); }
-    }, 'Підтвердити', 'Скасувати');
+    showConfirm('Remove moderator', `Remove the moderator role from ${user.name}?`, async () => {
+      try { await api.removeModerator(user.user_id); showAlert('Success', 'Moderator role removed'); loadUsers(); }
+      catch (e: any) { showAlert('Error', e?.response?.data?.detail || e.message); }
+    }, 'Confirm', 'Cancel');
   };
 
   const openModulesModal = (user: any) => {
@@ -96,10 +96,10 @@ export default function Users() {
   const saveModules = async () => {
     try {
       await api.updateModeratorModules(selectedUser.user_id, modModules);
-      showAlert('Успіх', 'Доступ до модулів оновлено');
+      showAlert('Success', 'Module access updated');
       setModModalVisible(false);
       loadUsers();
-    } catch (e: any) { showAlert('Помилка', e?.response?.data?.detail || e.message); }
+    } catch (e: any) { showAlert('Error', e?.response?.data?.detail || e.message); }
   };
 
   const loadUsers = async () => {
@@ -235,7 +235,7 @@ export default function Users() {
 
             <View style={styles.actions}>
               {user.user_id === currentUserId ? (
-                <Text style={styles.selfNote}>Це ваш акаунт</Text>
+                <Text style={styles.selfNote}>This is your account</Text>
               ) : (
                 <>
                   <TouchableOpacity
@@ -244,7 +244,7 @@ export default function Users() {
                     data-testid={`change-role-btn-${user.user_id}`}
                   >
                     <Ionicons name="swap-horizontal" size={16} color="#6366f1" />
-                    <Text style={[styles.actionText, { color: '#6366f1' }]}>Роль</Text>
+                    <Text style={[styles.actionText, { color: '#6366f1' }]}>Role</Text>
                   </TouchableOpacity>
 
                   {user.role === 'moderator' && (
@@ -254,7 +254,7 @@ export default function Users() {
                       data-testid={`modules-btn-${user.user_id}`}
                     >
                       <Ionicons name="options-outline" size={16} color="#8b5cf6" />
-                      <Text style={[styles.actionText, { color: '#8b5cf6' }]}>Модулі</Text>
+                      <Text style={[styles.actionText, { color: '#8b5cf6' }]}>Modules</Text>
                     </TouchableOpacity>
                   )}
 
@@ -346,14 +346,14 @@ export default function Users() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Доступ до модулів</Text>
+              <Text style={styles.modalTitle}>Module access</Text>
               <TouchableOpacity onPress={() => setModModalVisible(false)}>
                 <Ionicons name='close' size={24} color='#6b7280' />
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalBody}>
               <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 12 }}>
-                {selectedUser?.name} — оберіть модулі доступу:
+                {selectedUser?.name} — select module access:
               </Text>
               {ALL_MODULES.map((mod) => (
                 <TouchableOpacity
@@ -369,7 +369,7 @@ export default function Users() {
                 style={[styles.modalButton, { backgroundColor: '#2563eb', marginTop: 16, marginBottom: 8 }]}
                 onPress={saveModules}
               >
-                <Text style={styles.modalButtonText}>Зберегти</Text>
+                <Text style={styles.modalButtonText}>Save</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -381,14 +381,14 @@ export default function Users() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Змінити роль</Text>
+              <Text style={styles.modalTitle}>Change role</Text>
               <TouchableOpacity onPress={() => setRoleModalVisible(false)} data-testid="role-modal-close">
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
               <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
-                {roleTarget?.name} — оберіть нову роль:
+                {roleTarget?.name} — select a new role:
               </Text>
               {ROLE_OPTIONS.map((opt) => {
                 const active = roleTarget?.role === opt.value;

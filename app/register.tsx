@@ -23,15 +23,15 @@ export default function Register() {
 
   const handleRegister = async () => {
     if (!email || !password || !name) {
-      setErrorMsg('Заповніть всі обовʼязкові поля');
+      setErrorMsg('Fill in all required fields');
       return;
     }
     if (password.length < 6) {
-      setErrorMsg('Пароль має бути мінімум 6 символів');
+      setErrorMsg('Password must be at least 6 characters');
       return;
     }
     if (!acceptedTerms) {
-      setErrorMsg('Будь ласка, погодьтеся з Terms of Use та Privacy Policy');
+      setErrorMsg('Please agree to the Terms of Use and Privacy Policy');
       return;
     }
     setErrorMsg('');
@@ -45,12 +45,12 @@ export default function Register() {
       router.replace({ pathname: '/verify-email', params: { email } } as any);
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
-      let msg = (typeof detail === 'string' && detail) || error.message || 'Помилка реєстрації';
+      let msg = (typeof detail === 'string' && detail) || error.message || 'Registration error';
       const lower = String(msg).toLowerCase();
       if (lower.includes('already registered')) {
-        msg = 'Цей email вже зареєстрований. Спробуйте увійти або скористайтесь іншим email.';
+        msg = 'This email is already registered. Try logging in or use a different email.';
       } else if (error.message && (error.message.includes('Network') || error.message.includes('fetch'))) {
-        msg = 'Не вдалося підключитися до сервера.';
+        msg = 'Could not connect to the server.';
       }
       setErrorMsg(msg);
     } finally {

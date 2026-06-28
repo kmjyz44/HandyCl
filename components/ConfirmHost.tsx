@@ -66,7 +66,7 @@ export default function ConfirmHost() {
           {!!state.message && <Text style={styles.message}>{state.message}</Text>}
           <View style={styles.actions}>
             <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => close(false)} data-testid="confirm-cancel-btn">
-              <Text style={styles.btnCancelText}>{state.cancelLabel || 'Скасувати'}</Text>
+              <Text style={styles.btnCancelText}>{state.cancelLabel || 'Cancel'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, destructive ? styles.btnDanger : styles.btnPrimary]}

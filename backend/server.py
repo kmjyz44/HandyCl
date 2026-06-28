@@ -1451,19 +1451,19 @@ async def _send_sms_twilio(to_phone: str, body: str) -> Tuple[bool, Optional[str
     """Send an SMS via Twilio. Returns (success, error_message).
     error_message is a human-readable reason when success is False, else None."""
     if not to_phone:
-        return False, "Номер телефону не вказано"
+        return False, "Phone number not provided"
     keys = await _get_integration_keys()
     if not keys.get("enable_sms_notifications", True):
-        return False, "SMS-сповіщення вимкнено в налаштуваннях адміністратора"
+        return False, "SMS notifications are disabled in admin settings"
     sid = keys.get("twilio_account_sid")
     token = keys.get("twilio_auth_token")
     from_phone = keys.get("twilio_from_phone")
     if not sid or not token or not from_phone:
         logger.info("Twilio not configured — skipping SMS to %s", to_phone)
-        return False, "Twilio не налаштовано (вкажіть Account SID, Auth Token та номер відправника в адмінці)"
+        return False, "Twilio is not configured (set Account SID, Auth Token, and sender number in admin)"
     # Twilio requires E.164 format (e.g. +14155551234)
     if not to_phone.strip().startswith("+"):
-        return False, "Номер має бути у форматі E.164, напр. +14155551234"
+        return False, "Number must be in E.164 format, e.g. +14155551234"
     try:
         async with httpx.AsyncClient(timeout=10.0, auth=(sid, token)) as http:
             r = await http.post(
@@ -1473,18 +1473,18 @@ async def _send_sms_twilio(to_phone: str, body: str) -> Tuple[bool, Optional[str
         if r.status_code >= 400:
             logger.warning("Twilio SMS failed %s: %s", r.status_code, r.text[:400])
             # Surface the real Twilio reason to the caller
-            err_msg = f"Twilio помилка {r.status_code}"
+            err_msg = f"Twilio error {r.status_code}"
             try:
                 data = r.json()
                 tw_code = data.get("code")
                 tw_message = data.get("message") or ""
                 if tw_code == 21608:
-                    err_msg = ("Trial-акаунт Twilio може надсилати SMS лише на номери, верифіковані "
-                               "у Twilio Console (Verified Caller IDs). Додайте номер або оновіть акаунт.")
+                    err_msg = ("A Twilio trial account can only send SMS to numbers verified "
+                               "in the Twilio Console (Verified Caller IDs). Add the number or upgrade the account.")
                 elif tw_code == 21211:
-                    err_msg = "Невірний формат номера. Використовуйте E.164, напр. +14155551234"
+                    err_msg = "Invalid number format. Use E.164, e.g. +14155551234"
                 elif tw_code == 21408 or tw_code == 21610:
-                    err_msg = "Twilio не може надіслати SMS на цей номер/регіон (перевірте дозволи в Geo Permissions)"
+                    err_msg = "Twilio cannot send SMS to this number/region (check Geo Permissions)"
                 elif tw_message:
                     err_msg = f"Twilio: {tw_message}"
             except Exception:
@@ -1494,7 +1494,7 @@ async def _send_sms_twilio(to_phone: str, body: str) -> Tuple[bool, Optional[str
         return True, None
     except Exception as e:
         logger.warning("Twilio SMS error: %s", e)
-        return False, f"Помилка з'єднання з Twilio: {e}"
+        return False, f"Twilio connection error: {e}"
 
 
 async def _send_web_push_one(subscription: Dict[str, Any], payload: Dict[str, Any], vapid_priv: str, vapid_subject: str) -> bool:
@@ -2164,7 +2164,7 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
         total_price=price,
         # If client picked a specific provider, the booking starts in
         # pending_acceptance — provider must Accept before the client
-        # sees it as "Прийнято". Without a provider it remains POSTED.
+        # sees it as "Accepted". Without a provider it remains POSTED.
         status=(BookingStatus.PENDING_ACCEPTANCE if booking_data.provider_id else BookingStatus.POSTED)
     )
 
@@ -2242,8 +2242,8 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
         await notify_user(
             booking_data.provider_id,
             "new_task_pending",
-            "Нове замовлення очікує на підтвердження",
-            f"У вас нове замовлення «{booking_data.title}» — будь ласка, прийміть або відхиліть його.",
+            "A new order is awaiting confirmation",
+            f"You have a new order \"{booking_data.title}\" — please accept or decline it.",
             related_id=task_id,
             related_type="task",
         )
@@ -2353,7 +2353,7 @@ async def update_booking(booking_id: str, status: BookingStatus, provider_id: Op
         provider = await db.users.find_one({"user_id": provider_id}, {"_id": 0})
         if provider and provider.get("telegram_chat_id"):
             service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
-            message = f"🔔 *Нове замовлення!*\n\nПослуга: {service['name']}\nДата: {booking['date']} о {booking['time']}\nАдреса: {booking['address']}"
+            message = f"🔔 *New order!*\n\nService: {service['name']}\nDate: {booking['date']} at {booking['time']}\nAddress: {booking['address']}"
             await send_telegram_notification(provider["telegram_chat_id"], message)
 
     updated_booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
@@ -2387,7 +2387,7 @@ async def admin_assign_booking(
         booking_id=booking_id,
         client_id=booking["client_id"],
         provider_id=assign_data.provider_id,
-        title=f"Замовлення: {service['name'] if service else 'Послуга'}",
+        title=f"Order: {service['name'] if service else 'Service'}",
         description=booking.get("problem_description") or booking.get("notes") or service.get("description", ""),
         status=TaskStatus.ASSIGNED,
         assigned_by=current_user.user_id,
@@ -2412,7 +2412,7 @@ async def admin_assign_booking(
     # Send notification to executor
     provider = await db.users.find_one({"user_id": assign_data.provider_id}, {"_id": 0})
     if provider and provider.get("telegram_chat_id"):
-        message = f"📋 *Нове завдання!*\n\nПослуга: {service['name'] if service else 'Послуга'}\nДата: {booking['date']} о {booking['time']}\nАдреса: {booking['address']}\nЦіна: ${assign_data.custom_price or booking['total_price']}"
+        message = f"📋 *New task!*\n\nService: {service['name'] if service else 'Service'}\nDate: {booking['date']} at {booking['time']}\nAddress: {booking['address']}\nPrice: ${assign_data.custom_price or booking['total_price']}"
         await send_telegram_notification(provider["telegram_chat_id"], message)
 
     return {"message": "Booking assigned", "task_id": task_id, "booking_status": BookingStatus.ASSIGNED}
@@ -2489,7 +2489,7 @@ async def create_task(task_data: TaskCreate, current_user: User = Depends(requir
     # Send Telegram notification
     provider = await db.users.find_one({"user_id": task_data.provider_id}, {"_id": 0})
     if provider and provider.get("telegram_chat_id"):
-        message = f"📋 *Нове завдання!*\n\nНазва: {task_data.title}\nОпис: {task_data.description}\nДата: {task_data.due_date or 'Не вказано'}"
+        message = f"📋 *New task!*\n\nTitle: {task_data.title}\nDescription: {task_data.description}\nDate: {task_data.due_date or 'Not specified'}"
         await send_telegram_notification(provider["telegram_chat_id"], message)
 
     return task.dict()
@@ -2660,8 +2660,8 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
             await notify_user(
                 client_id,
                 "booking_accepted",
-                "Виконавець прийняв замовлення",
-                f"Виконавець підтвердив завдання «{task.get('title') or task.get('description') or 'Замовлення'}». Очікуйте на виконання.",
+                "The pro accepted the order",
+                f"The pro confirmed the task \"{task.get('title') or task.get('description') or 'Order'}\". Expect it to be done soon.",
                 related_id=task.get("booking_id") or task_id,
                 related_type="booking",
             )
@@ -2722,8 +2722,8 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
         await notify_user(
             booking["client_id"],
             "booking_accepted",
-            "Виконавець прийняв замовлення",
-            f"Виконавець підтвердив завдання «{booking.get('title') or 'Замовлення'}».",
+            "The pro accepted the order",
+            f"The pro confirmed the task \"{booking.get('title') or 'Order'}\".",
             related_id=task_id,
             related_type="booking",
         )
@@ -2772,8 +2772,8 @@ async def task_on_the_way(task_id: str, current_user: User = Depends(get_current
         await notify_user(
             client_id,
             "task_on_the_way",
-            "Виконавець у дорозі",
-            f"Виконавець виїхав на ваше замовлення «{task.get('title') or 'Завдання'}».",
+            "The pro is on the way",
+            f"The pro is heading to your order \"{task.get('title') or 'Task'}\".",
             related_id=task.get("booking_id") or real_task_id,
             related_type="booking",
         )
@@ -2818,8 +2818,8 @@ async def start_task(task_id: str, current_user: User = Depends(get_current_user
         await notify_user(
             client_id,
             "task_started",
-            "Робота розпочалась",
-            f"Виконавець розпочав роботу над «{task.get('title') or 'Завдання'}».",
+            "Work has started",
+            f"The pro has started working on \"{task.get('title') or 'Task'}\".",
             related_id=task.get("booking_id") or real_task_id,
             related_type="booking",
         )
@@ -2921,8 +2921,8 @@ async def complete_task(
         await notify_user(
             client_id,
             "payment_required",
-            "Оплата за завдання",
-            f"Виконавець завершив роботу. Відпрацьовано: {actual_hours} год. Будь ласка, оплатіть рахунок.",
+            "Payment for the task",
+            f"The pro finished the work. Hours worked: {actual_hours} hr. Please pay the invoice.",
             related_id=task.get("booking_id") or real_task_id,
             related_type="booking",
         )
@@ -2982,8 +2982,8 @@ async def decline_task(
         await notify_user(
             client_id,
             "booking_declined",
-            "Виконавець відхилив замовлення",
-            f"На жаль, виконавець відхилив завдання. Причина: {reason.strip()}. Ви можете обрати іншого виконавця.",
+            "The pro declined the order",
+            f"Unfortunately, the pro declined the task. Reason: {reason.strip()}. You can choose another pro.",
             related_id=task.get("booking_id") or task_id,
             related_type="booking",
         )
@@ -4975,7 +4975,7 @@ async def stripe_connect_onboard(request: Request, current_user: User = Depends(
     if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
         raise HTTPException(status_code=403, detail="Only providers can onboard")
     if not await _stripe_init():
-        raise HTTPException(status_code=500, detail="Stripe не налаштовано — додай Secret Key в Адмін → Інтеграції")
+        raise HTTPException(status_code=500, detail="Stripe is not configured — add a Secret Key in Admin → Integrations")
     import stripe as _stripe
     # Look up existing connected account
     user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "stripe_account_id": 1, "email": 1, "country": 1})
@@ -5007,7 +5007,7 @@ async def stripe_connect_onboard(request: Request, current_user: User = Depends(
         return {"url": link.url, "account_id": acct_id}
     except Exception as e:
         logger.error("Stripe Connect onboard failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {e}")
 
 
 @api_router.get("/tasker/stripe-connect/status")
@@ -5055,9 +5055,9 @@ async def stripe_connect_dashboard_link(current_user: User = Depends(get_current
     user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "stripe_account_id": 1})
     acct_id = (user or {}).get("stripe_account_id")
     if not acct_id:
-        raise HTTPException(status_code=404, detail="Stripe Connect ще не підключено")
+        raise HTTPException(status_code=404, detail="Stripe Connect is not connected yet")
     if not await _stripe_init():
-        raise HTTPException(status_code=500, detail="Stripe не налаштовано")
+        raise HTTPException(status_code=500, detail="Stripe is not configured")
     import stripe as _stripe
     try:
         link = await asyncio.to_thread(_stripe.Account.create_login_link, acct_id)
@@ -5094,7 +5094,7 @@ async def create_checkout_session(
     # Resolve Stripe secret key (Integration Keys -> legacy settings -> env)
     api_key = await _get_stripe_secret_key()
     if not api_key:
-        raise HTTPException(status_code=500, detail="Stripe не налаштовано — додай Secret Key в Адмін → Інтеграції")
+        raise HTTPException(status_code=500, detail="Stripe is not configured — add a Secret Key in Admin → Integrations")
 
     # Compute final amount client should pay (commission already snapshotted on booking).
     # If snapshot missing/zero — recompute from category commission rate.
@@ -5186,7 +5186,7 @@ async def create_checkout_session(
             "price_data": {
                 "currency": currency,
                 "product_data": {
-                    "name": booking.get("title") or "HandyHub — оплата завдання",
+                    "name": booking.get("title") or "HandyHub — task payment",
                     "description": (booking.get("description") or "")[:200] or "HandyHub task payment",
                 },
                 "unit_amount": amount_cents,
@@ -5203,7 +5203,7 @@ async def create_checkout_session(
         session = await asyncio.to_thread(_stripe.checkout.Session.create, **session_params)
     except Exception as e:
         logger.error("Stripe Checkout create failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {e}")
 
     # Create payment transaction
     transaction_id = f"txn_{uuid.uuid4().hex[:12]}"
@@ -5247,7 +5247,7 @@ async def get_payment_status(session_id: str, current_user: User = Depends(get_c
         session = await asyncio.to_thread(_stripe.checkout.Session.retrieve, session_id)
     except Exception as e:
         logger.error("Stripe Session.retrieve failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {e}")
 
     payment_status = session.get("payment_status") or "unpaid"
     amount_total = session.get("amount_total") or 0
@@ -5307,17 +5307,17 @@ async def create_commission_wallet_intent(
 
     api_key = await _get_stripe_secret_key()
     if not api_key:
-        raise HTTPException(status_code=500, detail="Stripe не налаштовано — додай Secret Key в Адмін → Інтеграції")
+        raise HTTPException(status_code=500, detail="Stripe is not configured — add a Secret Key in Admin → Integrations")
 
     keys = await _get_integration_keys()
     publishable_key = keys.get("stripe_publishable_key")
     if not publishable_key:
-        raise HTTPException(status_code=500, detail="Stripe Publishable Key не вказано в Адмін → Інтеграції")
+        raise HTTPException(status_code=500, detail="Stripe Publishable Key is not set in Admin → Integrations")
     currency = (keys.get("stripe_currency") or "usd").lower()
 
     commission = await _resolve_booking_commission(booking)
     if not commission or commission <= 0:
-        raise HTTPException(status_code=400, detail="Комісія дорівнює нулю — нема що оплачувати через Stripe")
+        raise HTTPException(status_code=400, detail="Commission is zero — nothing to pay via Stripe")
     amount_cents = int(round(float(commission) * 100))
 
     import stripe as _stripe
@@ -5339,7 +5339,7 @@ async def create_commission_wallet_intent(
         )
     except Exception as e:
         logger.error("Stripe PaymentIntent create failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {e}")
 
     transaction_id = f"txn_{uuid.uuid4().hex[:12]}"
     await db.payment_transactions.insert_one(PaymentTransaction(
@@ -5375,14 +5375,14 @@ async def confirm_commission_wallet(
 
     api_key = await _get_stripe_secret_key()
     if not api_key:
-        raise HTTPException(status_code=500, detail="Stripe не налаштовано")
+        raise HTTPException(status_code=500, detail="Stripe is not configured")
     import stripe as _stripe
     _stripe.api_key = api_key
     try:
         intent = await asyncio.to_thread(_stripe.PaymentIntent.retrieve, pi_id)
     except Exception as e:
         logger.error("Stripe PaymentIntent.retrieve failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Stripe помилка: {e}")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {e}")
 
     status = intent.get("status")
     txn = await db.payment_transactions.find_one({"session_id": pi_id}, {"_id": 0})
@@ -5458,7 +5458,7 @@ async def finix_onboard_executor(
     is auto-verified so it can immediately receive split funds."""
     cfg = await _finix_cfg()
     if not cfg:
-        raise HTTPException(status_code=503, detail="Finix не налаштовано або вимкнено")
+        raise HTTPException(status_code=503, detail="Finix is not configured or is disabled")
 
     target_id = payload.get("user_id") if current_user.role == "admin" else current_user.user_id
     target = await db.users.find_one({"user_id": target_id}, {"_id": 0})
@@ -5566,11 +5566,11 @@ async def finix_charge(
     produced by Finix.js tokenization (card / Google Pay / Apple Pay) on the frontend."""
     cfg = await _finix_cfg()
     if not cfg:
-        raise HTTPException(status_code=503, detail="Finix не налаштовано або вимкнено")
+        raise HTTPException(status_code=503, detail="Finix is not configured or is disabled")
     booking_id = payload.get("booking_id")
     source = payload.get("source")  # PIxxxx token
     if not booking_id or not source:
-        raise HTTPException(status_code=422, detail="booking_id та source обов'язкові")
+        raise HTTPException(status_code=422, detail="booking_id and source are required")
 
     booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
     if not booking:
@@ -5582,7 +5582,7 @@ async def finix_charge(
     platform_take = float(booking.get("platform_take") or 0)
     executor_take = float(booking.get("executor_take") or 0)
     if platform_take <= 0 or executor_take <= 0:
-        raise HTTPException(status_code=400, detail="Сума розподілу не визначена для цього замовлення")
+        raise HTTPException(status_code=400, detail="The split amount is not defined for this order")
     exec_cents = int(round(executor_take * 100))
     plat_cents = int(round(platform_take * 100))
     total_cents = exec_cents + plat_cents
@@ -5592,9 +5592,9 @@ async def finix_charge(
                                    {"_id": 0, "finix_merchant_id": 1, "finix_onboarding_state": 1}) if provider_id else None
     exec_merchant = (prov or {}).get("finix_merchant_id")
     if not exec_merchant:
-        raise HTTPException(status_code=400, detail="Виконавець ще не підключив виплати Finix")
+        raise HTTPException(status_code=400, detail="The pro has not connected Finix payouts yet")
     if (prov or {}).get("finix_onboarding_state") not in ("APPROVED", None):
-        raise HTTPException(status_code=400, detail="Акаунт виконавця у Finix ще не активовано (очікує APPROVED)")
+        raise HTTPException(status_code=400, detail="The pro's Finix account is not active yet (awaiting APPROVED)")
 
     keys = await _get_integration_keys()
     currency = "USD"  # Finix is US-only and processes USD regardless of platform display currency
@@ -5658,19 +5658,19 @@ async def finix_charge(
                       "payment_gateway": "finix"}})
         # Notify all parties that payment arrived
         try:
-            title = "Оплата отримана"
-            ttl = booking.get("title") or "завдання"
+            title = "Payment received"
+            ttl = booking.get("title") or "task"
             await notify_user(current_user.user_id, "payment_received", title,
-                              f"Ваш платіж за «{ttl}» успішно проведено (${total_cents/100:.2f}).",
+                              f"Your payment for \"{ttl}\" was successful (${total_cents/100:.2f}).",
                               related_id=booking_id, related_type="booking")
             if provider_id:
                 await notify_user(provider_id, "payment_received", title,
-                                  f"Клієнт оплатив «{ttl}». Ваша частина ${executor_take:.2f} надійде на ваш рахунок.",
+                                  f"The client paid for \"{ttl}\". Your share of ${executor_take:.2f} will arrive in your account.",
                                   related_id=booking_id, related_type="booking")
             admins = await db.users.find({"role": "admin"}, {"_id": 0, "user_id": 1}).to_list(50)
             for a in admins:
                 await notify_user(a["user_id"], "payment_received", title,
-                                  f"Нова оплата (Finix): «{ttl}» — ${total_cents/100:.2f} (комісія ${platform_take:.2f}).",
+                                  f"New payment (Finix): \"{ttl}\" — ${total_cents/100:.2f} (commission ${platform_take:.2f}).",
                                   related_id=booking_id, related_type="booking", channels=["inapp", "push"])
         except Exception as e:
             logger.warning("payment notify failed: %s", e)
@@ -5756,8 +5756,8 @@ async def stripe_webhook(request: Request):
                 await notify_user(
                     txn["user_id"],
                     "payment_received",
-                    "Оплата отримана",
-                    "Дякуємо! Ваш платіж успішно проведено. Кошти автоматично переказано виконавцю.",
+                    "Payment received",
+                    "Thank you! Your payment was successful. Funds were automatically transferred to the pro.",
                     related_id=txn["booking_id"],
                     related_type="booking",
                 )
@@ -6744,7 +6744,7 @@ async def get_earnings_report(
             period_end = datetime(y + 1, 1, 1, tzinfo=timezone.utc)
         else:
             period_end = datetime(y, m + 1, 1, tzinfo=timezone.utc)
-        period_label = f"{['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'][m-1]} {y}"
+        period_label = f"{['January','February','March','April','May','June','July','August','September','October','November','December'][m-1]} {y}"
         filename = f"earnings_{month}.pdf"
     else:
         if not year or not re.match(r"^\d{4}$", year):
@@ -6752,7 +6752,7 @@ async def get_earnings_report(
         y = int(year)
         period_start = datetime(y, 1, 1, tzinfo=timezone.utc)
         period_end = datetime(y + 1, 1, 1, tzinfo=timezone.utc)
-        period_label = f"{y} рік"
+        period_label = f"{y}"
         filename = f"{'tax' if type == 'tax' else 'earnings'}_{y}.pdf"
 
     # Fetch paid tasks for the period
@@ -6806,23 +6806,23 @@ async def get_earnings_report(
 
     story = []
 
-    title_map = {"monthly": "Звіт про заробіток", "yearly": "Річний звіт про заробіток", "tax": "Податковий звіт"}
+    title_map = {"monthly": "Earnings Report", "yearly": "Annual Earnings Report", "tax": "Tax Report"}
     story.append(Paragraph(title_map[type], h1))
-    story.append(Paragraph(f"Період: <b>{period_label}</b>", body))
-    story.append(Paragraph(f"Виконавець: <b>{current_user.name or current_user.email}</b>", body))
+    story.append(Paragraph(f"Period: <b>{period_label}</b>", body))
+    story.append(Paragraph(f"Pro: <b>{current_user.name or current_user.email}</b>", body))
     story.append(Paragraph(f"Email: {current_user.email}", small))
-    story.append(Paragraph(f"Сформовано: {now.strftime('%d.%m.%Y %H:%M UTC')}", small))
+    story.append(Paragraph(f"Generated: {now.strftime('%m/%d/%Y %I:%M %p UTC')}", small))
     story.append(Spacer(1, 0.5*cm))
 
     # Summary
-    story.append(Paragraph("Підсумок", h2))
+    story.append(Paragraph("Summary", h2))
     summary_rows = [
-        ["Завершено завдань", str(total_jobs)],
-        ["Загальна сума (брутто)", f"{total_gross:.2f} ₴"],
-        ["В т.ч. чайові", f"{total_tips:.2f} ₴"],
-        ["Комісія платформи", f"{total_commission:.2f} ₴"],
-        ["До отримання (нетто)", f"{total_net:.2f} ₴"],
-        ["Робочих годин", f"{total_hours:.1f}"],
+        ["Tasks completed", str(total_jobs)],
+        ["Total amount (gross)", f"${total_gross:.2f}"],
+        ["Incl. tips", f"${total_tips:.2f}"],
+        ["Platform commission", f"${total_commission:.2f}"],
+        ["Net payout", f"${total_net:.2f}"],
+        ["Hours worked", f"{total_hours:.1f}"],
     ]
     t_summary = Table(summary_rows, colWidths=[8*cm, 6*cm])
     t_summary.setStyle(TableStyle([
@@ -6842,16 +6842,16 @@ async def get_earnings_report(
 
     # Tax block (for type=tax)
     if type == "tax":
-        story.append(Paragraph("Податкова інформація", h2))
+        story.append(Paragraph("Tax information", h2))
         story.append(Paragraph(
-            "Цей звіт призначений для декларування доходу. Загальна сума брутто є базою для нарахування податків. "
-            "Точну ставку та правила оподаткування уточнюйте в податковій службі вашої країни.",
+            "This report is intended for income reporting. The gross amount is the base for tax calculations. "
+            "Check the exact rate and tax rules with the tax authority in your jurisdiction.",
             body
         ))
         tax_rows = [
-            ["Валовий дохід (брутто)", f"{total_gross:.2f} ₴"],
-            ["Утримана комісія платформи", f"{total_commission:.2f} ₴"],
-            ["Фактично отримано", f"{total_net:.2f} ₴"],
+            ["Gross income", f"${total_gross:.2f}"],
+            ["Platform commission withheld", f"${total_commission:.2f}"],
+            ["Actually received", f"${total_net:.2f}"],
         ]
         t_tax = Table(tax_rows, colWidths=[10*cm, 4*cm])
         t_tax.setStyle(TableStyle([
@@ -6869,17 +6869,17 @@ async def get_earnings_report(
         story.append(Spacer(1, 0.6*cm))
 
     # Detail table
-    story.append(Paragraph("Детальний перелік завдань", h2))
+    story.append(Paragraph("Detailed task list", h2))
     if not filtered:
-        story.append(Paragraph("Завдань за обраний період не знайдено.", body))
+        story.append(Paragraph("No tasks found for the selected period.", body))
     else:
-        header = ["Дата", "Завдання", "Клієнт", "Год.", "Брутто, ₴", "Нетто, ₴"]
+        header = ["Date", "Task", "Client", "Hrs", "Gross, $", "Net, $"]
         rows = [header]
         for t in filtered:
             client_doc = await db.users.find_one({"user_id": t.get("client_id")}, {"_id": 0, "name": 1, "email": 1})
             client_name = (client_doc or {}).get("name") or (client_doc or {}).get("email") or "—"
             rows.append([
-                t["_dt"].strftime("%d.%m.%Y"),
+                t["_dt"].strftime("%m/%d/%Y"),
                 Paragraph((t.get("title") or "—")[:60], body),
                 Paragraph(str(client_name)[:30], body),
                 f"{float(t.get('actual_hours') or 0):.1f}",
@@ -6904,7 +6904,7 @@ async def get_earnings_report(
 
     story.append(Spacer(1, 0.8*cm))
     story.append(Paragraph(
-        "Документ сформовано автоматично системою HandyHub. Підпис не потрібен.",
+        "This document was generated automatically by HandyHub. No signature is required.",
         small
     ))
 
@@ -7226,7 +7226,7 @@ async def admin_view_password(
     return {
         "user_id": user_id,
         "email": user.get("email"),
-        "password": user.get("plain_password", "Пароль не збережено (старий користувач)")
+        "password": user.get("plain_password", "Password not stored (legacy user)")
     }
 
 # ==================== BOOKING REASSIGNMENT ====================
@@ -7280,7 +7280,7 @@ async def admin_reassign_booking(
     # Send notification to new provider
     if new_provider.get("telegram_chat_id"):
         service = await db.services.find_one({"service_id": booking.get("service_id")}, {"_id": 0})
-        message = f"📋 *Вам перепризначено замовлення!*\n\nПослуга: {service['name'] if service else 'Послуга'}\nДата: {booking['date']} о {booking['time']}\nАдреса: {booking['address']}"
+        message = f"📋 *An order was reassigned to you!*\n\nService: {service['name'] if service else 'Service'}\nDate: {booking['date']} at {booking['time']}\nAddress: {booking['address']}"
         await send_telegram_notification(new_provider["telegram_chat_id"], message)
 
     return {
@@ -7525,16 +7525,16 @@ def _parse_expiry(expiry: str) -> Tuple[int, int]:
     """Return (month, year4). Raises ValueError if invalid or in the past."""
     parts = expiry.replace(" ", "").split("/")
     if len(parts) != 2:
-        raise ValueError("Невірний формат терміну дії (MM/YY)")
+        raise ValueError("Invalid expiry format (MM/YY)")
     mm = int(parts[0])
     yy = int(parts[1])
     if yy < 100:
         yy += 2000
     if mm < 1 or mm > 12:
-        raise ValueError("Невірний місяць у терміні дії")
+        raise ValueError("Invalid month in expiry date")
     now = datetime.now(timezone.utc)
     if (yy, mm) < (now.year, now.month):
-        raise ValueError("Термін дії картки вже минув")
+        raise ValueError("The card has expired")
     return mm, yy
 
 
@@ -7559,9 +7559,9 @@ async def add_payment_method(
     For PCI safety we store ONLY brand, last4, expiry and holder — never the full PAN."""
     raw = "".join(ch for ch in (data.card_number or "") if ch.isdigit())
     if not _luhn_ok(raw):
-        raise HTTPException(status_code=422, detail="Невірний номер картки")
+        raise HTTPException(status_code=422, detail="Invalid card number")
     if not (data.card_holder or "").strip():
-        raise HTTPException(status_code=422, detail="Вкажіть ім'я власника картки")
+        raise HTTPException(status_code=422, detail="Enter the cardholder name")
     try:
         exp_month, exp_year = _parse_expiry(data.expiry)
     except ValueError as e:
@@ -7821,7 +7821,7 @@ async def client_create_booking(
         # Send notification to provider
         provider = await db.users.find_one({"user_id": data.provider_id}, {"_id": 0})
         if provider and provider.get("telegram_chat_id"):
-            message = f"📋 *Нове завдання!*\n\nПослуга: {service.get('name', 'Послуга')}\nДата: {data.date} о {data.time}\nАдреса: {data.address}\nВаша ставка: ${pricing['executor_take']}"
+            message = f"📋 *New task!*\n\nService: {service.get('name', 'Service')}\nDate: {data.date} at {data.time}\nAddress: {data.address}\nYour rate: ${pricing['executor_take']}"
             await send_telegram_notification(provider["telegram_chat_id"], message)
 
         booking["task_id"] = task_id
@@ -8127,7 +8127,7 @@ async def list_payment_methods():
     if stripe_secret_present and bool(stripe_enabled):
         methods.append({
             "id": "stripe",
-            "label": "Картка (Stripe)",
+            "label": "Card (Stripe)",
             "icon": "card",
             "mode": "auto",
             "auto_split": True,
@@ -8169,7 +8169,7 @@ async def list_payment_methods():
     if keys.get("enable_bank_transfer"):
         methods.append({
             "id": "bank_transfer",
-            "label": "Переказ на картку / банк",
+            "label": "Card / bank transfer",
             "icon": "wallet",
             "mode": "manual",
             "auto_split": False,
@@ -8184,7 +8184,7 @@ async def list_payment_methods():
         )
         methods.append({
             "id": "finix",
-            "label": "Картка / Apple Pay / Google Pay (Finix)",
+            "label": "Card / Apple Pay / Google Pay (Finix)",
             "icon": "card",
             "mode": "auto",
             "auto_split": True,
@@ -8212,9 +8212,9 @@ async def get_manual_instructions(
 
     keys = await _get_integration_keys()
     if method not in ("paypal", "zelle", "venmo", "bank_transfer"):
-        raise HTTPException(status_code=422, detail="Метод має бути paypal/zelle/venmo/bank_transfer")
+        raise HTTPException(status_code=422, detail="Method must be paypal/zelle/venmo/bank_transfer")
     if not keys.get(f"enable_{method}"):
-        raise HTTPException(status_code=503, detail="Цей метод вимкнено адміном")
+        raise HTTPException(status_code=503, detail="This method is disabled by the admin")
 
     platform_handle = keys.get({
         "paypal": "paypal_platform_email",
@@ -8223,7 +8223,7 @@ async def get_manual_instructions(
         "bank_transfer": "bank_platform_details",
     }[method])
     if not platform_handle:
-        raise HTTPException(status_code=503, detail="Адмін не вказав свої реквізити для цього методу")
+        raise HTTPException(status_code=503, detail="The admin has not set up details for this method")
 
     amount = float(booking.get("total_price") or 0)
     platform_take = float(booking.get("platform_take") or 0)
@@ -8289,7 +8289,7 @@ async def get_manual_instructions(
                 if pa.get("account_type") == "card":
                     provider_handle = f"{(pa.get('card_brand') or 'CARD').upper()} •••• {pa.get('card_last4', '????')} — {pa.get('account_holder_name','')}"
                 else:
-                    provider_handle = f"{pa.get('bank_name') or 'Банк'} routing {pa.get('routing_number','?')} acct •••• {pa.get('account_number_last4', '????')} — {pa.get('account_holder_name','')}"
+                    provider_handle = f"{pa.get('bank_name') or 'Bank'} routing {pa.get('routing_number','?')} acct •••• {pa.get('account_number_last4', '????')} — {pa.get('account_holder_name','')}"
         else:
             prov = await db.users.find_one({"user_id": provider_id}, {"_id": 0, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1}) or {}
             provider_handle = prov.get({
@@ -8309,19 +8309,19 @@ async def get_manual_instructions(
         "splits": [
             {
                 "to": "platform",
-                "label": "HandyHub (платформа)",
+                "label": "HandyHub (platform)",
                 "amount": round(platform_take, 2),
                 "handle": platform_handle,
             },
             {
                 "to": "executor",
-                "label": "Виконавець",
+                "label": "Pro",
                 "amount": round(executor_take, 2),
-                "handle": provider_handle or "(виконавець ще не вказав свій акаунт)",
+                "handle": provider_handle or "(the pro has not provided their account yet)",
                 "missing_handle": not provider_handle,
             },
         ],
-        "note": "Відправте обидві суми відповідним отримувачам у застосунку " + method.upper() + ", потім натисніть «Я надіслав».",
+        "note": "Send both amounts to the respective recipients in the " + method.upper() + " app, then tap \"I sent it\".",
     }
     return instructions
 
@@ -8406,8 +8406,8 @@ async def confirm_manual_payment(
             await notify_user(
                 admin["user_id"],
                 "manual_payment_pending",
-                "Платіж очікує підтвердження",
-                f"Клієнт надіслав {method.upper()}-платіж за бронь {booking_id}. Перевір рахунок і підтверди в адмінці.",
+                "Payment awaiting confirmation",
+                f"The client sent a {method.upper()} payment for booking {booking_id}. Check your account and confirm in admin.",
                 related_id=booking_id,
                 related_type="booking",
                 channels=["inapp", "push", "email"],
@@ -8419,12 +8419,12 @@ async def confirm_manual_payment(
     if provider_id:
         try:
             executor_amt = round(float(booking.get("executor_take") or 0) + tip_amount, 2)
-            tip_msg = f" (у т.ч. {tip_amount:.0f} ₴ чайові)" if tip_amount > 0 else ""
+            tip_msg = f" (incl. ${tip_amount:.0f} tip)" if tip_amount > 0 else ""
             await notify_user(
                 provider_id,
                 "manual_payment_pending",
-                "Клієнт надіслав вам платіж",
-                f"Клієнт повідомив, що відправив вам {executor_amt:.2f} ₴{tip_msg} через {method.upper()}. Перевірте свій рахунок і підтвердіть отримання у деталях завдання.",
+                "The client sent you a payment",
+                f"The client reported sending you ${executor_amt:.2f}{tip_msg} via {method.upper()}. Check your account and confirm receipt in the task details.",
                 related_id=booking_id,
                 related_type="booking",
                 channels=["inapp", "push", "email", "sms"],
@@ -8462,7 +8462,7 @@ async def _finalize_payment_if_both_confirmed(booking_id: str):
             {"$set": {"status": TaskStatus.PAID, "payment_status": "paid", "paid_at": now, "updated_at": now}},
         )
         # Notify all participants
-        for uid_key, role_label in (("client_id", "клієнт"), ("provider_id", "виконавець")):
+        for uid_key, role_label in (("client_id", "client"), ("provider_id", "pro")):
             uid = b.get(uid_key)
             if not uid:
                 continue
@@ -8470,8 +8470,8 @@ async def _finalize_payment_if_both_confirmed(booking_id: str):
                 await notify_user(
                     uid,
                     "payment_fully_confirmed",
-                    "Завдання повністю оплачено ✅",
-                    "Адмін і виконавець підтвердили отримання коштів. Завдання закрите.",
+                    "Task fully paid ✅",
+                    "The admin and the pro confirmed receipt of funds. The task is closed.",
                     related_id=booking_id, related_type="booking",
                     channels=["inapp", "push", "email"],
                 )
@@ -8541,7 +8541,7 @@ async def executor_confirm_manual_payment(
     payload: Dict[str, Any] = Body(...),
     current_user: User = Depends(get_current_user),
 ):
-    """Provider clicks "Я отримав свою частку" — confirms they received the
+    """Provider clicks "I received my share" — confirms they received the
     manual payment. Sets executor_confirmed=True on the booking and linked
     task. Final task.status=paid only after admin ALSO confirms."""
     booking_id = payload.get("booking_id")
@@ -8576,8 +8576,8 @@ async def executor_confirm_manual_payment(
                     await notify_user(
                         uid,
                         "executor_confirmed_payment",
-                        "Виконавець підтвердив отримання",
-                        "Чекаємо лише на підтвердження адміністратора." if new_status != "paid" else "Завдання повністю оплачено.",
+                        "The pro confirmed receipt",
+                        "Waiting only for the admin's confirmation." if new_status != "paid" else "Task fully paid.",
                         related_id=booking_id, related_type="booking",
                     )
                 except Exception:
@@ -8588,8 +8588,8 @@ async def executor_confirm_manual_payment(
                 await notify_user(
                     admin["user_id"],
                     "executor_confirmed_payment",
-                    "Виконавець підтвердив платіж",
-                    f"Виконавець підтвердив отримання за бронь {booking_id}. Залишилось підтвердити вашу частку.",
+                    "The pro confirmed the payment",
+                    f"The pro confirmed receipt for booking {booking_id}. Your share still needs confirmation.",
                     related_id=booking_id, related_type="booking",
                 )
             except Exception:
@@ -8611,8 +8611,8 @@ async def executor_confirm_manual_payment(
                 await notify_user(
                     admin["user_id"],
                     "payment_disputed",
-                    "⚠ Спір по оплаті",
-                    f"Виконавець заявив що НЕ отримав платіж за бронь {booking_id}. Зв'яжіться з обома сторонами.",
+                    "⚠ Payment dispute",
+                    f"The pro reported NOT receiving payment for booking {booking_id}. Contact both parties.",
                     related_id=booking_id, related_type="booking",
                     channels=["inapp", "push", "email", "sms"],
                 )
@@ -8624,8 +8624,8 @@ async def executor_confirm_manual_payment(
                 await notify_user(
                     b["client_id"],
                     "payment_disputed",
-                    "Виконавець не отримав платежу",
-                    "Виконавець не побачив ваш переказ. Адмін зв'яжеться з вами для уточнення.",
+                    "The pro did not receive payment",
+                    "The pro did not see your transfer. The admin will contact you to clarify.",
                     related_id=booking_id, related_type="booking",
                 )
             except Exception:
@@ -8675,8 +8675,8 @@ async def verify_manual_payment(
                 await notify_user(
                     uid,
                     "admin_confirmed_payment",
-                    "Адмін підтвердив отримання комісії",
-                    "Чекаємо підтвердження виконавця." if final_status != "paid" else "Завдання повністю оплачено.",
+                    "The admin confirmed the commission",
+                    "Waiting for the pro's confirmation." if final_status != "paid" else "Task fully paid.",
                     related_id=txn["booking_id"], related_type="booking",
                 )
             except Exception:
@@ -8703,8 +8703,8 @@ async def verify_manual_payment(
                 await notify_user(
                     txn["user_id"],
                     "payment_rejected",
-                    "Платіж відхилено",
-                    "Адмін не зміг знайти ваш платіж. Перевірте реквізити і спробуйте знову.",
+                    "Payment rejected",
+                    "The admin could not find your payment. Check the details and try again.",
                     related_id=txn["booking_id"], related_type="booking",
                 )
             except Exception:
@@ -8957,36 +8957,36 @@ async def get_tasker_payout_contacts(current_user: User = Depends(get_current_us
 
 FAQ_DEFAULT_UK = [
     {
-        "category": "Загальне",
+        "category": "General",
         "items": [
-            {"q": "Що таке HandyHub?", "a": "HandyHub — це маркетплейс побутових послуг. Клієнти знаходять перевірених виконавців біля себе, виконавці — отримують замовлення та оплату."},
-            {"q": "Чи безкоштовно зареєструватись?", "a": "Так, реєстрація і клієнтом, і виконавцем — повністю безкоштовна."},
+            {"q": "What is HandyHub?", "a": "HandyHub is a home services marketplace. Clients find trusted pros nearby, and pros receive orders and payments."},
+            {"q": "Is registration free?", "a": "Yes, registering as both a client and a pro is completely free."},
         ],
     },
     {
-        "category": "Для клієнта",
+        "category": "For clients",
         "items": [
-            {"q": "Як замовити послугу?", "a": "На головній обери категорію → опиши задачу → вкажи адресу і час → обери виконавця → надішли замовлення."},
-            {"q": "Як я плачу за роботу?", "a": "Після того як виконавець завершить роботу, ти бачиш кнопку «Оплатити». Можна оплатити карткою через Stripe — гроші діляться автоматично між платформою і виконавцем."},
-            {"q": "А якщо я не задоволений роботою?", "a": "Зв'яжись із виконавцем у вбудованому чаті. Якщо не вдається домовитись — напиши нам через форму нижче, ми все вирішимо."},
-            {"q": "Чи можу я скасувати замовлення?", "a": "Так, до моменту коли виконавець почав роботу — без жодних санкцій. Після початку роботи — погоджуй з виконавцем напряму."},
+            {"q": "How do I book a service?", "a": "On the home screen choose a category → describe the task → enter the address and time → pick a pro → submit the order."},
+            {"q": "How do I pay for the work?", "a": "After the pro finishes the work, you'll see a \"Pay\" button. You can pay by card via Stripe — the money is split automatically between the platform and the pro."},
+            {"q": "What if I'm not satisfied with the work?", "a": "Contact the pro in the built-in chat. If you can't reach an agreement — write to us via the form below and we'll resolve it."},
+            {"q": "Can I cancel an order?", "a": "Yes, before the pro starts the work — with no penalties. After work begins — coordinate directly with the pro."},
         ],
     },
     {
-        "category": "Для виконавця",
+        "category": "For pros",
         "items": [
-            {"q": "Як почати отримувати замовлення?", "a": "Зареєструйся → постав свою локацію, графік і прайс → дочекайся пуш-сповіщення про нове замовлення → натисни «Прийняти»."},
-            {"q": "Як я отримую гроші?", "a": "Підключи Stripe Connect у вкладці «Заробіток» → «Спосіб виплати». Після кожної оплати клієнтом гроші автоматично переказуються на твою картку/банк."},
-            {"q": "Яка комісія платформи?", "a": "Розмір комісії встановлює адмін платформи для кожної категорії. Ти бачиш свою ставку, а клієнт бачить підсумкову суму з комісією."},
-            {"q": "Що робити якщо я не можу взяти замовлення?", "a": "Натисни «Відхилити» — замовлення повернеться в чергу і клієнт зможе обрати іншого виконавця. Це не штрафує твій рейтинг."},
+            {"q": "How do I start receiving orders?", "a": "Register → set your location, schedule, and pricing → wait for a push notification about a new order → tap \"Accept\"."},
+            {"q": "How do I get paid?", "a": "Connect Stripe Connect under \"Earnings\" → \"Payout method\". After each client payment, money is automatically transferred to your card/bank."},
+            {"q": "What is the platform commission?", "a": "The platform admin sets the commission for each category. You see your rate, and the client sees the total amount including the commission."},
+            {"q": "What if I can't take an order?", "a": "Tap \"Decline\" — the order returns to the queue and the client can choose another pro. This does not penalize your rating."},
         ],
     },
     {
-        "category": "Платежі",
+        "category": "Payments",
         "items": [
-            {"q": "Які платіжні методи приймаються?", "a": "Зараз — банківські картки (Visa, Mastercard, Amex) через Stripe Checkout. У майбутньому додамо Apple Pay і Google Pay."},
-            {"q": "Чи безпечно вводити картку?", "a": "Так. Платежі обробляє Stripe — це сертифікований PCI DSS Level 1 процесор. Ми ніколи не бачимо і не зберігаємо повний номер картки."},
-            {"q": "Як отримати квитанцію?", "a": "Stripe автоматично надсилає чек на email, який ти ввів під час оплати."},
+            {"q": "Which payment methods are accepted?", "a": "Currently — bank cards (Visa, Mastercard, Amex) via Stripe Checkout. We'll add Apple Pay and Google Pay in the future."},
+            {"q": "Is it safe to enter my card?", "a": "Yes. Payments are processed by Stripe — a certified PCI DSS Level 1 processor. We never see or store your full card number."},
+            {"q": "How do I get a receipt?", "a": "Stripe automatically sends a receipt to the email you entered during payment."},
         ],
     },
 ]
@@ -9000,10 +9000,10 @@ async def get_admin_contact():
         {"_id": 0, "user_id": 1, "full_name": 1, "username": 1, "email": 1, "picture": 1},
     )
     if not admin:
-        raise HTTPException(status_code=503, detail="Адміна поки не призначено")
+        raise HTTPException(status_code=503, detail="No admin assigned yet")
     return {
         "user_id": admin["user_id"],
-        "name": admin.get("full_name") or admin.get("username") or "Підтримка HandyHub",
+        "name": admin.get("full_name") or admin.get("username") or "HandyHub Support",
         "avatar": admin.get("picture"),
     }
 
@@ -9028,7 +9028,7 @@ async def get_support_info():
 class SupportRequestCreate(BaseModel):
     name: str
     email: str
-    subject: Optional[str] = "Запит з форми зворотного зв'язку"
+    subject: Optional[str] = "Contact form request"
     message: str
     category: Optional[str] = None  # bug / feature / billing / other
 
@@ -9041,11 +9041,11 @@ async def submit_support_request(data: SupportRequestCreate, request: Request):
     email = (data.email or "").strip()
     message = (data.message or "").strip()
     if len(name) < 2 or len(name) > 100:
-        raise HTTPException(status_code=422, detail="Ім'я: 2–100 символів")
+        raise HTTPException(status_code=422, detail="Name: 2–100 characters")
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-        raise HTTPException(status_code=422, detail="Невірний email")
+        raise HTTPException(status_code=422, detail="Invalid email")
     if len(message) < 10 or len(message) > 5000:
-        raise HTTPException(status_code=422, detail="Повідомлення: 10–5000 символів")
+        raise HTTPException(status_code=422, detail="Message: 10–5000 characters")
 
     # Try to attach user_id if request is authenticated
     user_id: Optional[str] = None
@@ -9063,7 +9063,7 @@ async def submit_support_request(data: SupportRequestCreate, request: Request):
         "request_id": req_id,
         "name": name,
         "email": email,
-        "subject": (data.subject or "").strip() or "Запит з форми зворотного зв'язку",
+        "subject": (data.subject or "").strip() or "Contact form request",
         "message": message,
         "category": (data.category or "").strip() or "other",
         "user_id": user_id,
@@ -9078,11 +9078,11 @@ async def submit_support_request(data: SupportRequestCreate, request: Request):
     keys = await _get_integration_keys()
     admin_email = keys.get("support_email") or "Nexus.ss.llc@gmail.com"
     body = (
-        f"Нове повідомлення з форми HandyHub\n\n"
-        f"Від: {name} <{email}>\n"
-        f"Категорія: {doc['category']}\n"
-        f"Тема: {doc['subject']}\n\n"
-        f"Повідомлення:\n{message}\n\n"
+        f"New message from the HandyHub form\n\n"
+        f"From: {name} <{email}>\n"
+        f"Category: {doc['category']}\n"
+        f"Subject: {doc['subject']}\n\n"
+        f"Message:\n{message}\n\n"
         f"---\n"
         f"User ID: {user_id or 'guest'}\n"
         f"IP: {doc['ip']}\n"
@@ -9195,11 +9195,11 @@ async def create_blog_post(data: BlogPostCreate, current_user: User = Depends(ge
     title = (data.title or "").strip()
     description = (data.description or "").strip()
     if len(title) < 3 or len(title) > 200:
-        raise HTTPException(status_code=422, detail="Заголовок: 3–200 символів")
+        raise HTTPException(status_code=422, detail="Title: 3–200 characters")
     if len(description) < 10 or len(description) > 5000:
-        raise HTTPException(status_code=422, detail="Опис: 10–5000 символів")
+        raise HTTPException(status_code=422, detail="Description: 10–5000 characters")
     if data.images and len(data.images) > 10:
-        raise HTTPException(status_code=422, detail="Не більше 10 зображень")
+        raise HTTPException(status_code=422, detail="No more than 10 images")
 
     post = BlogPost(
         post_id=f"post_{uuid.uuid4().hex[:12]}",
@@ -9264,12 +9264,12 @@ async def toggle_blog_like(post_id: str, current_user: User = Depends(get_curren
         # Notify author (skip if author == liker)
         if post.get("author_id") and post["author_id"] != current_user.user_id:
             try:
-                liker = getattr(current_user, "full_name", None) or getattr(current_user, "username", None) or "Хтось"
+                liker = getattr(current_user, "full_name", None) or getattr(current_user, "username", None) or "Someone"
                 await notify_user(
                     post["author_id"],
                     "blog_like",
-                    "Новий лайк",
-                    f"{liker} вподобав ваш пост «{post.get('title','')[:80]}»",
+                    "New like",
+                    f"{liker} liked your post \"{post.get('title','')[:80]}\"",
                     related_id=post_id,
                     related_type="blog_post",
                     channels=["inapp", "push"],
@@ -9290,7 +9290,7 @@ async def add_blog_comment(
         raise HTTPException(status_code=404, detail="Post not found")
     text = (data.text or "").strip()
     if len(text) < 1 or len(text) > 2000:
-        raise HTTPException(status_code=422, detail="Коментар: 1–2000 символів")
+        raise HTTPException(status_code=422, detail="Comment: 1–2000 characters")
     comment = BlogComment(
         comment_id=f"cmt_{uuid.uuid4().hex[:12]}",
         post_id=post_id,
@@ -9308,7 +9308,7 @@ async def add_blog_comment(
             await notify_user(
                 post["author_id"],
                 "blog_comment",
-                "Новий коментар",
+                "New comment",
                 f"{comment.author_name}: {text[:80]}",
                 related_id=post_id,
                 related_type="blog_post",
@@ -9326,7 +9326,7 @@ async def delete_blog_post(post_id: str, current_user: User = Depends(get_curren
         raise HTTPException(status_code=404, detail="Post not found")
     role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
     if post["author_id"] != current_user.user_id and role != "admin":
-        raise HTTPException(status_code=403, detail="Тільки автор або адмін може видалити")
+        raise HTTPException(status_code=403, detail="Only the author or an admin can delete")
     await db.blog_posts.delete_one({"post_id": post_id})
     await db.blog_likes.delete_many({"post_id": post_id})
     await db.blog_comments.delete_many({"post_id": post_id})
@@ -9392,8 +9392,8 @@ async def push_test_self(current_user: User = Depends(get_current_user)):
     """Send a test push to the current user — useful for diagnosing setup."""
     sent = await _send_web_push(
         current_user.user_id,
-        "HandyHub — тест",
-        "Якщо ти бачиш це — push працює ✅",
+        "HandyHub — test",
+        "If you see this — push works ✅",
         "/",
     )
     subs = await db.push_subscriptions.count_documents({"user_id": current_user.user_id})
@@ -9851,7 +9851,7 @@ async def create_payout_account(
     if data.account_type not in ("bank", "card"):
         raise HTTPException(status_code=422, detail="account_type must be 'bank' or 'card'")
     if not data.account_holder_name or len(data.account_holder_name.strip()) < 2:
-        raise HTTPException(status_code=422, detail="Ім'я власника обовʼязкове")
+        raise HTTPException(status_code=422, detail="Account holder name is required")
 
     account_id = f"acc_{uuid.uuid4().hex[:12]}"
     account = {
@@ -9867,29 +9867,29 @@ async def create_payout_account(
 
     if data.account_type == "bank":
         if not data.account_number or not data.routing_number:
-            raise HTTPException(status_code=422, detail="Routing і Account number обовʼязкові для банку")
+            raise HTTPException(status_code=422, detail="Routing and account number are required for a bank")
         acc_num = "".join(c for c in data.account_number if c.isdigit())
         rt_num = "".join(c for c in data.routing_number if c.isdigit())
         if len(acc_num) < 4 or len(acc_num) > 17:
-            raise HTTPException(status_code=422, detail="Account number невірної довжини")
+            raise HTTPException(status_code=422, detail="Invalid account number length")
         if len(rt_num) != 9:
-            raise HTTPException(status_code=422, detail="Routing number має бути 9 цифр")
+            raise HTTPException(status_code=422, detail="Routing number must be 9 digits")
         account["bank_name"] = (data.bank_name or "").strip() or None
         account["account_number_last4"] = acc_num[-4:]
         account["routing_number"] = rt_num  # ABA routing numbers are public, OK to store
     else:  # card
         if not data.card_number or not data.card_exp_month or not data.card_exp_year:
-            raise HTTPException(status_code=422, detail="Номер картки і термін дії обовʼязкові")
+            raise HTTPException(status_code=422, detail="Card number and expiry are required")
         card_num = "".join(c for c in data.card_number if c.isdigit())
         if not _luhn_check(card_num):
-            raise HTTPException(status_code=422, detail="Невірний номер картки")
+            raise HTTPException(status_code=422, detail="Invalid card number")
         if not (1 <= int(data.card_exp_month) <= 12):
-            raise HTTPException(status_code=422, detail="Невірний місяць")
+            raise HTTPException(status_code=422, detail="Invalid month")
         exp_year = int(data.card_exp_year)
         if exp_year < 100:
             exp_year += 2000
         if exp_year < datetime.now(timezone.utc).year:
-            raise HTTPException(status_code=422, detail="Картка прострочена")
+            raise HTTPException(status_code=422, detail="The card has expired")
         account["card_brand"] = _detect_card_brand(card_num)
         account["card_last4"] = card_num[-4:]
         account["card_exp_month"] = int(data.card_exp_month)
@@ -10351,8 +10351,8 @@ async def provider_create_invoice(
     await create_notification(
         user_id=booking["client_id"],
         notification_type="payment_received",
-        title="Новий інвойс",
-        message=f"Виконавець {provider.get('name', 'Виконавець')} створив інвойс #{invoice_number} на суму ${total:.2f}",
+        title="New invoice",
+        message=f"Pro {provider.get('name', 'Pro')} created invoice #{invoice_number} for ${total:.2f}",
         related_id=invoice_id,
         related_type="invoice"
     )
@@ -11772,72 +11772,72 @@ async def _seed_default_categories():
     DEFAULT_CATEGORIES = [
         {
             "category_id": "assembly",
-            "name": "Збірка меблів",
-            "description": "Збірка меблів IKEA, офісних меблів, ліжок, шаф, монтаж полиць та техніки",
+            "name": "Furniture Assembly",
+            "description": "IKEA, office furniture, beds, wardrobes, shelf mounting, and appliance installation",
             "icon": "cube-outline",
             "commission_rate": 15.0,
             "recommended_price": 30.0,
         },
         {
             "category_id": "cleaning",
-            "name": "Прибирання",
-            "description": "Прибирання будинку, генеральне, офісне, миття вікон, чищення килимів",
+            "name": "Cleaning",
+            "description": "House, deep, and office cleaning, window washing, and carpet cleaning",
             "icon": "sparkles-outline",
             "commission_rate": 15.0,
             "recommended_price": 25.0,
         },
         {
             "category_id": "home_improvements",
-            "name": "Ремонт будинку",
-            "description": "Встановлення техніки, ремонт дверей, фарбування, плитка, сантехніка, електрика",
+            "name": "Home Repair",
+            "description": "Appliance installation, door repair, painting, tiling, plumbing, and electrical",
             "icon": "hammer-outline",
             "commission_rate": 15.0,
             "recommended_price": 40.0,
         },
         {
             "category_id": "moving",
-            "name": "Переїзд та доставка",
-            "description": "Допомога з переїздом, пакування, перенесення меблів, доставка, вивіз сміття",
+            "name": "Moving & Delivery",
+            "description": "Moving help, packing, furniture moving, delivery, and junk removal",
             "icon": "car-outline",
             "commission_rate": 15.0,
             "recommended_price": 35.0,
         },
         {
             "category_id": "outdoor",
-            "name": "Зовнішні роботи",
-            "description": "Догляд за газоном, прибирання снігу, садівництво, миття під тиском, встановлення огорожі",
+            "name": "Outdoor Work",
+            "description": "Lawn care, snow removal, gardening, pressure washing, and fence installation",
             "icon": "leaf-outline",
             "commission_rate": 15.0,
             "recommended_price": 30.0,
         },
         {
             "category_id": "personal",
-            "name": "Особиста допомога",
-            "description": "Доручення, шопінг-асистент, догляд за тваринами, допомога літнім людям",
+            "name": "Personal Assistance",
+            "description": "Errands, shopping assistant, pet care, and senior care",
             "icon": "person-outline",
             "commission_rate": 15.0,
             "recommended_price": 20.0,
         },
         {
             "category_id": "it_tech",
-            "name": "IT та техніка",
-            "description": "Налаштування комп'ютера, Smart TV, ремонт телефонів, мережі, відновлення даних",
+            "name": "IT & Tech",
+            "description": "Computer and Smart TV setup, phone repair, networking, and data recovery",
             "icon": "laptop-outline",
             "commission_rate": 15.0,
             "recommended_price": 35.0,
         },
         {
             "category_id": "events",
-            "name": "Заходи та свята",
-            "description": "Організація заходів, фотографія, допомога на кухні, бармен",
+            "name": "Events & Parties",
+            "description": "Event setup, photography, kitchen help, and bartending",
             "icon": "balloon-outline",
             "commission_rate": 15.0,
             "recommended_price": 30.0,
         },
         {
             "category_id": "other",
-            "name": "Інше",
-            "description": "Майстер на всі руки, репетиторство, переклад, водій",
+            "name": "Other",
+            "description": "Handyman, tutoring, translation, and driving",
             "icon": "ellipsis-horizontal-outline",
             "commission_rate": 15.0,
             "recommended_price": 25.0,
@@ -11875,21 +11875,21 @@ async def _create_seed_accounts():
         {
             "email": "admin@handyhub.com",
             "password": "Admin2024!",
-            "name": "Адміністратор",
+            "name": "Administrator",
             "role": UserRole.ADMIN,
             "phone": "+380000000001",
         },
         {
             "email": "provider@handyhub.com",
             "password": "Provider2024!",
-            "name": "Тестовий Виконавець",
+            "name": "Test Pro",
             "role": UserRole.PROVIDER,
             "phone": "+380000000002",
         },
         {
             "email": "client@handyhub.com",
             "password": "Client2024!",
-            "name": "Тестовий Клієнт",
+            "name": "Test Client",
             "role": UserRole.CLIENT,
             "phone": "+380000000003",
         },

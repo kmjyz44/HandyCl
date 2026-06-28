@@ -17,8 +17,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../utils/api';
 
 const { width } = Dimensions.get('window');
-const DAYS = ['Понеділок', 'Вівторок', 'Середа', 'Четвер', "П'ятниця", 'Субота', 'Неділя'];
-const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 interface ExecutorProfile {
   profile_id: string;
@@ -98,7 +98,7 @@ export default function ExecutorProfile() {
         // Pricing might not be set
       }
     } catch (error: any) {
-      Alert.alert('Помилка', 'Не вдалося завантажити профіль виконавця');
+      Alert.alert('Error', 'Could not load the pro profile');
       router.back();
     } finally {
       setLoading(false);
@@ -123,11 +123,11 @@ export default function ExecutorProfile() {
   const contactExecutor = () => {
     // Navigate to messages or create booking
     Alert.alert(
-      'Зв\'язатися з виконавцем',
-      'Оберіть опцію:',
+      'Contact the pro',
+      'Choose an option:',
       [
-        { text: 'Написати повідомлення', onPress: () => router.push(`/(tabs)/messages?userId=${id}`) },
-        { text: 'Скасувати', style: 'cancel' },
+        { text: 'Send a message', onPress: () => router.push(`/(tabs)/messages?userId=${id}`) },
+        { text: 'Cancel', style: 'cancel' },
       ]
     );
   };
@@ -144,7 +144,7 @@ export default function ExecutorProfile() {
     return (
       <View style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={64} color="#d1d5db" />
-        <Text style={styles.errorText}>Профіль не знайдено</Text>
+        <Text style={styles.errorText}>Profile not found</Text>
       </View>
     );
   }
@@ -156,7 +156,7 @@ export default function ExecutorProfile() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Профіль виконавця</Text>
+        <Text style={styles.headerTitle}>Pro profile</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -176,7 +176,7 @@ export default function ExecutorProfile() {
               <View style={styles.ratingContainer}>
                 {renderStars(profile.average_rating, 20)}
                 <Text style={styles.ratingText}>
-                  {profile.average_rating.toFixed(1)} ({profile.total_reviews} відгуків)
+                  {profile.average_rating.toFixed(1)} ({profile.total_reviews} reviews)
                 </Text>
               </View>
             </View>
@@ -192,19 +192,19 @@ export default function ExecutorProfile() {
               <View style={styles.statItem}>
                 <Ionicons name="briefcase-outline" size={24} color="#2563eb" />
                 <Text style={styles.statValue}>{profile.experience_years}</Text>
-                <Text style={styles.statLabel}>років досвіду</Text>
+                <Text style={styles.statLabel}>years of experience</Text>
               </View>
             )}
             <View style={styles.statItem}>
               <Ionicons name="star-outline" size={24} color="#f59e0b" />
               <Text style={styles.statValue}>{profile.total_reviews}</Text>
-              <Text style={styles.statLabel}>відгуків</Text>
+              <Text style={styles.statLabel}>reviews</Text>
             </View>
             {pricing?.final_rate && (
               <View style={styles.statItem}>
                 <Ionicons name="cash-outline" size={24} color="#10b981" />
                 <Text style={styles.statValue}>${pricing.final_rate}</Text>
-                <Text style={styles.statLabel}>за годину</Text>
+                <Text style={styles.statLabel}>per hour</Text>
               </View>
             )}
           </View>
@@ -213,7 +213,7 @@ export default function ExecutorProfile() {
         {/* Skills */}
         {profile.skills && profile.skills.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Навички</Text>
+            <Text style={styles.sectionTitle}>Skills</Text>
             <View style={styles.skillsContainer}>
               {profile.skills.map((skill, index) => (
                 <View key={index} style={styles.skillBadge}>
@@ -228,7 +228,7 @@ export default function ExecutorProfile() {
         {/* Languages */}
         {profile.languages && profile.languages.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Мови</Text>
+            <Text style={styles.sectionTitle}>Languages</Text>
             <View style={styles.languagesContainer}>
               {profile.languages.map((lang, index) => (
                 <View key={index} style={styles.languageBadge}>
@@ -243,7 +243,7 @@ export default function ExecutorProfile() {
         {/* Certifications */}
         {profile.certifications && profile.certifications.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Сертифікати</Text>
+            <Text style={styles.sectionTitle}>Certifications</Text>
             {profile.certifications.map((cert, index) => (
               <View key={index} style={styles.certItem}>
                 <Ionicons name="ribbon-outline" size={20} color="#2563eb" />
@@ -256,7 +256,7 @@ export default function ExecutorProfile() {
         {/* Availability Calendar */}
         {availability.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Графік роботи</Text>
+            <Text style={styles.sectionTitle}>Work schedule</Text>
             <View style={styles.calendarContainer}>
               {DAYS.map((day, index) => {
                 const daySlots = availability.filter(
@@ -278,7 +278,7 @@ export default function ExecutorProfile() {
                           </View>
                         ))
                       ) : (
-                        <Text style={styles.notAvailable}>Вихідний</Text>
+                        <Text style={styles.notAvailable}>Day off</Text>
                       )}
                     </View>
                   </View>
@@ -291,10 +291,10 @@ export default function ExecutorProfile() {
         {/* Service Area Map */}
         {(profile.latitude && profile.longitude) || profile.service_radius_km || (profile.service_cities && profile.service_cities.length > 0) || (profile.service_zones && profile.service_zones.length > 0) ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Зона роботи</Text>
+            <Text style={styles.sectionTitle}>Service area</Text>
             {profile.service_radius_km ? (
               <Text style={styles.coverageSubtitle}>
-                Виконавець працює в радіусі {profile.service_radius_km} км
+                The pro works within a {profile.service_radius_km} mi radius
               </Text>
             ) : null}
             {profile.latitude && profile.longitude && profile.service_radius_km ? (
@@ -310,15 +310,15 @@ export default function ExecutorProfile() {
                 <View style={styles.mapPlaceholder}>
                   <Ionicons name="map-outline" size={40} color="#2563eb" />
                   <Text style={styles.mapPlaceholderText}>
-                    Зона роботи: {profile.service_radius_km} км
+                    Service area: {profile.service_radius_km} mi
                   </Text>
                 </View>
               )
             ) : (
               <View style={styles.mapPlaceholder}>
                 <Ionicons name="map-outline" size={40} color="#2563eb" />
-                <Text style={styles.mapPlaceholderText}>Зона обслуговування</Text>
-                <Text style={styles.mapPlaceholderSub}>Виконавець не вказав координати</Text>
+                <Text style={styles.mapPlaceholderText}>Service area</Text>
+                <Text style={styles.mapPlaceholderSub}>The pro hasn't provided coordinates</Text>
               </View>
             )}
             {((profile.service_cities && profile.service_cities.length > 0) || (profile.service_zones && profile.service_zones.length > 0)) && (
@@ -337,7 +337,7 @@ export default function ExecutorProfile() {
         {/* Portfolio */}
         {profile.portfolio_photos && profile.portfolio_photos.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Портфоліо</Text>
+            <Text style={styles.sectionTitle}>Portfolio</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.portfolioScroll}>
               {profile.portfolio_photos.map((photo, index) => (
                 <TouchableOpacity
@@ -354,7 +354,7 @@ export default function ExecutorProfile() {
         {/* Reviews */}
         {reviews.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Відгуки</Text>
+            <Text style={styles.sectionTitle}>Reviews</Text>
             {reviews.slice(0, 5).map((review) => (
               <View key={review.review_id} style={styles.reviewCard}>
                 <View style={styles.reviewHeader}>
@@ -362,7 +362,7 @@ export default function ExecutorProfile() {
                     {renderStars(review.rating, 14)}
                   </View>
                   <Text style={styles.reviewDate}>
-                    {new Date(review.created_at).toLocaleDateString('uk-UA')}
+                    {new Date(review.created_at).toLocaleDateString('en-US')}
                   </Text>
                 </View>
                 {review.comment && (
@@ -373,7 +373,7 @@ export default function ExecutorProfile() {
             {reviews.length > 5 && (
               <TouchableOpacity style={styles.moreReviewsButton}>
                 <Text style={styles.moreReviewsText}>
-                  Показати всі відгуки ({reviews.length})
+                  Show all reviews ({reviews.length})
                 </Text>
               </TouchableOpacity>
             )}
@@ -383,21 +383,21 @@ export default function ExecutorProfile() {
         {/* Pricing Info */}
         {pricing && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ціни</Text>
+            <Text style={styles.sectionTitle}>Pricing</Text>
             <View style={styles.pricingCard}>
               <View style={styles.pricingRow}>
-                <Text style={styles.pricingLabel}>Базова ставка:</Text>
-                <Text style={styles.pricingValue}>${pricing.base_rate}/год</Text>
+                <Text style={styles.pricingLabel}>Base rate:</Text>
+                <Text style={styles.pricingValue}>${pricing.base_rate}/hr</Text>
               </View>
               {pricing.commission_applied && (
                 <View style={styles.pricingRow}>
-                  <Text style={styles.pricingLabel}>Комісія сервісу:</Text>
+                  <Text style={styles.pricingLabel}>Service fee:</Text>
                   <Text style={styles.pricingValue}>{pricing.commission_percentage}%</Text>
                 </View>
               )}
               <View style={[styles.pricingRow, styles.totalRow]}>
-                <Text style={styles.pricingLabel}>Фінальна ціна:</Text>
-                <Text style={styles.finalPrice}>${pricing.final_rate}/год</Text>
+                <Text style={styles.pricingLabel}>Final price:</Text>
+                <Text style={styles.finalPrice}>${pricing.final_rate}/hr</Text>
               </View>
             </View>
           </View>
@@ -410,7 +410,7 @@ export default function ExecutorProfile() {
       <View style={styles.footer}>
         <TouchableOpacity style={styles.contactButton} onPress={contactExecutor}>
           <Ionicons name="chatbubble-outline" size={20} color="#fff" />
-          <Text style={styles.contactButtonText}>Зв'язатися</Text>
+          <Text style={styles.contactButtonText}>Contact</Text>
         </TouchableOpacity>
       </View>
 

@@ -65,14 +65,14 @@ export default function TabsLayout() {
         headerShown: false,
         // Hide the bottom tab bar entirely for unauthenticated visitors so
         // the landing page looks like a public marketing page (no provider
-        // tabs like "Завдання"/"Заробіток" leaking through).
+        // tabs like "Tasks"/"Earnings" leaking through).
         tabBarStyle: isGuest ? { display: 'none' } : undefined,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Головна',
+          title: 'Home',
           href: (role === 'client' || isGuest) ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
@@ -83,7 +83,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="executors"
         options={{
-          title: 'Виконавці',
+          title: 'Pros',
           href: role === 'client' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
@@ -94,7 +94,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="bookings"
         options={{
-          title: 'Замовлення',
+          title: 'Orders',
           href: role === 'client' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar-outline" size={size} color={color} />
@@ -105,7 +105,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="tasks"
         options={{
-          title: 'Завдання',
+          title: 'Tasks',
           href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list-outline" size={size} color={color} />
@@ -116,7 +116,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="service-area"
         options={{
-          title: 'Локація',
+          title: 'Location',
           href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="location-outline" size={size} color={color} />
@@ -127,7 +127,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="availability"
         options={{
-          title: 'Графік',
+          title: 'Schedule',
           href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="time-outline" size={size} color={color} />
@@ -138,7 +138,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="earnings"
         options={{
-          title: 'Заробіток',
+          title: 'Earnings',
           href: role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="wallet-outline" size={size} color={color} />
@@ -150,7 +150,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="messages"
         options={{
-          title: 'Чати',
+          title: 'Chats',
           href: role === 'support' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <View>
@@ -165,7 +165,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="support-inbox"
         options={{
-          title: 'Підтримка',
+          title: 'Support',
           href: role === 'support' || role === 'admin' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="headset-outline" size={size} color={color} />
@@ -188,7 +188,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="community"
         options={{
-          title: 'Спільнота',
+          title: 'Community',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="newspaper-outline" size={size} color={color} />
           ),
@@ -242,7 +242,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="my-profile"
         options={{
-          title: 'Профіль',
+          title: 'Profile',
           href: role === 'client' || role === 'provider' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />

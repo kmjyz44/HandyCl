@@ -25,7 +25,7 @@ export default function VerifyPhone() {
 
   const sendCode = async () => {
     if (!phone || phone.replace(/\D/g, '').length < 8) {
-      setError('Введіть коректний номер у форматі +1...');
+      setError('Enter a valid number in +1... format');
       return;
     }
     setSending(true);
@@ -35,13 +35,13 @@ export default function VerifyPhone() {
       if (res?.sent) {
         setSent(true);
         setCooldown(60);
-        Alert.alert('Надіслано', 'Код підтвердження надіслано у SMS');
+        Alert.alert('Sent', 'A verification code was sent via SMS');
       } else {
         // HTTP 200 but Twilio did not deliver — surface the real reason
-        setError(res?.error || 'Не вдалося надіслати SMS. Спробуйте пізніше.');
+        setError(res?.error || 'Could not send SMS. Please try again later.');
       }
     } catch (e: any) {
-      const detail = e?.response?.data?.detail || e?.response?.data?.error || 'Помилка';
+      const detail = e?.response?.data?.detail || e?.response?.data?.error || 'Error';
       if (String(detail).includes('60')) { setSent(true); setCooldown(60); }
       setError(detail);
     } finally {
@@ -51,7 +51,7 @@ export default function VerifyPhone() {
 
   const verify = async () => {
     if (code.length !== 6) {
-      setError('Введіть 6-значний код');
+      setError('Enter the 6-digit code');
       return;
     }
     setLoading(true);
@@ -59,10 +59,10 @@ export default function VerifyPhone() {
     try {
       await api.verifyPhone({ code });
       if (user) setUser({ ...user, phone, phone_verified: true } as any);
-      Alert.alert('Готово!', 'Номер телефону підтверджено.');
+      Alert.alert('Done!', 'Your phone number is verified.');
       router.replace('/(tabs)');
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Помилка');
+      setError(e?.response?.data?.detail || 'Error');
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export default function VerifyPhone() {
         <TouchableOpacity onPress={() => router.back()} style={s.back}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={s.title}>Підтвердіть телефон</Text>
+        <Text style={s.title}>Verify your phone</Text>
       </View>
       <View style={s.body}>
         <View style={s.iconCircle}>
@@ -82,8 +82,8 @@ export default function VerifyPhone() {
         </View>
         {!sent ? (
           <>
-            <Text style={s.h1}>Номер телефону</Text>
-            <Text style={s.subtitle}>Ми надішлемо 6-значний код у SMS</Text>
+            <Text style={s.h1}>Phone number</Text>
+            <Text style={s.subtitle}>We'll send a 6-digit code via SMS</Text>
             <TextInput
               style={s.phoneInput}
               value={phone}
@@ -100,14 +100,14 @@ export default function VerifyPhone() {
               disabled={sending}
               data-testid="send-phone-code-btn"
             >
-              {sending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Надіслати код</Text>}
+              {sending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Send code</Text>}
             </TouchableOpacity>
           </>
         ) : (
           <>
-            <Text style={s.h1}>Введіть код</Text>
+            <Text style={s.h1}>Enter the code</Text>
             <Text style={s.subtitle}>
-              Код надіслано на{'\n'}
+              Code sent to{'\n'}
               <Text style={{ fontWeight: '700', color: '#111827' }}>{phone}</Text>
             </Text>
             <TextInput
@@ -128,17 +128,17 @@ export default function VerifyPhone() {
               disabled={loading || code.length !== 6}
               data-testid="verify-phone-submit-btn"
             >
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Підтвердити</Text>}
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Confirm</Text>}
             </TouchableOpacity>
             <TouchableOpacity onPress={sendCode} disabled={sending || cooldown > 0} data-testid="resend-phone-code-btn">
               <Text style={s.resend}>
-                {cooldown > 0 ? `Надіслати знов через ${cooldown}с` : sending ? 'Надсилаю…' : 'Не отримали код? Надіслати знов'}
+                {cooldown > 0 ? `Resend in ${cooldown}s` : sending ? 'Sending…' : "Didn't get the code? Resend"}
               </Text>
             </TouchableOpacity>
           </>
         )}
         <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={{ marginTop: 20 }} data-testid="skip-phone-verify-btn">
-          <Text style={s.skip}>Пропустити поки що</Text>
+          <Text style={s.skip}>Skip for now</Text>
         </TouchableOpacity>
       </View>
     </View>

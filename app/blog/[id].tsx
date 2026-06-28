@@ -12,14 +12,14 @@ import { showAlert, showConfirm } from '../../utils/alert';
 function fmt(ts: string) {
   try {
     const d = new Date(ts);
-    return d.toLocaleString('uk-UA', { dateStyle: 'medium', timeStyle: 'short' });
+    return d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
   } catch { return ''; }
 }
 
 const ROLE_LABEL: Record<string, { text: string; color: string }> = {
-  client:   { text: 'Клієнт',     color: '#3b82f6' },
-  provider: { text: 'Виконавець', color: '#16a34a' },
-  admin:    { text: 'Адмін',      color: '#a855f7' },
+  client:   { text: 'Client',   color: '#3b82f6' },
+  provider: { text: 'Pro',      color: '#16a34a' },
+  admin:    { text: 'Admin',    color: '#a855f7' },
 };
 
 export default function BlogPostDetail() {
@@ -43,19 +43,19 @@ export default function BlogPostDetail() {
   useEffect(() => { load(); }, [id]);
 
   const onLike = async () => {
-    if (!user) { showAlert('Увійди', 'Щоб ставити лайки, треба увійти'); return; }
+    if (!user) { showAlert('Log in', 'You need to log in to like'); return; }
     try {
       const r = await api.toggleBlogLike(post.post_id);
       setPost((p: any) => ({ ...p, liked_by_me: r.liked, likes_count: r.likes_count }));
     } catch (e: any) {
-      showAlert('Помилка', e?.message || 'Не вдалось');
+      showAlert('Error', e?.message || 'Failed');
     }
   };
 
   const onComment = async () => {
     const text = commentText.trim();
     if (!text) return;
-    if (!user) { showAlert('Увійди', 'Щоб коментувати, треба увійти'); return; }
+    if (!user) { showAlert('Log in', 'You need to log in to comment'); return; }
     setSending(true);
     try {
       const c = await api.addBlogComment(post.post_id, text);
@@ -66,24 +66,24 @@ export default function BlogPostDetail() {
       }));
       setCommentText('');
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+      showAlert('Error', e?.response?.data?.detail || 'Failed');
     } finally { setSending(false); }
   };
 
   const onDelete = () => {
     showConfirm(
-      'Видалити пост?',
-      'Цю дію не можна скасувати.',
+      'Delete post?',
+      'This action cannot be undone.',
       async () => {
         try {
           await api.deleteBlogPost(post.post_id);
           router.back();
         } catch (e: any) {
-          showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось');
+          showAlert('Error', e?.response?.data?.detail || 'Failed');
         }
       },
-      'Видалити',
-      'Скасувати',
+      'Delete',
+      'Cancel',
     );
   };
 
@@ -94,7 +94,7 @@ export default function BlogPostDetail() {
     return (
       <View style={styles.center}>
         <Ionicons name="alert-circle-outline" size={48} color="#9ca3af" />
-        <Text style={styles.notFound}>Пост не знайдено</Text>
+        <Text style={styles.notFound}>Post not found</Text>
       </View>
     );
   }
@@ -109,7 +109,7 @@ export default function BlogPostDetail() {
     >
       <Stack.Screen
         options={{
-          title: 'Публікація',
+          title: 'Post',
           headerRight: () => canDelete ? (
             <TouchableOpacity onPress={onDelete} style={{ paddingHorizontal: 12 }} data-testid="blog-delete-btn">
               <Ionicons name="trash-outline" size={20} color="#dc2626" />
@@ -129,7 +129,7 @@ export default function BlogPostDetail() {
             </View>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={styles.authorName}>{post.author_name || 'Користувач'}</Text>
+            <Text style={styles.authorName}>{post.author_name || 'User'}</Text>
             <Text style={styles.authorMeta}>
               <Text style={[styles.roleTag, { color: role.color }]}>{role.text}</Text>
               {' · '}{fmt(post.created_at)}
@@ -173,7 +173,7 @@ export default function BlogPostDetail() {
 
         {/* Comments */}
         <View style={styles.commentsBlock}>
-          <Text style={styles.commentsHeader}>Коментарі ({post.comments?.length || 0})</Text>
+          <Text style={styles.commentsHeader}>Comments ({post.comments?.length || 0})</Text>
           {(post.comments || []).map((c: any) => (
             <View key={c.comment_id} style={styles.comment} data-testid={`comment-${c.comment_id}`}>
               {c.author_avatar ? (
@@ -184,14 +184,14 @@ export default function BlogPostDetail() {
                 </View>
               )}
               <View style={styles.commentBubble}>
-                <Text style={styles.commentAuthor}>{c.author_name || 'Користувач'}</Text>
+                <Text style={styles.commentAuthor}>{c.author_name || 'User'}</Text>
                 <Text style={styles.commentText}>{c.text}</Text>
                 <Text style={styles.commentTime}>{fmt(c.created_at)}</Text>
               </View>
             </View>
           ))}
           {!post.comments?.length && (
-            <Text style={styles.noComments}>Поки немає коментарів. Стань першим!</Text>
+            <Text style={styles.noComments}>No comments yet. Be the first!</Text>
           )}
         </View>
       </ScrollView>
@@ -201,7 +201,7 @@ export default function BlogPostDetail() {
           <TextInput
             value={commentText}
             onChangeText={setCommentText}
-            placeholder="Залишити коментар..."
+            placeholder="Leave a comment..."
             style={styles.composerInput}
             multiline
             data-testid="comment-input"

@@ -384,7 +384,7 @@ export const api = {
       return res.data;
     } catch (err: any) {
       // If backend returns non-JSON 500, throw a readable error
-      const msg = err?.response?.data?.detail || err?.response?.data || err?.message || 'Помилка сервера';
+      const msg = err?.response?.data?.detail || err?.response?.data || err?.message || 'Server error';
       throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
   },
@@ -842,7 +842,7 @@ export const api = {
       const res = await client.post('/bookings', payload);
       return res.data;
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.response?.data || err?.message || 'Помилка сервера';
+      const msg = err?.response?.data?.detail || err?.response?.data || err?.message || 'Server error';
       throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
   },

@@ -90,14 +90,14 @@ export default function PayoutSetup() {
 
   const submitFinixOnboard = async () => {
     const k = kyc;
-    if (!k.first_name.trim() || !k.last_name.trim()) return showAlert('Помилка', "Вкажіть ім'я та прізвище");
+    if (!k.first_name.trim() || !k.last_name.trim()) return showAlert('Error', 'Please enter your first and last name');
     const dobMatch = k.dob.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!dobMatch) return showAlert('Помилка', 'Дата народження у форматі MM/DD/YYYY');
-    if (!/^\d{9}$/.test(k.ssn.replace(/\D/g, ''))) return showAlert('Помилка', 'SSN/Tax ID має містити 9 цифр');
+    if (!dobMatch) return showAlert('Error', 'Date of birth in MM/DD/YYYY format');
+    if (!/^\d{9}$/.test(k.ssn.replace(/\D/g, ''))) return showAlert('Error', 'SSN/Tax ID must contain 9 digits');
     if (!k.line1.trim() || !k.city.trim() || !k.region.trim() || !k.postal_code.trim())
-      return showAlert('Помилка', 'Заповніть адресу повністю');
-    if (!/^\d{6,17}$/.test(k.bank_account_number.replace(/\D/g, ''))) return showAlert('Помилка', 'Невірний номер рахунку');
-    if (!/^\d{9}$/.test(k.bank_routing_number.replace(/\D/g, ''))) return showAlert('Помилка', 'Routing number має містити 9 цифр');
+      return showAlert('Error', 'Please fill in the full address');
+    if (!/^\d{6,17}$/.test(k.bank_account_number.replace(/\D/g, ''))) return showAlert('Error', 'Invalid account number');
+    if (!/^\d{9}$/.test(k.bank_routing_number.replace(/\D/g, ''))) return showAlert('Error', 'Routing number must contain 9 digits');
 
     setFinixLoading(true);
     try {
@@ -113,11 +113,11 @@ export default function PayoutSetup() {
       } as any);
       setFinixStatus({ onboarded: true, merchant_id: r.merchant_id, onboarding_state: r.onboarding_state });
       setShowFinixForm(false);
-      showAlert('Готово', r.onboarding_state === 'APPROVED'
-        ? 'Виплати Finix активовано — ви готові приймати платежі.'
-        : 'Заявку подано. Finix перевіряє дані — статус оновиться автоматично (зазвичай за хвилину).');
+      showAlert('Done', r.onboarding_state === 'APPROVED'
+        ? "Finix payouts are active — you're ready to accept payments."
+        : 'Application submitted. Finix is reviewing your data — the status will update automatically (usually within a minute).');
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалося підключити Finix');
+      showAlert('Error', e?.response?.data?.detail || 'Could not connect Finix');
     } finally {
       setFinixLoading(false);
     }
@@ -131,9 +131,9 @@ export default function PayoutSetup() {
         zelle_handle: zelleHandle.trim(),
         venmo_handle: venmoHandle.trim(),
       });
-      showAlert('Готово', 'Контакти збережено. Клієнти бачитимуть їх при оплаті.');
+      showAlert('Done', 'Contacts saved. Clients will see them at payment.');
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || 'Не вдалось зберегти');
+      showAlert('Error', e?.response?.data?.detail || 'Could not save');
     } finally {
       setSavingContacts(false);
     }
@@ -169,7 +169,7 @@ export default function PayoutSetup() {
         await Linking.openURL(r.url);
       }
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || e?.message || 'Не вдалось почати онбординг');
+      showAlert('Error', e?.response?.data?.detail || e?.message || 'Could not start onboarding');
     } finally {
       setConnectLoading(false);
     }
@@ -187,7 +187,7 @@ export default function PayoutSetup() {
         }
       }
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || e?.message || 'Не вдалось відкрити');
+      showAlert('Error', e?.response?.data?.detail || e?.message || 'Could not open');
     }
   };
 
@@ -199,7 +199,7 @@ export default function PayoutSetup() {
 
   const submit = async () => {
     if (!holderName.trim()) {
-      showAlert('Помилка', "Введіть ім'я власника");
+      showAlert('Error', 'Enter the account holder name');
       return;
     }
     setSaving(true);
@@ -219,11 +219,11 @@ export default function PayoutSetup() {
         payload.account_number = accountNumber.replace(/\D/g, '');
       }
       await api.createPayoutAccount(payload);
-      showAlert('Готово', 'Спосіб виплати додано');
+      showAlert('Done', 'Payout method added');
       reset();
       load();
     } catch (e: any) {
-      showAlert('Помилка', e?.response?.data?.detail || e?.message || 'Не вдалося зберегти');
+      showAlert('Error', e?.response?.data?.detail || e?.message || 'Could not save');
     } finally {
       setSaving(false);
     }
@@ -231,18 +231,18 @@ export default function PayoutSetup() {
 
   const remove = (id: string) => {
     showConfirm(
-      'Видалити?',
-      'Цей спосіб буде видалено зі способів виплат.',
+      'Delete?',
+      'This method will be removed from your payout methods.',
       async () => {
         try {
           await api.deletePayoutAccount(id);
           load();
         } catch (e: any) {
-          showAlert('Помилка', e?.message || 'Не вдалось видалити');
+          showAlert('Error', e?.message || 'Could not delete');
         }
       },
-      'Видалити',
-      'Скасувати',
+      'Delete',
+      'Cancel',
     );
   };
 
@@ -251,19 +251,19 @@ export default function PayoutSetup() {
       await api.setDefaultPayoutAccount(id);
       load();
     } catch (e: any) {
-      showAlert('Помилка', e?.message || 'Не вдалось зберегти');
+      showAlert('Error', e?.message || 'Could not save');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Спосіб виплати' }} />
+      <Stack.Screen options={{ title: 'Payout method' }} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-        <Text style={styles.h1}>Куди ми переказуватимемо ваші гроші</Text>
+        <Text style={styles.h1}>Where we'll send your money</Text>
         <Text style={styles.sub}>
-          Підключи Stripe Connect — і кошти автоматично переказуватимуться тобі на картку
-          після кожного оплаченого завдання. Stripe сам перевірить документи (5 хв) — нам
-          нічого не треба робити вручну.
+          Connect Stripe Connect — and funds will be automatically transferred to your card
+          after each paid task. Stripe verifies your documents itself (5 min) — we
+          don't need to do anything manually.
         </Text>
 
         {/* Stripe Connect — recommended (only if admin enabled Stripe) */}
@@ -274,19 +274,19 @@ export default function PayoutSetup() {
               <Ionicons name="flash" size={22} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.connectTitle}>Stripe Connect (рекомендовано)</Text>
+              <Text style={styles.connectTitle}>Stripe Connect (recommended)</Text>
               <Text style={styles.connectSub}>
                 {connectStatus?.charges_enabled && connectStatus?.payouts_enabled
-                  ? '✓ Активно — гроші переказуватимуться автоматично'
+                  ? '✓ Active — funds will transfer automatically'
                   : connectStatus?.connected
-                  ? '⏳ Підключено, але потрібно завершити онбординг'
-                  : 'Один раз пройти онбординг — і виплати автоматичні'}
+                  ? '⏳ Connected, but onboarding needs to be completed'
+                  : 'Complete onboarding once — and payouts are automatic'}
               </Text>
             </View>
           </View>
           {connectStatus?.charges_enabled && connectStatus?.payouts_enabled ? (
             <TouchableOpacity style={styles.connectBtnSecondary} onPress={openStripeDashboard} data-testid="open-stripe-dashboard-btn">
-              <Text style={styles.connectBtnSecondaryText}>Відкрити Stripe Dashboard</Text>
+              <Text style={styles.connectBtnSecondaryText}>Open Stripe Dashboard</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -299,7 +299,7 @@ export default function PayoutSetup() {
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
                 <Text style={styles.connectBtnText}>
-                  {connectStatus?.connected ? 'Продовжити онбординг' : 'Підключити Stripe →'}
+                  {connectStatus?.connected ? 'Continue onboarding' : 'Connect Stripe →'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -315,13 +315,13 @@ export default function PayoutSetup() {
               <Ionicons name="card" size={22} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.connectTitle}>Finix (авто-split, США)</Text>
+              <Text style={styles.connectTitle}>Finix (auto-split, USA)</Text>
               <Text style={styles.connectSub}>
                 {finixStatus?.onboarding_state === 'APPROVED'
-                  ? '✓ Активно — ваша частина надходитиме автоматично'
+                  ? '✓ Active — your share will arrive automatically'
                   : finixStatus?.onboarded
-                  ? '⏳ Заявку подано, очікує підтвердження Finix'
-                  : 'Підключіть один раз — і отримуйте свою частину автоматично'}
+                  ? '⏳ Application submitted, awaiting Finix approval'
+                  : 'Connect once — and receive your share automatically'}
               </Text>
             </View>
           </View>
@@ -336,7 +336,7 @@ export default function PayoutSetup() {
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
                 <Text style={styles.connectBtnText}>
-                  {finixStatus?.onboarded ? 'Перевірити статус' : 'Підключити виплати Finix →'}
+                  {finixStatus?.onboarded ? 'Check status' : 'Connect Finix payouts →'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -344,13 +344,13 @@ export default function PayoutSetup() {
         </View>
         )}
 
-        <Text style={styles.dividerLabel}>або зберегти реквізити вручну (для довідки)</Text>
+        <Text style={styles.dividerLabel}>or save details manually (for reference)</Text>
 
         {/* PayPal / Zelle / Venmo contacts — for manual-split methods */}
         <View style={styles.altCard}>
-          <Text style={styles.altTitle}>Альтернативні способи отримання</Text>
+          <Text style={styles.altTitle}>Alternative payout methods</Text>
           <Text style={styles.altSub}>
-            Якщо клієнт обирає PayPal / Zelle / Venmo — він буде надсилати тобі гроші напряму на ці акаунти.
+            If a client chooses PayPal / Zelle / Venmo — they will send money directly to these accounts.
           </Text>
           {enabledMethods.includes('paypal') && (<>
           <Text style={styles.label}>PayPal email</Text>
@@ -365,18 +365,18 @@ export default function PayoutSetup() {
           />
           </>)}
           {enabledMethods.includes('zelle') && (<>
-          <Text style={styles.label}>Zelle (email або телефон)</Text>
+          <Text style={styles.label}>Zelle (email or phone)</Text>
           <TextInput
             value={zelleHandle}
             onChangeText={setZelleHandle}
-            placeholder="you@bank.com або +1 234 567 8900"
+            placeholder="you@bank.com or +1 234 567 8900"
             autoCapitalize="none"
             style={styles.input}
             data-testid="zelle-handle-input"
           />
           </>)}
           {enabledMethods.includes('venmo') && (<>
-          <Text style={styles.label}>Venmo username (без @)</Text>
+          <Text style={styles.label}>Venmo username (without @)</Text>
           <TextInput
             value={venmoHandle}
             onChangeText={setVenmoHandle}
@@ -392,7 +392,7 @@ export default function PayoutSetup() {
             disabled={savingContacts}
             data-testid="save-payout-contacts-btn"
           >
-            {savingContacts ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Зберегти контакти</Text>}
+            {savingContacts ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save contacts</Text>}
           </TouchableOpacity>
         </View>
 
@@ -401,7 +401,7 @@ export default function PayoutSetup() {
           <ActivityIndicator style={{ marginTop: 16 }} color="#2563eb" />
         ) : accounts.length > 0 ? (
           <View style={styles.list}>
-            <Text style={styles.h2}>Збережені реквізити</Text>
+            <Text style={styles.h2}>Saved details</Text>
             {accounts.map((a) => (
               <View key={a.account_id} style={styles.acc} data-testid={`payout-account-${a.account_id}`}>
                 <View style={styles.accIcon}>
@@ -414,17 +414,17 @@ export default function PayoutSetup() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.accTitle}>
                     {a.account_type === 'card'
-                      ? `${(a.card_brand || 'Картка').toUpperCase()} •••• ${a.card_last4}`
-                      : `${a.bank_name || 'Банк'} •••• ${a.account_number_last4}`}
+                      ? `${(a.card_brand || 'Card').toUpperCase()} •••• ${a.card_last4}`
+                      : `${a.bank_name || 'Bank'} •••• ${a.account_number_last4}`}
                   </Text>
                   <Text style={styles.accSub}>
-                    {a.account_holder_name || '—'} · {a.is_default ? 'Основний' : 'Резерв'}
-                    {a.is_verified ? ' · ✓' : ' · очікує верифікації'}
+                    {a.account_holder_name || '—'} · {a.is_default ? 'Primary' : 'Backup'}
+                    {a.is_verified ? ' · ✓' : ' · awaiting verification'}
                   </Text>
                 </View>
                 {!a.is_default && (
                   <TouchableOpacity onPress={() => makeDefault(a.account_id)} style={styles.accBtn} data-testid={`set-default-${a.account_id}`}>
-                    <Text style={styles.accBtnText}>Основний</Text>
+                    <Text style={styles.accBtnText}>Primary</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity onPress={() => remove(a.account_id)} style={[styles.accBtn, styles.accBtnDanger]} data-testid={`delete-${a.account_id}`}>
@@ -443,7 +443,7 @@ export default function PayoutSetup() {
             data-testid="tab-card"
           >
             <Ionicons name="card-outline" size={18} color={tab === 'card' ? '#fff' : '#374151'} />
-            <Text style={[styles.tabText, tab === 'card' && styles.tabTextActive]}>Дебетова картка</Text>
+            <Text style={[styles.tabText, tab === 'card' && styles.tabTextActive]}>Debit card</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, tab === 'bank' && styles.tabActive]}
@@ -451,13 +451,13 @@ export default function PayoutSetup() {
             data-testid="tab-bank"
           >
             <Ionicons name="business-outline" size={18} color={tab === 'bank' ? '#fff' : '#374151'} />
-            <Text style={[styles.tabText, tab === 'bank' && styles.tabTextActive]}>Банк (ACH)</Text>
+            <Text style={[styles.tabText, tab === 'bank' && styles.tabTextActive]}>Bank (ACH)</Text>
           </TouchableOpacity>
         </View>
 
         {/* Form */}
         <View style={styles.card}>
-          <Text style={styles.label}>Ім'я власника рахунку</Text>
+          <Text style={styles.label}>Account holder name</Text>
           <TextInput
             value={holderName}
             onChangeText={setHolderName}
@@ -468,7 +468,7 @@ export default function PayoutSetup() {
 
           {tab === 'card' ? (
             <>
-              <Text style={styles.label}>Номер дебетової картки</Text>
+              <Text style={styles.label}>Debit card number</Text>
               <TextInput
                 value={cardNumber}
                 onChangeText={(t) => setCardNumber(t.replace(/[^\d\s]/g, ''))}
@@ -479,7 +479,7 @@ export default function PayoutSetup() {
               />
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Місяць (MM)</Text>
+                  <Text style={styles.label}>Month (MM)</Text>
                   <TextInput
                     value={cardExpMonth}
                     onChangeText={(t) => setCardExpMonth(t.replace(/\D/g, '').slice(0, 2))}
@@ -490,7 +490,7 @@ export default function PayoutSetup() {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Рік (YYYY)</Text>
+                  <Text style={styles.label}>Year (YYYY)</Text>
                   <TextInput
                     value={cardExpYear}
                     onChangeText={(t) => setCardExpYear(t.replace(/\D/g, '').slice(0, 4))}
@@ -516,7 +516,7 @@ export default function PayoutSetup() {
             </>
           ) : (
             <>
-              <Text style={styles.label}>Назва банку</Text>
+              <Text style={styles.label}>Bank name</Text>
               <TextInput
                 value={bankName}
                 onChangeText={setBankName}
@@ -524,7 +524,7 @@ export default function PayoutSetup() {
                 style={styles.input}
                 data-testid="payout-bank-name"
               />
-              <Text style={styles.label}>Routing number (9 цифр)</Text>
+              <Text style={styles.label}>Routing number (9 digits)</Text>
               <TextInput
                 value={routingNumber}
                 onChangeText={(t) => setRoutingNumber(t.replace(/\D/g, '').slice(0, 9))}
@@ -551,12 +551,12 @@ export default function PayoutSetup() {
             disabled={saving}
             data-testid="save-payout-method-btn"
           >
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Зберегти спосіб виплати</Text>}
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save payout method</Text>}
           </TouchableOpacity>
 
           <Text style={styles.helper}>
-            🔒 Дані захищено. Після підключення Stripe Connect ваші кошти автоматично
-            переказуватимуться на цю картку/рахунок після кожного виконаного завдання.
+            🔒 Your data is protected. After connecting Stripe Connect, your funds will automatically
+            be transferred to this card/account after each completed task.
           </Text>
         </View>
       </ScrollView>
@@ -566,36 +566,36 @@ export default function PayoutSetup() {
         <View style={fx.overlay}>
           <View style={fx.sheet}>
             <View style={fx.sheetHeader}>
-              <Text style={fx.sheetTitle}>Підключення виплат Finix</Text>
+              <Text style={fx.sheetTitle}>Connect Finix payouts</Text>
               <TouchableOpacity onPress={() => { if (!finixLoading) setShowFinixForm(false); }} data-testid="finix-form-close">
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ padding: 16 }}>
-              <Text style={fx.note}>Finix (США) вимагає ці дані для верифікації отримувача виплат. Дані передаються напряму у Finix.</Text>
+              <Text style={fx.note}>Finix (USA) requires this data to verify the payout recipient. Data is sent directly to Finix.</Text>
               <View style={fx.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={fx.lbl}>Ім'я</Text>
+                  <Text style={fx.lbl}>First name</Text>
                   <TextInput style={fx.inp} value={kyc.first_name} onChangeText={(v) => setKyc({ ...kyc, first_name: v })} placeholder="Oleh" data-testid="kyc-first-name" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={fx.lbl}>Прізвище</Text>
+                  <Text style={fx.lbl}>Last name</Text>
                   <TextInput style={fx.inp} value={kyc.last_name} onChangeText={(v) => setKyc({ ...kyc, last_name: v })} placeholder="Koval" data-testid="kyc-last-name" />
                 </View>
               </View>
-              <Text style={fx.lbl}>Дата народження (MM/DD/YYYY)</Text>
+              <Text style={fx.lbl}>Date of birth (MM/DD/YYYY)</Text>
               <TextInput style={fx.inp} value={kyc.dob} onChangeText={(v) => setKyc({ ...kyc, dob: v })} placeholder="07/15/1988" keyboardType="numbers-and-punctuation" data-testid="kyc-dob" />
-              <Text style={fx.lbl}>SSN / Tax ID (9 цифр)</Text>
+              <Text style={fx.lbl}>SSN / Tax ID (9 digits)</Text>
               <TextInput style={fx.inp} value={kyc.ssn} onChangeText={(v) => setKyc({ ...kyc, ssn: v })} placeholder="123456789" keyboardType="number-pad" data-testid="kyc-ssn" />
-              <Text style={fx.lbl}>Адреса</Text>
+              <Text style={fx.lbl}>Address</Text>
               <TextInput style={fx.inp} value={kyc.line1} onChangeText={(v) => setKyc({ ...kyc, line1: v })} placeholder="123 Market St" data-testid="kyc-line1" />
               <View style={fx.row2}>
                 <View style={{ flex: 2 }}>
-                  <Text style={fx.lbl}>Місто</Text>
+                  <Text style={fx.lbl}>City</Text>
                   <TextInput style={fx.inp} value={kyc.city} onChangeText={(v) => setKyc({ ...kyc, city: v })} placeholder="San Francisco" data-testid="kyc-city" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={fx.lbl}>Штат</Text>
+                  <Text style={fx.lbl}>State</Text>
                   <TextInput style={fx.inp} value={kyc.region} onChangeText={(v) => setKyc({ ...kyc, region: v })} placeholder="CA" autoCapitalize="characters" maxLength={2} data-testid="kyc-region" />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -603,15 +603,15 @@ export default function PayoutSetup() {
                   <TextInput style={fx.inp} value={kyc.postal_code} onChangeText={(v) => setKyc({ ...kyc, postal_code: v })} placeholder="94103" keyboardType="number-pad" data-testid="kyc-zip" />
                 </View>
               </View>
-              <Text style={[fx.lbl, { marginTop: 8, color: '#1a8917' }]}>Банк для виплат</Text>
-              <Text style={fx.lbl}>Номер рахунку</Text>
+              <Text style={[fx.lbl, { marginTop: 8, color: '#1a8917' }]}>Payout bank</Text>
+              <Text style={fx.lbl}>Account number</Text>
               <TextInput style={fx.inp} value={kyc.bank_account_number} onChangeText={(v) => setKyc({ ...kyc, bank_account_number: v })} placeholder="123123123" keyboardType="number-pad" data-testid="kyc-account" />
-              <Text style={fx.lbl}>Routing number (9 цифр)</Text>
+              <Text style={fx.lbl}>Routing number (9 digits)</Text>
               <TextInput style={fx.inp} value={kyc.bank_routing_number} onChangeText={(v) => setKyc({ ...kyc, bank_routing_number: v })} placeholder="122105155" keyboardType="number-pad" data-testid="kyc-routing" />
             </ScrollView>
             <View style={fx.footer}>
               <TouchableOpacity style={[fx.btn, { backgroundColor: '#1a8917' }, finixLoading && { opacity: 0.6 }]} onPress={submitFinixOnboard} disabled={finixLoading} data-testid="kyc-submit">
-                {finixLoading ? <ActivityIndicator color="#fff" /> : <Text style={fx.btnText}>Підключити виплати</Text>}
+                {finixLoading ? <ActivityIndicator color="#fff" /> : <Text style={fx.btnText}>Connect payouts</Text>}
               </TouchableOpacity>
             </View>
           </View>

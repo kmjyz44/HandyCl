@@ -33,24 +33,24 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  pending:                   'Очікує',
-  confirmed:                 'Підтверджено',
-  in_progress:               'Виконується',
-  completed:                 'Завершено',
-  cancelled:                 'Скасовано',
-  draft:                     'Чернетка',
-  posted:                    'Очікує виконавця',
-  offering:                  'Приймає пропозиції',
-  assigned:                  'Прийнято виконавцем',
-  pending_acceptance:        'Очікує прийняття виконавцем',
-  hold_placed:               'Оплата підтверджена',
-  on_the_way:                'Виконавець в дорозі',
-  started:                   'Виконується',
-  completed_pending_payment: 'Очікує оплати',
-  paid:                      'Оплачено ✓',
-  cancelled_by_client:       'Скасовано вами',
-  cancelled_by_tasker:       'Скасовано виконавцем',
-  declined:                  'Відхилено виконавцем',
+  pending:                   'Pending',
+  confirmed:                 'Confirmed',
+  in_progress:               'In progress',
+  completed:                 'Completed',
+  cancelled:                 'Cancelled',
+  draft:                     'Draft',
+  posted:                    'Awaiting a pro',
+  offering:                  'Receiving offers',
+  assigned:                  'Accepted by pro',
+  pending_acceptance:        'Awaiting pro acceptance',
+  hold_placed:               'Payment confirmed',
+  on_the_way:                'Pro on the way',
+  started:                   'In progress',
+  completed_pending_payment: 'Awaiting payment',
+  paid:                      'Paid ✓',
+  cancelled_by_client:       'Cancelled by you',
+  cancelled_by_tasker:       'Cancelled by pro',
+  declined:                  'Declined by pro',
 };
 
 const COMPLETED_STATUSES = ['completed_pending_payment', 'paid', 'completed'];
@@ -138,8 +138,8 @@ export default function Bookings() {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Мої замовлення</Text>
-          <Text style={styles.headerSubtitle}>Завантаження...</Text>
+          <Text style={styles.headerTitle}>My orders</Text>
+          <Text style={styles.headerSubtitle}>Loading...</Text>
         </View>
         <View style={{ flex: 1, padding: 16 }}>
           {[1, 2, 3].map(i => (
@@ -159,11 +159,11 @@ export default function Bookings() {
     if (!booking || !booking.booking_id) return null;
 
     const statusColor = STATUS_COLORS[booking.status] || '#6b7280';
-    const statusLabel = STATUS_LABELS[booking.status] || booking.status || 'Невідомо';
+    const statusLabel = STATUS_LABELS[booking.status] || booking.status || 'Unknown';
     // Client sees price including 15% platform commission
     const rawPrice = booking.total_price || booking.estimated_price || 0;
     const price = rawPrice > 0 ? Math.round(rawPrice * 1.15 * 100) / 100 : 0;
-    const title = booking.title || booking.service?.name || 'Послуга';
+    const title = booking.title || booking.service?.name || 'Service';
     const isCompleted = COMPLETED_STATUSES.includes(booking.status);
     const bookingIdStr = String(booking.booking_id || '');
 
@@ -202,7 +202,7 @@ export default function Bookings() {
                 <Ionicons name="calendar-outline" size={15} color="#6b7280" />
                 <Text style={styles.infoText}>
                   {booking.scheduled_date || booking.date}
-                  {(booking.scheduled_time || booking.time) ? ` о ${booking.scheduled_time || booking.time}` : ''}
+                  {(booking.scheduled_time || booking.time) ? ` at ${booking.scheduled_time || booking.time}` : ''}
                 </Text>
               </View>
             )}
@@ -215,13 +215,13 @@ export default function Bookings() {
             {price > 0 && (
               <View style={styles.infoRow}>
                 <Ionicons name="cash-outline" size={15} color="#10b981" />
-                <Text style={[styles.infoText, { color: '#10b981', fontWeight: '600' }]}>{price} грн</Text>
+                <Text style={[styles.infoText, { color: '#10b981', fontWeight: '600' }]}>${price}</Text>
               </View>
             )}
             {isCompleted && booking.actual_hours != null && (
               <View style={styles.infoRow}>
                 <Ionicons name="time-outline" size={15} color="#2563eb" />
-                <Text style={[styles.infoText, { color: '#2563eb' }]}>Відпрацьовано: {booking.actual_hours} год</Text>
+                <Text style={[styles.infoText, { color: '#2563eb' }]}>Hours worked: {booking.actual_hours} hr</Text>
               </View>
             )}
           </View>
@@ -230,9 +230,9 @@ export default function Bookings() {
           {['assigned','hold_placed','on_the_way','started'].includes(booking.status) && (
             <View style={styles.progressTracker}>
               {[
-                { key: 'assigned',   icon: 'person-add-outline',   label: 'Прийнято' },
-                { key: 'on_the_way', icon: 'car-outline',           label: 'В дорозі' },
-                { key: 'started',    icon: 'construct-outline',     label: 'В роботі' },
+                { key: 'assigned',   icon: 'person-add-outline',   label: 'Accepted' },
+                { key: 'on_the_way', icon: 'car-outline',           label: 'On the way' },
+                { key: 'started',    icon: 'construct-outline',     label: 'In progress' },
               ].map((step, idx, arr) => {
                 const ORDER = ['assigned','hold_placed','on_the_way','started'];
                 const curIdx = ORDER.indexOf(booking.status);
@@ -259,7 +259,7 @@ export default function Bookings() {
           {booking.status === 'completed_pending_payment' && user?.role === 'client' && (
             <View style={styles.payPrompt}>
               <Ionicons name="card-outline" size={15} color="#92400e" />
-              <Text style={styles.payPromptText}>Натисніть щоб оплатити</Text>
+              <Text style={styles.payPromptText}>Tap to pay</Text>
             </View>
           )}
         </View>
@@ -270,9 +270,9 @@ export default function Bookings() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Мої замовлення</Text>
+        <Text style={styles.headerTitle}>My orders</Text>
         <Text style={styles.headerSubtitle}>
-          {user?.role === 'provider' ? 'Ваші призначені завдання' : 'Ваші замовлення послуг'}
+          {user?.role === 'provider' ? 'Your assigned tasks' : 'Your service orders'}
         </Text>
       </View>
 
@@ -285,7 +285,7 @@ export default function Bookings() {
           onPress={() => setActiveTab('active')}
         >
           <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>
-            Активні ({activeBookings.length})
+            Active ({activeBookings.length})
           </Text>
         </TouchableOpacity>
         {pendingPayBookings.length > 0 && (
@@ -301,7 +301,7 @@ export default function Bookings() {
               style={{ marginRight: 3 }}
             />
             <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextPending]} numberOfLines={1}>
-              Підтвердж. ({pendingPayBookings.length})
+              Confirm. ({pendingPayBookings.length})
             </Text>
           </TouchableOpacity>
         )}
@@ -316,7 +316,7 @@ export default function Bookings() {
             style={{ marginRight: 5 }}
           />
           <Text style={[styles.tabText, activeTab === 'completed' && styles.tabTextCompleted]}>
-            Виконані ({completedBookings.length})
+            Completed ({completedBookings.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -328,18 +328,18 @@ export default function Bookings() {
           <View style={{ flex: 1 }}>
             <Text style={styles.overduePayTitle}>
               {overduePayments.length === 1
-                ? 'Є несплачене завдання!'
-                : `${overduePayments.length} несплачених завдань!`}
+                ? 'You have an unpaid task!'
+                : `${overduePayments.length} unpaid tasks!`}
             </Text>
             <Text style={styles.overduePayText}>
-              Будь ласка, оплатіть виконані завдання. Виконавець чекає на оплату більше доби.
+              Please pay for completed tasks. The pro has been waiting for payment for over a day.
             </Text>
           </View>
           <TouchableOpacity
             onPress={() => setActiveTab('completed')}
             style={styles.overduePayBtn}
           >
-            <Text style={styles.overduePayBtnText}>Переглянути</Text>
+            <Text style={styles.overduePayBtnText}>View</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -360,13 +360,13 @@ export default function Bookings() {
               color="#d1d5db"
             />
             <Text style={styles.emptyText}>
-              {activeTab === 'active' ? 'Немає активних замовлень' :
-               activeTab === 'pending' ? 'Немає платежів в очікуванні' :
-               'Немає виконаних завдань'}
+              {activeTab === 'active' ? 'No active orders' :
+               activeTab === 'pending' ? 'No pending payments' :
+               'No completed tasks'}
             </Text>
             {activeTab === 'active' && user?.role === 'client' && (
               <TouchableOpacity style={styles.browseButton} onPress={() => router.push('/(tabs)')}>
-                <Text style={styles.browseButtonText}>Знайти виконавця</Text>
+                <Text style={styles.browseButtonText}>Find a pro</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -377,11 +377,11 @@ export default function Bookings() {
                 <View style={styles.pendingBannerHeader}>
                   <Ionicons name="time-outline" size={20} color="#b45309" />
                   <Text style={styles.pendingBannerTitle}>
-                    Очікують підтвердження ({pendingPayBookings.length})
+                    Awaiting confirmation ({pendingPayBookings.length})
                   </Text>
                 </View>
                 <Text style={styles.pendingBannerSubtitle}>
-                  Ви надіслали платіж. Завдання перейде до "Виконаних" після того як і виконавець, і адмін підтвердять отримання.
+                  You sent the payment. The task moves to "Completed" after both the pro and the admin confirm receipt.
                 </Text>
               </View>
             )}
