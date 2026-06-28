@@ -195,3 +195,7 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - Переклад home (app/(tabs)/index.tsx): SKILL_CATEGORIES (назви+скіли, id збережено!), STATUS_LABELS, days/months масиви, дашборд виконавця (greeting, stats New/Mine/Done, таби Available/My tasks, чіпи, empty states, $/hr). EN.
 - ЗАЛИШОК index.tsx (~69 рядків): клієнтський booking-flow, укр. міста (Київ/Харків...) -> треба US-міста або через Photon. + 39 інших файлів.
 - ПОРЯДОК далі: tasks.tsx (список) -> task-detail -> payment -> profile. Категорії дублюються в 6 файлах — варто винести в спільний catalog (TODO).
+
+## 2026-06-28 — Переклад: tasks.tsx (список завдань) DONE
+- app/(tabs)/tasks.tsx повністю EN: CATEGORIES, STATUS_LABELS, таби (Available/Mine/Confirm/Done), картки завдань, ціни ($, /hr, hours), 2-крокове підтвердження (Executor/Admin), empty states, doneSummary (Hours/Amount/Tips/Total $). 0 UA рядків.
+- Наступне за порядком: task-detail.tsx -> payment flow -> profile. Потім решта файлів + укр.міста в index.tsx.

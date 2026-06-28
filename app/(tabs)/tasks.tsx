@@ -16,29 +16,29 @@ import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 import { useAuthStore } from '../../store/authStore';
 
 const CATEGORIES: Record<string, { name: string; icon: string }> = {
-  handyman_plumbing: { name: 'Сантехніка', icon: 'water-outline' },
-  handyman_electrical: { name: 'Електрика', icon: 'flash-outline' },
-  handyman_carpentry: { name: 'Столярні роботи', icon: 'hammer-outline' },
-  handyman_painting: { name: 'Фарбування', icon: 'color-palette-outline' },
-  handyman_assembly: { name: 'Збирання меблів', icon: 'construct-outline' },
-  handyman_mounting: { name: 'Монтаж', icon: 'build-outline' },
-  cleaning_regular: { name: 'Прибирання', icon: 'sparkles-outline' },
-  cleaning_deep: { name: 'Глибоке прибирання', icon: 'sparkles' },
-  moving_local: { name: 'Переїзд', icon: 'car-outline' },
-  delivery: { name: 'Доставка', icon: 'cube-outline' },
-  gardening: { name: 'Садівництво', icon: 'leaf-outline' },
-  other: { name: 'Інше', icon: 'ellipsis-horizontal-outline' },
+  handyman_plumbing: { name: 'Plumbing', icon: 'water-outline' },
+  handyman_electrical: { name: 'Electrical', icon: 'flash-outline' },
+  handyman_carpentry: { name: 'Carpentry', icon: 'hammer-outline' },
+  handyman_painting: { name: 'Painting', icon: 'color-palette-outline' },
+  handyman_assembly: { name: 'Furniture Assembly', icon: 'construct-outline' },
+  handyman_mounting: { name: 'Mounting', icon: 'build-outline' },
+  cleaning_regular: { name: 'Cleaning', icon: 'sparkles-outline' },
+  cleaning_deep: { name: 'Deep Cleaning', icon: 'sparkles' },
+  moving_local: { name: 'Moving', icon: 'car-outline' },
+  delivery: { name: 'Delivery', icon: 'cube-outline' },
+  gardening: { name: 'Gardening', icon: 'leaf-outline' },
+  other: { name: 'Other', icon: 'ellipsis-horizontal-outline' },
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  posted: { label: 'Нове', color: '#3b82f6' },
-  offering: { label: 'Приймає пропозиції', color: '#8b5cf6' },
-  assigned: { label: 'Призначено', color: '#f59e0b' },
-  hold_placed: { label: 'Оплата підтверджена', color: '#10b981' },
-  on_the_way: { label: 'В дорозі', color: '#06b6d4' },
-  started: { label: 'В роботі', color: '#f97316' },
-  completed_pending_payment: { label: 'Очікує оплати', color: '#eab308' },
-  paid: { label: 'Оплачено', color: '#22c55e' },
+  posted: { label: 'New', color: '#3b82f6' },
+  offering: { label: 'Receiving offers', color: '#8b5cf6' },
+  assigned: { label: 'Assigned', color: '#f59e0b' },
+  hold_placed: { label: 'Payment confirmed', color: '#10b981' },
+  on_the_way: { label: 'On the way', color: '#06b6d4' },
+  started: { label: 'In progress', color: '#f97316' },
+  completed_pending_payment: { label: 'Awaiting payment', color: '#eab308' },
+  paid: { label: 'Paid', color: '#22c55e' },
 };
 
 interface Task {
@@ -141,7 +141,7 @@ export default function AvailableTasks() {
   const renderTaskCard = (task: Task, isMyTask: boolean = false) => {
     const status = getStatusInfo(task.status);
     const category = getCategoryInfo(task.category);
-    const clientName = task.client?.name || 'Клієнт';
+    const clientName = task.client?.name || 'Client';
     const clientPhoto = task.client?.photo_url;
     const t = task as any;
     // Show best available price: final_price > hours×rate > estimated_price
@@ -152,10 +152,10 @@ export default function AvailableTasks() {
         : t.estimated_price;
     const price = calcPrice;
     const priceLabel = t.final_price
-      ? `${t.final_price} грн`
+      ? `$${t.final_price}`
       : (t.actual_hours && t.hourly_rate)
-        ? `${Math.round(t.actual_hours * t.hourly_rate)} грн (${t.actual_hours}год × ${t.hourly_rate}грн)`
-        : t.estimated_price ? `${t.estimated_price} грн` : null;
+        ? `$${Math.round(t.actual_hours * t.hourly_rate)} (${t.actual_hours}h × $${t.hourly_rate})`
+        : t.estimated_price ? `$${t.estimated_price}` : null;
     const taskPhotos = task.photos || [];
 
     return (
@@ -179,7 +179,7 @@ export default function AvailableTasks() {
         </View>
 
         {/* Title */}
-        <Text style={styles.taskTitle}>{task.title || 'Без назви'}</Text>
+        <Text style={styles.taskTitle}>{task.title || 'Untitled'}</Text>
 
         {/* Description */}
         {!!task.description && (
@@ -207,7 +207,7 @@ export default function AvailableTasks() {
             <View style={styles.infoRow}>
               <Ionicons name="calendar-outline" size={15} color="#6b7280" />
               <Text style={styles.infoText}>
-                {task.scheduled_date}{task.scheduled_date && task.scheduled_time ? ' о ' : ''}{task.scheduled_time}
+                {task.scheduled_date}{task.scheduled_date && task.scheduled_time ? ' at ' : ''}{task.scheduled_time}
               </Text>
             </View>
           )}
@@ -240,7 +240,7 @@ export default function AvailableTasks() {
           ) : (
             <View style={styles.priceChip}>
               <Ionicons name="cash-outline" size={14} color="#9ca3af" />
-              <Text style={[styles.priceValue, { color: '#9ca3af' }]}>Ціна не вказана</Text>
+              <Text style={[styles.priceValue, { color: '#9ca3af' }]}>Price not set</Text>
             </View>
           )}
         </View>
@@ -250,7 +250,7 @@ export default function AvailableTasks() {
           <View style={styles.myOfferBadge}>
             <Ionicons name="paper-plane" size={13} color="#8b5cf6" />
             <Text style={styles.myOfferText}>
-              Ваша пропозиція: {task.my_offer.proposed_price} грн
+              Your offer: ${task.my_offer.proposed_price}
             </Text>
           </View>
         )}
@@ -262,7 +262,7 @@ export default function AvailableTasks() {
             onPress={() => openTaskDetail(task)}
           >
             <Text style={styles.viewButtonText}>
-              {isMyTask ? 'Деталі' : task.allow_offers ? 'Надіслати пропозицію' : 'Переглянути'}
+              {isMyTask ? 'Details' : task.allow_offers ? 'Send offer' : 'View'}
             </Text>
             <Ionicons name="chevron-forward" size={17} color="#2563eb" />
           </TouchableOpacity>
@@ -282,7 +282,7 @@ export default function AvailableTasks() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Завдання</Text>
+        <Text style={styles.headerTitle}>Tasks</Text>
         <TouchableOpacity
           onPress={() => router.push('/(tabs)/community' as any)}
           data-testid="open-blog-btn-tasks"
@@ -320,7 +320,7 @@ export default function AvailableTasks() {
           onPress={() => setActiveTab('available')}
         >
           <Text style={[styles.tabText, activeTab === 'available' && styles.tabTextActive]}>
-            Доступні ({tasks.length})
+            Available ({tasks.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -328,7 +328,7 @@ export default function AvailableTasks() {
           onPress={() => setActiveTab('my')}
         >
           <Text style={[styles.tabText, activeTab === 'my' && styles.tabTextActive]}>
-            Мої ({activeMyTasks.length})
+            Mine ({activeMyTasks.length})
           </Text>
         </TouchableOpacity>
         {pendingPayTasks.length > 0 && (
@@ -339,7 +339,7 @@ export default function AvailableTasks() {
           >
             <Ionicons name="time-outline" size={14} color={activeTab === 'pending' ? '#b45309' : '#9ca3af'} style={{ marginRight: 3 }} />
             <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextPending]} numberOfLines={1}>
-              Підтвердж. ({pendingPayTasks.length})
+              Confirm. ({pendingPayTasks.length})
             </Text>
           </TouchableOpacity>
         )}
@@ -349,7 +349,7 @@ export default function AvailableTasks() {
         >
           <Ionicons name="checkmark-done-circle" size={14} color={activeTab === 'done' ? '#22c55e' : '#9ca3af'} style={{ marginRight: 3 }} />
           <Text style={[styles.tabText, activeTab === 'done' && styles.tabTextDone]}>
-            Виконані ({doneTasks.length})
+            Done ({doneTasks.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -364,8 +364,8 @@ export default function AvailableTasks() {
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="clipboard-outline" size={64} color="#d1d5db" />
-              <Text style={styles.emptyTitle}>Немає доступних завдань</Text>
-              <Text style={styles.emptySubtitle}>Нові завдання з'являться тут</Text>
+              <Text style={styles.emptyTitle}>No available tasks</Text>
+              <Text style={styles.emptySubtitle}>New tasks will appear here</Text>
             </View>
           )
         ) : activeTab === 'my' ? (
@@ -374,8 +374,8 @@ export default function AvailableTasks() {
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="briefcase-outline" size={64} color="#d1d5db" />
-              <Text style={styles.emptyTitle}>У вас немає активних завдань</Text>
-              <Text style={styles.emptySubtitle}>Прийміть завдання зі списку доступних</Text>
+              <Text style={styles.emptyTitle}>You have no active tasks</Text>
+              <Text style={styles.emptySubtitle}>Accept a task from the available list</Text>
             </View>
           )
         ) : activeTab === 'pending' ? (
@@ -385,11 +385,11 @@ export default function AvailableTasks() {
                 <View style={styles.pendingBannerHeader}>
                   <Ionicons name="time-outline" size={20} color="#b45309" />
                   <Text style={styles.pendingBannerTitle}>
-                    Очікують підтвердження ({pendingPayTasks.length})
+                    Awaiting confirmation ({pendingPayTasks.length})
                   </Text>
                 </View>
                 <Text style={styles.pendingBannerSubtitle}>
-                  Клієнт надіслав платіж. Завдання буде закрите, коли і виконавець, і адмін підтвердять отримання.
+                  The client sent the payment. The task closes once both the executor and admin confirm receipt.
                 </Text>
               </View>
               {pendingPayTasks.map(task => {
@@ -408,14 +408,14 @@ export default function AvailableTasks() {
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={styles.pendingItemTitle} numberOfLines={2}>
-                        {task.title || 'Завдання'}
+                        {task.title || 'Task'}
                       </Text>
                       <View style={{ flexDirection: 'row', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
                         <Text style={{ fontSize: 12, color: execOk ? '#059669' : '#92400e', fontWeight: '700' }}>
-                          {execOk ? '✓' : '○'} Виконавець
+                          {execOk ? '✓' : '○'} Executor
                         </Text>
                         <Text style={{ fontSize: 12, color: adminOk ? '#059669' : '#92400e', fontWeight: '700' }}>
-                          {adminOk ? '✓' : '○'} Адмін
+                          {adminOk ? '✓' : '○'} Admin
                         </Text>
                         <Text style={{ fontSize: 12, color: '#92400e', fontWeight: '600' }}>
                           {((task as any).payment_method || '').toUpperCase()}
@@ -423,7 +423,7 @@ export default function AvailableTasks() {
                       </View>
                       {isDisputed && (
                         <Text style={{ fontSize: 12, color: '#dc2626', marginTop: 6, fontWeight: '600' }}>
-                          ⚠ Виник спір. Адмін розгляне.
+                          ⚠ A dispute was raised. Admin will review.
                         </Text>
                       )}
                     </View>
@@ -435,8 +435,8 @@ export default function AvailableTasks() {
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="time-outline" size={64} color="#d1d5db" />
-              <Text style={styles.emptyTitle}>Немає платежів в очікуванні</Text>
-              <Text style={styles.emptySubtitle}>Тут з'являться завдання після того як клієнт надішле платіж</Text>
+              <Text style={styles.emptyTitle}>No payments pending</Text>
+              <Text style={styles.emptySubtitle}>Tasks will appear here once the client sends a payment</Text>
             </View>
           )
         ) : (
@@ -451,27 +451,27 @@ export default function AvailableTasks() {
                 if (paidTasks.length === 0) return null;
                 return (
                   <View style={styles.doneSummaryCard}>
-                    <Text style={styles.doneSummaryTitle}>Загальна статистика оплачених</Text>
+                    <Text style={styles.doneSummaryTitle}>Paid totals</Text>
                     <View style={styles.doneSummaryRow}>
                       <View style={styles.doneSummaryItem}>
                         <Ionicons name="hourglass-outline" size={22} color="#2563eb" />
-                        <Text style={styles.doneSummaryValue}>{totalHours > 0 ? `${totalHours.toFixed(1)} год` : '—'}</Text>
-                        <Text style={styles.doneSummaryLabel}>Години</Text>
+                        <Text style={styles.doneSummaryValue}>{totalHours > 0 ? `${totalHours.toFixed(1)} h` : '—'}</Text>
+                        <Text style={styles.doneSummaryLabel}>Hours</Text>
                       </View>
                       <View style={styles.doneSummaryItem}>
                         <Ionicons name="cash-outline" size={22} color="#10b981" />
-                        <Text style={styles.doneSummaryValue}>{totalAmount > 0 ? `${totalAmount.toFixed(0)} грн` : '—'}</Text>
-                        <Text style={styles.doneSummaryLabel}>Сума</Text>
+                        <Text style={styles.doneSummaryValue}>{totalAmount > 0 ? `$${totalAmount.toFixed(0)}` : '—'}</Text>
+                        <Text style={styles.doneSummaryLabel}>Amount</Text>
                       </View>
                       <View style={styles.doneSummaryItem}>
                         <Ionicons name="gift-outline" size={22} color="#f59e0b" />
-                        <Text style={styles.doneSummaryValue}>{totalTips > 0 ? `${totalTips.toFixed(0)} грн` : '—'}</Text>
-                        <Text style={styles.doneSummaryLabel}>Чайові</Text>
+                        <Text style={styles.doneSummaryValue}>{totalTips > 0 ? `$${totalTips.toFixed(0)}` : '—'}</Text>
+                        <Text style={styles.doneSummaryLabel}>Tips</Text>
                       </View>
                       <View style={styles.doneSummaryItem}>
                         <Ionicons name="checkmark-circle-outline" size={22} color="#7c3aed" />
-                        <Text style={styles.doneSummaryValue}>{totalAmount + totalTips > 0 ? `${(totalAmount + totalTips).toFixed(0)} грн` : '—'}</Text>
-                        <Text style={styles.doneSummaryLabel}>Всього</Text>
+                        <Text style={styles.doneSummaryValue}>{totalAmount + totalTips > 0 ? `$${(totalAmount + totalTips).toFixed(0)}` : '—'}</Text>
+                        <Text style={styles.doneSummaryLabel}>Total</Text>
                       </View>
                     </View>
                   </View>
@@ -482,8 +482,8 @@ export default function AvailableTasks() {
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="checkmark-done-circle-outline" size={64} color="#d1d5db" />
-              <Text style={styles.emptyTitle}>Немає виконаних завдань</Text>
-              <Text style={styles.emptySubtitle}>Завершені завдання з'являться тут</Text>
+              <Text style={styles.emptyTitle}>No completed tasks</Text>
+              <Text style={styles.emptySubtitle}>Completed tasks will appear here</Text>
             </View>
           )
         )}
