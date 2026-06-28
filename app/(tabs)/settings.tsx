@@ -11,8 +11,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../utils/api';
+import { useT } from '../../utils/i18n';
 
 export default function Settings() {
+  const { t, lang, setLang } = useT();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [stripeKey, setStripeKey] = useState('');
@@ -74,6 +76,33 @@ export default function Settings() {
       </View>
 
       <ScrollView style={styles.content}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings.language', 'Language')}</Text>
+          <View style={styles.card}>
+            {([
+              { id: 'en', label: t('settings.language_en', 'English (US)'), flag: '🇺🇸' },
+              { id: 'uk', label: t('settings.language_uk', 'Ukrainian'), flag: '🇺🇦' },
+            ] as const).map((opt) => (
+              <TouchableOpacity
+                key={opt.id}
+                style={styles.switchRow}
+                onPress={() => setLang(opt.id)}
+                data-testid={`lang-${opt.id}`}
+              >
+                <View style={styles.switchInfo}>
+                  <Text style={{ fontSize: 22 }}>{opt.flag}</Text>
+                  <Text style={[styles.switchLabel, { marginLeft: 12 }]}>{opt.label}</Text>
+                </View>
+                <Ionicons
+                  name={lang === opt.id ? 'radio-button-on' : 'radio-button-off'}
+                  size={22}
+                  color={lang === opt.id ? '#2563eb' : '#9ca3af'}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Integration</Text>
           <View style={styles.card}>

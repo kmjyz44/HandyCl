@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { registerWebPush } from '../utils/webPush';
 import ToastHost from '../components/ToastHost';
 import ConfirmHost from '../components/ConfirmHost';
+import { LanguageProvider } from '../utils/i18n';
 
 export default function RootLayout() {
   const loadToken = useAuthStore((state) => state.loadToken);
@@ -29,6 +30,7 @@ export default function RootLayout() {
   }, [token]);
 
   return (
+    <LanguageProvider>
     <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
@@ -53,5 +55,6 @@ export default function RootLayout() {
       <ConfirmHost />
       <ToastHost />
     </View>
+    </LanguageProvider>
   );
 }

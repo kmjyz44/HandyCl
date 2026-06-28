@@ -179,3 +179,13 @@ FINIX 'не налаштовано' на Railway: треба ввести API Us
 - payout-setup.tsx: кнопка 'Підключити виплати Finix' тепер відкриває KYC-форму (ім'я, DOB MM/DD/YYYY, SSN 9 цифр, адреса, банк account+routing) з валідацією; submit -> api.finixOnboardExecutor(payload). Якщо вже онбордений -> 'Перевірити статус'.
 - Бекенд onboard-executor вже приймав payload-поля (без змін цього разу).
 ПРИМІТКА: merchant у sandbox стає APPROVED асинхронно (~20-60с). У проді статус оновлює вебхук merchant.provisioned/underwriting -> /webhook/finix.
+
+## 2026-06-28 — Фікси (картка, Stripe-гейтинг) + фундамент US-локалізації
+ФІКСИ (бекенд перевірено curl):
+- Картка в профілі: + миттєва клієнтська валідація Luhn/термін (my-profile.tsx handleAddPayment) — раніше не зберігалась/без помилки. Бекенд-валідація вже була.
+- Stripe-гейтинг: list_payment_methods читав enable_stripe_method, а адмін-UI писав enable_stripe_payments -> вимкнення не діяло. Виправлено: тепер чита enable_stripe_payments. Перевірено: enable=true показує stripe, false ховає (і блок 'Підключити Stripe' у виконавця теж).
+US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
+- utils/i18n.tsx: LanguageProvider + useT() + словники EN/UA, persist localStorage, default EN. Перемикач у settings.tsx (lang-en/lang-uk).
+- utils/format.ts: formatMoney($), formatDate(MM/DD/YYYY), formatTime(12h), formatDateTime, formatDistance(mi/ft), kmToMiles.
+- _layout.tsx обгорнуто LanguageProvider.
+- ПЛАН: повний переклад 40 файлів + застосування $/дати/одиниць — ПОЕТАПНО, екран за екраном (велика робота, не тестується в поді). Адреси: прості текстові поля US (State+ZIP) — згодом.
