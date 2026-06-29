@@ -34,9 +34,16 @@ export default function Login() {
       const hasPendingBooking = typeof window !== 'undefined' && !!window.localStorage.getItem('pending_booking_draft');
       router.replace(hasPendingBooking ? '/(tabs)/' : '/(tabs)');
     } catch (error: any) {
-      let msg = error.message || 'Login error';
-      if (msg.includes('Invalid credentials')) msg = 'Invalid email or password.';
-      if (msg.includes('Network') || msg.includes('fetch')) msg = 'Could not connect to the server.';
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+      let msg = detail || error.message || 'Login error';
+      if (status === 401 || (typeof detail === 'string' && detail.includes('Invalid credentials'))) {
+        msg = 'Invalid email or password. If you forgot it, tap "Forgot password?" below.';
+      } else if (status === 403) {
+        msg = detail || 'Your account is not active. Please contact support.';
+      } else if (!error?.response || String(error.message).match(/Network|fetch|timeout/i)) {
+        msg = 'Could not connect to the server. Please try again.';
+      }
       setErrorMsg(msg);
     } finally {
       setLoading(false);

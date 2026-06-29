@@ -234,3 +234,17 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - FRONTEND (index.tsx): camera icon inside search bar + "Identify by photo" AI button below it (both open camera/gallery picker, base64). New 'photo_result' step shows photo, detected skill+category, confidence %, est. time, est. price ($), available pros (top 3, if city known), and Book/Choose-manually CTAs. Prefills booking (category, skill, description, photo) and routes into existing address→datetime→taskers→confirm flow. api.analyzeTaskPhoto added.
 - VERIFIED (backend, localhost): faucet photo -> "Faucet repair" conf 0.9 ~1–2hr $46–92 (2.8s); empty image -> 400; ambiguous/finished-room photo -> low-confidence 'other' (graceful). Frontend babel-validated; visual check pending on Netlify.
 - DEPLOY NOTE: production backend env must include EMERGENT_LLM_KEY (added to backend/.env). Frontend needs "Save to GitHub" -> Netlify rebuild.
+
+## 2026-06-29 — Bugfixes (login UX + card saving + Alert.alert) & Finix config diagnosis
+- FIX (P0) Silent card-save failure on Web: my-profile.tsx used native Alert.alert (renders nothing on RN Web) for Luhn/expiry validation + success/error. Removed Alert from RN import; added a module-level Alert shim that routes Alert.alert(...) -> showAlertWithButtons (in-app toast/modal). Fixes ALL ~40 call sites in the file at once, incl. add-card flow. esbuild-compiled OK.
+- FIX (P0) Login error UX + Forgot password: login.tsx now maps 401 -> friendly "Invalid email or password. If you forgot it, tap Forgot password? below." (previously raw "Request failed with status code 401" leaked). Added "Forgot password?" link. Created /app/app/forgot-password.tsx (2-step: request code -> enter code + new password). api.passwordRecoveryRequest/Verify added.
+- BACKEND: /auth/password-recovery/request now actually emails the 6-digit code via _send_email (Resend) and NO LONGER leaks dev_code in the response. Verified via curl (returns generic message). server.py synced to backend/server.py.
+- FINIX DIAGNOSIS: live site shows "Card/Apple/Google Pay (Finix) (not configured)" because the Finix sandbox keys live ONLY in the pod DB, never entered in the production Railway/Atlas DB. Verified pod keys are VALID: GET /identities -> 200, platform merchant MUuSC7mqYPnqZBveXKgSAn9s onboarding_state=APPROVED, processing_enabled=True. Admin CAN already edit all Finix fields (admin-integrations.tsx + GET/PUT /admin/integration-keys; password masked, replace via "Clear field"). RESOLUTION = admin must enter the keys on the LIVE site (cannot write to prod DB from pod).
+- FINIX SANDBOX KEYS (entered in pod; user must paste on live admin):
+  enable_finix=true, finix_environment=sandbox
+  finix_api_username=USqQTpm6Y1smxUqmu1sGodjD
+  finix_api_password=9076d085-6e05-4b8b-bb7e-f976cb8fdbe9
+  finix_application_id=AP3gELgwSZfCFF1T8D4486zY
+  finix_platform_merchant_id=MUuSC7mqYPnqZBveXKgSAn9s
+  finix_platform_identity_id=IDsNDraM4RXV235pZYjxHLHx
+- NOTE: frontend changes (1-3) verified only via esbuild compile; real UI verification requires Netlify deploy (pod runs the CRA placeholder, not the Expo app). User must "Save to GitHub".
