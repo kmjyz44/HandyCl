@@ -11,6 +11,7 @@ import { useBookingStore } from '../../store/bookingStore';
 import { api } from '../../utils/api';
 import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
 
@@ -480,7 +481,7 @@ export default function HomeScreen() {
       if (booking.city && (clientLat == null || clientLng == null)) {
         try {
           const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(booking.city)}&limit=1&accept-language=uk`,
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(booking.city)}&limit=1&accept-language=en`,
             { headers: { 'User-Agent': 'HandyHub/1.0' } }
           );
           const geoData = await geoRes.json();
@@ -522,7 +523,7 @@ export default function HomeScreen() {
         try {
           const { latitude, longitude } = pos.coords;
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=uk`,
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=en`,
             { headers: { 'User-Agent': 'HandyHub/1.0' } }
           );
           const data = await res.json();
@@ -552,7 +553,7 @@ export default function HomeScreen() {
       // No countrycodes restriction — support any country (US, UA, etc.)
       // addressdetails=1 returns structured address (city, town, county) for better city extraction
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&accept-language=uk,en&addressdetails=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&accept-language=en&addressdetails=1`,
         { headers: { 'User-Agent': 'HandyHub/1.0' } }
       );
       const data = await res.json();
@@ -1072,42 +1073,21 @@ export default function HomeScreen() {
           />
 
           <Text style={s.fieldLabel}>Street and number</Text>
-          <TextInput
-            style={s.input}
-            placeholder="123 Main St"
+          <AddressAutocomplete
             value={booking.address}
-            onChangeText={v => {
-              setBooking(b => ({ ...b, address: v }));
-              searchAddress(`${v}, ${booking.city}`);
+            placeholder="123 Main St"
+            testID="booking-address-input"
+            onChangeText={v => setBooking(b => ({ ...b, address: v }))}
+            onSelect={(formatted, parts) => {
+              setBooking(b => ({
+                ...b,
+                address: parts.line1 || formatted,
+                city: parts.city || b.city,
+                lat: parts.lat ?? b.lat,
+                lng: parts.lon ?? b.lng,
+              }));
             }}
-            placeholderTextColor="#9ca3af"
           />
-          {/* Address autocomplete suggestions */}
-          {addressSuggestions.length > 0 && (
-            <View style={s.suggestionsBox}>
-              {addressSuggestions.map((s2: any, i: number) => (
-                <TouchableOpacity
-                  key={i}
-                  style={s.suggestionRow}
-                  onPress={() => {
-                    const parts = s2.display_name.split(',');
-                    const street = parts[0]?.trim() || s2.display_name;
-                    // Try to extract city from address components
-                    const addr = s2.address || {};
-                    const city = addr.city || addr.town || addr.village || addr.county || parts[2]?.trim() || parts[1]?.trim() || '';
-                    // Save lat/lng from Nominatim result so radius search works
-                    const selLat = s2.lat ? parseFloat(s2.lat) : undefined;
-                    const selLng = s2.lon ? parseFloat(s2.lon) : undefined;
-                    setBooking(b => ({ ...b, address: street, city: city || b.city, lat: selLat ?? b.lat, lng: selLng ?? b.lng }));
-                    setAddressSuggestions([]);
-                  }}
-                >
-                  <Ionicons name="location-outline" size={16} color="#6b7280" />
-                  <Text style={s.suggestionText} numberOfLines={2}>{s2.display_name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
         </ScrollView>
         <View style={s.bottomBar}>
           <TouchableOpacity

@@ -220,3 +220,9 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - P2: HTML email templates (Resend/SendGrid) — emails currently plain text.
 - P2: Apple Pay / Google Pay validation via Finix.js — BLOCKED in preview (needs live Netlify domain verification).
 - Code-quality: server.py is ~11.9k lines; consider extracting i18n strings/routes into modules.
+
+## 2026-06-28 (cont.) — Bugfix: booking address autocomplete (index.tsx)
+- BUG: in the home booking flow, tapping an address suggestion did not fill the "Street and number" field, and suggestions were in Ukrainian ("Іллінойс", "Сполучені Штати").
+- ROOT CAUSE: index.tsx used a custom Nominatim search with accept-language=uk and fragile comma-split parsing; the inline suggestion list mis-extracted street (only housenumber) and the flow was inconsistent.
+- FIX: replaced the custom street input + suggestion list with the proven <AddressAutocomplete/> component (Photon, lang=en, US-filtered, keyboardShouldPersistTaps, builds line1=housenumber+street). onSelect now sets booking.address/city/lat/lng. Also switched the remaining geolocation Nominatim calls (city geocode + "Detect my location" reverse geocode) to accept-language=en.
+- Verified: babel syntax OK; Photon returns English + proper street for the reported query. Visual confirmation pending on Netlify.
