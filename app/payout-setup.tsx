@@ -46,6 +46,7 @@ export default function PayoutSetup() {
   const [finixStatus, setFinixStatus] = useState<any>(null);
   const [finixLoading, setFinixLoading] = useState(false);
   const [showFinixForm, setShowFinixForm] = useState(false);
+  const [finixFormError, setFinixFormError] = useState('');
   const [kyc, setKyc] = useState({
     first_name: '', last_name: '', dob: '', ssn: '',
     line1: '', city: '', region: '', postal_code: '',
@@ -90,14 +91,19 @@ export default function PayoutSetup() {
 
   const submitFinixOnboard = async () => {
     const k = kyc;
-    if (!k.first_name.trim() || !k.last_name.trim()) return showAlert('Error', 'Please enter your first and last name');
+    setFinixFormError('');
+    const fail = (m: string) => { setFinixFormError(m); return; };
+    if (!k.first_name.trim() || !k.last_name.trim()) return fail('Please enter your first and last name');
     const dobMatch = k.dob.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!dobMatch) return showAlert('Error', 'Date of birth in MM/DD/YYYY format');
-    if (!/^\d{9}$/.test(k.ssn.replace(/\D/g, ''))) return showAlert('Error', 'SSN/Tax ID must contain 9 digits');
+    if (!dobMatch) return fail('Date of birth must be in MM/DD/YYYY format');
+    if (!/^\d{9}$/.test(k.ssn.replace(/\D/g, ''))) return fail('SSN / Tax ID must contain exactly 9 digits');
     if (!k.line1.trim() || !k.city.trim() || !k.region.trim() || !k.postal_code.trim())
-      return showAlert('Error', 'Please fill in the full address');
-    if (!/^\d{6,17}$/.test(k.bank_account_number.replace(/\D/g, ''))) return showAlert('Error', 'Invalid account number');
-    if (!/^\d{9}$/.test(k.bank_routing_number.replace(/\D/g, ''))) return showAlert('Error', 'Routing number must contain 9 digits');
+      return fail('Please fill in the full address (street, city, state, ZIP)');
+    const acct = k.bank_account_number.replace(/\D/g, '');
+    const routing = k.bank_routing_number.replace(/\D/g, '');
+    if (!/^\d{6,17}$/.test(acct)) return fail('Invalid account number (6–17 digits)');
+    if (!/^\d{9}$/.test(routing)) return fail('Routing number must contain exactly 9 digits');
+    if (acct === routing) return fail('Account number and routing number must be different. Tip: use a sandbox routing like 122105155.');
 
     setFinixLoading(true);
     try {
@@ -108,16 +114,17 @@ export default function PayoutSetup() {
         tax_id: k.ssn.replace(/\D/g, ''),
         business_type: 'INDIVIDUAL_SOLE_PROPRIETORSHIP',
         address: { line1: k.line1.trim(), city: k.city.trim(), region: k.region.trim().toUpperCase(), postal_code: k.postal_code.trim(), country: 'USA' },
-        bank_account_number: k.bank_account_number.replace(/\D/g, ''),
-        bank_routing_number: k.bank_routing_number.replace(/\D/g, ''),
+        bank_account_number: acct,
+        bank_routing_number: routing,
       } as any);
       setFinixStatus({ onboarded: true, merchant_id: r.merchant_id, onboarding_state: r.onboarding_state });
       setShowFinixForm(false);
+      setFinixFormError('');
       showAlert('Done', r.onboarding_state === 'APPROVED'
         ? "Finix payouts are active — you're ready to accept payments."
         : 'Application submitted. Finix is reviewing your data — the status will update automatically (usually within a minute).');
     } catch (e: any) {
-      showAlert('Error', e?.response?.data?.detail || 'Could not connect Finix');
+      setFinixFormError(e?.response?.data?.detail || 'Could not connect Finix. Please check your details and try again.');
     } finally {
       setFinixLoading(false);
     }
@@ -567,7 +574,7 @@ export default function PayoutSetup() {
           <View style={fx.sheet}>
             <View style={fx.sheetHeader}>
               <Text style={fx.sheetTitle}>Connect Finix payouts</Text>
-              <TouchableOpacity onPress={() => { if (!finixLoading) setShowFinixForm(false); }} data-testid="finix-form-close">
+              <TouchableOpacity onPress={() => { if (!finixLoading) { setShowFinixForm(false); setFinixFormError(''); } }} data-testid="finix-form-close">
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -607,9 +614,14 @@ export default function PayoutSetup() {
               <Text style={fx.lbl}>Account number</Text>
               <TextInput style={fx.inp} value={kyc.bank_account_number} onChangeText={(v) => setKyc({ ...kyc, bank_account_number: v })} placeholder="123123123" keyboardType="number-pad" data-testid="kyc-account" />
               <Text style={fx.lbl}>Routing number (9 digits)</Text>
-              <TextInput style={fx.inp} value={kyc.bank_routing_number} onChangeText={(v) => setKyc({ ...kyc, bank_routing_number: v })} placeholder="122105155" keyboardType="number-pad" data-testid="kyc-routing" />
+              <TextInput style={fx.inp} value={kyc.bank_routing_number} onChangeText={(v) => setKyc({ ...kyc, bank_routing_number: v })} placeholder="122105155 (test)" keyboardType="number-pad" data-testid="kyc-routing" />
             </ScrollView>
             <View style={fx.footer}>
+              {!!finixFormError && (
+                <View style={fx.errBox} data-testid="finix-form-error">
+                  <Text style={fx.errText}>{finixFormError}</Text>
+                </View>
+              )}
               <TouchableOpacity style={[fx.btn, { backgroundColor: '#1a8917' }, finixLoading && { opacity: 0.6 }]} onPress={submitFinixOnboard} disabled={finixLoading} data-testid="kyc-submit">
                 {finixLoading ? <ActivityIndicator color="#fff" /> : <Text style={fx.btnText}>Connect payouts</Text>}
               </TouchableOpacity>
@@ -720,6 +732,8 @@ const fx = StyleSheet.create({
   lbl: { fontSize: 12, fontWeight: '600', color: '#374151', marginTop: 10, marginBottom: 4 },
   inp: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: '#f9fafb' },
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  errBox: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', borderRadius: 10, padding: 12, marginBottom: 12 },
+  errText: { color: '#dc2626', fontSize: 13, lineHeight: 18, textAlign: 'center' },
   btn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
