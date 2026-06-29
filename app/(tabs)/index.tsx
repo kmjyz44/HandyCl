@@ -503,28 +503,60 @@ export default function HomeScreen() {
     }
   };
 
-  const pickPhotoWebForAnalysis = () => {
+  const fileToCompressedBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.onload = () => {
+        const img = new (window as any).Image();
+        img.onload = () => {
+          try {
+            const maxDim = 1280;
+            let w = img.width;
+            let h = img.height;
+            if (w > h && w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
+            else if (h >= w && h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { reject(new Error('no ctx')); return; }
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            resolve(dataUrl.includes(',') ? dataUrl.split(',')[1] : '');
+          } catch (err) { reject(err as Error); }
+        };
+        img.onerror = () => reject(new Error('image decode failed'));
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const pickPhotoWebForAnalysis = (useCamera: boolean) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = (e: any) => {
+    if (useCamera) input.setAttribute('capture', 'environment');
+    input.style.position = 'fixed';
+    input.style.left = '-9999px';
+    input.onchange = async (e: any) => {
       const file = e?.target?.files?.[0];
+      try { if (input.parentNode) input.parentNode.removeChild(input); } catch {}
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const res = reader.result;
-        const b64 = typeof res === 'string' && res.includes(',') ? res.split(',')[1] : '';
+      try {
+        const b64 = await fileToCompressedBase64(file);
         if (b64) runPhotoAnalysis(b64);
         else Alert.alert('Error', 'Could not read the image. Please try another photo.');
-      };
-      reader.readAsDataURL(file);
+      } catch {
+        Alert.alert('Error', 'Could not process the image. Please try another photo.');
+      }
     };
+    document.body.appendChild(input);
     input.click();
   };
 
-  const pickPhotoForAnalysis = () => {
+  const pickPhotoForAnalysis = (useCamera = false) => {
     if (Platform.OS === 'web') {
-      pickPhotoWebForAnalysis();
+      pickPhotoWebForAnalysis(useCamera);
       return;
     }
     Alert.alert('Identify by photo', 'Choose a source', [
@@ -832,9 +864,9 @@ export default function HomeScreen() {
           ) : null}
           <TouchableOpacity
             style={s.searchCamBtn}
-            onPress={pickPhotoForAnalysis}
+            onPress={() => pickPhotoForAnalysis(true)}
             data-testid="search-photo-btn"
-            accessibilityLabel="Identify a service by photo"
+            accessibilityLabel="Take a photo to identify a service"
           >
             <Ionicons name="camera" size={18} color="#fff" />
           </TouchableOpacity>
@@ -842,7 +874,7 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={s.photoCta}
-          onPress={pickPhotoForAnalysis}
+          onPress={() => pickPhotoForAnalysis(false)}
           data-testid="identify-by-photo-btn"
         >
           <Ionicons name="sparkles" size={16} color="#2563eb" />
