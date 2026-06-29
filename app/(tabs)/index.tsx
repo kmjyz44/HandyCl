@@ -80,7 +80,7 @@ const SKILL_CATEGORIES = [
 ];
 
 // ─── BOOKING FLOW STEPS ───────────────────────────────────────────────────────
-type BookingStep = 'home' | 'skills' | 'details' | 'address' | 'datetime' | 'taskers' | 'tasker_profile' | 'confirm' | 'success';
+type BookingStep = 'home' | 'skills' | 'details' | 'address' | 'datetime' | 'taskers' | 'tasker_profile' | 'confirm' | 'success' | 'photo_result';
 
 interface BookingState {
   categoryId: string;
@@ -328,6 +328,8 @@ export default function HomeScreen() {
   const [taskers, setTaskers] = useState<any[]>([]);
   const [loadingTaskers, setLoadingTaskers] = useState(false);
   const [booking_submitting, setBookingSubmitting] = useState(false);
+  const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
+  const [photoResult, setPhotoResult] = useState<any>(null);
   const submittingRef = useRef(false); // synchronous guard against rapid double-taps
   const [searchQuery, setSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
@@ -468,6 +470,61 @@ export default function HomeScreen() {
   const selectSkill = (skill: string) => {
     setBooking(b => ({ ...b, skillName: skill }));
     setStep('details');
+  };
+
+  useEffect(() => {
+    if (step === 'photo_result' && photoResult && booking.city) {
+      loadTaskers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoResult, step]);
+
+  const runPhotoAnalysis = async (base64: string) => {
+    setAnalyzingPhoto(true);
+    setPhotoResult(null);
+    setStep('photo_result');
+    try {
+      const data = await api.analyzeTaskPhoto({ image_base64: base64, city: booking.city || undefined });
+      const det = data.detection || {};
+      setPhotoResult(data);
+      setBooking(b => ({
+        ...b,
+        categoryId: det.category_id || b.categoryId,
+        categoryName: det.category_name || b.categoryName,
+        skillName: det.skill || b.skillName,
+        taskDescription: det.summary || b.taskDescription,
+        photos: [base64, ...b.photos].slice(0, 5),
+      }));
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.detail || 'Could not analyze the photo. Please try again.');
+      setStep('home');
+    } finally {
+      setAnalyzingPhoto(false);
+    }
+  };
+
+  const pickPhotoForAnalysis = () => {
+    Alert.alert('Identify by photo', 'Choose a source', [
+      {
+        text: 'Camera',
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (!perm.granted) { Alert.alert('Error', 'Camera access is required'); return; }
+          const r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.6, base64: true });
+          if (!r.canceled && r.assets[0].base64) runPhotoAnalysis(r.assets[0].base64);
+        },
+      },
+      {
+        text: 'Gallery',
+        onPress: async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!perm.granted) { Alert.alert('Error', 'Gallery access is required'); return; }
+          const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6, base64: true });
+          if (!r.canceled && r.assets[0].base64) runPhotoAnalysis(r.assets[0].base64);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const loadTaskers = async () => {
@@ -750,7 +807,25 @@ export default function HomeScreen() {
               <Ionicons name="close-circle" size={20} color="#9ca3af" />
             </TouchableOpacity>
           ) : null}
+          <TouchableOpacity
+            style={s.searchCamBtn}
+            onPress={pickPhotoForAnalysis}
+            data-testid="search-photo-btn"
+            accessibilityLabel="Identify a service by photo"
+          >
+            <Ionicons name="camera" size={18} color="#fff" />
+          </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={s.photoCta}
+          onPress={pickPhotoForAnalysis}
+          data-testid="identify-by-photo-btn"
+        >
+          <Ionicons name="sparkles" size={16} color="#2563eb" />
+          <Text style={s.photoCtaText}>Identify by photo</Text>
+          <View style={s.photoCtaBadge}><Text style={s.photoCtaBadgeText}>AI</Text></View>
+        </TouchableOpacity>
 
         {/* Category grid */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
@@ -856,6 +931,108 @@ export default function HomeScreen() {
   }
 
   // STEP: SKILLS — list of skills in category
+  if (step === 'photo_result') {
+    const det = photoResult?.detection || {};
+    const est = photoResult?.estimate || {};
+    const img = booking.photos[0];
+    return (
+      <View style={s.container}>
+        <View style={s.stepHeader}>
+          <TouchableOpacity onPress={() => setStep('home')} style={s.backBtn} data-testid="photo-result-back">
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={s.stepTitle}>AI suggestion</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        {analyzingPhoto || !photoResult ? (
+          <View style={s.centered}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={{ marginTop: 12, color: '#6b7280' }}>Analyzing your photo…</Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 140 }}>
+            {img ? (
+              <Image source={{ uri: `data:image/jpeg;base64,${img}` }} style={s.photoResultImg} />
+            ) : null}
+
+            <View style={s.detectCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={s.detectSkill} data-testid="detected-skill">{det.skill}</Text>
+                <View style={s.confBadge}>
+                  <Text style={s.confBadgeText}>{Math.round((det.confidence || 0) * 100)}% match</Text>
+                </View>
+              </View>
+              <Text style={s.detectCat}>{det.category_name}</Text>
+              {det.summary ? <Text style={s.detectSummary}>{det.summary}</Text> : null}
+            </View>
+
+            <View style={s.estRow}>
+              <View style={s.estTile}>
+                <Ionicons name="time-outline" size={20} color="#2563eb" />
+                <Text style={s.estLabel}>Estimated time</Text>
+                <Text style={s.estValue} data-testid="estimate-time">{est.hours_label}</Text>
+              </View>
+              <View style={s.estTile}>
+                <Ionicons name="cash-outline" size={20} color="#16a34a" />
+                <Text style={s.estLabel}>Estimated price</Text>
+                <Text style={s.estValue} data-testid="estimate-price">${est.price_min}–${est.price_max}</Text>
+              </View>
+            </View>
+            <Text style={s.estNote}>Final price depends on the pro's rate and actual hours worked.</Text>
+
+            <Text style={s.sectionTitle}>Available pros</Text>
+            {loadingTaskers ? (
+              <ActivityIndicator color="#2563eb" style={{ marginVertical: 16 }} />
+            ) : taskers.length > 0 ? (
+              taskers.slice(0, 3).map((tasker, idx) => {
+                const profile = tasker.profile || {};
+                const rate = tasker.final_hourly_rate
+                  ? Math.round(tasker.final_hourly_rate)
+                  : Math.round((profile.hourly_rate || tasker.hourly_rate || 25) * 1.15);
+                const rating = tasker.average_rating || tasker.rating || 0;
+                const displayName = tasker.name || tasker.full_name || tasker.username || 'Pro';
+                return (
+                  <TouchableOpacity
+                    key={tasker.user_id || idx}
+                    style={s.proMini}
+                    data-testid={`photo-pro-${idx}`}
+                    onPress={() => { setBooking(b => ({ ...b, selectedTasker: tasker })); setStep('tasker_profile'); }}
+                  >
+                    <View style={[s.taskerAvatar, { backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }]}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>{displayName[0]?.toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={s.taskerName}>{displayName}</Text>
+                      <Text style={{ color: '#6b7280', fontSize: 12 }}>{rating > 0 ? `★ ${rating.toFixed(1)}` : 'New'} · ${rate}/hr</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+                  </TouchableOpacity>
+                );
+              })
+            ) : (
+              <View style={s.proEmpty}>
+                <Ionicons name="location-outline" size={22} color="#9ca3af" />
+                <Text style={s.proEmptyText}>Set your address in the next step to see available pros near you.</Text>
+              </View>
+            )}
+          </ScrollView>
+        )}
+
+        {!analyzingPhoto && photoResult && (
+          <View style={s.bottomBar}>
+            <TouchableOpacity style={s.nextBtn} onPress={() => setStep('address')} data-testid="photo-book-btn">
+              <Text style={s.nextBtnText}>Book this service</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.secondaryBtn} onPress={() => setStep('skills')} data-testid="photo-choose-manual">
+              <Text style={s.secondaryBtnText}>Choose manually</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  }
+
   if (step === 'skills') {
     const cat = SKILL_CATEGORIES.find(c => c.id === booking.categoryId)!;
     return (
@@ -1768,6 +1945,28 @@ const s = StyleSheet.create({
   headerAvatar: { width: 40, height: 40, borderRadius: 20 },
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 16, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', gap: 10 },
   searchInput: { flex: 1, fontSize: 15, color: '#111827' },
+  searchCamBtn: { backgroundColor: '#2563eb', width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  photoCta: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginHorizontal: 16, marginTop: -6, marginBottom: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe' },
+  photoCtaText: { color: '#1d4ed8', fontWeight: '700', fontSize: 13.5 },
+  photoCtaBadge: { backgroundColor: '#2563eb', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  photoCtaBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  photoResultImg: { width: '100%', height: 200, borderRadius: 16, marginBottom: 16, backgroundColor: '#e5e7eb' },
+  detectCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
+  detectSkill: { fontSize: 20, fontWeight: '800', color: '#111827', flex: 1 },
+  confBadge: { backgroundColor: '#dcfce7', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  confBadgeText: { color: '#15803d', fontSize: 12, fontWeight: '700' },
+  detectCat: { fontSize: 13, color: '#2563eb', fontWeight: '600', marginTop: 4 },
+  detectSummary: { fontSize: 14, color: '#374151', lineHeight: 20, marginTop: 10 },
+  estRow: { flexDirection: 'row', gap: 12, marginTop: 14 },
+  estTile: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'flex-start', gap: 6 },
+  estLabel: { fontSize: 12, color: '#6b7280' },
+  estValue: { fontSize: 18, fontWeight: '800', color: '#111827' },
+  estNote: { fontSize: 12, color: '#9ca3af', marginTop: 8 },
+  proMini: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 10 },
+  proEmpty: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#f3f4f6', borderRadius: 12, padding: 14, marginTop: 4 },
+  proEmptyText: { flex: 1, fontSize: 13, color: '#6b7280', lineHeight: 18 },
+  secondaryBtn: { marginTop: 10, alignItems: 'center', paddingVertical: 12 },
+  secondaryBtnText: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
   sectionTitle: { fontSize: 17, fontWeight: '700', color: '#111827', marginBottom: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   catCard: { width: '47%', aspectRatio: 1, borderRadius: 16, padding: 16, justifyContent: 'space-between', gap: 8, borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)' },

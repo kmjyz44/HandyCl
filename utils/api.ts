@@ -244,6 +244,11 @@ export const api = {
     return res.data;
   },
 
+  analyzeTaskPhoto: async (payload: { image_base64: string; city?: string }) => {
+    const res = await client.post('/ai/analyze-task-photo', payload);
+    return res.data;
+  },
+
   // Executor profile (used by /executor/[id].tsx)
   getExecutorProfile: async (id: string) => {
     try {

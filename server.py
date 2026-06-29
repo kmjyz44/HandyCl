@@ -11701,6 +11701,117 @@ async def send_support_message(data: SupportMessage):
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# AI: identify a service from a photo (public — works for guests)
+# ---------------------------------------------------------------------------
+class AnalyzePhotoRequest(BaseModel):
+    image_base64: str
+    city: Optional[str] = None
+
+
+@api_router.post("/ai/analyze-task-photo")
+async def analyze_task_photo(req: AnalyzePhotoRequest):
+    """Use GPT-4o vision to detect the likely home service, estimated hours and price from a photo."""
+    key = os.environ.get("EMERGENT_LLM_KEY")
+    if not key:
+        raise HTTPException(status_code=503, detail="AI photo analysis is not configured")
+
+    img = (req.image_base64 or "").strip()
+    if not img:
+        raise HTTPException(status_code=400, detail="image_base64 is required")
+    if img.startswith("data:") and "," in img:
+        img = img.split(",", 1)[1]
+
+    cats = await db.categories.find({"is_active": True}).to_list(100)
+    if not cats:
+        cats = await db.categories.find({}).to_list(100)
+    cat_lines = "\n".join(f'- {c.get("category_id")}: {c.get("name")}' for c in cats)
+    valid_ids = [c.get("category_id") for c in cats]
+
+    system_message = (
+        "You are a dispatcher for HandyHub, a US home-services marketplace. "
+        "Given a photo from a client, identify which single service category best fits the work shown, "
+        "suggest a concrete service/skill, estimate how many hours the job typically takes for a pro, "
+        "and write one short client-facing task description. "
+        "Use ONLY these category ids:\n" + cat_lines + "\n\n"
+        "Respond with STRICT JSON only (no markdown, no prose), with exactly these keys: "
+        '{"category_id": string (one of the ids above), "category_name": string, '
+        '"skill": string (short, e.g. "Faucet repair"), "confidence": number (0-1), '
+        '"estimated_hours_min": number, "estimated_hours_max": number, '
+        '"summary": string (one sentence describing the task)}. '
+        "If the photo is unclear or unrelated to home services, use category_id \"other\" with a low confidence."
+    )
+
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        chat = LlmChat(
+            api_key=key,
+            session_id=f"vision-{uuid.uuid4().hex[:12]}",
+            system_message=system_message,
+        ).with_model("openai", "gpt-4o")
+        message = UserMessage(
+            text="Analyze this photo and return the JSON described in the system message.",
+            file_contents=[ImageContent(image_base64=img)],
+        )
+        raw = await chat.send_message(message)
+    except Exception as e:
+        logging.error(f"[AI] analyze-task-photo failed: {e}")
+        raise HTTPException(status_code=502, detail="AI analysis failed. Please try again.")
+
+    text = raw if isinstance(raw, str) else str(raw)
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        raise HTTPException(status_code=502, detail="Could not interpret the AI response")
+    try:
+        parsed = json.loads(m.group(0))
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not parse the AI response")
+
+    category_id = parsed.get("category_id")
+    if category_id not in valid_ids:
+        category_id = "other" if "other" in valid_ids else (valid_ids[0] if valid_ids else "other")
+    cat = next((c for c in cats if c.get("category_id") == category_id), None)
+    category_name = (cat or {}).get("name") or parsed.get("category_name") or "Other"
+
+    def _f(v, d):
+        try:
+            return float(v)
+        except Exception:
+            return d
+    h_min = max(0.5, min(12.0, _f(parsed.get("estimated_hours_min"), 1.0)))
+    h_max = max(h_min, min(12.0, _f(parsed.get("estimated_hours_max"), h_min + 1.0)))
+
+    rate = _f((cat or {}).get("recommended_price"), 0) or 50.0
+    commission = _f((cat or {}).get("commission_rate"), 0) or 15.0
+    mult = 1.0 + commission / 100.0
+    price_min = round(rate * h_min * mult)
+    price_max = round(rate * h_max * mult)
+
+    def _hours_label(a, b):
+        fa = f"{a:g}"
+        fb = f"{b:g}"
+        return f"~{fa}–{fb} hr" if fa != fb else f"~{fa} hr"
+
+    return {
+        "detection": {
+            "category_id": category_id,
+            "category_name": category_name,
+            "skill": parsed.get("skill") or category_name,
+            "confidence": round(_f(parsed.get("confidence"), 0.7), 2),
+            "summary": parsed.get("summary") or "",
+        },
+        "estimate": {
+            "hours_min": h_min,
+            "hours_max": h_max,
+            "hours_label": _hours_label(h_min, h_max),
+            "price_min": price_min,
+            "price_max": price_max,
+            "currency": "USD",
+            "hourly_rate": round(rate),
+        },
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
