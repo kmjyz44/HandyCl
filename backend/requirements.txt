@@ -15,3 +15,5 @@ stripe==14.3.0
 python-telegram-bot==22.6
 pywebpush==2.0.0
 reportlab==4.5.1
+--extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
+emergentintegrations==0.1.2
