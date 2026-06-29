@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../utils/api';
+import { showAlert } from '../utils/alert';
 
 export default function Register() {
   const router = useRouter();
@@ -146,6 +147,10 @@ export default function Register() {
             onPress={() => {
               if (!acceptedTerms) {
                 setErrorMsg('Please accept the Terms & Privacy Policy first');
+                showAlert(
+                  'One more step',
+                  'Please check "I agree to the Terms of Use and Privacy Policy" above before continuing with Google.'
+                );
                 return;
               }
               if (typeof window !== 'undefined') {
