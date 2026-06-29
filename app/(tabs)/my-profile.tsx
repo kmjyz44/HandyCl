@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   TextInput,
   Modal,
   Image,
@@ -18,6 +17,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { api } from '../../utils/api';
 import { useAuthStore } from '../../store/authStore';
+import { showAlertWithButtons } from '../../utils/alert';
+
+// Web-safe Alert shim: native Alert.alert renders nothing on React Native Web,
+// causing silent failures (e.g. card validation). Route every call through the
+// in-app toast/modal hosts instead.
+const Alert = {
+  alert: (title: string, message?: string, buttons?: any[]) =>
+    showAlertWithButtons(title, message || '', buttons && buttons.length ? buttons : [{ text: 'OK' }]),
+};
 
 // ─── CLIENT PROFILE ───────────────────────────────────────────────────────────
 

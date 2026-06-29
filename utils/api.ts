@@ -41,6 +41,16 @@ export const api = {
     return res.data;
   },
 
+  passwordRecoveryRequest: async (data: { email: string }) => {
+    const res = await client.post('/auth/password-recovery/request', data);
+    return res.data;
+  },
+
+  passwordRecoveryVerify: async (data: { email: string; code: string; new_password: string }) => {
+    const res = await client.post('/auth/password-recovery/verify', data);
+    return res.data;
+  },
+
   verifyEmail: async (data: { email: string; code: string }) => {
     const res = await client.post('/auth/verify-email', data);
     return res.data;

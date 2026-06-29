@@ -7666,13 +7666,18 @@ async def request_password_recovery(data: PasswordRecoveryRequest):
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=15)
     })
 
-    # TODO: Send email/SMS with code
-    # For now, log it (in production, use SendGrid/Twilio)
+    # Send the recovery code via email (and SMS fallback handled by _send_email config)
     logger.info(f"Password recovery code for {data.email}: {code}")
+    user_name = user.get("name") or "there"
+    asyncio.create_task(_send_email(
+        data.email,
+        "HandyHub — Password Reset Code",
+        f"Hi {user_name},\n\nYour password reset code is: {code}\n\n"
+        f"This code expires in 15 minutes. If you didn't request this, you can ignore this email.\n\n— HandyHub",
+    ))
 
     return {
         "message": "If the email exists, a recovery code has been sent.",
-        "dev_code": code  # Remove in production!
     }
 
 @api_router.post("/auth/password-recovery/verify")

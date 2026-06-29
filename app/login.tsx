@@ -72,6 +72,10 @@ export default function Login() {
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Log in</Text>}
           </TouchableOpacity>
 
+          <TouchableOpacity onPress={() => router.push('/forgot-password')} style={styles.forgotContainer} data-testid="forgot-password-link">
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
+
           {/* OAuth divider */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 16 }}>
             <View style={{ flex: 1, height: 1, backgroundColor: '#e5e7eb' }} />
@@ -125,6 +129,8 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 18, fontWeight: '600' },
   linkContainer: { marginTop: 24, alignItems: 'center' },
+  forgotContainer: { marginTop: 14, alignItems: 'center' },
+  forgotText: { fontSize: 14, color: '#2563eb', fontWeight: '600' },
   linkText: { fontSize: 14, color: '#6b7280' },
   link: { color: '#2563eb', fontWeight: '600' },
 });
