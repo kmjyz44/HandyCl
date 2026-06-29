@@ -125,9 +125,13 @@ export default function TaskDetail() {
   useEffect(() => {
     if (!showFinix || Platform.OS !== 'web' || typeof window === 'undefined') return;
     const cfg = enabledMethods.find((m: any) => m.id === 'finix');
-    if (!cfg?.application_id) return;
+    if (!cfg?.application_id) { setFinixError('Finix is not configured'); return; }
     setFinixError('');
+    setFinixProcessing(false);
+    finixFormRef.current = null;
     const bookingId = task?.booking_id || taskId;
+    let cancelled = false;
+    let timer: any = null;
 
     const handleToken = async (err: any, res: any) => {
       if (err) { setFinixError('Please check your card details'); setFinixProcessing(false); return; }
@@ -150,44 +154,62 @@ export default function TaskDetail() {
       }
     };
 
-    const init = () => {
+    // Mount once the SDK + the target <div> are both present in the DOM.
+    const tryMount = (): boolean => {
+      const Finix = (window as any).Finix;
+      const el = document.getElementById('finix-card-form');
+      if (!Finix || !el) return false;
+      if (el.childElementCount > 0 || finixFormRef.current) return true; // already mounted
       try {
-        const Finix = (window as any).Finix;
-        if (!Finix) return;
         const env = cfg.environment === 'live' ? 'prod' : 'sandbox';
         finixFormRef.current = new Finix.PaymentForm('finix-card-form', env, cfg.application_id, {
           paymentMethods: ['card'],
+          showAddress: false,
           onSubmit: handleToken,
         });
+        return true;
       } catch (e) {
         setFinixError('Could not load the payment form');
+        return true; // stop retrying on a hard error
       }
     };
 
-    if ((window as any).Finix) {
-      setTimeout(init, 50);
-    } else {
+    const ensureScript = (cb: () => void) => {
+      if ((window as any).Finix) return cb();
       const id = 'finix-js-sdk';
-      let s = document.getElementById(id) as HTMLScriptElement | null;
-      if (!s) {
-        s = document.createElement('script');
-        s.id = id;
-        s.src = 'https://cdn.finix.com/v/2/finix.js';
-        s.onload = () => setTimeout(init, 50);
-        document.body.appendChild(s);
-      } else {
-        s.addEventListener('load', () => setTimeout(init, 50));
-      }
-    }
+      let sc = document.getElementById(id) as HTMLScriptElement | null;
+      if (sc) { sc.addEventListener('load', cb); if ((window as any).Finix) cb(); return; }
+      sc = document.createElement('script');
+      sc.id = id;
+      sc.src = 'https://cdn.finix.com/v/2/finix.js';
+      sc.onload = cb;
+      document.body.appendChild(sc);
+    };
+
+    let tries = 0;
+    const tick = () => {
+      if (cancelled) return;
+      tries += 1;
+      if (tryMount()) return;
+      if (tries < 50) timer = setTimeout(tick, 100); // poll up to ~5s for the div/SDK
+      else setFinixError('Could not load the payment form. Please close and reopen.');
+    };
+    ensureScript(() => { if (!cancelled) tick(); });
+
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [showFinix]);
 
   const submitFinix = () => {
+    if (!finixFormRef.current) {
+      setFinixError('The card form is still loading — please wait a second and tap Pay again.');
+      return;
+    }
     setFinixError('');
     setFinixProcessing(true);
     try {
-      finixFormRef.current?.submit();
+      finixFormRef.current.submit();
     } catch (e) {
-      setFinixError('Please fill in your card details');
+      setFinixError('Please enter your card details');
       setFinixProcessing(false);
     }
   };
