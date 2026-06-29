@@ -162,7 +162,7 @@ export default function TaskDetail() {
       if (el.childElementCount > 0 || finixFormRef.current) return true; // already mounted
       try {
         const env = cfg.environment === 'live' ? 'prod' : 'sandbox';
-        finixFormRef.current = new Finix.PaymentForm('finix-card-form', env, cfg.application_id, {
+        finixFormRef.current = Finix.PaymentForm('finix-card-form', env, cfg.application_id, {
           paymentMethods: ['card'],
           showAddress: false,
           onSubmit: handleToken,
@@ -181,7 +181,7 @@ export default function TaskDetail() {
       if (sc) { sc.addEventListener('load', cb); if ((window as any).Finix) cb(); return; }
       sc = document.createElement('script');
       sc.id = id;
-      sc.src = 'https://cdn.finix.com/v/2/finix.js';
+      sc.src = 'https://js.finix.com/v/2/finix.js';
       sc.onload = cb;
       document.body.appendChild(sc);
     };

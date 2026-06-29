@@ -5448,6 +5448,25 @@ def _finix_err(resp) -> str:
     return resp.text[:300]
 
 
+async def _finix_refresh_merchant_state(cfg: Optional[Dict[str, Any]], user_id: str, merchant_id: str) -> Optional[str]:
+    """Fetch the live merchant onboarding state from Finix and persist it. Returns the state or None.
+    Used to self-heal stale PROVISIONING states (sandbox approves a few seconds after onboarding)."""
+    if not (cfg and merchant_id):
+        return None
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=20.0, auth=cfg["auth"], headers=_finix_headers()) as http:
+            r = await http.get(f"{cfg['base_url']}/merchants/{merchant_id}")
+            if r.status_code < 400:
+                state = r.json().get("onboarding_state")
+                if state:
+                    await db.users.update_one({"user_id": user_id}, {"$set": {"finix_onboarding_state": state}})
+                return state
+    except Exception:
+        pass
+    return None
+
+
 @api_router.post("/payments/finix/onboard-executor")
 async def finix_onboard_executor(
     payload: Dict[str, Any] = Body(default={}),
@@ -5552,13 +5571,22 @@ async def finix_onboard_executor(
 
 @api_router.get("/payments/finix/executor-status")
 async def finix_executor_status(current_user: User = Depends(get_current_user)):
-    """Return the current executor's Finix onboarding state."""
+    """Return the current executor's Finix onboarding state.
+    If the stored state isn't APPROVED yet, refresh it live from Finix (sandbox
+    auto-approves a few seconds after onboarding, so the saved state may be stale)."""
     u = await db.users.find_one({"user_id": current_user.user_id},
                                 {"_id": 0, "finix_merchant_id": 1, "finix_onboarding_state": 1})
+    merchant_id = (u or {}).get("finix_merchant_id")
+    state = (u or {}).get("finix_onboarding_state")
+    if merchant_id and state != "APPROVED":
+        cfg = await _finix_cfg()
+        fresh = await _finix_refresh_merchant_state(cfg, current_user.user_id, merchant_id)
+        if fresh:
+            state = fresh
     return {
-        "onboarded": bool(u and u.get("finix_merchant_id")),
-        "merchant_id": (u or {}).get("finix_merchant_id"),
-        "onboarding_state": (u or {}).get("finix_onboarding_state"),
+        "onboarded": bool(merchant_id),
+        "merchant_id": merchant_id,
+        "onboarding_state": state,
     }
 
 
@@ -5600,8 +5628,14 @@ async def finix_charge(
     exec_merchant = (prov or {}).get("finix_merchant_id")
     if not exec_merchant:
         raise HTTPException(status_code=400, detail="The pro has not connected Finix payouts yet")
-    if (prov or {}).get("finix_onboarding_state") not in ("APPROVED", None):
-        raise HTTPException(status_code=400, detail="The pro's Finix account is not active yet (awaiting APPROVED)")
+    prov_state = (prov or {}).get("finix_onboarding_state")
+    if prov_state not in ("APPROVED", None):
+        # State may be stale (sandbox approves a few seconds after onboarding) — refresh live.
+        fresh = await _finix_refresh_merchant_state(cfg, provider_id, exec_merchant)
+        if fresh:
+            prov_state = fresh
+        if prov_state not in ("APPROVED", None):
+            raise HTTPException(status_code=400, detail="The pro's Finix account is not active yet (awaiting APPROVED)")
 
     keys = await _get_integration_keys()
     currency = "USD"  # Finix is US-only and processes USD regardless of platform display currency
