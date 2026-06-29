@@ -5481,15 +5481,22 @@ async def finix_onboard_executor(
     bank_account = payload.get("bank_account_number") or "123123123"
     bank_routing = payload.get("bank_routing_number") or "122105155"
 
+    # Finix requires a valid US phone (e.g. 4156665555). Normalize the user's stored
+    # phone (may be non-US, e.g. +380...) and fall back to a sandbox-valid number.
+    _raw_phone = re.sub(r"\D", "", str(payload.get("phone") or target.get("phone") or ""))
+    if len(_raw_phone) == 11 and _raw_phone.startswith("1"):
+        _raw_phone = _raw_phone[1:]
+    finix_phone = _raw_phone if len(_raw_phone) == 10 else "4155551234"
+
     identity_payload = {"entity": {
         "first_name": first_name, "last_name": last_name,
-        "email": target.get("email"), "phone": target.get("phone") or "+14155551234",
+        "email": target.get("email"), "phone": finix_phone,
         "personal_address": addr, "dob": dob,
         "principal_percentage_ownership": 100, "title": "OWNER", "tax_id": tax_id,
         "business_name": payload.get("business_name") or f"{first_name} {last_name}",
         "business_type": payload.get("business_type") or "INDIVIDUAL_SOLE_PROPRIETORSHIP",
         "doing_business_as": payload.get("business_name") or f"{first_name} {last_name}",
-        "business_phone": target.get("phone") or "+14155551234",
+        "business_phone": finix_phone,
         "business_tax_id": tax_id, "ownership_type": "PRIVATE",
         "business_address": addr, "url": "https://hendyhub.netlify.app",
         "incorporation_date": {"year": 2018, "month": 1, "day": 1},

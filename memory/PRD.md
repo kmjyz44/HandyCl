@@ -248,3 +248,10 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
   finix_platform_merchant_id=MUuSC7mqYPnqZBveXKgSAn9s
   finix_platform_identity_id=IDsNDraM4RXV235pZYjxHLHx
 - NOTE: frontend changes (1-3) verified only via esbuild compile; real UI verification requires Netlify deploy (pod runs the CRA placeholder, not the Expo app). User must "Save to GitHub".
+
+## 2026-06-29 (cont.) — Finix executor onboarding fixes (live testing)
+- CONTEXT: user enabled Finix on the LIVE admin (form now appears for providers). Hit two onboarding errors while testing with fake data.
+- FIX 1 (payout-setup.tsx): Finix KYC error was shown via toast that rendered BEHIND the modal ("background error"). Now errors show INLINE inside the modal (fx.errBox). Added client check: account_number != routing_number (Finix rejects equal values: "account_number must not be equal to bank_code"), routing must be 9 digits, SSN exactly 9. Routing placeholder -> "122105155 (test)". esbuild OK.
+- FIX 2 (server.py finix_onboard_executor): Finix rejected the IDENTITY because it used the provider's stored phone verbatim ("+380..." Ukrainian) -> "Business Phone should be valid phone number (e.g. 4156665555)". Added phone normalization: strip non-digits, drop leading US '1', use 10-digit number; fallback "4155551234" if not a valid US 10-digit. Applied to both phone + business_phone. The KYC form intentionally has NO phone field (uses profile phone).
+- VERIFIED (pod backend, real Finix sandbox): set provider phone to "+380501234567", called POST /payments/finix/onboard-executor with acct 123123122 / routing 321321321 -> identity ID2mFsBQtrctSD1ATWg9XbNh, merchant MU4dRBJ6Gt3vqqsyKaSp6okc, state APPROVED + processing_enabled. server.py synced to backend/server.py.
+- ⚠️ DEPLOY REQUIRED: FIX 2 is BACKEND (Railway) and FIX 1 is FRONTEND (Netlify). User MUST "Save to GitHub" to redeploy both; until then the LIVE site keeps showing the phone error.
