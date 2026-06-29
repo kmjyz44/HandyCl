@@ -503,7 +503,30 @@ export default function HomeScreen() {
     }
   };
 
+  const pickPhotoWebForAnalysis = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e: any) => {
+      const file = e?.target?.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = reader.result;
+        const b64 = typeof res === 'string' && res.includes(',') ? res.split(',')[1] : '';
+        if (b64) runPhotoAnalysis(b64);
+        else Alert.alert('Error', 'Could not read the image. Please try another photo.');
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
   const pickPhotoForAnalysis = () => {
+    if (Platform.OS === 'web') {
+      pickPhotoWebForAnalysis();
+      return;
+    }
     Alert.alert('Identify by photo', 'Choose a source', [
       {
         text: 'Camera',
