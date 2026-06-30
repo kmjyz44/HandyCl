@@ -315,3 +315,9 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - Hero headline → "One Photo. One Solution." + shorter subtitle.
 - Compacted: hero header paddings/fonts reduced (title 18, brand 16, subtitle 12, paddingTop 36/bottom 14); search bar narrower (paddingVertical 7, fontSize 14, radius 12); AI block already compact; category cards aspectRatio 1.35.
 - esbuild + JSON + python syntax all clean. Needs Save to GitHub → Netlify/Railway.
+
+## 2026-06-30 (cont.) — Minimal blue header + always-visible Install link
+- Blue hero (guest) reduced to a thin nav bar: logo + Log in/Sign up only (paddingTop 26/bottom 8); headline moved OUT of blue.
+- Headline "One Photo. One Solution." + sub-line now live in the white AI block title.
+- "Install app" link now ALWAYS shown on web (Platform.web && !isStandalone), no longer gated on beforeinstallprompt. installApp(): uses native prompt if available, else platform-specific instructions (iOS Share→Add to Home Screen / Android ⋮→Install / desktop address-bar). isStandalone state hides it once installed.
+- esbuild clean. Needs Save to GitHub → Netlify.
