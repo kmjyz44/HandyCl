@@ -11789,22 +11789,33 @@ async def send_support_message(data: SupportMessage):
 # AI: identify a service from a photo (public — works for guests)
 # ---------------------------------------------------------------------------
 class AnalyzePhotoRequest(BaseModel):
-    image_base64: str
+    image_base64: Optional[str] = None
+    images: Optional[List[str]] = None
     city: Optional[str] = None
 
 
 @api_router.post("/ai/analyze-task-photo")
 async def analyze_task_photo(req: AnalyzePhotoRequest):
-    """Use GPT-4o vision to detect the likely home service, estimated hours and price from a photo."""
+    """Use GPT-4o vision to detect likely home services from one or more photos.
+    Returns several ranked candidate services so the client can pick the right one."""
     key = os.environ.get("EMERGENT_LLM_KEY")
     if not key:
         raise HTTPException(status_code=503, detail="AI photo analysis is not configured")
 
-    img = (req.image_base64 or "").strip()
-    if not img:
-        raise HTTPException(status_code=400, detail="image_base64 is required")
-    if img.startswith("data:") and "," in img:
-        img = img.split(",", 1)[1]
+    raw_imgs = list(req.images or [])
+    if req.image_base64:
+        raw_imgs.append(req.image_base64)
+    imgs: List[str] = []
+    for im in raw_imgs:
+        s = (im or "").strip()
+        if not s:
+            continue
+        if s.startswith("data:") and "," in s:
+            s = s.split(",", 1)[1]
+        imgs.append(s)
+    imgs = imgs[:5]
+    if not imgs:
+        raise HTTPException(status_code=400, detail="At least one image is required")
 
     cats = await db.categories.find({"is_active": True}).to_list(100)
     if not cats:
@@ -11814,16 +11825,18 @@ async def analyze_task_photo(req: AnalyzePhotoRequest):
 
     system_message = (
         "You are a dispatcher for HandyHub, a US home-services marketplace. "
-        "Given a photo from a client, identify which single service category best fits the work shown, "
-        "suggest a concrete service/skill, estimate how many hours the job typically takes for a pro, "
-        "and write one short client-facing task description. "
+        "Given one or more photos from a client, identify the most likely home-service jobs shown. "
+        "Return the 2-3 MOST LIKELY distinct service options, ranked from most to least likely, so the "
+        "client can choose the correct one. For each option suggest a concrete service/skill, estimate "
+        "how many hours the job typically takes for a pro, and write one short client-facing description. "
         "Use ONLY these category ids:\n" + cat_lines + "\n\n"
-        "Respond with STRICT JSON only (no markdown, no prose), with exactly these keys: "
-        '{"category_id": string (one of the ids above), "category_name": string, '
+        "Respond with STRICT JSON only (no markdown, no prose) in this exact shape: "
+        '{"candidates": [{"category_id": string (one of the ids above), "category_name": string, '
         '"skill": string (short, e.g. "Faucet repair"), "confidence": number (0-1), '
         '"estimated_hours_min": number, "estimated_hours_max": number, '
-        '"summary": string (one sentence describing the task)}. '
-        "If the photo is unclear or unrelated to home services, use category_id \"other\" with a low confidence."
+        '"summary": string (one sentence describing the task)}]}. '
+        "Provide between 1 and 3 candidates. If the photos are unclear or unrelated to home services, "
+        "return a single candidate with category_id \"other\" and a low confidence."
     )
 
     try:
@@ -11834,8 +11847,8 @@ async def analyze_task_photo(req: AnalyzePhotoRequest):
             system_message=system_message,
         ).with_model("openai", "gpt-4o")
         message = UserMessage(
-            text="Analyze this photo and return the JSON described in the system message.",
-            file_contents=[ImageContent(image_base64=img)],
+            text="Analyze these photo(s) and return the JSON described in the system message.",
+            file_contents=[ImageContent(image_base64=i) for i in imgs],
         )
         raw = await chat.send_message(message)
     except Exception as e:
@@ -11851,48 +11864,59 @@ async def analyze_task_photo(req: AnalyzePhotoRequest):
     except Exception:
         raise HTTPException(status_code=502, detail="Could not parse the AI response")
 
-    category_id = parsed.get("category_id")
-    if category_id not in valid_ids:
-        category_id = "other" if "other" in valid_ids else (valid_ids[0] if valid_ids else "other")
-    cat = next((c for c in cats if c.get("category_id") == category_id), None)
-    category_name = (cat or {}).get("name") or parsed.get("category_name") or "Other"
+    items = parsed.get("candidates")
+    if not isinstance(items, list) or not items:
+        # Fallback: maybe the model returned a single flat object
+        items = [parsed]
 
     def _f(v, d):
         try:
             return float(v)
         except Exception:
             return d
-    h_min = max(0.5, min(12.0, _f(parsed.get("estimated_hours_min"), 1.0)))
-    h_max = max(h_min, min(12.0, _f(parsed.get("estimated_hours_max"), h_min + 1.0)))
-
-    rate = _f((cat or {}).get("recommended_price"), 0) or 50.0
-    commission = _f((cat or {}).get("commission_rate"), 0) or 15.0
-    mult = 1.0 + commission / 100.0
-    price_min = round(rate * h_min * mult)
-    price_max = round(rate * h_max * mult)
 
     def _hours_label(a, b):
-        fa = f"{a:g}"
-        fb = f"{b:g}"
+        fa, fb = f"{a:g}", f"{b:g}"
         return f"~{fa}–{fb} hr" if fa != fb else f"~{fa} hr"
 
+    def _build(item: dict):
+        category_id = item.get("category_id")
+        if category_id not in valid_ids:
+            category_id = "other" if "other" in valid_ids else (valid_ids[0] if valid_ids else "other")
+        cat = next((c for c in cats if c.get("category_id") == category_id), None)
+        category_name = (cat or {}).get("name") or item.get("category_name") or "Other"
+        h_min = max(0.5, min(12.0, _f(item.get("estimated_hours_min"), 1.0)))
+        h_max = max(h_min, min(12.0, _f(item.get("estimated_hours_max"), h_min + 1.0)))
+        rate = _f((cat or {}).get("recommended_price"), 0) or 50.0
+        commission = _f((cat or {}).get("commission_rate"), 0) or 15.0
+        mult = 1.0 + commission / 100.0
+        return {
+            "detection": {
+                "category_id": category_id,
+                "category_name": category_name,
+                "skill": item.get("skill") or category_name,
+                "confidence": round(_f(item.get("confidence"), 0.7), 2),
+                "summary": item.get("summary") or "",
+            },
+            "estimate": {
+                "hours_min": h_min, "hours_max": h_max,
+                "hours_label": _hours_label(h_min, h_max),
+                "price_min": round(rate * h_min * mult),
+                "price_max": round(rate * h_max * mult),
+                "currency": "USD", "hourly_rate": round(rate),
+            },
+        }
+
+    candidates = [_build(it) for it in items if isinstance(it, dict)][:3]
+    candidates.sort(key=lambda c: c["detection"]["confidence"], reverse=True)
+    if not candidates:
+        raise HTTPException(status_code=502, detail="Could not interpret the AI response")
+
+    top = candidates[0]
     return {
-        "detection": {
-            "category_id": category_id,
-            "category_name": category_name,
-            "skill": parsed.get("skill") or category_name,
-            "confidence": round(_f(parsed.get("confidence"), 0.7), 2),
-            "summary": parsed.get("summary") or "",
-        },
-        "estimate": {
-            "hours_min": h_min,
-            "hours_max": h_max,
-            "hours_label": _hours_label(h_min, h_max),
-            "price_min": price_min,
-            "price_max": price_max,
-            "currency": "USD",
-            "hourly_rate": round(rate),
-        },
+        "candidates": candidates,
+        "detection": top["detection"],  # backward compatibility
+        "estimate": top["estimate"],
     }
 
 

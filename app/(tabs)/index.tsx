@@ -330,6 +330,8 @@ export default function HomeScreen() {
   const [booking_submitting, setBookingSubmitting] = useState(false);
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [photoResult, setPhotoResult] = useState<any>(null);
+  const [scanPhotos, setScanPhotos] = useState<string[]>([]);
+  const [selectedCandidate, setSelectedCandidate] = useState(0);
   const submittingRef = useRef(false); // synchronous guard against rapid double-taps
   const [searchQuery, setSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
@@ -479,28 +481,42 @@ export default function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoResult, step]);
 
-  const runPhotoAnalysis = async (base64: string) => {
+  const applyCandidate = (cand: any) => {
+    const det = cand?.detection || {};
+    setBooking(b => ({
+      ...b,
+      categoryId: det.category_id || b.categoryId,
+      categoryName: det.category_name || b.categoryName,
+      skillName: det.skill || b.skillName,
+      taskDescription: det.summary || b.taskDescription,
+    }));
+  };
+
+  const runPhotoAnalysis = async (images: string[]) => {
+    const imgs = (images || []).filter(Boolean).slice(0, 5);
+    if (imgs.length === 0) return;
     setAnalyzingPhoto(true);
     setPhotoResult(null);
+    setSelectedCandidate(0);
     setStep('photo_result');
     try {
-      const data = await api.analyzeTaskPhoto({ image_base64: base64, city: booking.city || undefined });
-      const det = data.detection || {};
-      setPhotoResult(data);
-      setBooking(b => ({
-        ...b,
-        categoryId: det.category_id || b.categoryId,
-        categoryName: det.category_name || b.categoryName,
-        skillName: det.skill || b.skillName,
-        taskDescription: det.summary || b.taskDescription,
-        photos: [base64, ...b.photos].slice(0, 5),
-      }));
+      const data = await api.analyzeTaskPhoto({ images: imgs, city: booking.city || undefined });
+      const cands = (data.candidates && data.candidates.length ? data.candidates : [{ detection: data.detection, estimate: data.estimate }]);
+      setPhotoResult({ ...data, candidates: cands });
+      setBooking(b => ({ ...b, photos: imgs.slice(0, 5) }));
+      applyCandidate(cands[0]);
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.detail || 'Could not analyze the photo. Please try again.');
+      Alert.alert('Error', e?.response?.data?.detail || 'Could not analyze the photos. Please try again.');
       setStep('home');
     } finally {
       setAnalyzingPhoto(false);
     }
+  };
+
+  const chooseCandidate = (idx: number) => {
+    setSelectedCandidate(idx);
+    const cand = photoResult?.candidates?.[idx];
+    if (cand) applyCandidate(cand);
   };
 
   const fileToCompressedBase64 = (file: File): Promise<string> =>
@@ -531,7 +547,7 @@ export default function HomeScreen() {
       reader.readAsDataURL(file);
     });
 
-  const pickPhotoWebForAnalysis = (useCamera: boolean) => {
+  const addScanPhotoWeb = (useCamera: boolean) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -544,7 +560,7 @@ export default function HomeScreen() {
       if (!file) return;
       try {
         const b64 = await fileToCompressedBase64(file);
-        if (b64) runPhotoAnalysis(b64);
+        if (b64) setScanPhotos(prev => [...prev, b64].slice(0, 5));
         else Alert.alert('Error', 'Could not read the image. Please try another photo.');
       } catch {
         Alert.alert('Error', 'Could not process the image. Please try another photo.');
@@ -554,33 +570,36 @@ export default function HomeScreen() {
     input.click();
   };
 
-  const pickPhotoForAnalysis = (useCamera = false) => {
-    if (Platform.OS === 'web') {
-      pickPhotoWebForAnalysis(useCamera);
-      return;
+  const addScanPhoto = async (useCamera = false) => {
+    if (Platform.OS === 'web') { addScanPhotoWeb(useCamera); return; }
+    try {
+      if (useCamera) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { Alert.alert('Error', 'Camera access is required'); return; }
+        const r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6, base64: true });
+        if (!r.canceled && r.assets[0].base64) setScanPhotos(prev => [...prev, r.assets[0].base64!].slice(0, 5));
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { Alert.alert('Error', 'Gallery access is required'); return; }
+        const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6, base64: true });
+        if (!r.canceled && r.assets[0].base64) setScanPhotos(prev => [...prev, r.assets[0].base64!].slice(0, 5));
+      }
+    } catch {
+      Alert.alert('Error', 'Could not add the photo. Please try again.');
     }
-    Alert.alert('Identify by photo', 'Choose a source', [
-      {
-        text: 'Camera',
-        onPress: async () => {
-          const perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (!perm.granted) { Alert.alert('Error', 'Camera access is required'); return; }
-          const r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.6, base64: true });
-          if (!r.canceled && r.assets[0].base64) runPhotoAnalysis(r.assets[0].base64);
-        },
-      },
-      {
-        text: 'Gallery',
-        onPress: async () => {
-          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!perm.granted) { Alert.alert('Error', 'Gallery access is required'); return; }
-          const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6, base64: true });
-          if (!r.canceled && r.assets[0].base64) runPhotoAnalysis(r.assets[0].base64);
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
   };
+
+  const removeScanPhoto = (idx: number) => setScanPhotos(prev => prev.filter((_, i) => i !== idx));
+  const analyzeScans = () => { if (scanPhotos.length) runPhotoAnalysis(scanPhotos); };
+
+  // PWA home-screen shortcut: opening with ?scan=1 jumps straight to the camera.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('scan') === '1') setTimeout(() => addScanPhoto(true), 400);
+    } catch {}
+  }, []);
 
   const loadTaskers = async () => {
     setLoadingTaskers(true);
@@ -799,8 +818,8 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-            <Text style={s.heroTitle}>Find a trusted pro near you</Text>
-            <Text style={s.heroSubtitle}>Book services in a few clicks. Registration is optional.</Text>
+            <Text style={s.heroTitle}>Snap it. We'll match you with the right pro.</Text>
+            <Text style={s.heroSubtitle}>Take a photo of the problem — our AI identifies it and finds the best local pro. No typing needed.</Text>
           </View>
         ) : (
           <View style={s.header}>
@@ -847,12 +866,69 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* AI photo-first block — primary CTA, the first thing users see */}
+        <View style={s.aiBlock}>
+          <Text style={s.aiBlockTitle}>Describe the problem with a photo</Text>
+          <View style={s.aiSteps}>
+            <View style={s.aiStep}>
+              <View style={[s.aiStepIcon, { backgroundColor: '#dbeafe' }]}><Ionicons name="camera" size={18} color="#2563eb" /></View>
+              <Text style={s.aiStepText}>Take a photo</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={13} color="#c7d2fe" />
+            <View style={s.aiStep}>
+              <View style={[s.aiStepIcon, { backgroundColor: '#ede9fe' }]}><Ionicons name="sparkles" size={18} color="#7c3aed" /></View>
+              <Text style={s.aiStepText}>AI finds it</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={13} color="#c7d2fe" />
+            <View style={s.aiStep}>
+              <View style={[s.aiStepIcon, { backgroundColor: '#dcfce7' }]}><Ionicons name="people" size={18} color="#16a34a" /></View>
+              <Text style={s.aiStepText}>Get matched</Text>
+            </View>
+          </View>
+
+          {scanPhotos.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.aiTray} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+              {scanPhotos.map((p, i) => (
+                <View key={i} style={s.aiThumbWrap}>
+                  <Image source={{ uri: `data:image/jpeg;base64,${p}` }} style={s.aiThumb} />
+                  <TouchableOpacity style={s.aiThumbX} onPress={() => removeScanPhoto(i)} data-testid={`remove-scan-${i}`}>
+                    <Ionicons name="close" size={12} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {scanPhotos.length < 5 && (
+                <TouchableOpacity style={s.aiThumbAdd} onPress={() => addScanPhoto(false)} data-testid="add-scan-more">
+                  <Ionicons name="add" size={22} color="#2563eb" />
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          )}
+
+          <View style={s.aiBtnRow}>
+            <TouchableOpacity style={s.aiPrimaryBtn} onPress={() => addScanPhoto(true)} data-testid="ai-take-photo-btn">
+              <Ionicons name="camera" size={18} color="#fff" />
+              <Text style={s.aiPrimaryBtnText}>Take a photo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.aiGhostBtn} onPress={() => addScanPhoto(false)} data-testid="ai-gallery-btn">
+              <Ionicons name="images-outline" size={18} color="#2563eb" />
+              <Text style={s.aiGhostBtnText}>Gallery</Text>
+            </TouchableOpacity>
+          </View>
+          {scanPhotos.length > 0 && (
+            <TouchableOpacity style={s.aiAnalyzeBtn} onPress={analyzeScans} data-testid="ai-identify-btn">
+              <Ionicons name="sparkles" size={16} color="#fff" />
+              <Text style={s.aiAnalyzeBtnText}>Identify {scanPhotos.length > 1 ? `${scanPhotos.length} photos` : 'photo'} with AI</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={s.aiHint}>Add up to 5 photos · AI suggests a few options to choose from</Text>
+        </View>
+
         {/* Search */}
         <View style={s.searchBox}>
           <Ionicons name="search-outline" size={20} color="#9ca3af" />
           <TextInput
             style={s.searchInput}
-            placeholder={isGuest ? 'What do you need done? (e.g., furniture assembly)' : 'Search for a service...'}
+            placeholder={isGuest ? 'Or search a service (e.g., furniture assembly)' : 'Search for a service...'}
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholderTextColor="#9ca3af"
@@ -864,23 +940,13 @@ export default function HomeScreen() {
           ) : null}
           <TouchableOpacity
             style={s.searchCamBtn}
-            onPress={() => pickPhotoForAnalysis(true)}
+            onPress={() => addScanPhoto(true)}
             data-testid="search-photo-btn"
             accessibilityLabel="Take a photo to identify a service"
           >
             <Ionicons name="camera" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={s.photoCta}
-          onPress={() => pickPhotoForAnalysis(false)}
-          data-testid="identify-by-photo-btn"
-        >
-          <Ionicons name="sparkles" size={16} color="#2563eb" />
-          <Text style={s.photoCtaText}>Identify by photo</Text>
-          <View style={s.photoCtaBadge}><Text style={s.photoCtaBadgeText}>AI</Text></View>
-        </TouchableOpacity>
 
         {/* Category grid */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
@@ -987,9 +1053,11 @@ export default function HomeScreen() {
 
   // STEP: SKILLS — list of skills in category
   if (step === 'photo_result') {
-    const det = photoResult?.detection || {};
-    const est = photoResult?.estimate || {};
-    const img = booking.photos[0];
+    const cands = photoResult?.candidates || [];
+    const sel = cands[selectedCandidate] || photoResult || {};
+    const det = sel?.detection || {};
+    const est = sel?.estimate || {};
+    const photos = booking.photos || [];
     return (
       <View style={s.container}>
         <View style={s.stepHeader}>
@@ -1003,24 +1071,47 @@ export default function HomeScreen() {
         {analyzingPhoto || !photoResult ? (
           <View style={s.centered}>
             <ActivityIndicator size="large" color="#2563eb" />
-            <Text style={{ marginTop: 12, color: '#6b7280' }}>Analyzing your photo…</Text>
+            <Text style={{ marginTop: 12, color: '#6b7280' }}>Analyzing your photos…</Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 140 }}>
-            {img ? (
-              <Image source={{ uri: `data:image/jpeg;base64,${img}` }} style={s.photoResultImg} />
+            {photos.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8 }}>
+                {photos.map((p, i) => (
+                  <Image key={i} source={{ uri: `data:image/jpeg;base64,${p}` }} style={s.photoStripImg} />
+                ))}
+              </ScrollView>
             ) : null}
 
-            <View style={s.detectCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={s.detectSkill} data-testid="detected-skill">{det.skill}</Text>
-                <View style={s.confBadge}>
-                  <Text style={s.confBadgeText}>{Math.round((det.confidence || 0) * 100)}% match</Text>
-                </View>
-              </View>
-              <Text style={s.detectCat}>{det.category_name}</Text>
-              {det.summary ? <Text style={s.detectSummary}>{det.summary}</Text> : null}
-            </View>
+            {cands.length > 1 && (
+              <Text style={[s.sectionTitle, { marginTop: 0 }]}>Which one do you need? ({cands.length} options)</Text>
+            )}
+            {cands.map((c: any, i: number) => {
+              const cd = c.detection || {};
+              const ce = c.estimate || {};
+              const active = i === selectedCandidate;
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={[s.candCard, active && s.candCardActive]}
+                  onPress={() => chooseCandidate(i)}
+                  data-testid={`candidate-${i}`}
+                >
+                  <View style={[s.candRadio, active && s.candRadioActive]}>
+                    {active ? <Ionicons name="checkmark" size={13} color="#fff" /> : null}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={s.candSkill} data-testid={i === selectedCandidate ? 'detected-skill' : undefined}>{cd.skill}</Text>
+                      <View style={s.confBadge}><Text style={s.confBadgeText}>{Math.round((cd.confidence || 0) * 100)}%</Text></View>
+                    </View>
+                    <Text style={s.candCat}>{cd.category_name}</Text>
+                    {cd.summary ? <Text style={s.candSummary}>{cd.summary}</Text> : null}
+                    <Text style={s.candMeta}>{ce.hours_label} · ${ce.price_min}–${ce.price_max}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
 
             <View style={s.estRow}>
               <View style={s.estTile}>
@@ -2006,6 +2097,35 @@ const s = StyleSheet.create({
   photoCtaBadge: { backgroundColor: '#2563eb', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   photoCtaBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   photoResultImg: { width: '100%', height: 200, borderRadius: 16, marginBottom: 16, backgroundColor: '#e5e7eb' },
+  photoStripImg: { width: 96, height: 96, borderRadius: 12, backgroundColor: '#e5e7eb' },
+  aiBlock: { marginHorizontal: 16, marginTop: 14, marginBottom: 10, backgroundColor: '#fff', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#1e3a8a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  aiBlockTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 12 },
+  aiSteps: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  aiStep: { alignItems: 'center', flex: 1 },
+  aiStepIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  aiStepText: { fontSize: 11, color: '#374151', fontWeight: '600', textAlign: 'center' },
+  aiTray: { marginBottom: 12 },
+  aiThumbWrap: { position: 'relative' },
+  aiThumb: { width: 64, height: 64, borderRadius: 10, backgroundColor: '#e5e7eb' },
+  aiThumbX: { position: 'absolute', top: -6, right: -6, backgroundColor: '#ef4444', width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  aiThumbAdd: { width: 64, height: 64, borderRadius: 10, borderWidth: 1.5, borderColor: '#bfdbfe', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', backgroundColor: '#eff6ff' },
+  aiBtnRow: { flexDirection: 'row', gap: 10 },
+  aiPrimaryBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563eb', borderRadius: 12, paddingVertical: 13 },
+  aiPrimaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  aiGhostBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#eff6ff', borderRadius: 12, paddingVertical: 13, paddingHorizontal: 16, borderWidth: 1, borderColor: '#bfdbfe' },
+  aiGhostBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
+  aiAnalyzeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#7c3aed', borderRadius: 12, paddingVertical: 13, marginTop: 10 },
+  aiAnalyzeBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  aiHint: { fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 10 },
+  candCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#e5e7eb', marginBottom: 10 },
+  candCardActive: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  candRadio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#cbd5e1', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  candRadioActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  candSkill: { fontSize: 15, fontWeight: '800', color: '#111827', flex: 1 },
+  candCat: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  candSummary: { fontSize: 13, color: '#374151', marginTop: 6, lineHeight: 18 },
+  candMeta: { fontSize: 12, color: '#2563eb', fontWeight: '700', marginTop: 8 },
+
   detectCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   detectSkill: { fontSize: 20, fontWeight: '800', color: '#111827', flex: 1 },
   confBadge: { backgroundColor: '#dcfce7', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },

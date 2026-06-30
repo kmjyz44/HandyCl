@@ -294,3 +294,12 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - FIX (server.py finix_charge): when booking lacks platform_take/executor_take, fall back to the linked task's provider_payout (executor_take) + platform_fee (platform_take). Authoritative server-computed values.
 - TESTED end-to-end (pod + real Finix sandbox) with the user's exact scenario (15.34h×$25 + materials, +15%): charge SUCCEEDED, amount $568.04, split executor $493.95 / platform $74.09 — matches the app's "Total due" exactly. transfer TR3PR8q7gsRLmMgmXx6enyo5.
 - ⚠️ Backend fix → needs Save to GitHub → Railway. This is the fix for the user's live payment failure.
+
+## 2026-06-30 — Photo-first redesign + multi-photo/multi-option AI + PWA
+- Hero copy: "Snap it. We'll match you with the right pro." + AI-focused subtitle.
+- NEW big AI block as the primary CTA on home (above search): 3-step row (Take a photo → AI finds it → Get matched) with vector icons, a multi-photo tray (add up to 5, remove), "Take a photo"/"Gallery" buttons, and "Identify N photos with AI".
+- Multi-photo + multi-option: backend /ai/analyze-task-photo now accepts images[] (+ legacy image_base64), sends all photos to GPT-4o, returns ranked `candidates[]` (1-3) each with detection+estimate (top-level kept for back-compat). photo_result screen shows a photo strip + selectable candidate cards (radio); choosing one sets the booking category/skill/description; estimate tiles + pros reflect the selected option.
+- TESTED backend: posted a real plumbing photo → 2 candidates returned (Plumbing inspection 90% ~1-3hr $46-138; Pipe repair 80% ~2-4hr $92-184). ✅
+- PWA: added public/manifest.json (standalone, theme #2563eb, icons, shortcut "Scan a problem" → /?scan=1), public/pwa-icon.png, app/+html.tsx (injects manifest + apple meta + registers /sw.js), added fetch handler to public/sw.js for installability. Home reads ?scan=1 → auto-opens camera. Android: full install + camera shortcut; iOS Safari: Add to Home Screen works, camera opens on tap (Apple limitation).
+- Files: app/(tabs)/index.tsx, server.py (analyze endpoint), utils/api.ts, public/manifest.json, public/sw.js, app/+html.tsx. esbuild-clean.
+- ⚠️ Frontend/PWA verified via compile + backend test only (pod preview runs CRA placeholder, not the Expo app). Visual + install must be checked on Netlify after Save to GitHub.

@@ -1,0 +1,24 @@
+{
+  "name": "HandyHub — Snap & Fix",
+  "short_name": "HandyHub",
+  "description": "Take a photo of the problem. Our AI identifies it and matches you with the right local pro.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    { "src": "/pwa-icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/pwa-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Scan a problem",
+      "short_name": "Scan",
+      "description": "Open the camera and identify a problem with AI",
+      "url": "/?scan=1",
+      "icons": [{ "src": "/pwa-icon.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

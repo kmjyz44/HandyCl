@@ -254,7 +254,7 @@ export const api = {
     return res.data;
   },
 
-  analyzeTaskPhoto: async (payload: { image_base64: string; city?: string }) => {
+  analyzeTaskPhoto: async (payload: { image_base64?: string; images?: string[]; city?: string }) => {
     const res = await client.post('/ai/analyze-task-photo', payload);
     return res.data;
   },
