@@ -287,3 +287,10 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - Could NOT reproduce live error (no Railway log access; Finix secure iframes block programmatic card entry so can't mint a TK token in automation).
 - FIX (server.py finix_charge): wrapped TK-exchange + /transfers in try/except — re-raises HTTPException, converts any other exception to HTTP 502 with detail=f"Finix payment failed: {str(ex)}" + logs full traceback. Transfer HTTP errors already return detail "Finix: <err>" + log body. After deploy, the red error on live will show the REAL Finix cause.
 - NEXT: user Save to GitHub → retry payment once → send the new (detailed) red error text to pinpoint root cause.
+
+## 2026-06-30 (cont.) — ROOT CAUSE of "split amount not defined" FOUND + FIXED
+- Live error surfaced (thanks to better error reporting): "The split amount is not defined for this order".
+- ROOT CAUSE: for hourly / at-completion bookings, the split is computed at task completion (complete_task: provider_payout=executor share, platform_fee=commission, final_price=client total, commission added ON TOP, default 15%) and stored on the TASK doc — but the booking only gets status+actual_hours, NOT platform_take/executor_take. finix_charge read only the booking → 0 → raised.
+- FIX (server.py finix_charge): when booking lacks platform_take/executor_take, fall back to the linked task's provider_payout (executor_take) + platform_fee (platform_take). Authoritative server-computed values.
+- TESTED end-to-end (pod + real Finix sandbox) with the user's exact scenario (15.34h×$25 + materials, +15%): charge SUCCEEDED, amount $568.04, split executor $493.95 / platform $74.09 — matches the app's "Total due" exactly. transfer TR3PR8q7gsRLmMgmXx6enyo5.
+- ⚠️ Backend fix → needs Save to GitHub → Railway. This is the fix for the user's live payment failure.

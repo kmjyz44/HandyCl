@@ -5617,6 +5617,16 @@ async def finix_charge(
     platform_take = float(booking.get("platform_take") or 0)
     executor_take = float(booking.get("executor_take") or 0)
     if platform_take <= 0 or executor_take <= 0:
+        # Hourly / at-completion bookings store the final split on the TASK
+        # (provider_payout = executor share, platform_fee = commission), computed
+        # when the pro completes the job. Fall back to those authoritative values.
+        tk = await db.tasks.find_one(
+            {"booking_id": booking_id},
+            {"_id": 0, "provider_payout": 1, "platform_fee": 1, "final_price": 1})
+        if tk:
+            executor_take = float(tk.get("provider_payout") or 0)
+            platform_take = float(tk.get("platform_fee") or 0)
+    if platform_take <= 0 or executor_take <= 0:
         raise HTTPException(status_code=400, detail="The split amount is not defined for this order")
     exec_cents = int(round(executor_take * 100))
     plat_cents = int(round(platform_take * 100))
