@@ -275,3 +275,8 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - FIX (task-detail.tsx): removed onSubmit from options; moved tokenization handler to component scope `handleFinixToken`; Pay button now calls `finixFormRef.current.submit(handleFinixToken)`. Matches the official "Custom Submit Button Example" exactly.
 - NOTE: Could not auto-test tokenization (Finix secure iframes block programmatic input for PCI). Verified: form renders + mounts (childCount=1) in real browser; backend charge+split proven SUCCEEDED earlier. Final card-entry test must be done on the deployed Netlify site. If it still hangs, fallback = Option 1 (onSubmit auto-button, remove custom button).
 - ⚠️ Needs Save to GitHub (frontend → Netlify).
+
+## 2026-06-30 — Payment UX when pro hasn't connected Finix payouts
+- After the submit fix, charge correctly reached backend and returned "The pro has not connected Finix payouts yet" (correct business rule — that booking's provider has no finix_merchant_id on the LIVE/Railway DB).
+- ENHANCEMENT (server.py finix_charge): on this failure (no merchant OR not APPROVED), now (1) returns a friendly client-facing message + HTTP 409, and (2) fires asyncio notify_user(provider, "payout_setup_required", ...) → in-app + email + SMS prompting the pro to complete Earnings → Connect Finix payouts.
+- VERIFIED via curl: reset provider finix fields → charge → HTTP 409 friendly detail; notification doc created for provider (notification_type=payout_setup_required). Frontend already surfaces error.response.data.detail, so client sees the friendly text. Backend change → needs Save to GitHub (Railway).

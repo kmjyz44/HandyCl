@@ -5627,7 +5627,16 @@ async def finix_charge(
                                    {"_id": 0, "finix_merchant_id": 1, "finix_onboarding_state": 1}) if provider_id else None
     exec_merchant = (prov or {}).get("finix_merchant_id")
     if not exec_merchant:
-        raise HTTPException(status_code=400, detail="The pro has not connected Finix payouts yet")
+        # Let the pro know they need to finish payout setup so this client can pay.
+        if provider_id:
+            asyncio.create_task(notify_user(
+                provider_id, "payout_setup_required",
+                "Action needed: connect your payouts",
+                "A client is trying to pay you, but your Finix payout account isn't set up yet. "
+                "Open Earnings → Where to receive funds → Connect Finix payouts to get paid.",
+                related_id=booking.get("booking_id"), related_type="booking",
+            ))
+        raise HTTPException(status_code=409, detail="This pro hasn't set up payouts yet. We've let them know — please try again once they finish, or pay later.")
     prov_state = (prov or {}).get("finix_onboarding_state")
     if prov_state not in ("APPROVED", None):
         # State may be stale (sandbox approves a few seconds after onboarding) — refresh live.
@@ -5635,7 +5644,15 @@ async def finix_charge(
         if fresh:
             prov_state = fresh
         if prov_state not in ("APPROVED", None):
-            raise HTTPException(status_code=400, detail="The pro's Finix account is not active yet (awaiting APPROVED)")
+            if provider_id:
+                asyncio.create_task(notify_user(
+                    provider_id, "payout_setup_required",
+                    "Your payout account is still being reviewed",
+                    "A client is trying to pay you. Your Finix payout account isn't approved yet — "
+                    "please check Earnings → Where to receive funds and complete any remaining steps.",
+                    related_id=booking.get("booking_id"), related_type="booking",
+                ))
+            raise HTTPException(status_code=409, detail="This pro's payout account isn't active yet. We've notified them — please try again shortly.")
 
     keys = await _get_integration_keys()
     currency = "USD"  # Finix is US-only and processes USD regardless of platform display currency
