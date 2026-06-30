@@ -121,6 +121,31 @@ export default function TaskDetail() {
   const [finixError, setFinixError] = useState('');
   const finixFormRef = useRef<any>(null);
 
+  // Tokenization callback — receives (error, response) from Finix.js form.submit(cb).
+  // We use Option 2 (custom Pay button): do NOT pass onSubmit in options (that makes
+  // Finix render its OWN button and conflicts with a manual submit() → button hangs).
+  const handleFinixToken = async (err: any, res: any) => {
+    if (err) { setFinixError('Please check your card details'); setFinixProcessing(false); return; }
+    const token = res?.data?.id;
+    if (!token) { setFinixError('Could not get card token'); setFinixProcessing(false); return; }
+    try {
+      const bookingId = task?.booking_id || taskId;
+      const r = await api.finixCharge({ booking_id: bookingId, source: token });
+      if (r?.state === 'SUCCEEDED' || r?.state === 'PENDING' || r?.ok) {
+        setShowFinix(false);
+        setShowPayment(false);
+        try { await loadTask(); } catch (_) {}
+        setTimeout(() => setShowReview(true), 400);
+      } else {
+        setFinixError('Payment failed. Please try another card.');
+      }
+    } catch (e: any) {
+      setFinixError(e?.response?.data?.detail || 'Finix payment error');
+    } finally {
+      setFinixProcessing(false);
+    }
+  };
+
   // Mount the Finix.js v2 PaymentForm when the Finix modal opens (web only)
   useEffect(() => {
     if (!showFinix || Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -129,30 +154,8 @@ export default function TaskDetail() {
     setFinixError('');
     setFinixProcessing(false);
     finixFormRef.current = null;
-    const bookingId = task?.booking_id || taskId;
     let cancelled = false;
     let timer: any = null;
-
-    const handleToken = async (err: any, res: any) => {
-      if (err) { setFinixError('Please check your card details'); setFinixProcessing(false); return; }
-      const token = res?.data?.id;
-      if (!token) { setFinixError('Could not get card token'); setFinixProcessing(false); return; }
-      try {
-        const r = await api.finixCharge({ booking_id: bookingId, source: token });
-        if (r?.state === 'SUCCEEDED' || r?.state === 'PENDING' || r?.ok) {
-          setShowFinix(false);
-          setShowPayment(false);
-          try { await loadTask(); } catch (_) {}
-          setTimeout(() => setShowReview(true), 400);
-        } else {
-          setFinixError('Payment failed. Please try another card.');
-        }
-      } catch (e: any) {
-        setFinixError(e?.response?.data?.detail || 'Finix payment error');
-      } finally {
-        setFinixProcessing(false);
-      }
-    };
 
     // Mount once the SDK + the target <div> are both present in the DOM.
     const tryMount = (): boolean => {
@@ -162,10 +165,10 @@ export default function TaskDetail() {
       if (el.childElementCount > 0 || finixFormRef.current) return true; // already mounted
       try {
         const env = cfg.environment === 'live' ? 'prod' : 'sandbox';
+        // No onSubmit — we submit manually from our own Pay button via form.submit(cb).
         finixFormRef.current = Finix.PaymentForm('finix-card-form', env, cfg.application_id, {
           paymentMethods: ['card'],
           showAddress: false,
-          onSubmit: handleToken,
         });
         return true;
       } catch (e) {
@@ -207,7 +210,8 @@ export default function TaskDetail() {
     setFinixError('');
     setFinixProcessing(true);
     try {
-      finixFormRef.current.submit();
+      // v2: pass the callback directly to submit() — it tokenizes then invokes cb(err, res).
+      finixFormRef.current.submit(handleFinixToken);
     } catch (e) {
       setFinixError('Please enter your card details');
       setFinixProcessing(false);
