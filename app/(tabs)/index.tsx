@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Head from 'expo-router/head';
 import { useAuthStore } from '../../store/authStore';
 import { useBookingStore } from '../../store/bookingStore';
 import { api } from '../../utils/api';
@@ -839,6 +840,13 @@ export default function HomeScreen() {
     const isGuest = !user;
     return (
       <View style={s.container}>
+        <Head>
+          <title>Ono-Fix — One Photo. One Solution. | AI Home Services in the US</title>
+          <meta name="description" content="Snap a photo of any home problem — Ono-Fix AI identifies it and matches you with the right trusted local pro: plumbing, electrical, furniture assembly, cleaning, repairs and more." />
+          <link rel="canonical" href="https://ono-fix.com/" />
+          <meta property="og:title" content="Ono-Fix — One Photo. One Solution." />
+          <meta property="og:url" content="https://ono-fix.com/" />
+        </Head>
         {/* Header — landing hero for guests, personalised greeting for clients */}
         {isGuest ? (
           <View style={s.heroHeader}>

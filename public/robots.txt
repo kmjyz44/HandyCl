@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin-integrations
+Disallow: /admin-payments
+Disallow: /admin-payment-stats
+Disallow: /my-profile
+Disallow: /payout-setup
+Disallow: /payment-success
+Disallow: /payment-cancelled
+Disallow: /verify-email
+Disallow: /verify-phone
+
+Sitemap: https://ono-fix.com/sitemap.xml

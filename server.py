@@ -11920,6 +11920,55 @@ async def analyze_task_photo(req: AnalyzePhotoRequest):
     }
 
 
+@api_router.get("/seo/sitemap.xml")
+async def seo_sitemap():
+    """Dynamically generated sitemap including all active service categories."""
+    from fastapi.responses import Response
+    base = "https://ono-fix.com"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    urls = [
+        (f"{base}/", "1.0", "daily"),
+        (f"{base}/login", "0.5", "monthly"),
+        (f"{base}/register", "0.6", "monthly"),
+        (f"{base}/terms", "0.3", "yearly"),
+        (f"{base}/privacy", "0.3", "yearly"),
+    ]
+    try:
+        cats = await db.categories.find({"is_active": True}).to_list(200)
+        if not cats:
+            cats = await db.categories.find({}).to_list(200)
+        for c in cats:
+            cid = c.get("category_id")
+            if cid:
+                urls.append((f"{base}/?category={cid}", "0.8", "weekly"))
+    except Exception:
+        pass
+
+    items = "".join(
+        f"<url><loc>{loc}</loc><lastmod>{today}</lastmod>"
+        f"<changefreq>{cf}</changefreq><priority>{pr}</priority></url>"
+        for loc, pr, cf in urls
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{items}</urlset>"
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
+@api_router.get("/seo/robots.txt")
+async def seo_robots():
+    from fastapi.responses import Response
+    body = (
+        "User-agent: *\nAllow: /\n"
+        "Disallow: /admin\nDisallow: /my-profile\nDisallow: /payout-setup\n"
+        "Disallow: /payment-success\nDisallow: /payment-cancelled\n\n"
+        "Sitemap: https://ono-fix.com/sitemap.xml\n"
+    )
+    return Response(content=body, media_type="text/plain")
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
