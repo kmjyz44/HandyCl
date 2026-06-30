@@ -5727,9 +5727,14 @@ async def finix_charge(
     ).dict())
 
     if state in ("SUCCEEDED", "PENDING"):
+        now_paid = datetime.now(timezone.utc)
         await db.bookings.update_one({"booking_id": booking_id},
-            {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc),
-                      "payment_gateway": "finix"}})
+            {"$set": {"payment_status": "paid", "status": BookingStatus.PAID,
+                      "paid_at": now_paid, "payment_gateway": "finix", "payment_method": "finix"}})
+        # Mark the linked task PAID too, otherwise it keeps showing "Pay for task".
+        await db.tasks.update_one({"booking_id": booking_id},
+            {"$set": {"status": TaskStatus.PAID, "payment_status": "paid",
+                      "paid_at": now_paid, "payment_method": "finix", "updated_at": now_paid}})
         # Notify all parties that payment arrived
         try:
             title = "Payment received"
