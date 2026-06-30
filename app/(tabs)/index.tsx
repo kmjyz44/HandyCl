@@ -332,6 +332,8 @@ export default function HomeScreen() {
   const [photoResult, setPhotoResult] = useState<any>(null);
   const [scanPhotos, setScanPhotos] = useState<string[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState(0);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [canInstall, setCanInstall] = useState(false);
   const submittingRef = useRef(false); // synchronous guard against rapid double-taps
   const [searchQuery, setSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
@@ -601,6 +603,35 @@ export default function HomeScreen() {
     } catch {}
   }, []);
 
+  // Capture the install prompt so we can offer an in-app "Install app" button.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+      || (window.navigator as any).standalone === true;
+    if (standalone) return; // already installed
+    const onPrompt = (e: any) => { e.preventDefault(); setInstallPrompt(e); setCanInstall(true); };
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    const ua = window.navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    if (isIOS) setCanInstall(true); // iOS has no prompt event — we show instructions
+    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
+  }, []);
+
+  const installApp = async () => {
+    if (installPrompt) {
+      installPrompt.prompt();
+      try { await installPrompt.userChoice; } catch {}
+      setInstallPrompt(null);
+      setCanInstall(false);
+      return;
+    }
+    // iOS / unsupported: show manual instructions
+    Alert.alert(
+      'Install HandyHub',
+      'On iPhone: tap the Share button in Safari, then choose "Add to Home Screen". The HandyHub icon will open straight to the camera.'
+    );
+  };
+
   const loadTaskers = async () => {
     setLoadingTaskers(true);
     try {
@@ -868,7 +899,15 @@ export default function HomeScreen() {
 
         {/* AI photo-first block — primary CTA, the first thing users see */}
         <View style={s.aiBlock}>
-          <Text style={s.aiBlockTitle}>Describe the problem with a photo</Text>
+          <View style={s.aiTitleRow}>
+            <Text style={s.aiBlockTitle}>Describe the problem with a photo</Text>
+            {Platform.OS === 'web' && canInstall ? (
+              <TouchableOpacity style={s.installBtn} onPress={installApp} data-testid="install-app-btn">
+                <Ionicons name="download-outline" size={14} color="#2563eb" />
+                <Text style={s.installBtnText}>Install app</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
           <View style={s.aiSteps}>
             <View style={s.aiStep}>
               <View style={[s.aiStepIcon, { backgroundColor: '#dbeafe' }]}><Ionicons name="camera" size={18} color="#2563eb" /></View>
@@ -2100,6 +2139,9 @@ const s = StyleSheet.create({
   photoStripImg: { width: 96, height: 96, borderRadius: 12, backgroundColor: '#e5e7eb' },
   aiBlock: { marginHorizontal: 16, marginTop: 10, marginBottom: 6, backgroundColor: '#fff', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#1e3a8a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   aiBlockTitle: { fontSize: 14, fontWeight: '800', color: '#111827', marginBottom: 8 },
+  aiTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  installBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8 },
+  installBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 12 },
   aiSteps: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   aiStep: { alignItems: 'center', flex: 1 },
   aiStepIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },

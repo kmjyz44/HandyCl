@@ -303,3 +303,9 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - PWA: added public/manifest.json (standalone, theme #2563eb, icons, shortcut "Scan a problem" → /?scan=1), public/pwa-icon.png, app/+html.tsx (injects manifest + apple meta + registers /sw.js), added fetch handler to public/sw.js for installability. Home reads ?scan=1 → auto-opens camera. Android: full install + camera shortcut; iOS Safari: Add to Home Screen works, camera opens on tap (Apple limitation).
 - Files: app/(tabs)/index.tsx, server.py (analyze endpoint), utils/api.ts, public/manifest.json, public/sw.js, app/+html.tsx. esbuild-clean.
 - ⚠️ Frontend/PWA verified via compile + backend test only (pod preview runs CRA placeholder, not the Expo app). Visual + install must be checked on Netlify after Save to GitHub.
+
+## 2026-06-30 (cont.) — PWA install button + camera-first launch + compact home
+- Compacted home: AI block padding/icons/buttons reduced (~30% shorter), hero paddings+fonts smaller, category cards aspectRatio 1→1.35 (shorter) so the lower grid is visible.
+- PWA install UX: added visible "Install app" pill in the AI block (web only, shown when installable / iOS). Android/Chrome → native beforeinstallprompt; iOS → Alert with "Share → Add to Home Screen" instructions. Hidden when already running standalone.
+- Installed icon launches camera-first: manifest start_url = "/?scan=1" (+ existing "Scan a problem" shortcut). Home reads ?scan=1 → attempts to open camera (reliable one-tap via the big "Take a photo" button; browsers may block auto-open without a gesture).
+- Files: app/(tabs)/index.tsx (install state/handlers + button + style trims), public/manifest.json (start_url). esbuild-clean. Needs Save to GitHub → Netlify (PWA install requires the live https site + SW + manifest).
