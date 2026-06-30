@@ -67,7 +67,7 @@ export default function Register() {
         </TouchableOpacity>
         <View style={styles.header}>
           <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join HandyHub today</Text>
+          <Text style={styles.subtitle}>Join Ono-Fix today</Text>
         </View>
         <View style={styles.form}>
           {errorMsg ? (
@@ -124,7 +124,7 @@ export default function Register() {
               <Text style={termsStyles.link} onPress={() => router.push('/privacy' as any)}>
                 Privacy Policy
               </Text>
-              . I understand that all payments and communications must be conducted through the HandyHub platform.
+              . I understand that all payments and communications must be conducted through the Ono-Fix platform.
             </Text>
           </TouchableOpacity>
 

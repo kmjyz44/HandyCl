@@ -17,7 +17,7 @@ export default function PrivacyPolicy() {
         <Text style={styles.meta}>Effective Date: February 15, 2026 · Last Updated: February 15, 2026</Text>
 
         <Text style={styles.p}>
-          HandyHub Inc. ("we", "us", "our") respects your privacy. This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the HandyHub Platform.
+          Ono-Fix Inc. ("we", "us", "our") respects your privacy. This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the Ono-Fix Platform.
         </Text>
 
         <Text style={styles.h2}>1. Information We Collect</Text>
@@ -39,7 +39,7 @@ export default function PrivacyPolicy() {
 
         <Text style={styles.h2}>4. Communications & TCPA Consent</Text>
         <Text style={styles.p}>
-          By providing your phone number, you consent to receive transactional SMS messages (booking confirmations, payment notifications, support replies) from HandyHub. Standard message and data rates apply. You may opt out by replying STOP. Email communications can be unsubscribed via the link in any email or by emailing <Text style={styles.link}>privacy@handyhub.com</Text>.
+          By providing your phone number, you consent to receive transactional SMS messages (booking confirmations, payment notifications, support replies) from Ono-Fix. Standard message and data rates apply. You may opt out by replying STOP. Email communications can be unsubscribed via the link in any email or by emailing <Text style={styles.link}>privacy@handyhub.com</Text>.
         </Text>
 
         <Text style={styles.h2}>5. Cookies & Analytics</Text>
@@ -84,7 +84,7 @@ export default function PrivacyPolicy() {
 
         <Text style={styles.h2}>13. Contact</Text>
         <Text style={styles.p}>
-          HandyHub Inc., 1209 Orange Street, Wilmington, DE 19801 · <Text style={styles.link}>privacy@handyhub.com</Text>
+          Ono-Fix Inc., 1209 Orange Street, Wilmington, DE 19801 · <Text style={styles.link}>privacy@handyhub.com</Text>
         </Text>
 
         <View style={{ height: 40 }} />

@@ -627,8 +627,8 @@ export default function HomeScreen() {
     }
     // iOS / unsupported: show manual instructions
     Alert.alert(
-      'Install HandyHub',
-      'On iPhone: tap the Share button in Safari, then choose "Add to Home Screen". The HandyHub icon will open straight to the camera.'
+      'Install Ono-Fix',
+      'On iPhone: tap the Share button in Safari, then choose "Add to Home Screen". The Ono-Fix icon will open straight to the camera.'
     );
   };
 
@@ -644,7 +644,7 @@ export default function HomeScreen() {
         try {
           const geoRes = await fetch(
             `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(booking.city)}&limit=1&accept-language=en`,
-            { headers: { 'User-Agent': 'HandyHub/1.0' } }
+            { headers: { 'User-Agent': 'Ono-Fix/1.0' } }
           );
           const geoData = await geoRes.json();
           if (geoData && geoData[0]) {
@@ -686,7 +686,7 @@ export default function HomeScreen() {
           const { latitude, longitude } = pos.coords;
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=en`,
-            { headers: { 'User-Agent': 'HandyHub/1.0' } }
+            { headers: { 'User-Agent': 'Ono-Fix/1.0' } }
           );
           const data = await res.json();
           const addr = data.address || {};
@@ -716,7 +716,7 @@ export default function HomeScreen() {
       // addressdetails=1 returns structured address (city, town, county) for better city extraction
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&accept-language=en&addressdetails=1`,
-        { headers: { 'User-Agent': 'HandyHub/1.0' } }
+        { headers: { 'User-Agent': 'Ono-Fix/1.0' } }
       );
       const data = await res.json();
       setAddressSuggestions(data);
@@ -838,7 +838,7 @@ export default function HomeScreen() {
                 <View style={s.heroLogo}>
                   <Ionicons name="construct" size={20} color="#fff" />
                 </View>
-                <Text style={s.heroBrandText}>HandyHub</Text>
+                <Text style={s.heroBrandText}>Ono-Fix</Text>
               </View>
               <View style={s.heroAuthBtns}>
                 <TouchableOpacity onPress={() => router.push('/login')} style={s.heroLoginBtn}>
@@ -849,8 +849,8 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-            <Text style={s.heroTitle}>Snap it. We'll match you with the right pro.</Text>
-            <Text style={s.heroSubtitle}>Take a photo of the problem — our AI identifies it and finds the best local pro. No typing needed.</Text>
+            <Text style={s.heroTitle}>One Photo. One Solution.</Text>
+            <Text style={s.heroSubtitle}>Snap the problem — our AI identifies it and matches you with the right local pro.</Text>
           </View>
         ) : (
           <View style={s.header}>
@@ -2128,8 +2128,8 @@ const s = StyleSheet.create({
   greeting: { fontSize: 22, fontWeight: '700', color: '#111827' },
   headerSub: { fontSize: 14, color: '#6b7280', marginTop: 2 },
   headerAvatar: { width: 40, height: 40, borderRadius: 20 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 16, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', gap: 10 },
-  searchInput: { flex: 1, fontSize: 15, color: '#111827' },
+  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginTop: 6, marginBottom: 10, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', gap: 8 },
+  searchInput: { flex: 1, fontSize: 14, color: '#111827' },
   searchCamBtn: { backgroundColor: '#2563eb', width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   photoCta: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginHorizontal: 16, marginTop: -6, marginBottom: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe' },
   photoCtaText: { color: '#1d4ed8', fontWeight: '700', fontSize: 13.5 },
@@ -2341,18 +2341,18 @@ const s = StyleSheet.create({
   },
 
   // Landing hero (guest)
-  heroHeader: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingTop: 40, paddingBottom: 16 },
+  heroHeader: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingTop: 36, paddingBottom: 14 },
   heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
   heroBrand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroLogo: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  heroBrandText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  heroBrandText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   heroAuthBtns: { flexDirection: 'row', gap: 8 },
   heroLoginBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   heroLoginBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   heroSignupBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: '#fff' },
   heroSignupBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
-  heroTitle: { color: '#fff', fontSize: 20, fontWeight: '800', lineHeight: 26, marginBottom: 4 },
-  heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 18 },
+  heroTitle: { color: '#fff', fontSize: 18, fontWeight: '800', lineHeight: 23, marginBottom: 4 },
+  heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 12, lineHeight: 16 },
 
   // How it works section (landing)
   howItWorks: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginTop: 8, borderWidth: 1, borderColor: '#f3f4f6' },

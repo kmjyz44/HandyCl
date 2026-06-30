@@ -423,7 +423,7 @@ export default function TaskDetail() {
       Alert.alert('Cannot open', 'The pro has not provided their account yet');
       return;
     }
-    const note = encodeURIComponent('HandyHub');
+    const note = encodeURIComponent('Ono-Fix');
     const amt = amount.toFixed(2);
     let url = '';
     let appName = '';

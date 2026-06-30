@@ -22,7 +22,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="HandyHub" />
+        <meta name="apple-mobile-web-app-title" content="Ono-Fix" />
         <link rel="apple-touch-icon" href="/pwa-icon.png" />
         <ScrollViewStyleReset />
         <script dangerouslySetInnerHTML={{ __html: swReg }} />

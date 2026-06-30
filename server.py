@@ -1386,7 +1386,7 @@ async def _send_email_sendgrid(to_email: str, subject: str, body_text: str) -> b
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json={
                     "personalizations": [{"to": [{"email": to_email}], "subject": subject}],
-                    "from": {"email": from_email, "name": "HandyHub"},
+                    "from": {"email": from_email, "name": "Ono-Fix"},
                     "content": [{"type": "text/plain", "value": body_text}],
                 },
             )
@@ -1778,8 +1778,8 @@ async def register(user_data: UserRegister):
     try:
         await _send_email(
             reg_email,
-            "HandyHub — Email Verification",
-            f"Welcome to HandyHub!\n\nYour verification code is: {code}\n\nThis code expires in 10 minutes.\n\nIf you did not sign up, ignore this email."
+            "Ono-Fix — Email Verification",
+            f"Welcome to Ono-Fix!\n\nYour verification code is: {code}\n\nThis code expires in 10 minutes.\n\nIf you did not sign up, ignore this email."
         )
     except Exception:
         pass
@@ -1922,7 +1922,7 @@ async def resend_verification(payload: Dict[str, Any] = Body(...)):
     })
     sent = False
     try:
-        sent = await _send_email(email, "HandyHub — New Verification Code", f"Your new verification code is: {code}\n\nExpires in 10 minutes.")
+        sent = await _send_email(email, "Ono-Fix — New Verification Code", f"Your new verification code is: {code}\n\nExpires in 10 minutes.")
     except Exception:
         pass
     return {"ok": True, "email_sent": sent}
@@ -1954,7 +1954,7 @@ async def send_phone_code(payload: Dict[str, Any] = Body(default={}), current_us
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
         "created_at": datetime.now(timezone.utc), "attempts": 0,
     })
-    sent, sms_error = await _send_sms_twilio(phone, f"HandyHub: your verification code is {code}. It expires in 10 minutes.")
+    sent, sms_error = await _send_sms_twilio(phone, f"Ono-Fix: your verification code is {code}. It expires in 10 minutes.")
     resp: Dict[str, Any] = {"ok": True, "sent": sent}
     if not sent and sms_error:
         resp["error"] = sms_error
@@ -5170,7 +5170,7 @@ async def create_checkout_session(
 
     pi_data: Dict[str, Any] = {
         "metadata": {"booking_id": booking_id, "user_id": current_user.user_id, "platform": "handyhub"},
-        # Statement descriptor on customer's bank statement — keeps HandyHub charges
+        # Statement descriptor on customer's bank statement — keeps Ono-Fix charges
         # distinct from any other site sharing the same Stripe account (e.g. finscan.store).
         "statement_descriptor_suffix": "HANDYHUB",
     }
@@ -5186,8 +5186,8 @@ async def create_checkout_session(
             "price_data": {
                 "currency": currency,
                 "product_data": {
-                    "name": booking.get("title") or "HandyHub — task payment",
-                    "description": (booking.get("description") or "")[:200] or "HandyHub task payment",
+                    "name": booking.get("title") or "Ono-Fix — task payment",
+                    "description": (booking.get("description") or "")[:200] or "Ono-Fix task payment",
                 },
                 "unit_amount": amount_cents,
             },
@@ -5328,7 +5328,7 @@ async def create_commission_wallet_intent(
             amount=amount_cents,
             currency=currency,
             automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
-            description=f"HandyHub commission — {booking.get('title') or booking_id}",
+            description=f"Ono-Fix commission — {booking.get('title') or booking_id}",
             statement_descriptor_suffix="HANDYHUB",
             metadata={
                 "booking_id": booking_id,
@@ -5517,7 +5517,7 @@ async def finix_onboard_executor(
         "doing_business_as": payload.get("business_name") or f"{first_name} {last_name}",
         "business_phone": finix_phone,
         "business_tax_id": tax_id, "ownership_type": "PRIVATE",
-        "business_address": addr, "url": "https://hendyhub.netlify.app",
+        "business_address": addr, "url": "https://ono-fix.com",
         "incorporation_date": {"year": 2018, "month": 1, "day": 1},
         "default_statement_descriptor": (first_name + " " + last_name)[:20],
         "max_transaction_amount": 1000000, "mcc": "0742", "annual_card_volume": 1000000,
@@ -6875,7 +6875,7 @@ async def get_earnings_report(
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         leftMargin=1.6*cm, rightMargin=1.6*cm, topMargin=1.6*cm, bottomMargin=1.6*cm,
-        title=f"HandyHub - {period_label}", author="HandyHub"
+        title=f"Ono-Fix - {period_label}", author="Ono-Fix"
     )
     styles = getSampleStyleSheet()
     h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontName=font_bold, fontSize=18, leading=22, textColor=colors.HexColor("#111827"))
@@ -6983,7 +6983,7 @@ async def get_earnings_report(
 
     story.append(Spacer(1, 0.8*cm))
     story.append(Paragraph(
-        "This document was generated automatically by HandyHub. No signature is required.",
+        "This document was generated automatically by Ono-Fix. No signature is required.",
         small
     ))
 
@@ -7750,9 +7750,9 @@ async def request_password_recovery(data: PasswordRecoveryRequest):
     user_name = user.get("name") or "there"
     asyncio.create_task(_send_email(
         data.email,
-        "HandyHub — Password Reset Code",
+        "Ono-Fix — Password Reset Code",
         f"Hi {user_name},\n\nYour password reset code is: {code}\n\n"
-        f"This code expires in 15 minutes. If you didn't request this, you can ignore this email.\n\n— HandyHub",
+        f"This code expires in 15 minutes. If you didn't request this, you can ignore this email.\n\n— Ono-Fix",
     ))
 
     return {
@@ -8393,7 +8393,7 @@ async def get_manual_instructions(
         "splits": [
             {
                 "to": "platform",
-                "label": "HandyHub (platform)",
+                "label": "Ono-Fix (platform)",
                 "amount": round(platform_take, 2),
                 "handle": platform_handle,
             },
@@ -9043,7 +9043,7 @@ FAQ_DEFAULT_UK = [
     {
         "category": "General",
         "items": [
-            {"q": "What is HandyHub?", "a": "HandyHub is a home services marketplace. Clients find trusted pros nearby, and pros receive orders and payments."},
+            {"q": "What is Ono-Fix?", "a": "Ono-Fix is a home services marketplace. Clients find trusted pros nearby, and pros receive orders and payments."},
             {"q": "Is registration free?", "a": "Yes, registering as both a client and a pro is completely free."},
         ],
     },
@@ -9087,7 +9087,7 @@ async def get_admin_contact():
         raise HTTPException(status_code=503, detail="No admin assigned yet")
     return {
         "user_id": admin["user_id"],
-        "name": admin.get("full_name") or admin.get("username") or "HandyHub Support",
+        "name": admin.get("full_name") or admin.get("username") or "Ono-Fix Support",
         "avatar": admin.get("picture"),
     }
 
@@ -9162,7 +9162,7 @@ async def submit_support_request(data: SupportRequestCreate, request: Request):
     keys = await _get_integration_keys()
     admin_email = keys.get("support_email") or "Nexus.ss.llc@gmail.com"
     body = (
-        f"New message from the HandyHub form\n\n"
+        f"New message from the Ono-Fix form\n\n"
         f"From: {name} <{email}>\n"
         f"Category: {doc['category']}\n"
         f"Subject: {doc['subject']}\n\n"
@@ -9174,7 +9174,7 @@ async def submit_support_request(data: SupportRequestCreate, request: Request):
         f"Request ID: {req_id}\n"
     )
     asyncio.create_task(
-        _send_email(admin_email, f"[HandyHub Support] {doc['subject']}", body)
+        _send_email(admin_email, f"[Ono-Fix Support] {doc['subject']}", body)
     )
     return {"ok": True, "request_id": req_id}
 
@@ -9476,7 +9476,7 @@ async def push_test_self(current_user: User = Depends(get_current_user)):
     """Send a test push to the current user — useful for diagnosing setup."""
     sent = await _send_web_push(
         current_user.user_id,
-        "HandyHub — test",
+        "Ono-Fix — test",
         "If you see this — push works ✅",
         "/",
     )
@@ -11824,7 +11824,7 @@ async def analyze_task_photo(req: AnalyzePhotoRequest):
     valid_ids = [c.get("category_id") for c in cats]
 
     system_message = (
-        "You are a dispatcher for HandyHub, a US home-services marketplace. "
+        "You are a dispatcher for Ono-Fix, a US home-services marketplace. "
         "Given one or more photos from a client, identify the most likely home-service jobs shown. "
         "Return the 2-3 MOST LIKELY distinct service options, ranked from most to least likely, so the "
         "client can choose the correct one. For each option suggest a concrete service/skill, estimate "

@@ -18,7 +18,7 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>1. Acceptance of Terms</Text>
         <Text style={styles.p}>
-          By creating an account, accessing, or using HandyHub (the "Platform"), you agree to be bound by these Terms of Use ("Terms"), our Privacy Policy, and any additional policies referenced herein. If you do not agree, do not use the Platform.
+          By creating an account, accessing, or using Ono-Fix (the "Platform"), you agree to be bound by these Terms of Use ("Terms"), our Privacy Policy, and any additional policies referenced herein. If you do not agree, do not use the Platform.
         </Text>
 
         <Text style={styles.h2}>2. Eligibility</Text>
@@ -28,7 +28,7 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>3. Description of Service</Text>
         <Text style={styles.p}>
-          HandyHub is an online marketplace that connects individuals seeking home services ("Clients") with independent service providers ("Taskers" or "Providers"). HandyHub is not the employer of any Provider; Providers are independent contractors. HandyHub does not perform the services and is not responsible for the quality, safety, or legality of any service rendered.
+          Ono-Fix is an online marketplace that connects individuals seeking home services ("Clients") with independent service providers ("Taskers" or "Providers"). Ono-Fix is not the employer of any Provider; Providers are independent contractors. Ono-Fix does not perform the services and is not responsible for the quality, safety, or legality of any service rendered.
         </Text>
 
         <Text style={styles.h2}>4. Account Registration & Security</Text>
@@ -38,20 +38,20 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>5. Platform-Only Payment & Communication</Text>
         <Text style={styles.p}>
-          <Text style={styles.bold}>You agree to conduct all payments and communications exclusively through the HandyHub platform.</Text> Off-platform payments (cash, wire transfer, peer-to-peer apps outside the Platform's integration, etc.) and off-platform communication (personal phone numbers, third-party messengers, email exchanged outside the in-app chat) are strictly prohibited. Violations may result in immediate account suspension or termination.
+          <Text style={styles.bold}>You agree to conduct all payments and communications exclusively through the Ono-Fix platform.</Text> Off-platform payments (cash, wire transfer, peer-to-peer apps outside the Platform's integration, etc.) and off-platform communication (personal phone numbers, third-party messengers, email exchanged outside the in-app chat) are strictly prohibited. Violations may result in immediate account suspension or termination.
         </Text>
         <Text style={styles.p}>
-          HandyHub does <Text style={styles.bold}>not guarantee the safety, quality, completion, or payment</Text> of any service that is arranged, communicated, or paid for outside the Platform. Our trust & safety, dispute resolution, refund, and insurance protections apply only to transactions completed through the Platform.
+          Ono-Fix does <Text style={styles.bold}>not guarantee the safety, quality, completion, or payment</Text> of any service that is arranged, communicated, or paid for outside the Platform. Our trust & safety, dispute resolution, refund, and insurance protections apply only to transactions completed through the Platform.
         </Text>
 
         <Text style={styles.h2}>6. Fees & Payments</Text>
         <Text style={styles.p}>
-          Clients pay the agreed service price plus a Platform service fee (commission) that is added on top of the Provider's price. Providers receive their full set rate, less applicable Provider taxes. Tips are voluntary and 100% paid to the Provider. All payments are processed by our payment processors (Stripe, etc.). By using the Platform, you authorize HandyHub to charge your payment method.
+          Clients pay the agreed service price plus a Platform service fee (commission) that is added on top of the Provider's price. Providers receive their full set rate, less applicable Provider taxes. Tips are voluntary and 100% paid to the Provider. All payments are processed by our payment processors (Stripe, etc.). By using the Platform, you authorize Ono-Fix to charge your payment method.
         </Text>
 
         <Text style={styles.h2}>7. Cancellation & Refunds</Text>
         <Text style={styles.p}>
-          Cancellations made more than 24 hours before the scheduled service incur no fee. Cancellations within 24 hours may be subject to a cancellation fee. Refunds for disputed services are evaluated by HandyHub's support team on a case-by-case basis.
+          Cancellations made more than 24 hours before the scheduled service incur no fee. Cancellations within 24 hours may be subject to a cancellation fee. Refunds for disputed services are evaluated by Ono-Fix's support team on a case-by-case basis.
         </Text>
 
         <Text style={styles.h2}>8. Prohibited Conduct</Text>
@@ -61,12 +61,12 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>9. Reviews & Content</Text>
         <Text style={styles.p}>
-          You may post reviews and content; you grant HandyHub a worldwide, royalty-free, perpetual license to use, display, and distribute such content on the Platform. Reviews must be truthful and based on actual experience.
+          You may post reviews and content; you grant Ono-Fix a worldwide, royalty-free, perpetual license to use, display, and distribute such content on the Platform. Reviews must be truthful and based on actual experience.
         </Text>
 
         <Text style={styles.h2}>10. Independent Contractor Status</Text>
         <Text style={styles.p}>
-          Providers are independent contractors. Nothing in these Terms creates an employer-employee, partnership, agency, joint venture, or franchise relationship between HandyHub and any user. Providers are responsible for their own taxes (IRS Form 1099-NEC may be issued for U.S. Providers earning ≥ $600/year).
+          Providers are independent contractors. Nothing in these Terms creates an employer-employee, partnership, agency, joint venture, or franchise relationship between Ono-Fix and any user. Providers are responsible for their own taxes (IRS Form 1099-NEC may be issued for U.S. Providers earning ≥ $600/year).
         </Text>
 
         <Text style={styles.h2}>11. Disclaimers & Limitation of Liability</Text>
@@ -76,12 +76,12 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>12. Indemnification</Text>
         <Text style={styles.p}>
-          You agree to indemnify and hold HandyHub harmless from any claims, damages, liabilities, and expenses (including attorneys' fees) arising from your use of the Platform, violation of these Terms, or violation of any third-party rights.
+          You agree to indemnify and hold Ono-Fix harmless from any claims, damages, liabilities, and expenses (including attorneys' fees) arising from your use of the Platform, violation of these Terms, or violation of any third-party rights.
         </Text>
 
         <Text style={styles.h2}>13. Dispute Resolution & Binding Arbitration</Text>
         <Text style={styles.p}>
-          <Text style={styles.bold}>PLEASE READ CAREFULLY.</Text> Any dispute arising out of or relating to these Terms shall be resolved by binding individual arbitration administered by the American Arbitration Association (AAA) under its Consumer Arbitration Rules, in accordance with the Federal Arbitration Act. You and HandyHub waive the right to a jury trial and to participate in class actions. You may opt out by emailing <Text style={styles.link}>legal@handyhub.com</Text> within 30 days of account creation.
+          <Text style={styles.bold}>PLEASE READ CAREFULLY.</Text> Any dispute arising out of or relating to these Terms shall be resolved by binding individual arbitration administered by the American Arbitration Association (AAA) under its Consumer Arbitration Rules, in accordance with the Federal Arbitration Act. You and Ono-Fix waive the right to a jury trial and to participate in class actions. You may opt out by emailing <Text style={styles.link}>legal@handyhub.com</Text> within 30 days of account creation.
         </Text>
 
         <Text style={styles.h2}>14. Governing Law</Text>
@@ -106,7 +106,7 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>18. Contact</Text>
         <Text style={styles.p}>
-          HandyHub Inc., 1209 Orange Street, Wilmington, DE 19801 · <Text style={styles.link}>support@handyhub.com</Text>
+          Ono-Fix Inc., 1209 Orange Street, Wilmington, DE 19801 · <Text style={styles.link}>support@handyhub.com</Text>
         </Text>
 
         <View style={{ height: 40 }} />

@@ -524,7 +524,7 @@ function ClientProfile() {
           <Text style={styles.logoutBtnText}>Log out</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>HandyHub v1.0.0</Text>
+        <Text style={styles.version}>Ono-Fix v1.0.0</Text>
       </ScrollView>
 
       {/* Edit Profile Modal */}
@@ -1391,7 +1391,7 @@ function ProviderProfile() {
         <Text style={[pStyles.menuRowText, { flex: 1, color: '#ef4444', fontWeight: '600' }]}>Delete account</Text>
       </TouchableOpacity>
 
-      <Text style={pStyles.versionText}>HandyHub v1.0.0</Text>
+      <Text style={pStyles.versionText}>Ono-Fix v1.0.0</Text>
     </ScrollView>
   );
 
@@ -2087,13 +2087,13 @@ function ProviderProfile() {
               <View style={{ width: 80, height: 80, borderRadius: 20, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
                 <Ionicons name="construct" size={40} color="#fff" />
               </View>
-              <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827' }}>HandyHub</Text>
+              <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827' }}>Ono-Fix</Text>
               <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>v1.0.0</Text>
             </View>
 
             {[{
-              icon: 'information-circle-outline' as const, title: 'What is HandyHub?',
-              text: 'HandyHub is a platform for finding trusted pros near you. Clients post tasks, and pros accept and complete them.'
+              icon: 'information-circle-outline' as const, title: 'What is Ono-Fix?',
+              text: 'Ono-Fix is a platform for finding trusted pros near you. Clients post tasks, and pros accept and complete them.'
             }, {
               icon: 'list-outline' as const, title: 'How does it work?',
               text: '1. The client creates an order (booking)\n2. Pros see the order and accept it\n3. The pro travels to the client and does the work\n4. The client pays and leaves a review\n5. The payout reaches the pro automatically'

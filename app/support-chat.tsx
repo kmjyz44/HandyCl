@@ -108,7 +108,7 @@ export default function SupportChat() {
               )}
               <View>
                 <Text style={styles.headerName}>{admin.name}</Text>
-                <Text style={styles.headerStatus}>HandyHub Support</Text>
+                <Text style={styles.headerStatus}>Ono-Fix Support</Text>
               </View>
             </View>
           ),

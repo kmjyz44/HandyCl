@@ -55,7 +55,7 @@ export default function Login() {
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Ionicons name="hammer" size={64} color="#2563eb" />
-          <Text style={styles.title}>HandyHub</Text>
+          <Text style={styles.title}>Ono-Fix</Text>
           <Text style={styles.subtitle}>Handyman & cleaning services</Text>
         </View>
         <View style={styles.form}>

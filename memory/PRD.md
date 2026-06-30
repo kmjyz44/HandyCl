@@ -309,3 +309,9 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - PWA install UX: added visible "Install app" pill in the AI block (web only, shown when installable / iOS). Android/Chrome → native beforeinstallprompt; iOS → Alert with "Share → Add to Home Screen" instructions. Hidden when already running standalone.
 - Installed icon launches camera-first: manifest start_url = "/?scan=1" (+ existing "Scan a problem" shortcut). Home reads ?scan=1 → attempts to open camera (reliable one-tap via the big "Take a photo" button; browsers may block auto-open without a gesture).
 - Files: app/(tabs)/index.tsx (install state/handlers + button + style trims), public/manifest.json (start_url). esbuild-clean. Needs Save to GitHub → Netlify (PWA install requires the live https site + SW + manifest).
+
+## 2026-06-30 — Rebrand to Ono-Fix + compact home + new headline
+- BRAND: HandyHub → Ono-Fix across UI, server.py/backend, app.json, manifest, +html, emails (test login emails @handyhub.com left unchanged on purpose). Domain hendyhub.netlify.app → ono-fix.com (incl. Finix identity url). Domain: ono-fix.com.
+- Hero headline → "One Photo. One Solution." + shorter subtitle.
+- Compacted: hero header paddings/fonts reduced (title 18, brand 16, subtitle 12, paddingTop 36/bottom 14); search bar narrower (paddingVertical 7, fontSize 14, radius 12); AI block already compact; category cards aspectRatio 1.35.
+- esbuild + JSON + python syntax all clean. Needs Save to GitHub → Netlify/Railway.
