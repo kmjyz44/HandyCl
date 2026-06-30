@@ -5658,47 +5658,53 @@ async def finix_charge(
     currency = "USD"  # Finix is US-only and processes USD regardless of platform display currency
 
     import httpx
-    # If the frontend passed a Finix.js token (TKxxx), exchange it for a PaymentInstrument
-    # linked to a buyer Identity (reused per client) before charging.
-    if isinstance(source, str) and source.startswith("TK"):
-        async with httpx.AsyncClient(timeout=40.0, auth=cfg["auth"], headers=_finix_headers()) as http:
-            buyer = await db.users.find_one({"user_id": current_user.user_id},
-                                            {"_id": 0, "finix_buyer_identity_id": 1, "name": 1, "email": 1})
-            buyer_identity = (buyer or {}).get("finix_buyer_identity_id")
-            if not buyer_identity:
-                nm = ((buyer or {}).get("name") or "Client User").split(" ", 1)
-                ri = await http.post(f"{cfg['base_url']}/identities", json={"entity": {
-                    "first_name": nm[0], "last_name": nm[1] if len(nm) > 1 else "Client",
-                    "email": (buyer or {}).get("email"),
-                }})
-                if ri.status_code >= 400:
-                    raise HTTPException(status_code=400, detail=f"Finix buyer: {_finix_err(ri)}")
-                buyer_identity = ri.json()["id"]
-                await db.users.update_one({"user_id": current_user.user_id},
-                                          {"$set": {"finix_buyer_identity_id": buyer_identity}})
-            rpi = await http.post(f"{cfg['base_url']}/payment_instruments",
-                                  json={"type": "TOKEN", "token": source, "identity": buyer_identity})
-            if rpi.status_code >= 400:
-                raise HTTPException(status_code=400, detail=f"Finix card: {_finix_err(rpi)}")
-            source = rpi.json()["id"]
+    import traceback
+    try:
+        # If the frontend passed a Finix.js token (TKxxx), exchange it for a PaymentInstrument
+        # linked to a buyer Identity (reused per client) before charging.
+        if isinstance(source, str) and source.startswith("TK"):
+            async with httpx.AsyncClient(timeout=40.0, auth=cfg["auth"], headers=_finix_headers()) as http:
+                buyer = await db.users.find_one({"user_id": current_user.user_id},
+                                                {"_id": 0, "finix_buyer_identity_id": 1, "name": 1, "email": 1})
+                buyer_identity = (buyer or {}).get("finix_buyer_identity_id")
+                if not buyer_identity:
+                    nm = ((buyer or {}).get("name") or "Client User").split(" ", 1)
+                    ri = await http.post(f"{cfg['base_url']}/identities", json={"entity": {
+                        "first_name": nm[0], "last_name": nm[1] if len(nm) > 1 else "Client",
+                        "email": (buyer or {}).get("email"),
+                    }})
+                    if ri.status_code >= 400:
+                        raise HTTPException(status_code=400, detail=f"Finix buyer: {_finix_err(ri)}")
+                    buyer_identity = ri.json()["id"]
+                    await db.users.update_one({"user_id": current_user.user_id},
+                                              {"$set": {"finix_buyer_identity_id": buyer_identity}})
+                rpi = await http.post(f"{cfg['base_url']}/payment_instruments",
+                                      json={"type": "TOKEN", "token": source, "identity": buyer_identity})
+                if rpi.status_code >= 400:
+                    raise HTTPException(status_code=400, detail=f"Finix card: {_finix_err(rpi)}")
+                source = rpi.json()["id"]
 
-    transfer_body = {
-        "merchant": cfg["platform_merchant"], "currency": currency,
-        "amount": total_cents, "source": source,
-        "tags": {"booking_id": booking_id, "platform": "handyhub"},
-        "split_transfers": [
-            {"merchant": exec_merchant, "amount": exec_cents},
-            {"merchant": cfg["platform_merchant"], "amount": plat_cents},
-        ],
-    }
-    import httpx
-    async with httpx.AsyncClient(timeout=40.0, auth=cfg["auth"], headers=_finix_headers()) as http:
-        r = await http.post(f"{cfg['base_url']}/transfers", json=transfer_body)
-    if r.status_code >= 400:
-        logger.error("Finix transfer failed: %s", r.text[:400])
-        raise HTTPException(status_code=400, detail=f"Finix: {_finix_err(r)}")
-    tr = r.json()
-    state = tr.get("state")
+        transfer_body = {
+            "merchant": cfg["platform_merchant"], "currency": currency,
+            "amount": total_cents, "source": source,
+            "tags": {"booking_id": booking_id, "platform": "handyhub"},
+            "split_transfers": [
+                {"merchant": exec_merchant, "amount": exec_cents},
+                {"merchant": cfg["platform_merchant"], "amount": plat_cents},
+            ],
+        }
+        async with httpx.AsyncClient(timeout=40.0, auth=cfg["auth"], headers=_finix_headers()) as http:
+            r = await http.post(f"{cfg['base_url']}/transfers", json=transfer_body)
+        if r.status_code >= 400:
+            logger.error("Finix transfer failed (%s): %s | body=%s", r.status_code, r.text[:600], transfer_body)
+            raise HTTPException(status_code=400, detail=f"Finix: {_finix_err(r)}")
+        tr = r.json()
+        state = tr.get("state")
+    except HTTPException:
+        raise
+    except Exception as ex:
+        logger.error("Finix charge unexpected error: %s\n%s", ex, traceback.format_exc())
+        raise HTTPException(status_code=502, detail=f"Finix payment failed: {str(ex)[:200]}")
 
     transaction_id = f"txn_{uuid.uuid4().hex[:12]}"
     await db.payment_transactions.insert_one(PaymentTransaction(

@@ -280,3 +280,10 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - After the submit fix, charge correctly reached backend and returned "The pro has not connected Finix payouts yet" (correct business rule — that booking's provider has no finix_merchant_id on the LIVE/Railway DB).
 - ENHANCEMENT (server.py finix_charge): on this failure (no merchant OR not APPROVED), now (1) returns a friendly client-facing message + HTTP 409, and (2) fires asyncio notify_user(provider, "payout_setup_required", ...) → in-app + email + SMS prompting the pro to complete Earnings → Connect Finix payouts.
 - VERIFIED via curl: reset provider finix fields → charge → HTTP 409 friendly detail; notification doc created for provider (notification_type=payout_setup_required). Frontend already surfaces error.response.data.detail, so client sees the friendly text. Backend change → needs Save to GitHub (Railway).
+
+## 2026-06-30 (cont.) — Live "Finix payment error" (generic) debugging
+- Progress: provider onboarded on live (user sees executor in Finix cabinet), tokenization + submit now work; charge reaches backend but transfer step fails returning a GENERIC "Finix payment error" (frontend fallback) → means backend returned NO detail (likely a 500/502 or proxy timeout).
+- Pod regression: re-onboarded provider (merchant auto-APPROVED after a few seconds via state refresh) + charged with PAYMENT_CARD PI → SUCCEEDED $100 split $80/$20. So refactored charge code is correct; live failure is environment-specific.
+- Could NOT reproduce live error (no Railway log access; Finix secure iframes block programmatic card entry so can't mint a TK token in automation).
+- FIX (server.py finix_charge): wrapped TK-exchange + /transfers in try/except — re-raises HTTPException, converts any other exception to HTTP 502 with detail=f"Finix payment failed: {str(ex)}" + logs full traceback. Transfer HTTP errors already return detail "Finix: <err>" + log body. After deploy, the red error on live will show the REAL Finix cause.
+- NEXT: user Save to GitHub → retry payment once → send the new (detailed) red error text to pinpoint root cause.
