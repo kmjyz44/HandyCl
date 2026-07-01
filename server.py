@@ -9547,6 +9547,47 @@ async def set_integration_keys(payload: IntegrationKeysUpdate, current_user: Use
     return {"ok": True, "updated": list(update.keys())}
 
 
+@api_router.post("/admin/test-sms")
+async def admin_test_sms(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
+    """Admin diagnostic: send a test SMS and return the full Twilio response so the
+    exact delivery failure reason is visible (e.g. unverified toll-free number)."""
+    to_phone = (payload.get("phone") or "").strip()
+    if not to_phone:
+        raise HTTPException(status_code=422, detail="Phone number required (E.164, e.g. +14155551234)")
+    keys = await _get_integration_keys()
+    sid = keys.get("twilio_account_sid")
+    token = keys.get("twilio_auth_token")
+    from_phone = keys.get("twilio_from_phone")
+    if not sid or not token or not from_phone:
+        return {"ok": False, "error": "Twilio is not configured (Account SID, Auth Token, From phone all required)",
+                "configured": {"account_sid": bool(sid), "auth_token": bool(token), "from_phone": bool(from_phone)}}
+    if not to_phone.startswith("+"):
+        return {"ok": False, "error": "Number must be in E.164 format, e.g. +14155551234"}
+    try:
+        async with httpx.AsyncClient(timeout=15.0, auth=(sid, token)) as http:
+            r = await http.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                data={"From": from_phone, "To": to_phone, "Body": "Ono-Fix test message ✅"},
+            )
+        data = {}
+        try:
+            data = r.json()
+        except Exception:
+            pass
+        return {
+            "ok": r.status_code < 400,
+            "status_code": r.status_code,
+            "message_sid": data.get("sid"),
+            "message_status": data.get("status"),
+            "twilio_error_code": data.get("code"),
+            "twilio_error_message": data.get("message"),
+            "from": from_phone,
+            "to": to_phone,
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"Twilio connection error: {e}"}
+
+
 # ==================== END NEW BLOCK ===================
 
 async def calculate_commission(booking_id: str, base_price: float) -> Dict[str, Any]:

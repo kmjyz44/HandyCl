@@ -188,6 +188,11 @@ export const api = {
     return res.data;
   },
 
+  adminTestSms: async (phone: string) => {
+    const res = await client.post('/admin/test-sms', { phone });
+    return res.data;
+  },
+
   createCategory: async (data: { name: string; description?: string; icon?: string; image?: string; parent_id?: string; commission_rate?: number; recommended_price?: number }) => {
     const res = await client.post('/admin/categories', data);
     return res.data;

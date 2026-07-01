@@ -17,7 +17,7 @@ import { showAlert } from '../utils/alert';
 
 type KeyDef = { id: string; label: string; placeholder: string; secret?: boolean };
 
-const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: KeyDef[] }[] = [
+const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: KeyDef[]; testSms?: boolean }[] = [
   {
     title: 'Resend (Email — default)',
     toggle: 'enable_email_notifications',
@@ -108,6 +108,7 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     title: 'Twilio (SMS)',
     toggle: 'enable_sms_notifications',
     toggleLabel: 'Enable SMS notifications',
+    testSms: true,
     keys: [
       { id: 'twilio_account_sid', label: 'Account SID', placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
       { id: 'twilio_auth_token', label: 'Auth Token', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', secret: true },
@@ -138,6 +139,9 @@ export default function AdminIntegrations() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [values, setValues] = useState<Record<string, any>>({});
+  const [testPhone, setTestPhone] = useState('');
+  const [testingSms, setTestingSms] = useState(false);
+  const [smsResult, setSmsResult] = useState<any>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -168,6 +172,17 @@ export default function AdminIntegrations() {
     } catch (e: any) {
       showAlert('Error', e?.response?.data?.detail || 'Could not save');
     } finally { setSaving(false); }
+  };
+
+  const sendTestSms = async () => {
+    if (!testPhone.trim()) { showAlert('Error', 'Enter a phone number in E.164 format, e.g. +14155551234'); return; }
+    setTestingSms(true); setSmsResult(null);
+    try {
+      const res = await api.adminTestSms(testPhone.trim());
+      setSmsResult(res);
+    } catch (e: any) {
+      setSmsResult({ ok: false, error: e?.response?.data?.detail || 'Request failed' });
+    } finally { setTestingSms(false); }
   };
 
   if (loading) return <View style={s.center}><ActivityIndicator size="large" /></View>;
@@ -222,6 +237,41 @@ export default function AdminIntegrations() {
                 </View>
               );
             })}
+            {sec.testSms ? (
+              <View style={s.testBox} data-testid="twilio-test-box">
+                <Text style={s.label}>Send a test SMS</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder="+14155551234"
+                  value={testPhone}
+                  onChangeText={setTestPhone}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  data-testid="input-test-sms-phone"
+                />
+                <TouchableOpacity
+                  style={[s.testBtn, testingSms && { opacity: 0.5 }]}
+                  onPress={sendTestSms}
+                  disabled={testingSms}
+                  data-testid="send-test-sms-btn"
+                >
+                  {testingSms ? <ActivityIndicator color="#fff" /> : <Text style={s.testBtnText}>Send test SMS</Text>}
+                </TouchableOpacity>
+                {smsResult ? (
+                  <View style={[s.resultBox, { backgroundColor: smsResult.ok ? '#ecfdf5' : '#fef2f2', borderColor: smsResult.ok ? '#a7f3d0' : '#fecaca' }]} data-testid="test-sms-result">
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: smsResult.ok ? '#047857' : '#b91c1c' }}>
+                      {smsResult.ok ? '✓ Twilio accepted the message' : '✗ SMS failed'}
+                    </Text>
+                    {smsResult.message_status ? <Text style={s.resultLine}>Status: {smsResult.message_status}</Text> : null}
+                    {smsResult.message_sid ? <Text style={s.resultLine}>SID: {smsResult.message_sid}</Text> : null}
+                    {smsResult.twilio_error_code ? <Text style={s.resultLine}>Twilio code: {smsResult.twilio_error_code}</Text> : null}
+                    {smsResult.twilio_error_message ? <Text style={s.resultLine}>{smsResult.twilio_error_message}</Text> : null}
+                    {smsResult.error ? <Text style={s.resultLine}>{smsResult.error}</Text> : null}
+                    {smsResult.ok ? <Text style={[s.resultLine, { marginTop: 6, fontStyle: 'italic' }]}>Note: "accepted"/"queued" means Twilio took it — final delivery still depends on toll-free / A2P verification.</Text> : null}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         ))}
         <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.5 }]} onPress={save} disabled={saving} data-testid="save-integrations-btn">
@@ -250,5 +300,10 @@ const s = StyleSheet.create({
   clearBtnText: { color: '#dc2626', fontSize: 12, fontWeight: '600' },
   saveBtn: { backgroundColor: '#2563eb', padding: 16, borderRadius: 10, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  testBox: { marginTop: 8, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  testBtn: { backgroundColor: '#0ea5e9', padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  testBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  resultBox: { marginTop: 12, padding: 12, borderRadius: 8, borderWidth: 1 },
+  resultLine: { fontSize: 12, color: '#374151', marginTop: 3 },
   help: { fontSize: 12, color: '#6b7280', marginTop: 16, textAlign: 'center', lineHeight: 18 },
 });
