@@ -405,6 +405,13 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - index.tsx: providerAvailableDays state parsed from params; on entry jumps calDayIdx to the first available day; the datetime week strip disables + greys (opacity 0.35) days whose getDay() isn't in the list; added a hint banner "Showing <name>'s available days only". Fallback: if the pro has no availability set (e.g. LEO = null), no restriction (all days selectable). Cancel-provider banner clears the day restriction.
 - babel OK for both files. Purely UI on top of the already-verified booking backend; visual verification pending on Netlify after Save to GitHub.
 
+## 2026-07-01 (cont.) — Address step restructured: State → City → Street → Apt/Unit
+- Per user: address flow order = State (default Illinois) → City → Street & number → Apt/Unit (optional, for multi-unit buildings).
+- Booking model gained `state` (default 'Illinois') + `unit`. Added US_STATES (50) constant + a bottom-sheet state picker Modal (selectField + stateSheet styles). City chips + free text kept. Street uses AddressAutocomplete now with an explicit `state` prop.
+- AddressAutocomplete: new `state` prop takes precedence over the city-resolved state; street results are strictly filtered to that state (query includes ", city, state"; verified via Photon curl → Chicago/Illinois returns only Illinois). onSelect also sets booking.state.
+- Submit: address string now "street[, unit], city, state" for both the local task and createBooking; also sends state/unit (backend BookingCreate ignores unknown fields — no 422). Confirm step shows the full address. Address continue requires state+city+street.
+- VERIFIED via curl: POST /api/bookings with the new full address + state/unit → 200, address stored complete ("123 Main St, Apt 4B, Chicago, Illinois"). Photon returns only Illinois for state-restricted query. babel OK (index.tsx, AddressAutocomplete.tsx). Visual pending on Netlify.
+
 ## 2026-07-01 (cont.) — Executor profile: clickable services accordion + About
 - Per user: the bio area should be an "About" self-description; services should be clickable → each opens to reveal that service's real description (per-skill experience) + photos of completed work.
 - executor/[id].tsx: added "About" label above bio. Removed the aggregated top Portfolio gallery. Services section is now an accordion — each service row is a TouchableOpacity (chevron up/down); tapping expands to show that skill's experience text (or "No description yet") + a 2-col photo grid with captions; tapping a photo opens the existing fullscreen image Modal. State: expandedSkill. New styles: aboutLabel, servicesHint, skillExpanded, skillEmptyText. babel OK. Needs Save to GitHub.

@@ -16,6 +16,8 @@ type Props = {
   testID?: string;
   // When provided, street results are restricted to this city (and its US state)
   city?: string;
+  // Explicit US state — takes precedence over the state resolved from the city
+  state?: string;
 };
 
 function buildFormatted(p: any): { formatted: string; parts: AddressParts } {
@@ -35,7 +37,7 @@ const norm = (s?: string) => (s || '').trim().toLowerCase();
 
 // Free Komoot Photon geocoder — no API key. Results filtered to the US and,
 // when a city is provided, restricted to that city's US state.
-export default function AddressAutocomplete({ value, onChangeText, onSelect, placeholder, inputStyle, testID, city }: Props) {
+export default function AddressAutocomplete({ value, onChangeText, onSelect, placeholder, inputStyle, testID, city, state }: Props) {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -90,28 +92,30 @@ export default function AddressAutocomplete({ value, onChangeText, onSelect, pla
         const ctx = cityCtx.current;
         const biasLat = ctx?.lat ?? 39.8283;
         const biasLon = ctx?.lon ?? -98.5795;
+        const effState = state || ctx?.state;
         // Include the city (and state) in the query so Photon ranks that area first
-        const queryText = ctx && norm(ctx.name)
-          ? `${q}, ${ctx.name}${ctx.state ? ', ' + ctx.state : ''}`
-          : q;
+        const cityBit = ctx && norm(ctx.name) ? `, ${ctx.name}` : '';
+        const stateBit = effState ? `, ${effState}` : '';
+        const queryText = (cityBit || stateBit) ? `${q}${cityBit}${stateBit}` : q;
         const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(queryText)}&limit=10&lang=en&lat=${biasLat}&lon=${biasLon}`;
         const res = await fetch(url);
         const data = await res.json();
         let feats = (data.features || [])
           .filter((f: any) => (f.properties?.countrycode === 'US' || f.properties?.country === 'United States'));
 
-        // Restrict to the selected city's state (strict) — prevents other-state results
-        if (ctx?.state) {
-          const st = norm(ctx.state);
-          const inState = feats.filter((f: any) => norm(f.properties?.state) === st);
-          feats = inState;
+        // Restrict to the selected state (strict) — prevents other-state results
+        if (effState) {
+          const st = norm(effState);
+          feats = feats.filter((f: any) => norm(f.properties?.state) === st);
           // Within the state, put same-city matches first
-          const cityName = norm(ctx.name);
-          feats.sort((a: any, b: any) => {
-            const am = (norm(a.properties?.city) === cityName || norm(a.properties?.county) === cityName) ? 0 : 1;
-            const bm = (norm(b.properties?.city) === cityName || norm(b.properties?.county) === cityName) ? 0 : 1;
-            return am - bm;
-          });
+          const cityName = norm(ctx?.name);
+          if (cityName) {
+            feats.sort((a: any, b: any) => {
+              const am = (norm(a.properties?.city) === cityName || norm(a.properties?.county) === cityName) ? 0 : 1;
+              const bm = (norm(b.properties?.city) === cityName || norm(b.properties?.county) === cityName) ? 0 : 1;
+              return am - bm;
+            });
+          }
         }
 
         const top = feats.slice(0, 6);

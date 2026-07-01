@@ -92,6 +92,8 @@ interface BookingState {
   taskDescription: string;
   address: string;
   city: string;
+  state: string;
+  unit: string;
   dates: string[];      // multiple selected dates
   date: string;         // primary date (first selected)
   timeFrom: string;     // start time
@@ -104,6 +106,9 @@ interface BookingState {
 }
 
 const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+
+const US_STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'];
+
 
 function getDates() {
   const dates: { label: string; dayName: string; value: string }[] = [];
@@ -326,10 +331,11 @@ export default function HomeScreen() {
   const [showFullHome, setShowFullHome] = useState(false);
   const [forcedProvider, setForcedProvider] = useState<any | null>(null);
   const [providerAvailableDays, setProviderAvailableDays] = useState<number[]>([]);
+  const [stateModalVisible, setStateModalVisible] = useState(false);
   const bookParams = useLocalSearchParams();
   const [booking, setBooking] = useState<BookingState>({
     categoryId: '', categoryName: '', skillName: '', taskDescription: '',
-    address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null,
+    address: '', city: '', state: 'Illinois', unit: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null,
     photos: [],
   });
   const [taskers, setTaskers] = useState<any[]>([]);
@@ -839,7 +845,7 @@ export default function HomeScreen() {
       service_id: '',
       date: primaryDate,
       time: booking.timeFrom || booking.time,
-      address: `${booking.address}, ${booking.city}`,
+      address: `${booking.unit ? booking.address + ', ' + booking.unit : booking.address}, ${booking.city}, ${booking.state}`,
       status: 'pending',
       total_price: rate,
       payment_status: 'pending',
@@ -856,8 +862,10 @@ export default function HomeScreen() {
       provider_id: tasker.user_id || tasker.provider_id,
       provider_hourly_rate: rate,
       category: booking.categoryId,
-      address: booking.address,
+      address: `${booking.unit ? booking.address + ', ' + booking.unit : booking.address}, ${booking.city}, ${booking.state}`,
       city: booking.city,
+      state: booking.state,
+      unit: booking.unit || undefined,
       date: primaryDate,
       time: booking.timeFrom || booking.time,
       notes: notes || undefined,
@@ -1548,6 +1556,19 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
 
+          {/* 1. State */}
+          <Text style={s.fieldLabel}>State</Text>
+          <TouchableOpacity
+            style={s.selectField}
+            onPress={() => setStateModalVisible(true)}
+            data-testid="booking-state-select"
+          >
+            <Ionicons name="map-outline" size={18} color="#6b7280" />
+            <Text style={s.selectFieldText}>{booking.state || 'Select a state'}</Text>
+            <Ionicons name="chevron-down" size={18} color="#9ca3af" />
+          </TouchableOpacity>
+
+          {/* 2. City */}
           <Text style={s.fieldLabel}>City</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
             <View style={[s.chipsRow, { flexWrap: 'nowrap' }]}>
@@ -1564,31 +1585,74 @@ export default function HomeScreen() {
             value={booking.city}
             onChangeText={v => setBooking(b => ({ ...b, city: v }))}
             placeholderTextColor="#9ca3af"
+            data-testid="booking-city-input"
           />
 
+          {/* 3. Street and number */}
           <Text style={s.fieldLabel}>Street and number</Text>
           <AddressAutocomplete
             value={booking.address}
             placeholder="123 Main St"
             testID="booking-address-input"
             city={booking.city}
+            state={booking.state}
             onChangeText={v => setBooking(b => ({ ...b, address: v }))}
             onSelect={(formatted, parts) => {
               setBooking(b => ({
                 ...b,
                 address: parts.line1 || formatted,
                 city: parts.city || b.city,
+                state: parts.state || b.state,
                 lat: parts.lat ?? b.lat,
                 lng: parts.lon ?? b.lng,
               }));
             }}
           />
+
+          {/* 4. Apartment / Unit (optional) */}
+          <Text style={s.fieldLabel}>Apt / Unit / Floor (optional)</Text>
+          <TextInput
+            style={s.input}
+            placeholder="e.g., Apt 4B, Unit 12, Floor 3"
+            value={booking.unit}
+            onChangeText={v => setBooking(b => ({ ...b, unit: v }))}
+            placeholderTextColor="#9ca3af"
+            data-testid="booking-unit-input"
+          />
         </ScrollView>
+
+        {/* State picker modal */}
+        <Modal visible={stateModalVisible} transparent animationType="slide" onRequestClose={() => setStateModalVisible(false)}>
+          <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setStateModalVisible(false)}>
+            <View style={s.stateSheet}>
+              <View style={s.stateSheetHeader}>
+                <Text style={s.stateSheetTitle}>Select state</Text>
+                <TouchableOpacity onPress={() => setStateModalVisible(false)} data-testid="state-modal-close">
+                  <Ionicons name="close" size={24} color="#111827" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 420 }}>
+                {US_STATES.map(st => (
+                  <TouchableOpacity
+                    key={st}
+                    style={[s.stateRow, booking.state === st && { backgroundColor: '#eff6ff' }]}
+                    onPress={() => { setBooking(b => ({ ...b, state: st })); setStateModalVisible(false); }}
+                    data-testid={`state-option-${st}`}
+                  >
+                    <Text style={[s.stateRowText, booking.state === st && { color: '#2563eb', fontWeight: '700' }]}>{st}</Text>
+                    {booking.state === st ? <Ionicons name="checkmark" size={20} color="#2563eb" /> : null}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
         <View style={s.bottomBar}>
           <TouchableOpacity
-            style={[s.nextBtn, (!booking.address.trim() || !booking.city.trim()) && s.nextBtnDisabled]}
-            disabled={!booking.address.trim() || !booking.city.trim()}
+            style={[s.nextBtn, (!booking.address.trim() || !booking.city.trim() || !booking.state) && s.nextBtnDisabled]}
+            disabled={!booking.address.trim() || !booking.city.trim() || !booking.state}
             onPress={() => { setAddressSuggestions([]); setStep('datetime'); }}
+            data-testid="address-continue-btn"
           >
             <Text style={s.nextBtnText}>Next — Date & time</Text>
             <Ionicons name="arrow-forward" size={20} color="#fff" />
@@ -2036,7 +2100,7 @@ export default function HomeScreen() {
             </View>
             <View style={s.bookingSummaryRow}>
               <Ionicons name="location-outline" size={16} color="#6b7280" />
-              <Text style={s.bookingSummaryText}>{booking.address}, {booking.city}</Text>
+              <Text style={s.bookingSummaryText}>{booking.unit ? `${booking.address}, ${booking.unit}` : booking.address}, {booking.city}, {booking.state}</Text>
             </View>
             <View style={s.bookingSummaryRow}>
               <Ionicons name="calendar-outline" size={16} color="#6b7280" />
@@ -2358,6 +2422,14 @@ const s = StyleSheet.create({
   selectedSkillBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eff6ff', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 20, gap: 8, alignSelf: 'flex-start' },
   selectedSkillText: { fontSize: 14, color: '#2563eb', fontWeight: '600' },
   fieldLabel: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 4 },
+  selectField: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 14, paddingVertical: 13, marginBottom: 16 },
+  selectFieldText: { flex: 1, fontSize: 15, color: '#111827' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  stateSheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 24 },
+  stateSheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  stateSheetTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  stateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f9fafb' },
+  stateRowText: { fontSize: 15, color: '#374151' },
   input: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#111827', marginBottom: 16 },
   textArea: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#111827', minHeight: 120, marginBottom: 8 },
   hint: { fontSize: 13, color: '#9ca3af', marginBottom: 20 },
