@@ -1904,11 +1904,11 @@ export default function HomeScreen() {
                     <Text style={s.reviewCount}>({reviews} reviews)</Text>
                   </View>
                   <Text style={s.taskerSkills} numberOfLines={1}>
-                    {skills.slice(0, 3).join(' · ') || 'Pro'}
+                    {skills.slice(0, 3).map((sk: any) => typeof sk === 'string' ? sk : sk?.name).filter(Boolean).join(' · ') || 'Pro'}
                   </Text>
                 </View>
                 <View style={s.taskerCardRight}>
-                  <Text style={s.taskerRate}>{rate} ₴</Text>
+                  <Text style={s.taskerRate}>${rate}</Text>
                   <Text style={s.taskerRateLabel}>/hr</Text>
                   <Ionicons name="chevron-forward" size={18} color="#9ca3af" style={{ marginTop: 4 }} />
                 </View>

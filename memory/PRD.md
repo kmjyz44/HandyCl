@@ -372,3 +372,9 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - FRONTEND (executor/[id].tsx public profile): "Skills" section → "Services": each service rendered as a card with its rate, per-skill experience text, and a horizontal gallery of captioned photos. Normalizer handles legacy string skills and object skills.
 - BACKEND: no change needed — skills stored as List[Union[str,Dict]] (arbitrary dicts persisted as-is).
 - VERIFIED end-to-end via curl on preview backend: PUT /api/profile/executor with a skill containing experience+photos[{uri,caption}] → GET returns them intact. babel parse OK (my-profile.tsx, executor/[id].tsx). Visual check pending on Netlify after Save to GitHub.
+
+## 2026-07-01 (cont.) — FIX: "Pros" (executors list) page not loading / empty
+- BUG: client opens the Pros/executors list → page doesn't render, no executors shown.
+- ROOT CAUSE (pre-existing): skills are stored as OBJECTS ({id,name,hourly_rate,...}), but the executors LIST rendered them as React children directly — `app/(tabs)/executors.tsx:323` did `<Text>{skill}</Text>` and `app/(tabs)/index.tsx:1907` did `skills.slice(0,3).join(' · ')`. Rendering an object as a child throws "Objects are not valid as a React child", crashing the whole list. Any provider who added skills via my-profile (objects) triggered it. Confirmed via GET /api/executors: skills come back as list of dicts.
+- FIX: executors.tsx renders `typeof skill === 'string' ? skill : skill?.name`; index.tsx taskers list maps skill names before join. Also fixed a currency leftover in the taskers card: `{rate} ₴` → `${rate}` (app is USD). The tasker_profile step already handled objects (no change).
+- VERIFIED: GET /api/executors returns 200 with 3 executors (authed; 401 unauth as expected). babel parse OK for both files. Cleaned the bogus test photo injected earlier into the seeded provider. Visual check pending on Netlify after Save to GitHub.

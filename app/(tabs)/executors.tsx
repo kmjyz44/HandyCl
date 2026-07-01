@@ -318,9 +318,9 @@ export default function Executors() {
               ) : null}
               {executor.profile?.skills && executor.profile.skills.length > 0 ? (
                 <View style={styles.skillsContainer}>
-                  {executor.profile.skills.slice(0, 4).map((skill, index) => (
+                  {executor.profile.skills.slice(0, 4).map((skill: any, index: number) => (
                     <View key={index} style={styles.skillBadge}>
-                      <Text style={styles.skillText}>{skill}</Text>
+                      <Text style={styles.skillText}>{typeof skill === 'string' ? skill : (skill?.name || '')}</Text>
                     </View>
                   ))}
                   {executor.profile.skills.length > 4 ? (
