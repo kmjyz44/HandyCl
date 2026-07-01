@@ -382,3 +382,11 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 ## 2026-07-01 (cont.) — Work-photo preview in executors list card
 - Enhancement (approved): executors list cards now show up to 3 work-photo thumbnails to boost trust/CTR.
 - executors.tsx: aggregates photos across all of an executor's per-skill `photos[]` (falls back to legacy portfolio_photos), shows first 3 as a row (styles workPhotosRow/workPhotoThumb); hidden when none. Type updated for object skills. babel OK. Needs Save to GitHub.
+
+## 2026-07-01 (cont.) — FIX "View profile" (Profile not found) + portfolio redesign + remove list photos
+- Diagnosed on LIVE via Playwright: /executor/{id} showed "Profile not found" even for a real executor (LEO, user_a880ffe9c979, has_profile=true).
+- ROOT CAUSE: utils/api.ts `getExecutorProfile` called `/executors/{id}/profile` (404) with fallback `/executors/{id}` (404). Correct endpoint is `/profile/executor/{id}` (curl → 200). Both wrong URLs 404 → threw → page rendered "Profile not found". Also `getExecutorAvailability` (`/executors/{id}/availability` → 404) and `getExecutorPricing` (`/executors/{id}/pricing` → 404) were awaited in the main try, aborting the whole load.
+- FIX: getExecutorProfile → `/profile/executor/{id}`. executor/[id].tsx loadExecutorData: profile is primary (its payload already includes `availability`); reviews + pricing wrapped in independent try/catch (non-blocking); removed the Alert+router.back that hid the error on web.
+- LIST CARD: removed the oversized work-photo thumbnails from executors.tsx list cards (user: too big, covered everything).
+- PORTFOLIO REDESIGN (executor/[id].tsx): added a prominent "Portfolio · N photos" 2-column gallery grid (aggregates all per-skill photos + legacy, with captions) right under the profile header. Removed duplicate photo rendering from per-service cards (now name/rate/experience only) and removed the old bottom portfolio_photos section.
+- VERIFIED: curl — /profile/executor/{id} 200; /executors/{id}/availability & /pricing 404 (now non-blocking); /reviews/provider/{id} 200. babel OK for executor/[id].tsx, executors.tsx, utils/api.ts. Visual check pending on Netlify after Save to GitHub.

@@ -78,31 +78,24 @@ export default function ExecutorProfile() {
 
   const loadExecutorData = async () => {
     try {
-      // Load profile
       const profileData = await api.getExecutorProfile(id);
       setProfile(profileData);
-
-      // Load availability
-      const availabilityData = await api.getExecutorAvailability(id);
-      setAvailability(availabilityData.slots || []);
-
-      // Load reviews
+      // The profile payload already carries availability slots
+      setAvailability(profileData?.availability || []);
+    } catch (error: any) {
+      setLoading(false);
+      return; // render shows "Profile not found"
+    }
+    // Secondary data — never block the page if these fail
+    try {
       const reviewsData = await api.getProviderReviews(id);
       setReviews(reviewsData.reviews || []);
-
-      // Load pricing
-      try {
-        const pricingData = await api.getExecutorPricing(id);
-        setPricing(pricingData);
-      } catch (e) {
-        // Pricing might not be set
-      }
-    } catch (error: any) {
-      Alert.alert('Error', 'Could not load the pro profile');
-      router.back();
-    } finally {
-      setLoading(false);
-    }
+    } catch {}
+    try {
+      const pricingData = await api.getExecutorPricing(id);
+      setPricing(pricingData);
+    } catch {}
+    setLoading(false);
   };
 
   const renderStars = (rating: number, size: number = 16) => {
@@ -210,13 +203,41 @@ export default function ExecutorProfile() {
           </View>
         </View>
 
-        {/* Skills */}
+        {/* Portfolio gallery — aggregated work photos across all services */}
+        {(() => {
+          const skillPhotos = (profile.skills || [])
+            .flatMap((sk: any) => (sk && typeof sk === 'object' && Array.isArray(sk.photos)) ? sk.photos : [])
+            .filter((p: any) => p && p.uri);
+          const legacy = (profile.portfolio_photos || []).map((u: string) => ({ uri: u, caption: '' }));
+          const all = [...skillPhotos, ...legacy];
+          if (all.length === 0) return null;
+          return (
+            <View style={styles.section}>
+              <View style={styles.portfolioHeader}>
+                <Ionicons name="images" size={20} color="#2563eb" />
+                <Text style={styles.sectionTitle}>Portfolio · {all.length} photos</Text>
+              </View>
+              <View style={styles.portfolioGrid}>
+                {all.map((ph: any, i: number) => (
+                  <View key={i} style={styles.portfolioItem} data-testid={`portfolio-photo-${i}`}>
+                    <Image source={{ uri: ph.uri }} style={styles.portfolioImg} resizeMode="cover" />
+                    {ph.caption ? (
+                      <View style={styles.portfolioCaptionWrap}>
+                        <Text style={styles.portfolioCaption} numberOfLines={2}>{ph.caption}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        })()}
+
         {profile.skills && profile.skills.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Services</Text>
             {profile.skills.map((raw, index) => {
               const skill: any = typeof raw === 'string' ? { name: raw } : (raw || {});
-              const photos = Array.isArray(skill.photos) ? skill.photos : [];
               return (
                 <View key={index} style={styles.skillCard} data-testid={`executor-skill-${index}`}>
                   <View style={styles.skillCardHeader}>
@@ -226,16 +247,6 @@ export default function ExecutorProfile() {
                   </View>
                   {skill.experience ? (
                     <Text style={styles.skillCardExp}>{skill.experience}</Text>
-                  ) : null}
-                  {photos.length > 0 ? (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-                      {photos.map((ph: any, i: number) => (
-                        <View key={i} style={{ marginRight: 10, width: 140 }}>
-                          <Image source={{ uri: ph.uri }} style={styles.skillCardPhoto} />
-                          {ph.caption ? <Text style={styles.skillCardCaption} numberOfLines={2}>{ph.caption}</Text> : null}
-                        </View>
-                      ))}
-                    </ScrollView>
                   ) : null}
                 </View>
               );
@@ -351,23 +362,6 @@ export default function ExecutorProfile() {
             )}
           </View>
         ) : null}
-
-        {/* Portfolio */}
-        {profile.portfolio_photos && profile.portfolio_photos.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Portfolio</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.portfolioScroll}>
-              {profile.portfolio_photos.map((photo, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => setSelectedImage(photo)}
-                >
-                  <Image source={{ uri: photo }} style={styles.portfolioImage} />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
 
         {/* Reviews */}
         {reviews.length > 0 && (
@@ -604,6 +598,12 @@ const styles = StyleSheet.create({
   skillCardExp: { fontSize: 13, color: '#4b5563', marginTop: 8, lineHeight: 19 },
   skillCardPhoto: { width: 140, height: 105, borderRadius: 8, backgroundColor: '#e5e7eb' },
   skillCardCaption: { fontSize: 12, color: '#6b7280', marginTop: 4 },
+  portfolioHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  portfolioGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  portfolioItem: { width: '48.5%', marginBottom: 12, borderRadius: 12, overflow: 'hidden', backgroundColor: '#f3f4f6' },
+  portfolioImg: { width: '100%', aspectRatio: 1, backgroundColor: '#e5e7eb' },
+  portfolioCaptionWrap: { paddingHorizontal: 10, paddingVertical: 8 },
+  portfolioCaption: { fontSize: 12, color: '#4b5563' },
   languagesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -261,14 +261,8 @@ export const api = {
 
   // Executor profile (used by /executor/[id].tsx)
   getExecutorProfile: async (id: string) => {
-    try {
-      const res = await client.get(`/executors/${id}/profile`);
-      return res.data;
-    } catch {
-      // Fallback to /executors/:id
-      const res = await client.get(`/executors/${id}`);
-      return res.data;
-    }
+    const res = await client.get(`/profile/executor/${id}`);
+    return res.data;
   },
 
   getExecutorAvailability: async (id: string) => {

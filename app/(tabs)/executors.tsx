@@ -330,21 +330,6 @@ export default function Executors() {
                   ) : null}
                 </View>
               ) : null}
-              {(() => {
-                const skillPhotos = (executor.profile?.skills || [])
-                  .flatMap((sk: any) => (sk && typeof sk === 'object' && Array.isArray(sk.photos)) ? sk.photos : [])
-                  .filter((p: any) => p && p.uri);
-                const legacy = (executor.profile?.portfolio_photos || []).map((u: string) => ({ uri: u, caption: '' }));
-                const preview = [...skillPhotos, ...legacy].slice(0, 3);
-                if (preview.length === 0) return null;
-                return (
-                  <View style={styles.workPhotosRow} data-testid={`executor-work-photos-${executor.user_id}`}>
-                    {preview.map((ph: any, i: number) => (
-                      <Image key={i} source={{ uri: ph.uri }} style={styles.workPhotoThumb} />
-                    ))}
-                  </View>
-                );
-              })()}
               {executor.availability && executor.availability.length > 0 ? (
                 <View style={styles.availabilityContainer}>
                   <Ionicons name="calendar-outline" size={14} color="#10b981" />
