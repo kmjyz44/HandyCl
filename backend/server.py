@@ -279,6 +279,9 @@ class BookingCreate(BaseModel):
     time: Optional[str] = None
     address: str
     city: Optional[str] = None
+    state: Optional[str] = None
+    unit: Optional[str] = None
+    zip: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     notes: Optional[str] = None
@@ -2171,6 +2174,9 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
     booking_dict = booking.dict()
     # Save extra fields not in Booking model
     booking_dict['city'] = booking_data.city
+    booking_dict['state'] = booking_data.state
+    booking_dict['unit'] = booking_data.unit
+    booking_dict['zip'] = booking_data.zip
     booking_dict['provider_id'] = booking_data.provider_id
     booking_dict['provider_hourly_rate'] = booking_data.provider_hourly_rate
     booking_dict['urgency'] = booking_data.urgency
@@ -2220,6 +2226,9 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
             "description": booking_data.description,
             "address": booking_data.address,
             "city": booking_data.city,
+            "state": booking_data.state,
+            "unit": booking_data.unit,
+            "zip": booking_data.zip,
             "latitude": booking_data.latitude,
             "longitude": booking_data.longitude,
             "date": booking_data.date,
