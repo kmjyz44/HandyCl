@@ -24,7 +24,7 @@ interface Executor {
   picture?: string;
   profile?: {
     bio?: string;
-    skills: string[];
+    skills: (string | { name: string; photos?: { uri: string; caption: string }[] })[];
     experience_years?: number;
     hourly_rate?: number;
     portfolio_photos: string[];
@@ -330,6 +330,21 @@ export default function Executors() {
                   ) : null}
                 </View>
               ) : null}
+              {(() => {
+                const skillPhotos = (executor.profile?.skills || [])
+                  .flatMap((sk: any) => (sk && typeof sk === 'object' && Array.isArray(sk.photos)) ? sk.photos : [])
+                  .filter((p: any) => p && p.uri);
+                const legacy = (executor.profile?.portfolio_photos || []).map((u: string) => ({ uri: u, caption: '' }));
+                const preview = [...skillPhotos, ...legacy].slice(0, 3);
+                if (preview.length === 0) return null;
+                return (
+                  <View style={styles.workPhotosRow} data-testid={`executor-work-photos-${executor.user_id}`}>
+                    {preview.map((ph: any, i: number) => (
+                      <Image key={i} source={{ uri: ph.uri }} style={styles.workPhotoThumb} />
+                    ))}
+                  </View>
+                );
+              })()}
               {executor.availability && executor.availability.length > 0 ? (
                 <View style={styles.availabilityContainer}>
                   <Ionicons name="calendar-outline" size={14} color="#10b981" />
@@ -397,6 +412,8 @@ const styles = StyleSheet.create({
   heartButton: { padding: 4 },
   bio: { fontSize: 14, color: '#4b5563', marginTop: 12, lineHeight: 20 },
   skillsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 8 },
+  workPhotosRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  workPhotoThumb: { flex: 1, height: 88, borderRadius: 10, backgroundColor: '#e5e7eb' },
   skillBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   skillText: { fontSize: 12, color: '#2563eb', fontWeight: '500' },
   availabilityContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 6 },

@@ -378,3 +378,7 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - ROOT CAUSE (pre-existing): skills are stored as OBJECTS ({id,name,hourly_rate,...}), but the executors LIST rendered them as React children directly — `app/(tabs)/executors.tsx:323` did `<Text>{skill}</Text>` and `app/(tabs)/index.tsx:1907` did `skills.slice(0,3).join(' · ')`. Rendering an object as a child throws "Objects are not valid as a React child", crashing the whole list. Any provider who added skills via my-profile (objects) triggered it. Confirmed via GET /api/executors: skills come back as list of dicts.
 - FIX: executors.tsx renders `typeof skill === 'string' ? skill : skill?.name`; index.tsx taskers list maps skill names before join. Also fixed a currency leftover in the taskers card: `{rate} ₴` → `${rate}` (app is USD). The tasker_profile step already handled objects (no change).
 - VERIFIED: GET /api/executors returns 200 with 3 executors (authed; 401 unauth as expected). babel parse OK for both files. Cleaned the bogus test photo injected earlier into the seeded provider. Visual check pending on Netlify after Save to GitHub.
+
+## 2026-07-01 (cont.) — Work-photo preview in executors list card
+- Enhancement (approved): executors list cards now show up to 3 work-photo thumbnails to boost trust/CTR.
+- executors.tsx: aggregates photos across all of an executor's per-skill `photos[]` (falls back to legacy portfolio_photos), shows first 3 as a row (styles workPhotosRow/workPhotoThumb); hidden when none. Type updated for object skills. babel OK. Needs Save to GitHub.
