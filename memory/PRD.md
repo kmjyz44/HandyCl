@@ -335,3 +335,9 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - FIX 2 (service worker): sw.js empty fetch handler `() => {}` → real pass-through `event.respondWith(fetch(...))` (satisfies installability + enables future offline).
 - FIX 3 (timing): Chrome can fire beforeinstallprompt BEFORE React mounts. Added a global capture in +html.tsx (`window.__onoFixInstallPrompt`) + appinstalled cleanup. index.tsx useEffect reads the pre-captured prompt on mount; installApp() falls back to the global prompt and marks standalone on acceptance.
 - Now Chrome/Edge/Android show the native one-click install; iOS still uses the Add-to-Home-Screen instructions modal (Apple has no prompt API). Needs Save to GitHub → Netlify (PWA requires live https + SW + manifest; not testable in the CRA-placeholder pod).
+
+## 2026-07-01 (cont.) — REAL root cause: PWA icons were .gitignored → 404 on live
+- User screenshot showed the fallback "Install Ono-Fix / tap ⋮ menu" instructions instead of a native prompt. Diagnosed against LIVE ono-fix.com: manifest.json deployed correctly BUT all icon PNGs (/pwa-icon-192.png etc.) returned 200 text/html size=34901 = Netlify SPA fallback (index.html) = files NOT in the build.
+- ROOT CAUSE: `.gitignore` line 39 `*.png` ignored ALL png globally → the generated PWA icons were never committed/deployed → Chrome couldn't validate icons → beforeinstallprompt never fired. (My installApp code was correct; it correctly fell back to instructions because installPrompt was null.)
+- FIX: added negation rules to .gitignore (`!public/pwa-icon.png`, `-192`, `-512`, `-maskable`, `!public/favicon.png`, `!public/og-image.png`). Verified `git check-ignore` now returns nothing for them and `git status` lists them as new untracked files ready to commit.
+- ACTION REQUIRED: user must "Save to GitHub" so the icon PNGs get committed + deployed. After that, native install prompt will work on Chrome/Edge/Android.
