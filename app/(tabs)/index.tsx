@@ -325,6 +325,7 @@ export default function HomeScreen() {
   const [step, setStep] = useState<BookingStep>('home');
   const [showFullHome, setShowFullHome] = useState(false);
   const [forcedProvider, setForcedProvider] = useState<any | null>(null);
+  const [providerAvailableDays, setProviderAvailableDays] = useState<number[]>([]);
   const bookParams = useLocalSearchParams();
   const [booking, setBooking] = useState<BookingState>({
     categoryId: '', categoryName: '', skillName: '', taskDescription: '',
@@ -363,6 +364,15 @@ export default function HomeScreen() {
       };
       setForcedProvider(prov);
       setBooking(b => ({ ...b, selectedTasker: prov }));
+      const daysParam = bookParams?.providerDays as string | undefined;
+      const days = daysParam ? daysParam.split(',').filter(x => x !== '').map(Number) : [];
+      setProviderAvailableDays(days);
+      // Jump the date strip to the first available day (if constrained)
+      if (days.length > 0) {
+        const list = getDates();
+        const idx = list.findIndex(d => days.includes(new Date(d.value + 'T00:00:00').getDay()));
+        if (idx >= 0) setCalDayIdx(idx);
+      }
       setStep('home');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1090,7 +1100,7 @@ export default function HomeScreen() {
             <View style={s.bookingProviderBanner} data-testid="booking-provider-banner">
               <Ionicons name="person-circle" size={22} color="#2563eb" />
               <Text style={s.bookingProviderText}>Booking <Text style={{ fontWeight: '800' }}>{forcedProvider.name}</Text> — pick a category & date</Text>
-              <TouchableOpacity onPress={() => { setForcedProvider(null); setBooking(b => ({ ...b, selectedTasker: null })); }} data-testid="cancel-forced-provider">
+              <TouchableOpacity onPress={() => { setForcedProvider(null); setProviderAvailableDays([]); setBooking(b => ({ ...b, selectedTasker: null })); }} data-testid="cancel-forced-provider">
                 <Ionicons name="close-circle" size={20} color="#9ca3af" />
               </TouchableOpacity>
             </View>
@@ -1637,6 +1647,14 @@ export default function HomeScreen() {
           <View style={{ width: 40 }} />
         </View>
 
+        {forcedProvider && providerAvailableDays.length > 0 ? (
+          <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#dbeafe' }} data-testid="available-days-hint">
+            <Text style={{ fontSize: 12, color: '#1e40af' }}>
+              Showing {forcedProvider.name}'s available days only — greyed-out days are off.
+            </Text>
+          </View>
+        ) : null}
+
         {/* Week strip */}
         <View style={{
           flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 8,
@@ -1645,14 +1663,17 @@ export default function HomeScreen() {
           {dates.slice(0, 7).map((d, i) => {
             const isSel = i === calDayIdx;
             const hasTime = booking.dates.includes(d.value);
+            const restrictDays = forcedProvider && providerAvailableDays.length > 0;
+            const dayAllowed = !restrictDays || providerAvailableDays.includes(new Date(d.value + 'T00:00:00').getDay());
             return (
               <TouchableOpacity
                 key={d.value}
+                disabled={!dayAllowed}
                 onPress={() => setCalDayIdx(i)}
                 style={[{
                   flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 12,
                   backgroundColor: isSel ? '#2563eb' : 'transparent',
-                  marginHorizontal: 2,
+                  marginHorizontal: 2, opacity: dayAllowed ? 1 : 0.35,
                 }]}
               >
                 <Text style={{ fontSize: 11, color: isSel ? '#fff' : '#6b7280', fontWeight: '500', marginBottom: 2 }}>
@@ -1660,7 +1681,7 @@ export default function HomeScreen() {
                 </Text>
                 <Text style={{
                   fontSize: 16, fontWeight: '700',
-                  color: isSel ? '#fff' : (i === 0 ? '#2563eb' : '#111827')
+                  color: isSel ? '#fff' : (!dayAllowed ? '#d1d5db' : (i === 0 ? '#2563eb' : '#111827'))
                 }}>
                   {d.label.split(' ')[0]}
                 </Text>

@@ -119,7 +119,11 @@ export default function ExecutorProfile() {
     const name = profile?.user?.name || 'Pro';
     const rate = pricing?.final_rate || profile?.hourly_rate || '';
     const picture = profile?.user?.picture || '';
-    router.push(`/(tabs)?bookProvider=${encodeURIComponent(id)}&providerName=${encodeURIComponent(name)}&providerRate=${encodeURIComponent(String(rate))}&providerPicture=${encodeURIComponent(picture)}` as any);
+    // Executor day_of_week is Monday-indexed (0=Mon..6=Sun); convert to JS getDay (0=Sun..6=Sat)
+    const days = Array.from(new Set(
+      (availability || []).filter(s => s.is_active).map(s => (s.day_of_week + 1) % 7)
+    )).join(',');
+    router.push(`/(tabs)?bookProvider=${encodeURIComponent(id)}&providerName=${encodeURIComponent(name)}&providerRate=${encodeURIComponent(String(rate))}&providerPicture=${encodeURIComponent(picture)}&providerDays=${encodeURIComponent(days)}` as any);
   };
 
   const contactExecutor = () => {
