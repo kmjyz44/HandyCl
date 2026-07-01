@@ -390,3 +390,7 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - LIST CARD: removed the oversized work-photo thumbnails from executors.tsx list cards (user: too big, covered everything).
 - PORTFOLIO REDESIGN (executor/[id].tsx): added a prominent "Portfolio · N photos" 2-column gallery grid (aggregates all per-skill photos + legacy, with captions) right under the profile header. Removed duplicate photo rendering from per-service cards (now name/rate/experience only) and removed the old bottom portfolio_photos section.
 - VERIFIED: curl — /profile/executor/{id} 200; /executors/{id}/availability & /pricing 404 (now non-blocking); /reviews/provider/{id} 200. babel OK for executor/[id].tsx, executors.tsx, utils/api.ts. Visual check pending on Netlify after Save to GitHub.
+
+## 2026-07-01 (cont.) — Executor profile: clickable services accordion + About
+- Per user: the bio area should be an "About" self-description; services should be clickable → each opens to reveal that service's real description (per-skill experience) + photos of completed work.
+- executor/[id].tsx: added "About" label above bio. Removed the aggregated top Portfolio gallery. Services section is now an accordion — each service row is a TouchableOpacity (chevron up/down); tapping expands to show that skill's experience text (or "No description yet") + a 2-col photo grid with captions; tapping a photo opens the existing fullscreen image Modal. State: expandedSkill. New styles: aboutLabel, servicesHint, skillExpanded, skillEmptyText. babel OK. Needs Save to GitHub.

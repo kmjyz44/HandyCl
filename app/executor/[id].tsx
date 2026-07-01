@@ -71,6 +71,7 @@ export default function ExecutorProfile() {
   const [pricing, setPricing] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [expandedSkill, setExpandedSkill] = useState<number | null>(null);
 
   useEffect(() => {
     loadExecutorData();
@@ -175,9 +176,12 @@ export default function ExecutorProfile() {
             </View>
           </View>
 
-          {profile.bio && (
-            <Text style={styles.bio}>{profile.bio}</Text>
-          )}
+          {profile.bio ? (
+            <>
+              <Text style={styles.aboutLabel}>About</Text>
+              <Text style={styles.bio}>{profile.bio}</Text>
+            </>
+          ) : null}
 
           {/* Stats */}
           <View style={styles.statsContainer}>
@@ -204,49 +208,57 @@ export default function ExecutorProfile() {
         </View>
 
         {/* Portfolio gallery — aggregated work photos across all services */}
-        {(() => {
-          const skillPhotos = (profile.skills || [])
-            .flatMap((sk: any) => (sk && typeof sk === 'object' && Array.isArray(sk.photos)) ? sk.photos : [])
-            .filter((p: any) => p && p.uri);
-          const legacy = (profile.portfolio_photos || []).map((u: string) => ({ uri: u, caption: '' }));
-          const all = [...skillPhotos, ...legacy];
-          if (all.length === 0) return null;
-          return (
-            <View style={styles.section}>
-              <View style={styles.portfolioHeader}>
-                <Ionicons name="images" size={20} color="#2563eb" />
-                <Text style={styles.sectionTitle}>Portfolio · {all.length} photos</Text>
-              </View>
-              <View style={styles.portfolioGrid}>
-                {all.map((ph: any, i: number) => (
-                  <View key={i} style={styles.portfolioItem} data-testid={`portfolio-photo-${i}`}>
-                    <Image source={{ uri: ph.uri }} style={styles.portfolioImg} resizeMode="cover" />
-                    {ph.caption ? (
-                      <View style={styles.portfolioCaptionWrap}>
-                        <Text style={styles.portfolioCaption} numberOfLines={2}>{ph.caption}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-            </View>
-          );
-        })()}
-
         {profile.skills && profile.skills.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Services</Text>
+            <Text style={styles.servicesHint}>Tap a service to see the pro's experience and photos of completed work.</Text>
             {profile.skills.map((raw, index) => {
               const skill: any = typeof raw === 'string' ? { name: raw } : (raw || {});
+              const photos = (Array.isArray(skill.photos) ? skill.photos : []).filter((p: any) => p && p.uri);
+              const isOpen = expandedSkill === index;
               return (
                 <View key={index} style={styles.skillCard} data-testid={`executor-skill-${index}`}>
-                  <View style={styles.skillCardHeader}>
+                  <TouchableOpacity
+                    style={styles.skillCardHeader}
+                    activeOpacity={0.7}
+                    onPress={() => setExpandedSkill(isOpen ? null : index)}
+                    data-testid={`executor-skill-toggle-${index}`}
+                  >
                     <Ionicons name="checkmark-circle" size={18} color="#10b981" />
                     <Text style={styles.skillCardTitle}>{skill.name}</Text>
                     {skill.hourly_rate ? <Text style={styles.skillCardRate}>${skill.hourly_rate}/hr</Text> : null}
-                  </View>
-                  {skill.experience ? (
-                    <Text style={styles.skillCardExp}>{skill.experience}</Text>
+                    <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color="#9ca3af" style={{ marginLeft: 8 }} />
+                  </TouchableOpacity>
+                  {isOpen ? (
+                    <View style={styles.skillExpanded}>
+                      {skill.experience ? (
+                        <Text style={styles.skillCardExp}>{skill.experience}</Text>
+                      ) : (
+                        <Text style={styles.skillEmptyText}>No description added yet for this service.</Text>
+                      )}
+                      {photos.length > 0 ? (
+                        <View style={styles.portfolioGrid}>
+                          {photos.map((ph: any, i: number) => (
+                            <TouchableOpacity
+                              key={i}
+                              style={styles.portfolioItem}
+                              activeOpacity={0.9}
+                              onPress={() => setSelectedImage(ph.uri)}
+                              data-testid={`skill-${index}-photo-${i}`}
+                            >
+                              <Image source={{ uri: ph.uri }} style={styles.portfolioImg} resizeMode="cover" />
+                              {ph.caption ? (
+                                <View style={styles.portfolioCaptionWrap}>
+                                  <Text style={styles.portfolioCaption} numberOfLines={2}>{ph.caption}</Text>
+                                </View>
+                              ) : null}
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={styles.skillEmptyText}>No work photos yet.</Text>
+                      )}
+                    </View>
                   ) : null}
                 </View>
               );
@@ -596,6 +608,10 @@ const styles = StyleSheet.create({
   skillCardTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#111827' },
   skillCardRate: { fontSize: 13, fontWeight: '700', color: '#2563eb' },
   skillCardExp: { fontSize: 13, color: '#4b5563', marginTop: 8, lineHeight: 19 },
+  aboutLabel: { fontSize: 12, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 14 },
+  servicesHint: { fontSize: 13, color: '#6b7280', marginBottom: 12, marginTop: -4 },
+  skillExpanded: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#eef2f7' },
+  skillEmptyText: { fontSize: 13, color: '#9ca3af', fontStyle: 'italic', marginTop: 8 },
   skillCardPhoto: { width: 140, height: 105, borderRadius: 8, backgroundColor: '#e5e7eb' },
   skillCardCaption: { fontSize: 12, color: '#6b7280', marginTop: 4 },
   portfolioHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
