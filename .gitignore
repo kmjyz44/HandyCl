@@ -43,13 +43,7 @@ build/
 *.env.local
 
 # PWA / SEO static assets that MUST be deployed (override the *.png / *.jpg rules above)
-!public/pwa-icon.png
-!public/pwa-icon-192.png
-!public/pwa-icon-512.png
-!public/pwa-icon-maskable.png
-!public/favicon.png
-!public/og-image.png
-!assets/**/*.png
+!public/*.png
 
 **/*.tar
 **/*.tar.gz

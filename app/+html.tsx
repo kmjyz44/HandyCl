@@ -6,7 +6,7 @@ const SITE_NAME = 'Ono-Fix';
 const TAGLINE = 'One Photo. One Solution.';
 const DESCRIPTION =
   'Ono-Fix — snap a photo of any home problem. Our AI identifies the issue and instantly matches you with the right trusted local pro. Plumbing, electrical, furniture assembly, cleaning and more.';
-const OG_IMAGE = `${SITE_URL}/pwa-icon.png`;
+const OG_IMAGE = `${SITE_URL}/onofix-icon-512.png`;
 
 // Optional analytics / verification (set in Netlify env at build time).
 const GA4_ID = process.env.EXPO_PUBLIC_GA4_ID || '';
@@ -103,7 +103,8 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content={SITE_NAME} />
-        <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
+        <link rel="apple-touch-icon" href="/onofix-icon-192.png" />
+        <link rel="icon" type="image/png" href="/favicon.png" />
 
         {/* Performance: preconnect to common origins */}
         <link rel="preconnect" href="https://images.unsplash.com" crossOrigin="" />
