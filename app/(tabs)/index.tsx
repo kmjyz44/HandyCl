@@ -739,7 +739,7 @@ export default function HomeScreen() {
         setLoadingGeo(false);
         Alert.alert('Location', 'Could not access your location. Please enter the address manually.');
       },
-      { timeout: 10000 }
+      { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 }
     );
   };
 
@@ -1527,6 +1527,7 @@ export default function HomeScreen() {
             value={booking.address}
             placeholder="123 Main St"
             testID="booking-address-input"
+            city={booking.city}
             onChangeText={v => setBooking(b => ({ ...b, address: v }))}
             onSelect={(formatted, parts) => {
               setBooking(b => ({
