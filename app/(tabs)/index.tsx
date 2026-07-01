@@ -338,6 +338,7 @@ export default function HomeScreen() {
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [canInstall, setCanInstall] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [installWaiting, setInstallWaiting] = useState(false);
   const submittingRef = useRef(false); // synchronous guard against rapid double-taps
   const [searchQuery, setSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
@@ -627,7 +628,18 @@ export default function HomeScreen() {
   }, []);
 
   const installApp = async () => {
-    const nativePrompt = installPrompt || (typeof window !== 'undefined' ? (window as any).__onoFixInstallPrompt : null);
+    const getPrompt = () => installPrompt || (typeof window !== 'undefined' ? (window as any).__onoFixInstallPrompt : null);
+    let nativePrompt = getPrompt();
+    // If Chrome hasn't dispatched beforeinstallprompt yet (fires a few seconds
+    // after load), wait briefly for it before falling back to instructions.
+    if (!nativePrompt && Platform.OS === 'web') {
+      setInstallWaiting(true);
+      for (let i = 0; i < 15 && !nativePrompt; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        nativePrompt = getPrompt();
+      }
+      setInstallWaiting(false);
+    }
     if (nativePrompt) {
       try {
         nativePrompt.prompt();
@@ -646,7 +658,7 @@ export default function HomeScreen() {
       if (/iPad|iPhone|iPod/.test(ua)) {
         msg = 'In Safari: tap the Share button (□↑), then "Add to Home Screen". The Ono-Fix icon will open straight to the camera.';
       } else if (/Android/.test(ua)) {
-        msg = 'In Chrome: tap the ⋮ menu (top-right), then "Install app" / "Add to Home screen".';
+        msg = 'This app may already be installed — check your home screen for the Ono-Fix icon and open it there.\n\nOtherwise, in Chrome tap the ⋮ menu (top-right), then "Install app" / "Add to Home screen".';
       } else {
         msg = 'In your browser: click the install icon in the address bar, or the ⋮ menu → "Install Ono-Fix".';
       }
@@ -943,9 +955,13 @@ export default function HomeScreen() {
               <Text style={s.aiBlockSub}>Snap the problem — AI finds the right pro.</Text>
             </View>
             {Platform.OS === 'web' && !isStandalone ? (
-              <TouchableOpacity style={s.installBtn} onPress={installApp} data-testid="install-app-btn">
-                <Ionicons name="download-outline" size={14} color="#2563eb" />
-                <Text style={s.installBtnText}>Install app</Text>
+              <TouchableOpacity style={s.installBtn} onPress={installApp} disabled={installWaiting} data-testid="install-app-btn">
+                {installWaiting ? (
+                  <ActivityIndicator size="small" color="#2563eb" />
+                ) : (
+                  <Ionicons name="download-outline" size={14} color="#2563eb" />
+                )}
+                <Text style={s.installBtnText}>{installWaiting ? 'Preparing…' : 'Install app'}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -1085,7 +1101,21 @@ export default function HomeScreen() {
             })}
           </View>
 
+          {searchQuery.trim() !== '' && filteredCategories.length === 0 ? (
+            <View style={s.noResults} data-testid="search-no-results">
+              <Ionicons name="search-outline" size={28} color="#9ca3af" />
+              <Text style={s.noResultsTitle}>No services match “{searchQuery}”</Text>
+              <Text style={s.noResultsSub}>Try a different word, or snap a photo and let AI identify it.</Text>
+              <TouchableOpacity style={s.noResultsBtn} onPress={() => addScanPhoto(true)} data-testid="no-results-photo-btn">
+                <Ionicons name="camera" size={16} color="#fff" />
+                <Text style={s.noResultsBtnText}>Identify by photo</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {/* Popular tasks */}
+          {searchQuery.trim() === '' ? (
+          <>
           <Text style={[s.sectionTitle, { marginTop: 24 }]}>Popular tasks</Text>
           {[
             { skill: 'IKEA furniture assembly', cat: SKILL_CATEGORIES[0], emoji: '🪑' },
@@ -1138,6 +1168,8 @@ export default function HomeScreen() {
                 </View>
               </View>
             </View>
+          ) : null}
+          </>
           ) : null}
           </>
           )}
@@ -2418,6 +2450,11 @@ const s = StyleSheet.create({
   scanTagline: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 2 },
   browseAllBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, paddingVertical: 13, marginTop: 4 },
   browseAllText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
+  noResults: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16, gap: 8 },
+  noResultsTitle: { fontSize: 15, fontWeight: '700', color: '#374151', textAlign: 'center' },
+  noResultsSub: { fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 6 },
+  noResultsBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#7c3aed', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9 },
+  noResultsBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
   // How it works section (landing)
   howItWorks: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginTop: 8, borderWidth: 1, borderColor: '#f3f4f6' },
