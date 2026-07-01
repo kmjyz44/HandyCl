@@ -322,6 +322,7 @@ export default function HomeScreen() {
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURN (Rules of Hooks)
   const { addBooking } = useBookingStore();
   const [step, setStep] = useState<BookingStep>('home');
+  const [showFullHome, setShowFullHome] = useState(false);
   const [booking, setBooking] = useState<BookingState>({
     categoryId: '', categoryName: '', skillName: '', taskDescription: '',
     address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null,
@@ -849,6 +850,7 @@ export default function HomeScreen() {
   // STEP: HOME — category grid (landing for guests, dashboard-like for authed clients)
   if (step === 'home') {
     const isGuest = !user;
+    const focusedScan = isStandalone && !showFullHome;
     return (
       <View style={s.container}>
         <Head>
@@ -858,8 +860,16 @@ export default function HomeScreen() {
           <meta property="og:title" content="Ono-Fix — One Photo. One Solution." />
           <meta property="og:url" content="https://ono-fix.com/" />
         </Head>
-        {/* Header — landing hero for guests, personalised greeting for clients */}
-        {isGuest ? (
+        {/* Header — focused scan header (installed PWA), landing hero for guests, greeting for clients */}
+        {focusedScan ? (
+          <View style={s.scanHeader}>
+            <View style={s.scanLogo}>
+              <Ionicons name="camera" size={26} color="#fff" />
+            </View>
+            <Text style={s.scanBrand}>Ono-Fix</Text>
+            <Text style={s.scanTagline}>One Photo. One Solution.</Text>
+          </View>
+        ) : isGuest ? (
           <View style={s.heroHeader}>
             <View style={s.heroTopRow}>
               <View style={s.heroBrand}>
@@ -994,6 +1004,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Search */}
+        {!focusedScan && (
         <View style={s.searchBox}>
           <Ionicons name="search-outline" size={20} color="#9ca3af" />
           <TextInput
@@ -1017,11 +1028,23 @@ export default function HomeScreen() {
             <Ionicons name="camera" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
+        )}
 
         {/* Category grid */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <PaymentReminderBanner />
           <EmailVerificationBanner />
+          {focusedScan ? (
+            <TouchableOpacity
+              style={s.browseAllBtn}
+              onPress={() => setShowFullHome(true)}
+              data-testid="browse-all-services-btn"
+            >
+              <Ionicons name="grid-outline" size={18} color="#2563eb" />
+              <Text style={s.browseAllText}>Browse all services</Text>
+            </TouchableOpacity>
+          ) : (
+          <>
           <Text style={s.sectionTitle}>Choose a category</Text>
           <View style={s.grid}>
             {filteredCategories.map(cat => {
@@ -1116,6 +1139,8 @@ export default function HomeScreen() {
               </View>
             </View>
           ) : null}
+          </>
+          )}
         </ScrollView>
       </View>
     );
@@ -2385,6 +2410,14 @@ const s = StyleSheet.create({
   heroSignupBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
   heroTitle: { color: '#fff', fontSize: 15, fontWeight: '800', lineHeight: 20, marginBottom: 3 },
   heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 11, lineHeight: 15, marginBottom: 4 },
+
+  // Focused scan header (installed PWA)
+  scanHeader: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingTop: 44, paddingBottom: 20, alignItems: 'center' },
+  scanLogo: { width: 56, height: 56, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  scanBrand: { color: '#fff', fontSize: 22, fontWeight: '800', letterSpacing: 0.3 },
+  scanTagline: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 2 },
+  browseAllBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, paddingVertical: 13, marginTop: 4 },
+  browseAllText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
 
   // How it works section (landing)
   howItWorks: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginTop: 8, borderWidth: 1, borderColor: '#f3f4f6' },
