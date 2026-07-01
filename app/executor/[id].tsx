@@ -72,6 +72,7 @@ export default function ExecutorProfile() {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [expandedSkill, setExpandedSkill] = useState<number | null>(null);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   useEffect(() => {
     loadExecutorData();
@@ -112,6 +113,13 @@ export default function ExecutorProfile() {
       );
     }
     return stars;
+  };
+
+  const bookExecutor = () => {
+    const name = profile?.user?.name || 'Pro';
+    const rate = pricing?.final_rate || profile?.hourly_rate || '';
+    const picture = profile?.user?.picture || '';
+    router.push(`/(tabs)?bookProvider=${encodeURIComponent(id)}&providerName=${encodeURIComponent(name)}&providerRate=${encodeURIComponent(String(rate))}&providerPicture=${encodeURIComponent(picture)}` as any);
   };
 
   const contactExecutor = () => {
@@ -379,7 +387,7 @@ export default function ExecutorProfile() {
         {reviews.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Reviews</Text>
-            {reviews.slice(0, 5).map((review) => (
+            {reviews.slice(0, showAllReviews ? reviews.length : 5).map((review) => (
               <View key={review.review_id} style={styles.reviewCard}>
                 <View style={styles.reviewHeader}>
                   <View style={styles.reviewRating}>
@@ -395,9 +403,9 @@ export default function ExecutorProfile() {
               </View>
             ))}
             {reviews.length > 5 && (
-              <TouchableOpacity style={styles.moreReviewsButton}>
+              <TouchableOpacity style={styles.moreReviewsButton} onPress={() => setShowAllReviews(v => !v)} data-testid="toggle-reviews-btn">
                 <Text style={styles.moreReviewsText}>
-                  Show all reviews ({reviews.length})
+                  {showAllReviews ? 'Show fewer reviews' : `Show all reviews (${reviews.length})`}
                 </Text>
               </TouchableOpacity>
             )}
@@ -430,11 +438,11 @@ export default function ExecutorProfile() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Contact Button */}
+      {/* Book Button */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.contactButton} onPress={contactExecutor}>
-          <Ionicons name="chatbubble-outline" size={20} color="#fff" />
-          <Text style={styles.contactButtonText}>Contact</Text>
+        <TouchableOpacity style={styles.contactButton} onPress={bookExecutor} data-testid="book-executor-btn">
+          <Ionicons name="calendar-outline" size={20} color="#fff" />
+          <Text style={styles.contactButtonText}>Book this pro</Text>
         </TouchableOpacity>
       </View>
 

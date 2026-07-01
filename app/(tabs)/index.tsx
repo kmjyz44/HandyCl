@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import Head from 'expo-router/head';
 import { useAuthStore } from '../../store/authStore';
 import { useBookingStore } from '../../store/bookingStore';
@@ -323,6 +324,8 @@ export default function HomeScreen() {
   const { addBooking } = useBookingStore();
   const [step, setStep] = useState<BookingStep>('home');
   const [showFullHome, setShowFullHome] = useState(false);
+  const [forcedProvider, setForcedProvider] = useState<any | null>(null);
+  const bookParams = useLocalSearchParams();
   const [booking, setBooking] = useState<BookingState>({
     categoryId: '', categoryName: '', skillName: '', taskDescription: '',
     address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null,
@@ -343,6 +346,27 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
+
+  // "Book this pro" entry — launched from an executor profile with params.
+  useEffect(() => {
+    const pid = bookParams?.bookProvider as string | undefined;
+    if (pid && (!forcedProvider || forcedProvider.user_id !== pid)) {
+      const rate = bookParams?.providerRate ? parseFloat(bookParams.providerRate as string) : undefined;
+      const prov = {
+        user_id: pid,
+        name: (bookParams?.providerName as string) || 'Pro',
+        full_name: (bookParams?.providerName as string) || 'Pro',
+        picture: (bookParams?.providerPicture as string) || null,
+        final_hourly_rate: rate,
+        hourly_rate: rate,
+        profile: {},
+      };
+      setForcedProvider(prov);
+      setBooking(b => ({ ...b, selectedTasker: prov }));
+      setStep('home');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookParams?.bookProvider]);
   const [userCountry, setUserCountry] = useState<string>('US'); // default US
   const [quickCities, setQuickCities] = useState<string[]>(['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia']);
   const [calDayIdx, setCalDayIdx] = useState(0); // for datetime step — must be here (Rules of Hooks)
@@ -462,6 +486,7 @@ export default function HomeScreen() {
       home: 'home', skills: 'home', details: 'skills', address: 'details',
       datetime: 'address', taskers: 'datetime', tasker_profile: 'taskers', confirm: 'tasker_profile',
     };
+    if (forcedProvider && step === 'confirm') { setStep('datetime'); return; }
     setStep(prev[step]);
   };
 
@@ -1061,6 +1086,15 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ) : (
           <>
+          {forcedProvider ? (
+            <View style={s.bookingProviderBanner} data-testid="booking-provider-banner">
+              <Ionicons name="person-circle" size={22} color="#2563eb" />
+              <Text style={s.bookingProviderText}>Booking <Text style={{ fontWeight: '800' }}>{forcedProvider.name}</Text> — pick a category & date</Text>
+              <TouchableOpacity onPress={() => { setForcedProvider(null); setBooking(b => ({ ...b, selectedTasker: null })); }} data-testid="cancel-forced-provider">
+                <Ionicons name="close-circle" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
           <Text style={s.sectionTitle}>Choose a category</Text>
           <View style={s.grid}>
             {filteredCategories.map(cat => {
@@ -1824,9 +1858,18 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={[s.nextBtn, !canProceed && s.nextBtnDisabled]}
             disabled={!canProceed}
-            onPress={() => { loadTaskers(); setStep('taskers'); }}
+            onPress={() => {
+              if (forcedProvider) {
+                setBooking(b => ({ ...b, selectedTasker: forcedProvider }));
+                setStep('confirm');
+              } else {
+                loadTaskers();
+                setStep('taskers');
+              }
+            }}
+            data-testid="datetime-continue-btn"
           >
-            <Text style={s.nextBtnText}>Find pros</Text>
+            <Text style={s.nextBtnText}>{forcedProvider ? 'Review booking' : 'Find pros'}</Text>
             <Ionicons name="arrow-forward" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -2451,6 +2494,8 @@ const s = StyleSheet.create({
   scanTagline: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 2 },
   browseAllBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, paddingVertical: 13, marginTop: 4 },
   browseAllText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
+  bookingProviderBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 },
+  bookingProviderText: { flex: 1, fontSize: 13, color: '#1e40af' },
   noResults: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16, gap: 8 },
   noResultsTitle: { fontSize: 15, fontWeight: '700', color: '#374151', textAlign: 'center' },
   noResultsSub: { fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 6 },
