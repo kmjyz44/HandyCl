@@ -1538,7 +1538,7 @@ export default function HomeScreen() {
           <Text style={s.stepTitle}>Address</Text>
           <View style={{ width: 40 }} />
         </View>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 280 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={s.stepSubtitle}>Where does the task need to be done?</Text>
 
           {/* Geolocation button */}

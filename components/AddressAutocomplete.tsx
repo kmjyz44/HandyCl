@@ -133,12 +133,21 @@ export default function AddressAutocomplete({ value, onChangeText, onSelect, pla
   }, [value]);
 
   const pick = (f: any) => {
-    const { formatted, parts } = buildFormatted(f.properties || {});
+    const props = f.properties || {};
+    const { formatted, parts } = buildFormatted(props);
     const coords = f.geometry?.coordinates;
     if (coords) { parts.lat = coords[1]; parts.lon = coords[0]; }
+    // If the suggestion has no house number, keep the one the user typed.
+    if (!props.housenumber) {
+      const m = (value || '').match(/^\s*(\d+[a-zA-Z-]?)\b/);
+      const street = props.street || props.name || parts.line1 || '';
+      if (m && street) parts.line1 = `${m[1]} ${street}`;
+    }
+    // Show the street + number in the field (postcode/city kept in parts for later use).
+    const streetLine = parts.line1 || formatted;
     skipNext.current = true;
-    onChangeText(formatted);
-    onSelect?.(formatted, parts);
+    onChangeText(streetLine);
+    onSelect?.(streetLine, parts);
     setOpen(false);
     setSuggestions([]);
     setNoResults(false);

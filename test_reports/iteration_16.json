@@ -1,0 +1,46 @@
+{
+  "summary": "Backend-only verification against https://payment-flow-test-39.preview.emergentagent.com and external Photon geocoder. 6/6 pytest cases PASS. Covered: (1) Photon returns housenumber for a well-known IL address (233 S Wacker Dr, Chicago) — confirms happy path where AddressAutocomplete uses Photon's housenumber as-is; (2) Photon returns NO housenumber for '9701 Dee Road, Niles, Illinois' — OSM only has 'North Dee Road' street/bus-stop features. This exact case validates the pick() fallback fix that prepends the typed '9701' onto the street name so the field shows '9701 <street>' instead of dropping the number; (3) With ', Niles, Illinois' in the query, Photon's raw response already contained 0 non-Illinois features (4/4 Illinois); frontend strict state filter is a safe belt-and-suspenders guard; (4) POST /api/bookings with the composed address '9701 Dee Road, Apt 4B, Niles, Illinois' (+ city/state/unit + provider_id + provider_hourly_rate) returns 200 with the address stored intact and readable back via GET /api/bookings. Login token field remains session_token.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tested_features": {
+    "Photon housenumber for well-known IL address": "233 S Wacker Dr, Chicago → 5 features, ALL with properties.housenumber='233', street='South Wacker Drive'/'South Lower Wacker Service Drive'/'East Lower Wacker Drive', state='Illinois'. Happy path OK.",
+    "Photon housenumber for sparse OSM address (justifies frontend fix)": "9701 Dee Road, Niles → 4 features, NONE with housenumber (all street segments or bus stops on 'North Dee Road'), state='Illinois', postcode='60016'. Frontend fallback (prepend typed 9701) is REQUIRED for this real-world case.",
+    "Photon state restriction to Illinois": "With ', Niles, Illinois' in q + bias lat/lon → 4/4 features carry properties.state='Illinois'. No non-IL states returned in the raw response for this query; frontend strict state filter still guards against edge cases from other queries.",
+    "POST /api/bookings with composed address + provider_id": "200 OK. booking_id=booking_cd34c59119f8. Stored booking.address='9701 Dee Road, Apt 4B, Niles, Illinois' (byte-exact match to sent). category='handyman_carpentry', provider_id preserved.",
+    "GET /api/bookings readback preserves composed address": "200 OK. Composed address returned byte-exact on readback for the client."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_photon_and_composed_address_booking.py",
+    "/app/test_reports/pytest/photon_and_composed_address.xml"
+  ],
+  "action_items": [
+    "[INFO] Both frontend fixes are correctly supported by the data/API layer: (a) sparse-OSM addresses like '9701 Dee Road' really do lack housenumber in Photon → the pick() fallback that prepends the typed number is necessary and correct; (b) POST /api/bookings accepts and preserves the new composed 'street, unit, city, state' address string with no schema change needed.",
+    "[LOW] Consider seeding realistic reviews for demo providers (carryover from iteration_15).",
+    "[LOW] Photon returned 403 to plain requests without a User-Agent — the Expo web app sets a browser UA so this is only a testing-env issue, not a product bug. Documented in the test file (PHOTON_HEADERS)."
+  ],
+  "critical_code_review_comments": [
+    "components/AddressAutocomplete.tsx pick() fallback is justified — Photon's OSM data for '9701 Dee Road, Niles' has no house-numbered POIs; without the fallback the field would silently drop the number the user typed.",
+    "Frontend strict state filter on Photon features (properties.state == selected state) is defensive but does not change output for the tested Illinois query (already 4/4 IL). Recommend keeping it — Photon can return neighboring-state matches for less specific queries (e.g., border streets).",
+    "Backend server.py POST /api/bookings does not validate that `address` contains city/state; it trusts the composed string from the client. That's fine functionally, but consider echoing city/state/unit fields into the stored booking doc so the address can be reconstructed on the server if the composed string ever drifts (current backend response includes 'address' only in the snippet shown; main agent should confirm city/state/unit persistence)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_photon_and_composed_address_booking.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6)",
+    "frontend": "not tested (per request — Expo web only on Netlify)"
+  },
+  "test_credentials": "client@handyhub.com / Client2024! — verified. Login POST /api/auth/login → session_token used as Bearer.",
+  "seed_data_creation": "One TEST_ booking created with composed address (title 'TEST_ composed-address booking', booking_id=booking_cd34c59119f8) assigned to provider user_dc5e0dd73212. No cleanup endpoint; safe to leave or purge manually.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression file: /app/backend/tests/test_photon_and_composed_address_booking.py. Photon requires a browser User-Agent header (see PHOTON_HEADERS constant) or it returns 403 from this pod. '9701 Dee Road, Niles, Illinois' is a good permanent regression fixture for the sparse-OSM (no housenumber) case; '233 S Wacker Dr, Chicago, Illinois' is a good fixture for the happy-path (housenumber present) case. Booking POST expects session_token from login (not access_token). booking response has key 'booking_id' (not 'id').",
+  "rca of the issue": "N/A — the two fixed UI bugs are backed by correct external-API and backend behavior. Photon does NOT always return a house-numbered feature (verified with '9701 Dee Road, Niles, Illinois' → 0/4 features with housenumber), so the AddressAutocomplete pick() fallback that prepends the user-typed house number is necessary. The backend accepts and byte-exact preserves the new composed 'street, unit, city, state' address string on POST /api/bookings and on subsequent GET /api/bookings readback."
+}
