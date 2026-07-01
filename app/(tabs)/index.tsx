@@ -614,6 +614,11 @@ export default function HomeScreen() {
     if (standalone) { setIsStandalone(true); return; } // already installed
     const onPrompt = (e: any) => { e.preventDefault(); setInstallPrompt(e); setCanInstall(true); };
     window.addEventListener('beforeinstallprompt', onPrompt);
+    // If the event already fired (captured globally in +html.tsx) before mount, use it.
+    if ((window as any).__onoFixInstallPrompt) {
+      setInstallPrompt((window as any).__onoFixInstallPrompt);
+      setCanInstall(true);
+    }
     const ua = window.navigator.userAgent || '';
     const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
     if (isIOS) setCanInstall(true); // iOS has no prompt event — we show instructions
@@ -621,11 +626,16 @@ export default function HomeScreen() {
   }, []);
 
   const installApp = async () => {
-    if (installPrompt) {
-      installPrompt.prompt();
-      try { await installPrompt.userChoice; } catch {}
+    const nativePrompt = installPrompt || (typeof window !== 'undefined' ? (window as any).__onoFixInstallPrompt : null);
+    if (nativePrompt) {
+      try {
+        nativePrompt.prompt();
+        const choice = await nativePrompt.userChoice;
+        if (choice && choice.outcome === 'accepted') setIsStandalone(true);
+      } catch {}
       setInstallPrompt(null);
       setCanInstall(false);
+      if (typeof window !== 'undefined') (window as any).__onoFixInstallPrompt = null;
       return;
     }
     // No native prompt available — show platform-specific instructions.

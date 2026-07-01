@@ -17,7 +17,16 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
     navigator.serviceWorker.register('/sw.js').catch(function () {});
   });
-}`;
+}
+// Capture the install prompt globally so React can trigger it even if the
+// event fired before the component mounted.
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();
+  window.__onoFixInstallPrompt = e;
+});
+window.addEventListener('appinstalled', function () {
+  window.__onoFixInstallPrompt = null;
+});`;
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -94,7 +103,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content={SITE_NAME} />
-        <link rel="apple-touch-icon" href="/pwa-icon.png" />
+        <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
 
         {/* Performance: preconnect to common origins */}
         <link rel="preconnect" href="https://images.unsplash.com" crossOrigin="" />

@@ -10,7 +10,9 @@ self.addEventListener('activate', (event) => {
 });
 
 // Minimal pass-through fetch handler — required for PWA installability criteria.
-self.addEventListener('fetch', () => {});
+self.addEventListener('fetch', (event) => {
+  event.respondWith(fetch(event.request).catch(() => Response.error()));
+});
 
 self.addEventListener('push', (event) => {
   let data = {};
