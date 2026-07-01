@@ -97,7 +97,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="twitter:image" content={OG_IMAGE} />
 
         {/* PWA */}
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="manifest" href="/manifest.json?v=20260701b" />
         <meta name="theme-color" content="#2563eb" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

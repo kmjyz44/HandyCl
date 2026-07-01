@@ -1,6 +1,7 @@
 {
   "name": "Ono-Fix — One Photo. One Solution.",
   "short_name": "Ono-Fix",
+  "id": "/?scan=1",
   "description": "Snap a photo of the problem. Our AI identifies it and matches you with the right local pro.",
   "start_url": "/?scan=1",
   "scope": "/",
