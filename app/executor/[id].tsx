@@ -24,7 +24,7 @@ interface ExecutorProfile {
   profile_id: string;
   user_id: string;
   bio?: string;
-  skills: string[];
+  skills: (string | { name: string; experience?: string; hourly_rate?: number; photos?: { uri: string; caption: string }[] })[];
   experience_years?: number;
   hourly_rate?: number;
   portfolio_photos: string[];
@@ -213,15 +213,33 @@ export default function ExecutorProfile() {
         {/* Skills */}
         {profile.skills && profile.skills.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Skills</Text>
-            <View style={styles.skillsContainer}>
-              {profile.skills.map((skill, index) => (
-                <View key={index} style={styles.skillBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-                  <Text style={styles.skillText}>{skill}</Text>
+            <Text style={styles.sectionTitle}>Services</Text>
+            {profile.skills.map((raw, index) => {
+              const skill: any = typeof raw === 'string' ? { name: raw } : (raw || {});
+              const photos = Array.isArray(skill.photos) ? skill.photos : [];
+              return (
+                <View key={index} style={styles.skillCard} data-testid={`executor-skill-${index}`}>
+                  <View style={styles.skillCardHeader}>
+                    <Ionicons name="checkmark-circle" size={18} color="#10b981" />
+                    <Text style={styles.skillCardTitle}>{skill.name}</Text>
+                    {skill.hourly_rate ? <Text style={styles.skillCardRate}>${skill.hourly_rate}/hr</Text> : null}
+                  </View>
+                  {skill.experience ? (
+                    <Text style={styles.skillCardExp}>{skill.experience}</Text>
+                  ) : null}
+                  {photos.length > 0 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
+                      {photos.map((ph: any, i: number) => (
+                        <View key={i} style={{ marginRight: 10, width: 140 }}>
+                          <Image source={{ uri: ph.uri }} style={styles.skillCardPhoto} />
+                          {ph.caption ? <Text style={styles.skillCardCaption} numberOfLines={2}>{ph.caption}</Text> : null}
+                        </View>
+                      ))}
+                    </ScrollView>
+                  ) : null}
                 </View>
-              ))}
-            </View>
+              );
+            })}
           </View>
         )}
 
@@ -579,6 +597,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#166534',
   },
+  skillCard: { backgroundColor: '#f9fafb', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#eef2f7' },
+  skillCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  skillCardTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#111827' },
+  skillCardRate: { fontSize: 13, fontWeight: '700', color: '#2563eb' },
+  skillCardExp: { fontSize: 13, color: '#4b5563', marginTop: 8, lineHeight: 19 },
+  skillCardPhoto: { width: 140, height: 105, borderRadius: 8, backgroundColor: '#e5e7eb' },
+  skillCardCaption: { fontSize: 12, color: '#6b7280', marginTop: 4 },
   languagesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',

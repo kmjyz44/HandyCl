@@ -819,12 +819,15 @@ const SKILL_CATEGORIES = [
   },
 ];
 
+type SkillPhoto = { uri: string; caption: string };
 type ProviderSkill = {
   id: string;
   category_id: string;
   name: string;
   hourly_rate: number;
   status: 'active' | 'in_progress';
+  photos?: SkillPhoto[];
+  experience?: string;
 };
 
 function ProviderProfile() {
@@ -897,6 +900,10 @@ function ProviderProfile() {
   const [serviceDetailVisible, setServiceDetailVisible] = useState(false);
   const [selectedProviderSkill, setSelectedProviderSkill] = useState<ProviderSkill | null>(null);
   const [editingRate, setEditingRate] = useState('');
+  // Per-skill editing state (photos with captions + experience)
+  const [skillPhotos, setSkillPhotos] = useState<SkillPhoto[]>([]);
+  const [skillExperience, setSkillExperience] = useState('');
+  const [savingSkill, setSavingSkill] = useState(false);
 
   useEffect(() => { loadProfile(); }, []);
 
@@ -1062,9 +1069,19 @@ function ProviderProfile() {
       if (profile?.profile_id) { await api.updateExecutorProfile(updates); }
       else { await api.createExecutorProfile(updates); }
       await loadProfile();
-    } catch (e: any) { Alert.alert('Error', e.message || 'Could not save'); }
+    } catch (e: any) { Alert.alert('Error', e.message || 'Could not save'); throw e; }
     finally { setSaving(false); }
   };
+
+  const skillToPayload = (s: ProviderSkill) => ({
+    id: s.id,
+    category_id: s.category_id,
+    name: s.name,
+    hourly_rate: s.hourly_rate,
+    status: s.status,
+    photos: s.photos || [],
+    experience: s.experience || '',
+  });
 
   const addSkill = (categoryId: string, skill: typeof SKILL_CATEGORIES[0]['skills'][0], rate: number) => {
     const newSkill: ProviderSkill = {
@@ -1073,17 +1090,13 @@ function ProviderProfile() {
       name: skill.name,
       hourly_rate: rate,
       status: 'active',
+      photos: [],
+      experience: '',
     };
     const updated = [...providerSkills, newSkill];
     setProviderSkills(updated);
     saveProfile({
-      skills: updated.map(s => ({
-        id: s.id,
-        category_id: s.category_id,
-        name: s.name,
-        hourly_rate: s.hourly_rate,
-        status: s.status,
-      })),
+      skills: updated.map(skillToPayload),
       hourly_rate: rate,
     });
     setStats(prev => ({ ...prev, activatedSkillsCount: updated.filter(s => s.status === 'active').length }));
@@ -1092,11 +1105,7 @@ function ProviderProfile() {
   const removeSkill = (skillId: string) => {
     const updated = providerSkills.filter(s => s.id !== skillId);
     setProviderSkills(updated);
-    saveProfile({
-      skills: updated.map(s => ({
-        id: s.id, category_id: s.category_id, name: s.name, hourly_rate: s.hourly_rate, status: s.status,
-      })),
-    });
+    saveProfile({ skills: updated.map(skillToPayload) });
     setStats(prev => ({ ...prev, activatedSkillsCount: updated.filter(s => s.status === 'active').length }));
   };
 
@@ -1104,11 +1113,81 @@ function ProviderProfile() {
     const updated = providerSkills.map(s => s.id === skillId ? { ...s, hourly_rate: rate } : s);
     setProviderSkills(updated);
     saveProfile({
-      skills: updated.map(s => ({
-        id: s.id, category_id: s.category_id, name: s.name, hourly_rate: s.hourly_rate, status: s.status,
-      })),
+      skills: updated.map(skillToPayload),
       hourly_rate: rate,
     });
+  };
+
+  // Persist rate + photos + experience for a single skill
+  const saveSkillDetails = async () => {
+    if (!selectedProviderSkill) return;
+    const rate = parseFloat(editingRate);
+    if (isNaN(rate) || rate <= 0) { Alert.alert('Error', 'Enter a valid hourly rate'); return; }
+    setSavingSkill(true);
+    const updated = providerSkills.map(s =>
+      s.id === selectedProviderSkill.id
+        ? { ...s, hourly_rate: rate, photos: skillPhotos, experience: skillExperience }
+        : s
+    );
+    setProviderSkills(updated);
+    try {
+      await saveProfile({ skills: updated.map(skillToPayload), hourly_rate: rate });
+      Alert.alert('Saved', 'Service details updated');
+      setServiceDetailVisible(false);
+    } catch (e: any) {
+      // saveProfile already surfaced the error
+    } finally {
+      setSavingSkill(false);
+    }
+  };
+
+  // Add photos (up to 10) to the currently-open skill
+  const pickSkillPhoto = async () => {
+    const remaining = 10 - skillPhotos.length;
+    if (remaining <= 0) { Alert.alert('Limit reached', 'You can add up to 10 photos per service.'); return; }
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = true;
+      input.onchange = (e: any) => {
+        const files: File[] = Array.from(e.target.files || []).slice(0, remaining);
+        files.forEach((file: File) => {
+          const reader = new FileReader();
+          reader.onload = (ev: any) => {
+            const img = new (window as any).Image();
+            img.onload = () => {
+              const maxDim = 1200;
+              let { width, height } = img;
+              if (width > maxDim || height > maxDim) {
+                const scale = maxDim / Math.max(width, height);
+                width = Math.round(width * scale); height = Math.round(height * scale);
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = width; canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx?.drawImage(img, 0, 0, width, height);
+              const uri = canvas.toDataURL('image/jpeg', 0.7);
+              setSkillPhotos(prev => (prev.length >= 10 ? prev : [...prev, { uri, caption: '' }]));
+            };
+            img.src = ev.target.result as string;
+          };
+          reader.readAsDataURL(file);
+        });
+      };
+      input.click();
+      return;
+    }
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { Alert.alert('Error', 'Gallery access is required'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const a = result.assets[0];
+      const uri = a.base64 ? `data:image/jpeg;base64,${a.base64}` : a.uri;
+      setSkillPhotos(prev => (prev.length >= 10 ? prev : [...prev, { uri, caption: '' }]));
+    }
   };
 
   const skillsByCategory = SKILL_CATEGORIES.map(cat => ({
@@ -1214,7 +1293,7 @@ function ProviderProfile() {
                 <TouchableOpacity
                   key={skill.id}
                   style={[pStyles.skillCard, { borderColor: cat.color + '40' }]}
-                  onPress={() => { setSelectedProviderSkill(skill); setEditingRate(skill.hourly_rate.toString()); setServiceDetailVisible(true); }}
+                  onPress={() => { setSelectedProviderSkill(skill); setEditingRate(skill.hourly_rate.toString()); setSkillPhotos(skill.photos || []); setSkillExperience(skill.experience || ''); setServiceDetailVisible(true); }}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={pStyles.skillCardName}>{skill.name}</Text>
@@ -1598,51 +1677,75 @@ function ProviderProfile() {
 
                 <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>HOURLY RATE</Text>
                 <View style={pStyles.rateEditRow}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: '#374151' }}>$</Text>
                   <TextInput
                     style={[pStyles.rateInput, { flex: 1, marginBottom: 0 }]}
                     value={editingRate}
                     onChangeText={setEditingRate}
                     keyboardType="numeric"
                     placeholder="25"
+                    data-testid="skill-rate-input"
                   />
-                  <TouchableOpacity
-                    style={pStyles.rateSaveBtn}
-                    onPress={() => {
-                      const rate = parseFloat(editingRate);
-                      if (!isNaN(rate) && rate > 0) {
-                        updateSkillRate(selectedProviderSkill.id, rate);
-                        Alert.alert('Saved', 'Rate updated');
-                        setServiceDetailVisible(false);
-                      } else {
-                        Alert.alert('Error', 'Enter a valid rate');
-                      }
-                    }}
-                  >
-                    <Text style={pStyles.rateSaveBtnText}>Save</Text>
-                  </TouchableOpacity>
+                  <Text style={{ fontSize: 14, color: '#6b7280' }}>/hr</Text>
                 </View>
 
-                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>WORK PHOTOS</Text>
-                {portfolioPhotos.length > 0 ? (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                    {portfolioPhotos.slice(0, 5).map((photo, i) => (
-                      <Image key={i} source={{ uri: photo }} style={pStyles.portfolioPhoto} />
-                    ))}
-                  </ScrollView>
-                ) : null}
-                <TouchableOpacity style={[pStyles.addPhotoBtn, { marginTop: 8 }]} onPress={pickPortfolioPhoto}>
-                  <Ionicons name="camera-outline" size={20} color="#6b7280" />
-                  <Text style={pStyles.addPhotoBtnText}>Add photo</Text>
-                </TouchableOpacity>
-
-                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>OTHER INFORMATION</Text>
-                <TouchableOpacity style={pStyles.infoRow} onPress={() => { setServiceDetailVisible(false); setTimeout(() => setBioModalVisible(true), 300); }}>
-                  <Ionicons name="document-text-outline" size={22} color="#374151" />
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={pStyles.infoRowText}>Experience description</Text>
-                    {bio ? <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }} numberOfLines={1}>{bio}</Text> : null}
+                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>
+                  WORK PHOTOS FOR “{selectedProviderSkill.name.toUpperCase()}” ({skillPhotos.length}/10)
+                </Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                  Add up to 10 photos of your work for this specific service. You can caption each one.
+                </Text>
+                {skillPhotos.map((ph, i) => (
+                  <View key={i} style={pStyles.skillPhotoRow}>
+                    <Image source={{ uri: ph.uri }} style={pStyles.skillPhotoThumb} />
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <TextInput
+                        style={pStyles.skillCaptionInput}
+                        value={ph.caption}
+                        onChangeText={(t) => setSkillPhotos(prev => prev.map((p, idx) => idx === i ? { ...p, caption: t } : p))}
+                        placeholder="Add a caption (e.g., New outlet install)"
+                        placeholderTextColor="#9ca3af"
+                        data-testid={`skill-photo-caption-${i}`}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setSkillPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                      data-testid={`skill-photo-remove-${i}`}
+                      style={{ padding: 6 }}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                    </TouchableOpacity>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+                ))}
+                {skillPhotos.length < 10 && (
+                  <TouchableOpacity style={[pStyles.addPhotoBtn, { marginTop: 10 }]} onPress={pickSkillPhoto} data-testid="skill-add-photo-btn">
+                    <Ionicons name="camera-outline" size={20} color="#6b7280" />
+                    <Text style={pStyles.addPhotoBtnText}>Add photo</Text>
+                  </TouchableOpacity>
+                )}
+
+                <Text style={[pStyles.serviceSectionLabel, { marginTop: 24 }]}>EXPERIENCE WITH THIS SERVICE</Text>
+                <TextInput
+                  style={pStyles.experienceInput}
+                  value={skillExperience}
+                  onChangeText={setSkillExperience}
+                  placeholder={`Describe your experience with ${selectedProviderSkill.name.toLowerCase()} — years, typical jobs, certifications…`}
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                  numberOfLines={5}
+                  textAlignVertical="top"
+                  data-testid="skill-experience-input"
+                />
+
+                <TouchableOpacity
+                  style={[pStyles.rateSaveBtn, { marginTop: 24, paddingVertical: 14, alignItems: 'center', opacity: savingSkill ? 0.6 : 1 }]}
+                  onPress={saveSkillDetails}
+                  disabled={savingSkill}
+                  data-testid="save-skill-details-btn"
+                >
+                  {savingSkill
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={pStyles.rateSaveBtnText}>Save changes</Text>}
                 </TouchableOpacity>
               </ScrollView>
             </View>
@@ -2318,6 +2421,10 @@ const pStyles = StyleSheet.create({
   addPhotoBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f9fafb', borderRadius: 10, padding: 16, marginTop: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: '#d1d5db' },
   addPhotoBtnText: { fontSize: 14, color: '#6b7280' },
   portfolioPhoto: { width: 100, height: 100, borderRadius: 8, marginRight: 8 },
+  skillPhotoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: '#f9fafb', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#eef2f7' },
+  skillPhotoThumb: { width: 64, height: 64, borderRadius: 8, backgroundColor: '#e5e7eb' },
+  skillCaptionInput: { fontSize: 14, color: '#111827', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#fff' },
+  experienceInput: { fontSize: 14, color: '#111827', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 12, marginTop: 8, minHeight: 110, backgroundColor: '#f9fafb' },
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   infoRowText: { flex: 1, fontSize: 15, color: '#111827' },
   serviceDetailTabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', backgroundColor: '#fff' },
