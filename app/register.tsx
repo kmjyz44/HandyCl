@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../utils/api';
 import { showAlert } from '../utils/alert';
+import Head from 'expo-router/head';
 
 export default function Register() {
   const router = useRouter();
@@ -61,6 +62,11 @@ export default function Register() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <Head>
+        <title>Sign Up — Ono-Fix</title>
+        <meta name="description" content="Create your free Ono-Fix account. Snap a photo, get matched with vetted local pros, and book home services in minutes." />
+        <link rel="canonical" href="https://ono-fix.com/register" />
+      </Head>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#111827" />

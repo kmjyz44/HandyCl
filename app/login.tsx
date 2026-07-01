@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../utils/api';
+import Head from 'expo-router/head';
 
 export default function Login() {
   const router = useRouter();
@@ -52,6 +53,11 @@ export default function Login() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <Head>
+        <title>Log In — Ono-Fix</title>
+        <meta name="description" content="Log in to your Ono-Fix account to book trusted local pros or manage your jobs." />
+        <link rel="canonical" href="https://ono-fix.com/login" />
+      </Head>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Ionicons name="hammer" size={64} color="#2563eb" />

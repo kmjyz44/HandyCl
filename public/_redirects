@@ -1,2 +1,2 @@
-/sitemap.xml  https://handyhub-nbvo.onrender.com/api/seo/sitemap.xml  200
-/api/*  https://handyhub-nbvo.onrender.com/api/:splat  200
+/sitemap.xml  https://backend-production-a461.up.railway.app/api/seo/sitemap.xml  200
+/api/*  https://backend-production-a461.up.railway.app/api/:splat  200

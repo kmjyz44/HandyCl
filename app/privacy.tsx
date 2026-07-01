@@ -2,11 +2,18 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Head from 'expo-router/head';
 
 export default function PrivacyPolicy() {
   const router = useRouter();
   return (
     <View style={styles.container}>
+      <Head>
+        <title>Privacy Policy — Ono-Fix</title>
+        <meta name="description" content="Learn how Ono-Fix collects, uses, and protects your personal information across our AI-powered home services platform." />
+        <link rel="canonical" href="https://ono-fix.com/privacy" />
+        <meta name="robots" content="index, follow" />
+      </Head>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <Ionicons name="arrow-back" size={24} color="#111827" />

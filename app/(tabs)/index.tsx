@@ -10,6 +10,7 @@ import Head from 'expo-router/head';
 import { useAuthStore } from '../../store/authStore';
 import { useBookingStore } from '../../store/bookingStore';
 import { api } from '../../utils/api';
+import { showAlertWithButtons } from '../../utils/alert';
 import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
@@ -21,15 +22,15 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 // why the home grid showed blank grey cards). These IDs are publicly hosted
 // images that 200 from the images.unsplash.com CDN.
 const FALLBACK_COVERS: Record<string, string> = {
-  assembly:          'https://images.unsplash.com/photo-1503602642458-232111445657?w=800&q=80&auto=format&fit=crop',
-  cleaning:          'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80&auto=format&fit=crop',
-  home_improvements: 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=800&q=80&auto=format&fit=crop',
-  moving:            'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80&auto=format&fit=crop',
-  outdoor:           'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80&auto=format&fit=crop',
-  personal:          'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=800&q=80&auto=format&fit=crop',
-  it_tech:           'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80&auto=format&fit=crop',
-  events:            'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&q=80&auto=format&fit=crop',
-  other:             'https://images.unsplash.com/photo-1581092334651-ddf26d9a09d0?w=800&q=80&auto=format&fit=crop',
+  assembly:          'https://images.unsplash.com/photo-1503602642458-232111445657?w=500&q=75&auto=format&fit=crop',
+  cleaning:          'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=75&auto=format&fit=crop',
+  home_improvements: 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=500&q=75&auto=format&fit=crop',
+  moving:            'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&q=75&auto=format&fit=crop',
+  outdoor:           'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=500&q=75&auto=format&fit=crop',
+  personal:          'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=500&q=75&auto=format&fit=crop',
+  it_tech:           'https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&q=75&auto=format&fit=crop',
+  events:            'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=500&q=75&auto=format&fit=crop',
+  other:             'https://images.unsplash.com/photo-1581092334651-ddf26d9a09d0?w=500&q=75&auto=format&fit=crop',
 };
 
 const SKILL_CATEGORIES = [
@@ -639,7 +640,7 @@ export default function HomeScreen() {
         msg = 'In your browser: click the install icon in the address bar, or the ⋮ menu → "Install Ono-Fix".';
       }
     } catch {}
-    Alert.alert('Install Ono-Fix', msg);
+    showAlertWithButtons('Install Ono-Fix', msg, [{ text: 'Got it' }]);
   };
 
   const loadTaskers = async () => {
@@ -866,6 +867,8 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+            <Text style={s.heroTitle}>One Photo. One Solution.</Text>
+            <Text style={s.heroSubtitle}>Snap the problem — AI finds the right pro.</Text>
           </View>
         ) : (
           <View style={s.header}>
@@ -916,7 +919,7 @@ export default function HomeScreen() {
         <View style={s.aiBlock}>
           <View style={s.aiTitleRow}>
             <View style={{ flex: 1 }}>
-              <Text style={s.aiBlockTitle}>One Photo. One Solution.</Text>
+              <Text style={s.aiBlockTitle}>Identify it with AI</Text>
               <Text style={s.aiBlockSub}>Snap the problem — AI finds the right pro.</Text>
             </View>
             {Platform.OS === 'web' && !isStandalone ? (
@@ -2360,8 +2363,8 @@ const s = StyleSheet.create({
   },
 
   // Landing hero (guest)
-  heroHeader: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingTop: 26, paddingBottom: 8 },
-  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+  heroHeader: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingTop: 26, paddingBottom: 14 },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   heroBrand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroLogo: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   heroBrandText: { color: '#fff', fontSize: 16, fontWeight: '700' },
@@ -2370,8 +2373,8 @@ const s = StyleSheet.create({
   heroLoginBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   heroSignupBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: '#fff' },
   heroSignupBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
-  heroTitle: { color: '#fff', fontSize: 18, fontWeight: '800', lineHeight: 23, marginBottom: 4 },
-  heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 12, lineHeight: 16 },
+  heroTitle: { color: '#fff', fontSize: 15, fontWeight: '800', lineHeight: 20, marginBottom: 3 },
+  heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 11, lineHeight: 15, marginBottom: 4 },
 
   // How it works section (landing)
   howItWorks: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginTop: 8, borderWidth: 1, borderColor: '#f3f4f6' },

@@ -321,3 +321,10 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - Headline "One Photo. One Solution." + sub-line now live in the white AI block title.
 - "Install app" link now ALWAYS shown on web (Platform.web && !isStandalone), no longer gated on beforeinstallprompt. installApp(): uses native prompt if available, else platform-specific instructions (iOS Share→Add to Home Screen / Android ⋮→Install / desktop address-bar). isStandalone state hides it once installed.
 - esbuild clean. Needs Save to GitHub → Netlify.
+
+## 2026-07-01 — SEO finalize + blue-hero headline + Install button fix + Railway redirects
+- HEADLINE: moved "One Photo. One Solution." + sub-line back onto the blue guest hero (heroTitle 18→15, subtitle 12→11, tighter paddings). AI block title changed to "Identify it with AI" (kept sub + Install pill).
+- INSTALL BUTTON FIX (P1): root cause — index.tsx imported `Alert` from react-native (no-op on RN Web), so installApp()'s fallback instructions (the common case: desktop / iOS / no beforeinstallprompt) silently did nothing. Now uses `showAlertWithButtons` (in-app modal) → button works everywhere.
+- SEO (completed): added `<Head>` (title/description/canonical) to terms, privacy, login, register (index already had one; +html.tsx already carries JSON-LD/GA4/GSC/OG). Reduced Unsplash category thumbnails w=800→500, q=80→75 (auto=format serves WebP/AVIF) for LCP/CWV.
+- BACKEND URL FIX: public/_redirects was pointing /sitemap.xml + /api/* to onrender.com; user confirmed backend is on Railway → repointed to https://backend-production-a461.up.railway.app/api/... (static public/robots.txt kept, served by Netlify).
+- VERIFIED: babel parse OK for all 5 edited .tsx; backend /api/seo/sitemap.xml (incl. category URLs) + /api/seo/robots.txt curl-OK. Frontend visual verification pending on Netlify after Save to GitHub (pod serves CRA placeholder, not Expo).

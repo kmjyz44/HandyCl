@@ -2,11 +2,18 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Head from 'expo-router/head';
 
 export default function TermsOfUse() {
   const router = useRouter();
   return (
     <View style={styles.container}>
+      <Head>
+        <title>Terms of Use — Ono-Fix</title>
+        <meta name="description" content="Read the Ono-Fix Terms of Use governing your access to and use of our AI-powered home services marketplace." />
+        <link rel="canonical" href="https://ono-fix.com/terms" />
+        <meta name="robots" content="index, follow" />
+      </Head>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
