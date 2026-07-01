@@ -7619,8 +7619,10 @@ def _parse_expiry(expiry: str) -> Tuple[int, int]:
 
 class SavedAddressCreate(BaseModel):
     label: Optional[str] = "Home"
-    street: str
-    city: str
+    street: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    unit: Optional[str] = None
     zip: Optional[str] = None
 
 @api_router.get("/users/payment-methods")
@@ -7690,6 +7692,8 @@ async def add_saved_address(
         "label": data.label,
         "street": data.street,
         "city": data.city,
+        "state": data.state,
+        "unit": data.unit,
         "zip": data.zip
     }
     await db.users.update_one(

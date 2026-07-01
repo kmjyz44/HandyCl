@@ -57,6 +57,9 @@ function ClientProfile() {
   const [addressLabel, setAddressLabel] = useState('');
   const [addressText, setAddressText] = useState('');
   const [addressCity, setAddressCity] = useState('');
+  const [addressState, setAddressState] = useState('Illinois');
+  const [addressUnit, setAddressUnit] = useState('');
+  const [addressZip, setAddressZip] = useState('');
 
   useEffect(() => {
     loadData();
@@ -243,19 +246,21 @@ function ClientProfile() {
   };
 
   const handleAddAddress = async () => {
-    if (!addressText.trim() || !addressCity.trim()) {
-      Alert.alert('Error', 'Enter the address and city');
+    if (!addressText.trim() || !addressCity.trim() || !addressState.trim()) {
+      Alert.alert('Error', 'Enter at least state, city and street');
       return;
     }
     try {
       await api.addSavedAddress({
         label: addressLabel.trim() || 'My address',
-        address: addressText.trim(),
+        street: addressText.trim(),
         city: addressCity.trim(),
+        state: addressState.trim(),
+        unit: addressUnit.trim() || undefined,
+        zip: addressZip.trim() || undefined,
       });
-      setAddressLabel('');
-      setAddressText('');
-      setAddressCity('');
+      setAddressLabel(''); setAddressText(''); setAddressCity('');
+      setAddressState('Illinois'); setAddressUnit(''); setAddressZip('');
       setAddAddressVisible(false);
       loadData();
       Alert.alert('Success', 'Address added');
@@ -434,8 +439,8 @@ function ClientProfile() {
                   </View>
                   <View style={styles.addressInfo}>
                     <Text style={styles.addressLabel}>{addr.label || 'Address'}</Text>
-                    <Text style={styles.addressText}>{addr.address}</Text>
-                    <Text style={styles.addressCity}>{addr.city}</Text>
+                    <Text style={styles.addressText}>{[addr.street || addr.address, addr.unit].filter(Boolean).join(', ')}</Text>
+                    <Text style={styles.addressCity}>{[addr.city, addr.state, addr.zip].filter(Boolean).join(', ')}</Text>
                   </View>
                 </View>
                 <TouchableOpacity onPress={() => handleDeleteAddress(addr._id || addr.id)}>
@@ -644,29 +649,20 @@ function ClientProfile() {
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
-            <View style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
               <Text style={styles.label}>Label (e.g., Home, Work)</Text>
-              <TextInput
-                style={styles.input}
-                value={addressLabel}
-                onChangeText={setAddressLabel}
-                placeholder="Home"
-              />
-              <Text style={styles.label}>Address</Text>
-              <TextInput
-                style={styles.input}
-                value={addressText}
-                onChangeText={setAddressText}
-                placeholder="123 Main St"
-              />
+              <TextInput style={styles.input} value={addressLabel} onChangeText={setAddressLabel} placeholder="Home" data-testid="addr-label-input" />
+              <Text style={styles.label}>State</Text>
+              <TextInput style={styles.input} value={addressState} onChangeText={setAddressState} placeholder="Illinois" data-testid="addr-state-input" />
               <Text style={styles.label}>City</Text>
-              <TextInput
-                style={styles.input}
-                value={addressCity}
-                onChangeText={setAddressCity}
-                placeholder="New York"
-              />
-            </View>
+              <TextInput style={styles.input} value={addressCity} onChangeText={setAddressCity} placeholder="Chicago" data-testid="addr-city-input" />
+              <Text style={styles.label}>Street and number</Text>
+              <TextInput style={styles.input} value={addressText} onChangeText={setAddressText} placeholder="123 Main St" data-testid="addr-street-input" />
+              <Text style={styles.label}>Apt / Unit / Floor (optional)</Text>
+              <TextInput style={styles.input} value={addressUnit} onChangeText={setAddressUnit} placeholder="Apt 4B" data-testid="addr-unit-input" />
+              <Text style={styles.label}>ZIP code (optional)</Text>
+              <TextInput style={styles.input} value={addressZip} onChangeText={setAddressZip} placeholder="60601" keyboardType="numeric" data-testid="addr-zip-input" />
+            </ScrollView>
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={[styles.btn, styles.btnCancel]}

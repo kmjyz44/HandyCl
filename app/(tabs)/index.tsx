@@ -94,6 +94,7 @@ interface BookingState {
   city: string;
   state: string;
   unit: string;
+  zip: string;
   dates: string[];      // multiple selected dates
   date: string;         // primary date (first selected)
   timeFrom: string;     // start time
@@ -335,7 +336,7 @@ export default function HomeScreen() {
   const bookParams = useLocalSearchParams();
   const [booking, setBooking] = useState<BookingState>({
     categoryId: '', categoryName: '', skillName: '', taskDescription: '',
-    address: '', city: '', state: 'Illinois', unit: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null,
+    address: '', city: '', state: 'Illinois', unit: '', zip: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null,
     photos: [],
   });
   const [taskers, setTaskers] = useState<any[]>([]);
@@ -353,6 +354,30 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
+
+  // Prefill the booking address from the client's saved (default) address.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.getSavedAddresses();
+        const list = res?.addresses || res || [];
+        if (!cancelled && Array.isArray(list) && list.length > 0) {
+          const a = list.find((x: any) => x.is_default) || list[0];
+          setBooking(b => (b.address ? b : {
+            ...b,
+            address: a.street || a.address || '',
+            city: a.city || '',
+            state: a.state || b.state,
+            unit: a.unit || '',
+            zip: a.zip || '',
+          }));
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   // "Book this pro" entry — launched from an executor profile with params.
   useEffect(() => {
@@ -845,7 +870,7 @@ export default function HomeScreen() {
       service_id: '',
       date: primaryDate,
       time: booking.timeFrom || booking.time,
-      address: `${booking.unit ? booking.address + ', ' + booking.unit : booking.address}, ${booking.city}, ${booking.state}`,
+      address: `${booking.unit ? booking.address + ', ' + booking.unit : booking.address}, ${booking.city}, ${booking.state}${booking.zip ? ' ' + booking.zip : ''}`,
       status: 'pending',
       total_price: rate,
       payment_status: 'pending',
@@ -862,10 +887,11 @@ export default function HomeScreen() {
       provider_id: tasker.user_id || tasker.provider_id,
       provider_hourly_rate: rate,
       category: booking.categoryId,
-      address: `${booking.unit ? booking.address + ', ' + booking.unit : booking.address}, ${booking.city}, ${booking.state}`,
+      address: `${booking.unit ? booking.address + ', ' + booking.unit : booking.address}, ${booking.city}, ${booking.state}${booking.zip ? ' ' + booking.zip : ''}`,
       city: booking.city,
       state: booking.state,
       unit: booking.unit || undefined,
+      zip: booking.zip || undefined,
       date: primaryDate,
       time: booking.timeFrom || booking.time,
       notes: notes || undefined,
@@ -1603,6 +1629,7 @@ export default function HomeScreen() {
                 address: parts.line1 || formatted,
                 city: parts.city || b.city,
                 state: parts.state || b.state,
+                zip: parts.postal_code || b.zip,
                 lat: parts.lat ?? b.lat,
                 lng: parts.lon ?? b.lng,
               }));
@@ -1618,6 +1645,18 @@ export default function HomeScreen() {
             onChangeText={v => setBooking(b => ({ ...b, unit: v }))}
             placeholderTextColor="#9ca3af"
             data-testid="booking-unit-input"
+          />
+
+          {/* 5. ZIP code */}
+          <Text style={s.fieldLabel}>ZIP code</Text>
+          <TextInput
+            style={s.input}
+            placeholder="e.g., 60601"
+            value={booking.zip}
+            onChangeText={v => setBooking(b => ({ ...b, zip: v }))}
+            placeholderTextColor="#9ca3af"
+            keyboardType="numeric"
+            data-testid="booking-zip-input"
           />
         </ScrollView>
 
