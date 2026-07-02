@@ -55,6 +55,9 @@ export default function TermsOfUse() {
         <Text style={styles.p}>
           Clients pay the agreed service price plus a Platform service fee (commission) that is added on top of the Provider's price. Providers receive their full set rate, less applicable Provider taxes. Tips are voluntary and 100% paid to the Provider. All payments are processed by our payment processors (Stripe, etc.). By using the Platform, you authorize Ono-Fix to charge your payment method.
         </Text>
+        <Text style={styles.p}>
+          <Text style={styles.bold}>Minimum charge:</Text> Every job is billed for a minimum of one (1) hour of labor. A Provider may set a higher personal minimum (e.g., 1.5 or 2 hours), which is displayed on the Provider's profile before the Client confirms a booking. Work performed beyond the minimum is billed per minute at the Provider's hourly rate. Providers are <Text style={styles.bold}>required to clearly inform the Client of their minimum charge before starting any work</Text>. By confirming a booking, the Client acknowledges and agrees to the displayed minimum charge.
+        </Text>
 
         <Text style={styles.h2}>7. Cancellation & Refunds</Text>
         <Text style={styles.p}>

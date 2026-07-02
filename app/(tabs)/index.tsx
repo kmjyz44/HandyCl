@@ -387,6 +387,7 @@ export default function HomeScreen() {
     const pid = bookParams?.bookProvider as string | undefined;
     if (pid && (!forcedProvider || forcedProvider.user_id !== pid)) {
       const rate = bookParams?.providerRate ? parseFloat(bookParams.providerRate as string) : undefined;
+      const minH = bookParams?.providerMinHours ? parseFloat(bookParams.providerMinHours as string) : 1;
       const prov = {
         user_id: pid,
         name: (bookParams?.providerName as string) || 'Pro',
@@ -394,6 +395,7 @@ export default function HomeScreen() {
         picture: (bookParams?.providerPicture as string) || null,
         final_hourly_rate: rate,
         hourly_rate: rate,
+        minimum_hours: minH,
         profile: {},
       };
       setForcedProvider(prov);
@@ -2087,6 +2089,7 @@ export default function HomeScreen() {
               const reviews = tasker.total_reviews || tasker.review_count || 0;
               const displayName = tasker.name || tasker.full_name || tasker.username || 'Pro';
               const skills = Array.isArray(profile.skills) ? profile.skills : [];
+              const minHours = Math.max(1, Number(tasker.minimum_hours || profile.minimum_hours || 1));
               return (
               <TouchableOpacity key={tasker.user_id || idx} style={s.taskerCard} onPress={() => { setBooking(b => ({ ...b, selectedTasker: tasker })); setStep('tasker_profile'); }}>
                 <View style={s.taskerCardLeft}>
@@ -2113,6 +2116,7 @@ export default function HomeScreen() {
                   <Text style={s.taskerSkills} numberOfLines={1}>
                     {skills.slice(0, 3).map((sk: any) => typeof sk === 'string' ? sk : sk?.name).filter(Boolean).join(' · ') || 'Pro'}
                   </Text>
+                  <Text style={s.taskerMinHint}>Min {minHours} hr{minHours > 1 ? 's' : ''} · ≈ ${(rate * minHours).toFixed(0)}</Text>
                 </View>
                 <View style={s.taskerCardRight}>
                   <Text style={s.taskerRate}>${rate}</Text>
@@ -2141,6 +2145,7 @@ export default function HomeScreen() {
     const tName = tasker.name || tasker.full_name || tasker.username || 'Pro';
     const tSkills = Array.isArray(tProfile.skills) ? tProfile.skills : [];
     const tPhotos = Array.isArray(tProfile.portfolio_photos) ? tProfile.portfolio_photos : [];
+    const tMinHours = Math.max(1, Number(tasker.minimum_hours || tProfile.minimum_hours || 1));
     return (
       <View style={s.container}>
         <View style={s.stepHeader}>
@@ -2168,6 +2173,14 @@ export default function HomeScreen() {
               <Text style={[s.ratingText, { marginLeft: 6 }]}>{tRating > 0 ? tRating.toFixed(1) : 'New'} · {tReviews} reviews</Text>
             </View>
             <Text style={s.taskerHeroRate}>${tRate}/hr</Text>
+          </View>
+
+          {/* Minimum charge notice */}
+          <View style={s.minChargeNotice} data-testid="tasker-min-charge">
+            <Ionicons name="time-outline" size={18} color="#b45309" />
+            <Text style={s.minChargeNoticeText}>
+              Minimum charge: {tMinHours} hour{tMinHours > 1 ? 's' : ''} (≈ ${(tRate * tMinHours).toFixed(0)}). You pay for at least {tMinHours} hour{tMinHours > 1 ? 's' : ''}; extra time is billed per minute.
+            </Text>
           </View>
 
           {/* Task summary */}
@@ -2543,6 +2556,7 @@ const s = StyleSheet.create({
   ratingText: { fontSize: 13, fontWeight: '600', color: '#111827' },
   reviewCount: { fontSize: 12, color: '#6b7280' },
   taskerSkills: { fontSize: 12, color: '#6b7280' },
+  taskerMinHint: { fontSize: 11, color: '#b45309', marginTop: 3, fontWeight: '600' },
   taskerCardRight: { alignItems: 'flex-end' },
   taskerRate: { fontSize: 18, fontWeight: '800', color: '#2563eb' },
   taskerRateLabel: { fontSize: 12, color: '#6b7280' },
@@ -2554,6 +2568,8 @@ const s = StyleSheet.create({
   taskerHeroAvatar: { width: 96, height: 96, borderRadius: 48, marginBottom: 12 },
   taskerHeroName: { fontSize: 22, fontWeight: '800', color: '#111827', marginBottom: 6 },
   taskerHeroRate: { fontSize: 20, fontWeight: '700', color: '#2563eb', marginTop: 6 },
+  minChargeNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 12, padding: 12, marginHorizontal: 16, marginTop: 12 },
+  minChargeNoticeText: { flex: 1, fontSize: 12, color: '#92400e', lineHeight: 17 },
   bookingSummaryCard: { margin: 16, backgroundColor: '#eff6ff', borderRadius: 14, padding: 16 },
   bookingSummaryTitle: { fontSize: 14, fontWeight: '700', color: '#1d4ed8', marginBottom: 10 },
   bookingSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },

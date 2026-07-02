@@ -870,6 +870,7 @@ function ProviderProfile() {
   // Bio/experience
   const [bio, setBio] = useState('');
   const [experienceYears, setExperienceYears] = useState('');
+  const [minimumHours, setMinimumHours] = useState(1);
   const [bioModalVisible, setBioModalVisible] = useState(false);
   const [accountDetailsVisible, setAccountDetailsVisible] = useState(false);
   const [editingAccountDetails, setEditingAccountDetails] = useState(false);
@@ -909,6 +910,7 @@ function ProviderProfile() {
       setProfile(data);
       setBio(data.bio || '');
       setExperienceYears(data.experience_years?.toString() || '');
+      setMinimumHours(Math.max(1, Number(data.minimum_hours || 1)));
       // Load reviews
       try {
         const reviewsData = await api.getProviderReviews(data.user_id || user?.user_id || '');
@@ -2242,6 +2244,24 @@ function ProviderProfile() {
                 placeholder="5"
                 keyboardType="numeric"
               />
+              <Text style={styles.label}>Minimum charge</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                Clients are charged at least this many hours. Time beyond it is billed per minute. You must inform the client of this minimum before starting.
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {[1, 1.5, 2].map((h) => (
+                  <TouchableOpacity
+                    key={h}
+                    style={[styles.minHrChip, minimumHours === h && styles.minHrChipActive]}
+                    onPress={() => setMinimumHours(h)}
+                    data-testid={`min-hours-${h}`}
+                  >
+                    <Text style={[styles.minHrChipText, minimumHours === h && styles.minHrChipTextActive]}>
+                      {h} hr{h > 1 ? 's' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
             <View style={styles.modalFooter}>
               <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setBioModalVisible(false)}>
@@ -2250,7 +2270,7 @@ function ProviderProfile() {
               <TouchableOpacity
                 style={[styles.btn, styles.btnSave]}
                 onPress={() => {
-                  saveProfile({ bio, experience_years: experienceYears ? parseInt(experienceYears) : undefined });
+                  saveProfile({ bio, experience_years: experienceYears ? parseInt(experienceYears) : undefined, minimum_hours: minimumHours });
                   setBioModalVisible(false);
                   Alert.alert('Saved', 'Experience description updated');
                 }}
@@ -2338,6 +2358,10 @@ const styles = StyleSheet.create({
   modalBody: { padding: 24 },
   modalFooter: { flexDirection: 'row', gap: 12, padding: 24, paddingTop: 0 },
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  minHrChip: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', alignItems: 'center', backgroundColor: '#fff' },
+  minHrChipActive: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  minHrChipText: { fontSize: 15, fontWeight: '600', color: '#374151' },
+  minHrChipTextActive: { color: '#2563eb' },
   input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, fontSize: 16, marginBottom: 16, backgroundColor: '#f9fafb' },
   inputRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   addInlineBtn: { backgroundColor: '#2563eb', width: 48, height: 48, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },

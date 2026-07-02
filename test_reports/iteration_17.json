@@ -1,0 +1,43 @@
+{
+  "summary": "Backend-only regression for new 'minimum billable hours' rule. 12/12 pytest cases PASS against https://payment-flow-test-39.preview.emergentagent.com. Verified: (a) PUT /api/profile/executor persists minimum_hours for 1.0/1.5/2.0 and BOTH GET /api/profile/executor (private) and public GET /api/profile/executor/{user_id} return the saved value; (b) GET /api/executors/by-service exposes a numeric minimum_hours field on every row (defaults to ≥1.0); (c) task completion billing is correct end-to-end: with provider.minimum_hours=1.5 and actual_hours=0.25 → billable_hours=1.5, labor_cost=$37.50; with minimum_hours=2.0 and actual_hours=0.5 → billable=2.0, labor=$50.00; with minimum_hours=1.0 and actual_hours=2.5 → billable=2.5, labor=$62.50. Task doc now includes both billable_hours and minimum_hours after complete. (d) Regression: POST /api/bookings persists state/unit/zip (readback via GET /api/bookings/{id} preserves all four fields); POST /api/users/saved-addresses accepts label/street/city/state/unit/zip and readback via GET returns them intact.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tested_features": {
+    "PUT /api/profile/executor persists minimum_hours": "1.0/1.5/2.0 all persist; both GET /api/profile/executor and GET /api/profile/executor/{user_id} return the same value.",
+    "GET /api/executors/by-service exposes minimum_hours": "Every row has numeric minimum_hours ≥1.0; provider@handyhub.com row correctly reflects the value most recently set via PUT.",
+    "Task completion billing rule": "labor_cost = max(provider.minimum_hours, actual_hours) * hourly_rate — verified for short jobs at min=1.5 and min=2.0 (charged full minimum) and long job at min=1.0 (charged actual). Completed task doc contains billable_hours and minimum_hours fields.",
+    "POST /api/bookings state/unit/zip regression": "200 OK; GET /api/bookings/{id} returns state='Illinois', unit='Apt 4B', zip='60016', city='Niles' byte-exact.",
+    "POST /api/users/saved-addresses regression": "200 OK; response echoes label/street/city/state/unit/zip; GET /api/users/saved-addresses returns the same record until deleted."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_minimum_hours_billing.py",
+    "/app/test_reports/pytest/minimum_hours_billing.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py L2882 uses `max(1.0, float((prov or {}).get('minimum_hours') or 1.0))` — this correctly enforces the platform-wide floor of 1h even if a provider somehow saves <1 in the DB. Good.",
+    "server.py L3987 uses the same `max(1.0, …)` guard on the listing endpoint — consistent with completion logic. Good.",
+    "ExecutorProfileUpdate.minimum_hours has no explicit bounds validation (any float would be accepted). Not a functional bug (the floor is enforced at billing time) but consider `ge=1.0, le=2.0` and/or restrict to {1.0, 1.5, 2.0} in the Pydantic model per product spec. Report-only.",
+    "The bookings collection has no DELETE endpoint — test data can only be cleaned via direct DB access. Consider adding an admin DELETE /api/admin/bookings/{id} for QA/cleanup workflows (report-only)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_minimum_hours_billing.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12)",
+    "frontend": "not tested (per request — Expo app not served in this preview pod)"
+  },
+  "test_credentials": "admin@handyhub.com/Admin2024!, client@handyhub.com/Client2024!, provider@handyhub.com/Provider2024! — all verified. Login POST /api/auth/login returns session_token; used as Bearer.",
+  "seed_data_creation": "3 TEST_ bookings + tasks created (short-15, short-20, long-25) and 1 TEST_ regression booking, all cleaned up via direct MongoDB delete_many({'title': /^TEST_/}) on bookings & tasks collections. Provider minimum_hours restored to 1.5 by the module-scoped teardown fixture. Saved-address record explicitly deleted via DELETE /api/users/saved-addresses/{id} in the test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression file: /app/backend/tests/test_minimum_hours_billing.py. It uses a module-scoped `original_minimum_hours` fixture to snapshot & restore provider@handyhub.com's minimum_hours so tests can freely mutate it. To create a task-completion scenario cheaply: POST /api/bookings with provider_id + provider_hourly_rate → backend auto-creates a task in 'pending_acceptance' → find the task via GET /api/provider/tasks (filter by booking_id) → POST /tasks/{id}/accept → /start → /complete with explicit actual_hours in payload → GET /tasks/{id} to inspect billable_hours/minimum_hours/labor_cost. Note the /complete response is minimal ({message,status,actual_hours}); the persisted billing fields must be read via GET /api/tasks/{id}. No admin DELETE endpoint for bookings — use direct MongoDB cleanup on TEST_ prefixed titles.",
+  "rca of the issue": "N/A — feature works as specified. server.py:2879-2884 computes `min_hours = max(1.0, provider.minimum_hours or 1.0)` and `billable = max(min_hours, round(actual_hours, 2))`, then `labor_cost = billable * hourly_rate`. Task document persists actual_hours, billable_hours, minimum_hours, labor_cost, final_price, and provider_payout at completion time (L2908-2926). Public and private profile endpoints read minimum_hours directly from db.executor_profiles; the executors/by-service listing normalizes it at L3987 with the same 1.0 floor."
+}

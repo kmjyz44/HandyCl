@@ -119,11 +119,12 @@ export default function ExecutorProfile() {
     const name = profile?.user?.name || 'Pro';
     const rate = pricing?.final_rate || profile?.hourly_rate || '';
     const picture = profile?.user?.picture || '';
+    const minHours = profile?.minimum_hours || 1;
     // Executor day_of_week is Monday-indexed (0=Mon..6=Sun); convert to JS getDay (0=Sun..6=Sat)
     const days = Array.from(new Set(
       (availability || []).filter(s => s.is_active).map(s => (s.day_of_week + 1) % 7)
     )).join(',');
-    router.push(`/(tabs)?bookProvider=${encodeURIComponent(id)}&providerName=${encodeURIComponent(name)}&providerRate=${encodeURIComponent(String(rate))}&providerPicture=${encodeURIComponent(picture)}&providerDays=${encodeURIComponent(days)}` as any);
+    router.push(`/(tabs)?bookProvider=${encodeURIComponent(id)}&providerName=${encodeURIComponent(name)}&providerRate=${encodeURIComponent(String(rate))}&providerPicture=${encodeURIComponent(picture)}&providerDays=${encodeURIComponent(days)}&providerMinHours=${encodeURIComponent(String(minHours))}` as any);
   };
 
   const contactExecutor = () => {
@@ -434,6 +435,13 @@ export default function ExecutorProfile() {
               <View style={[styles.pricingRow, styles.totalRow]}>
                 <Text style={styles.pricingLabel}>Final price:</Text>
                 <Text style={styles.finalPrice}>${pricing.final_rate}/hr</Text>
+              </View>
+              <View style={styles.minChargeBox}>
+                <Ionicons name="time-outline" size={16} color="#b45309" />
+                <Text style={styles.minChargeText}>
+                  Minimum charge: {(profile.minimum_hours || 1)} hour{(profile.minimum_hours || 1) > 1 ? 's' : ''}
+                  {pricing.final_rate ? ` (≈ $${(pricing.final_rate * (profile.minimum_hours || 1)).toFixed(2)})` : ''}. Time beyond that is billed per minute.
+                </Text>
               </View>
             </View>
           </View>
@@ -774,6 +782,23 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#10b981',
+  },
+  minChargeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+  },
+  minChargeText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#92400e',
+    lineHeight: 17,
   },
   footer: {
     position: 'absolute',

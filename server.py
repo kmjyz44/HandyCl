@@ -438,6 +438,7 @@ class ExecutorProfile(BaseModel):
     # Service pricing options
     fixed_price_packages: List[Dict[str, Any]] = []  # [{name, price, description}]
     minimum_order: Optional[float] = None
+    minimum_hours: float = 1.0  # min billable hours; provider may raise to 1.5 / 2
     travel_fee: Optional[float] = None
     emergency_fee_percent: Optional[float] = None
     # Portfolio & media
@@ -477,6 +478,7 @@ class ExecutorProfileCreate(BaseModel):
     hourly_rate: Optional[float] = None
     fixed_price_packages: List[Dict[str, Any]] = []
     minimum_order: Optional[float] = None
+    minimum_hours: Optional[float] = None
     travel_fee: Optional[float] = None
     emergency_fee_percent: Optional[float] = None
     portfolio_photos: List[str] = []
@@ -499,6 +501,7 @@ class ExecutorProfileUpdate(BaseModel):
     hourly_rate: Optional[float] = None
     fixed_price_packages: Optional[List[Dict[str, Any]]] = None
     minimum_order: Optional[float] = None
+    minimum_hours: Optional[float] = None
     travel_fee: Optional[float] = None
     emergency_fee_percent: Optional[float] = None
     portfolio_photos: Optional[List[str]] = None
@@ -1360,16 +1363,9 @@ async def create_notification(
 
 # ==================== EMAIL / SMS DELIVERY ====================
 
-# Minimum billable time: the first hour is always charged in full; time beyond
-# the first hour is prorated per-minute (actual_hours carries minute precision).
-MIN_BILLABLE_HOURS = 1.0
-
-
-def billable_hours(actual_hours: Optional[float]) -> float:
-    """Return the hours to charge: at least MIN_BILLABLE_HOURS, then per-minute."""
-    return max(MIN_BILLABLE_HOURS, round(float(actual_hours or 0), 2))
-
-
+# Provider "trip fee" (a.k.a. service-call / callout fee): a flat amount the
+# provider charges for travelling to the client. Charged once, on top of the
+# per-minute labor. Optional per provider (0 = none).
 async def _get_integration_keys() -> Dict[str, Any]:
     """Read admin-managed integration keys from DB. Returns {} if not configured."""
     try:
@@ -2880,7 +2876,11 @@ async def complete_task(
     # Platform commission is added ON TOP for the client (commission_paid_by=client by default),
     # OR deducted from executor's gross (commission_paid_by=executor) — controlled by admin.
     hourly_rate = task.get("hourly_rate") or task.get("provider_hourly_rate") or 0.0
-    billable = billable_hours(actual_hours)
+    # Minimum billable hours: first hour (or provider's higher minimum) is charged
+    # in full; time beyond that is prorated per-minute (actual_hours has minute precision).
+    prov = await db.executor_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0, "minimum_hours": 1})
+    min_hours = max(1.0, float((prov or {}).get("minimum_hours") or 1.0))
+    billable = max(min_hours, round(float(actual_hours or 0), 2))
     labor_cost = round(billable * hourly_rate, 2)
     executor_total = round(labor_cost + materials, 2)
 
@@ -2912,6 +2912,7 @@ async def complete_task(
             "completed_at": now,
             "actual_hours": actual_hours,
             "billable_hours": billable,
+            "minimum_hours": min_hours,
             "materials_cost": materials,
             "expenses": materials,
             "provider_notes": notes,
@@ -3983,6 +3984,7 @@ async def get_executors_by_service(
         executor["base_hourly_rate"] = base_rate
         executor["final_hourly_rate"] = final_rate
         executor["commission_percentage"] = commission_percent
+        executor["minimum_hours"] = max(1.0, float(profile.get("minimum_hours") or 1.0))
         executor["work_photos_count"] = len(profile.get("portfolio_photos") or [])
 
         filtered.append(executor)

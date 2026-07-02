@@ -6,7 +6,7 @@ const SITE_NAME = 'Ono-Fix';
 const TAGLINE = 'One Photo. One Solution.';
 const DESCRIPTION =
   'Ono-Fix — snap a photo of any home problem. Our AI identifies the issue and instantly matches you with the right trusted local pro. Plumbing, electrical, furniture assembly, cleaning and more.';
-const OG_IMAGE = `${SITE_URL}/onofix-icon-512.png`;
+const OG_IMAGE = `${SITE_URL}/onofix-og.png`;
 
 // Optional analytics / verification (set in Netlify env at build time).
 const GA4_ID = process.env.EXPO_PUBLIC_GA4_ID || '';
@@ -88,6 +88,11 @@ export default function Root({ children }: PropsWithChildren) {
         <meta property="og:description" content={DESCRIPTION} />
         <meta property="og:url" content={SITE_URL} />
         <meta property="og:image" content={OG_IMAGE} />
+        <meta property="og:image:secure_url" content={OG_IMAGE} />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content={`${SITE_NAME} — ${TAGLINE}`} />
         <meta property="og:locale" content="en_US" />
 
         {/* Twitter Card */}
@@ -95,6 +100,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="twitter:title" content={`${SITE_NAME} — ${TAGLINE}`} />
         <meta name="twitter:description" content={DESCRIPTION} />
         <meta name="twitter:image" content={OG_IMAGE} />
+        <meta name="twitter:image:alt" content={`${SITE_NAME} — ${TAGLINE}`} />
 
         {/* PWA */}
         <link rel="manifest" href="/manifest.json?v=20260701b" />
