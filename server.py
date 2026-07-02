@@ -1360,6 +1360,16 @@ async def create_notification(
 
 # ==================== EMAIL / SMS DELIVERY ====================
 
+# Minimum billable time: the first hour is always charged in full; time beyond
+# the first hour is prorated per-minute (actual_hours carries minute precision).
+MIN_BILLABLE_HOURS = 1.0
+
+
+def billable_hours(actual_hours: Optional[float]) -> float:
+    """Return the hours to charge: at least MIN_BILLABLE_HOURS, then per-minute."""
+    return max(MIN_BILLABLE_HOURS, round(float(actual_hours or 0), 2))
+
+
 async def _get_integration_keys() -> Dict[str, Any]:
     """Read admin-managed integration keys from DB. Returns {} if not configured."""
     try:
@@ -2870,7 +2880,8 @@ async def complete_task(
     # Platform commission is added ON TOP for the client (commission_paid_by=client by default),
     # OR deducted from executor's gross (commission_paid_by=executor) — controlled by admin.
     hourly_rate = task.get("hourly_rate") or task.get("provider_hourly_rate") or 0.0
-    labor_cost = round((actual_hours or 0) * hourly_rate, 2)
+    billable = billable_hours(actual_hours)
+    labor_cost = round(billable * hourly_rate, 2)
     executor_total = round(labor_cost + materials, 2)
 
     # Resolve commission rate: prefer booking snapshot → category → settings → 15%
@@ -2900,6 +2911,7 @@ async def complete_task(
             "status": TaskStatus.COMPLETED_PENDING_PAYMENT,
             "completed_at": now,
             "actual_hours": actual_hours,
+            "billable_hours": billable,
             "materials_cost": materials,
             "expenses": materials,
             "provider_notes": notes,
