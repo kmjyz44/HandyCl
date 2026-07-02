@@ -16,6 +16,7 @@ export default function VerifyPhone() {
   const [sending, setSending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState('');
+  const [smsConsent, setSmsConsent] = useState(false);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -26,6 +27,10 @@ export default function VerifyPhone() {
   const sendCode = async () => {
     if (!phone || phone.replace(/\D/g, '').length < 8) {
       setError('Enter a valid number in +1... format');
+      return;
+    }
+    if (!smsConsent) {
+      setError('Please agree to receive SMS messages to continue');
       return;
     }
     setSending(true);
@@ -94,10 +99,27 @@ export default function VerifyPhone() {
               data-testid="phone-input"
             />
             {!!error && <Text style={s.error}>{error}</Text>}
+
             <TouchableOpacity
-              style={[s.btn, sending && s.btnDisabled]}
+              style={s.consentRow}
+              onPress={() => setSmsConsent(v => !v)}
+              activeOpacity={0.7}
+              data-testid="sms-consent-checkbox"
+            >
+              <Ionicons
+                name={smsConsent ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={smsConsent ? '#2563eb' : '#9ca3af'}
+              />
+              <Text style={s.consentText}>
+                I agree to receive SMS verification messages from OnoFix. Message and data rates may apply. Reply STOP to opt out and HELP for help.
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[s.btn, (sending || !smsConsent) && s.btnDisabled]}
               onPress={sendCode}
-              disabled={sending}
+              disabled={sending || !smsConsent}
               data-testid="send-phone-code-btn"
             >
               {sending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Send code</Text>}
@@ -157,6 +179,8 @@ const s = StyleSheet.create({
   phoneInput: { width: '100%', maxWidth: 320, height: 56, borderWidth: 2, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, fontSize: 18, color: '#111827', marginBottom: 12 },
   input: { width: '100%', maxWidth: 280, height: 64, borderWidth: 2, borderColor: '#e5e7eb', borderRadius: 12, textAlign: 'center', fontSize: 28, fontWeight: '700', letterSpacing: 8, color: '#111827', marginBottom: 12 },
   error: { fontSize: 13, color: '#dc2626', marginBottom: 12 },
+  consentRow: { flexDirection: 'row', alignItems: 'flex-start', width: '100%', maxWidth: 340, marginBottom: 16, paddingHorizontal: 4 },
+  consentText: { flex: 1, marginLeft: 10, fontSize: 12, color: '#6b7280', lineHeight: 18 },
   btn: { width: '100%', maxWidth: 320, height: 50, backgroundColor: '#2563eb', borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   btnDisabled: { backgroundColor: '#9ca3af' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
