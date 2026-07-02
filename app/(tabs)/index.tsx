@@ -354,6 +354,7 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
 
   // Prefill the booking address from the client's saved (default) address.
   useEffect(() => {
@@ -363,7 +364,9 @@ export default function HomeScreen() {
       try {
         const res = await api.getSavedAddresses();
         const list = res?.addresses || res || [];
-        if (!cancelled && Array.isArray(list) && list.length > 0) {
+        if (cancelled || !Array.isArray(list)) return;
+        setSavedAddresses(list);
+        if (list.length > 0) {
           const a = list.find((x: any) => x.is_default) || list[0];
           setBooking(b => (b.address ? b : {
             ...b,
@@ -1582,6 +1585,43 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
 
+          {/* Saved addresses — quick fill for returning clients */}
+          {savedAddresses.length > 0 ? (
+            <View style={s.savedBox} data-testid="saved-addresses-block">
+              <Text style={s.savedTitle}>Use a saved address</Text>
+              {savedAddresses.map((a: any) => {
+                const selected = booking.address === (a.street || a.address || '')
+                  && booking.zip === (a.zip || '') && booking.city === (a.city || '');
+                const line = [a.street || a.address, a.unit, a.city, a.state, a.zip].filter(Boolean).join(', ');
+                return (
+                  <TouchableOpacity
+                    key={a.id || line}
+                    style={[s.savedRow, selected && s.savedRowActive]}
+                    data-testid={`saved-address-${a.id || 'item'}`}
+                    onPress={() => setBooking(b => ({
+                      ...b,
+                      address: a.street || a.address || '',
+                      city: a.city || '',
+                      state: a.state || b.state,
+                      unit: a.unit || '',
+                      zip: a.zip || '',
+                    }))}
+                  >
+                    <Ionicons
+                      name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={20}
+                      color={selected ? '#2563eb' : '#9ca3af'}
+                    />
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={s.savedLabel}>{a.label || 'My address'}</Text>
+                      <Text style={s.savedLine} numberOfLines={1}>{line}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
+
           {/* 1. State */}
           <Text style={s.fieldLabel}>State</Text>
           <TouchableOpacity
@@ -2537,6 +2577,12 @@ const s = StyleSheet.create({
   priceSummaryRate: { fontSize: 24, fontWeight: '800', color: '#15803d' },
   geoBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 16, paddingVertical: 12, marginBottom: 20 },
   geoBtnText: { fontSize: 15, color: '#2563eb', fontWeight: '600', flex: 1 },
+  savedBox: { backgroundColor: '#f9fafb', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', padding: 12, marginBottom: 20 },
+  savedTitle: { fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 8 },
+  savedRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#fff', marginBottom: 8 },
+  savedRowActive: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  savedLabel: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  savedLine: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   suggestionsBox: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginTop: -12, marginBottom: 16, overflow: 'hidden' },
   suggestionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   suggestionText: { flex: 1, fontSize: 13, color: '#374151', lineHeight: 18 },
