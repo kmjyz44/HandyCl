@@ -46,7 +46,8 @@ export default function PrivacyPolicy() {
 
         <Text style={styles.h2}>4. Communications & TCPA Consent</Text>
         <Text style={styles.p}>
-          By providing your phone number, you consent to receive transactional SMS messages (booking confirmations, payment notifications, support replies) from Ono-Fix. Standard message and data rates apply. You may opt out by replying STOP. Email communications can be unsubscribed via the link in any email or by emailing <Text style={styles.link}>privacy@handyhub.com</Text>.
+          By providing your phone number, both Clients and Providers agree: <Text style={styles.bold}>"I agree to receive SMS verification messages from OnoFix. Message and data rates may apply. Reply STOP to opt out and HELP for help."</Text>{'\n\n'}
+          We only send SMS for account verification and important updates about your service requests. Standard message and data rates apply. You may opt out at any time by replying STOP, or reply HELP for assistance. Email communications can be unsubscribed via the link in any email or by emailing <Text style={styles.link}>privacy@handyhub.com</Text>.
         </Text>
 
         <Text style={styles.h2}>5. Cookies & Analytics</Text>
