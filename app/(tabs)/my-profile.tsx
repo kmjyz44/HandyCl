@@ -2153,7 +2153,7 @@ function ProviderProfile() {
               <Ionicons name="mail-outline" size={24} color="#2563eb" />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e40af' }}>Support email</Text>
-                <Text style={{ fontSize: 14, color: '#2563eb', marginTop: 2 }}>support@handyhub.com</Text>
+                <Text style={{ fontSize: 14, color: '#2563eb', marginTop: 2 }}>Nexus.ss.llc@gmail.com</Text>
               </View>
             </View>
 

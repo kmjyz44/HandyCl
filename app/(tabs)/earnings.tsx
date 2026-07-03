@@ -127,10 +127,10 @@ export default function Earnings() {
       const blob = await api.downloadEarningsReport({ type, month, year });
       const filename =
         type === 'monthly'
-          ? `handyhub-earnings-${month}.pdf`
+          ? `onofix-earnings-${month}.pdf`
           : type === 'tax'
-          ? `handyhub-tax-${year}.pdf`
-          : `handyhub-earnings-${year}.pdf`;
+          ? `onofix-tax-${year}.pdf`
+          : `onofix-earnings-${year}.pdf`;
 
       if (Platform.OS === 'web') {
         // @ts-ignore

@@ -40,7 +40,7 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>4. Account Registration & Security</Text>
         <Text style={styles.p}>
-          You agree to (a) provide accurate registration information, (b) maintain the confidentiality of your password, and (c) accept responsibility for all activity under your account. Notify us immediately at <Text style={styles.link}>support@handyhub.com</Text> of any unauthorized use.
+          You agree to (a) provide accurate registration information, (b) maintain the confidentiality of your password, and (c) accept responsibility for all activity under your account. Notify us immediately at <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text> of any unauthorized use.
         </Text>
 
         <Text style={styles.h2}>5. Platform-Only Payment & Communication</Text>
@@ -91,17 +91,17 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>13. Dispute Resolution & Binding Arbitration</Text>
         <Text style={styles.p}>
-          <Text style={styles.bold}>PLEASE READ CAREFULLY.</Text> Any dispute arising out of or relating to these Terms shall be resolved by binding individual arbitration administered by the American Arbitration Association (AAA) under its Consumer Arbitration Rules, in accordance with the Federal Arbitration Act. You and Ono-Fix waive the right to a jury trial and to participate in class actions. You may opt out by emailing <Text style={styles.link}>legal@handyhub.com</Text> within 30 days of account creation.
+          <Text style={styles.bold}>PLEASE READ CAREFULLY.</Text> Any dispute arising out of or relating to these Terms shall be resolved by binding individual arbitration administered by the American Arbitration Association (AAA) under its Consumer Arbitration Rules, in accordance with the Federal Arbitration Act. You and Ono-Fix waive the right to a jury trial and to participate in class actions. You may opt out by emailing <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text> within 30 days of account creation.
         </Text>
 
         <Text style={styles.h2}>14. Governing Law</Text>
         <Text style={styles.p}>
-          These Terms are governed by the laws of the State of Delaware, without regard to conflict-of-laws principles. Subject to Section 13, any litigation shall take place in the state or federal courts located in New Castle County, Delaware.
+          These Terms are governed by the laws of the State of Illinois, without regard to conflict-of-laws principles. Subject to Section 13, any litigation shall take place in the state or federal courts located in Cook County, Illinois.
         </Text>
 
         <Text style={styles.h2}>15. DMCA Notice</Text>
         <Text style={styles.p}>
-          If you believe content on the Platform infringes your copyright, submit a notice under 17 U.S.C. § 512 to <Text style={styles.link}>dmca@handyhub.com</Text>.
+          If you believe content on the Platform infringes your copyright, submit a notice under 17 U.S.C. § 512 to <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>.
         </Text>
 
         <Text style={styles.h2}>16. Termination</Text>
@@ -116,7 +116,7 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>18. Contact</Text>
         <Text style={styles.p}>
-          Ono-Fix Inc., 1209 Orange Street, Wilmington, DE 19801 · <Text style={styles.link}>support@handyhub.com</Text>
+          Ono-Fix is a service operated by Nexus Security Solutions LLC, 9701 Dee Rd, Niles, IL 60714 · <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>
         </Text>
 
         <View style={{ height: 40 }} />

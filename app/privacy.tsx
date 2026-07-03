@@ -24,7 +24,7 @@ export default function PrivacyPolicy() {
         <Text style={styles.meta}>Effective Date: February 15, 2026 · Last Updated: February 15, 2026</Text>
 
         <Text style={styles.p}>
-          Ono-Fix Inc. ("we", "us", "our") respects your privacy. This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the Ono-Fix Platform.
+          Nexus Security Solutions LLC, operator of Ono-Fix ("we", "us", "our"), respects your privacy. This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the Ono-Fix Platform.
         </Text>
 
         <Text style={styles.h2}>1. Information We Collect</Text>
@@ -47,7 +47,7 @@ export default function PrivacyPolicy() {
         <Text style={styles.h2}>4. Communications & TCPA Consent</Text>
         <Text style={styles.p}>
           By providing your phone number, both Clients and Providers agree: <Text style={styles.bold}>"I agree to receive SMS verification messages from OnoFix. Message and data rates may apply. Reply STOP to opt out and HELP for help."</Text>{'\n\n'}
-          We only send SMS for account verification and important updates about your service requests. Standard message and data rates apply. You may opt out at any time by replying STOP, or reply HELP for assistance. Email communications can be unsubscribed via the link in any email or by emailing <Text style={styles.link}>privacy@handyhub.com</Text>.
+          We only send SMS for account verification and important updates about your service requests. Standard message and data rates apply. You may opt out at any time by replying STOP, or reply HELP for assistance. Email communications can be unsubscribed via the link in any email or by emailing <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>.
         </Text>
 
         <Text style={styles.h2}>5. Cookies & Analytics</Text>
@@ -57,7 +57,7 @@ export default function PrivacyPolicy() {
 
         <Text style={styles.h2}>6. Your California Privacy Rights (CCPA/CPRA)</Text>
         <Text style={styles.p}>
-          If you are a California resident, you have the right to: (a) know what personal information we collect about you; (b) request a copy or deletion of your data; (c) opt out of the "sale" or "sharing" of personal information (we do not sell); (d) limit the use of sensitive personal information; (e) be free from retaliation for exercising your rights. To exercise these rights, email <Text style={styles.link}>privacy@handyhub.com</Text>.
+          If you are a California resident, you have the right to: (a) know what personal information we collect about you; (b) request a copy or deletion of your data; (c) opt out of the "sale" or "sharing" of personal information (we do not sell); (d) limit the use of sensitive personal information; (e) be free from retaliation for exercising your rights. To exercise these rights, email <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>.
         </Text>
 
         <Text style={styles.h2}>7. Your Rights in Other U.S. States</Text>
@@ -92,7 +92,7 @@ export default function PrivacyPolicy() {
 
         <Text style={styles.h2}>13. Contact</Text>
         <Text style={styles.p}>
-          Ono-Fix Inc., 1209 Orange Street, Wilmington, DE 19801 · <Text style={styles.link}>privacy@handyhub.com</Text>
+          Ono-Fix is a service operated by Nexus Security Solutions LLC, 9701 Dee Rd, Niles, IL 60714 · <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>
         </Text>
 
         <View style={{ height: 40 }} />

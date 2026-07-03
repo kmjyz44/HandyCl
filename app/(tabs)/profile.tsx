@@ -224,7 +224,7 @@ export default function Profile() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Help', 'Contact support@handyhub.com')}
+            onPress={() => Alert.alert('Help', 'Contact Nexus.ss.llc@gmail.com')}
           >
             <Ionicons name="help-circle-outline" size={24} color="#6b7280" />
             <Text style={styles.menuText}>Help</Text>

@@ -73,7 +73,7 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     toggle: 'enable_venmo',
     toggleLabel: 'Accept payments via Venmo',
     keys: [
-      { id: 'venmo_platform_handle', label: 'Platform Venmo username (without @)', placeholder: 'handyhub-platform' },
+      { id: 'venmo_platform_handle', label: 'Platform Venmo username (without @)', placeholder: 'onofix-platform' },
     ],
   },
   {
