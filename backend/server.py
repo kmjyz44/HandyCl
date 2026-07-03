@@ -1415,7 +1415,7 @@ async def _send_email_resend(to_email: str, subject: str, body_text: str) -> boo
         return False
     keys = await _get_integration_keys()
     api_key = keys.get("resend_api_key")
-    from_email = keys.get("resend_from_email") or "onboarding@resend.dev"
+    from_email = keys.get("resend_from_email") or "Ono-Fix <support@ono-fix.com>"
     if not api_key:
         logger.info("Resend not configured — skipping email to %s", to_email)
         return False
