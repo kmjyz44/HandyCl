@@ -26,10 +26,10 @@ export const SiteFooter = () => {
 };
 
 const s = StyleSheet.create({
-  wrap: { backgroundColor: '#0f172a', paddingVertical: 28, paddingHorizontal: 20, marginTop: 8 },
-  brand: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: 0.5, marginBottom: 14 },
+  wrap: { backgroundColor: 'transparent', paddingVertical: 28, paddingHorizontal: 20, marginTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  brand: { color: '#111827', fontSize: 20, fontWeight: '800', letterSpacing: 0.5, marginBottom: 14 },
   links: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, rowGap: 12, marginBottom: 18 },
-  link: { color: '#cbd5e1', fontSize: 13, fontWeight: '600', marginRight: 8 },
-  fine: { color: '#64748b', fontSize: 11, lineHeight: 17, marginTop: 4 },
+  link: { color: '#2563eb', fontSize: 13, fontWeight: '600', marginRight: 8 },
+  fine: { color: '#9ca3af', fontSize: 11, lineHeight: 17, marginTop: 4 },
 });
 
