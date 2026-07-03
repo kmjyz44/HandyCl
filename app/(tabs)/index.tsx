@@ -882,9 +882,30 @@ export default function HomeScreen() {
     submittingRef.current = true;
     setBookingSubmitting(true);
 
-    // Service-area gate: if the booking location isn't covered, capture the
-    // person to the waitlist and show a "coming soon" screen instead of booking.
-    if (!isInServiceArea(booking.state, booking.city, booking.lat, booking.lng)) {
+    // Service-area gate. If we don't yet have coordinates (client typed the
+    // address manually), geocode it first so a location that IS inside the
+    // zone (e.g. a Chicago suburb) is NOT wrongly blocked.
+    let gLat = booking.lat;
+    let gLng = booking.lng;
+    if ((gLat == null || gLng == null) && serviceArea?.enabled) {
+      const q = [booking.address, booking.city, booking.state, booking.zip].filter(Boolean).join(', ');
+      if (q) {
+        try {
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=us&limit=1&accept-language=en`,
+            { headers: { 'User-Agent': 'Ono-Fix/1.0' } }
+          );
+          const d = await r.json();
+          if (d && d[0]) {
+            gLat = parseFloat(d[0].lat);
+            gLng = parseFloat(d[0].lon);
+            setBooking(b => ({ ...b, lat: gLat!, lng: gLng! }));
+          }
+        } catch { /* ignore geocoding errors */ }
+      }
+    }
+
+    if (!isInServiceArea(booking.state, booking.city, gLat, gLng)) {
       api.addToWaitlist({
         email: user?.email,
         name: user?.name || user?.full_name,
@@ -893,8 +914,8 @@ export default function HomeScreen() {
         city: booking.city,
         zip: booking.zip,
         address: booking.address,
-        latitude: booking.lat,
-        longitude: booking.lng,
+        latitude: gLat,
+        longitude: gLng,
         source: 'booking',
       }).catch(() => {});
       submittingRef.current = false;
@@ -948,8 +969,8 @@ export default function HomeScreen() {
       state: booking.state,
       unit: booking.unit || undefined,
       zip: booking.zip || undefined,
-      latitude: booking.lat ?? undefined,
-      longitude: booking.lng ?? undefined,
+      latitude: gLat ?? booking.lat ?? undefined,
+      longitude: gLng ?? booking.lng ?? undefined,
       date: primaryDate,
       time: booking.timeFrom || booking.time,
       notes: notes || undefined,
@@ -2491,8 +2512,8 @@ export default function HomeScreen() {
           <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827', textAlign: 'center' }}>Coming soon to your area</Text>
           <Text style={{ fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22 }}>{msg}</Text>
           <View style={{ width: '100%', backgroundColor: '#ecfdf5', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#a7f3d0' }}>
-            <Text style={{ color: '#047857', textAlign: 'center', fontSize: 14, lineHeight: 20 }}>
-              We've saved your details — we'll reach out the moment Ono-Fix launches near {booking.city || 'you'}. Thank you for your interest!
+            <Text style={{ color: '#047857', textAlign: 'center', fontSize: 14, lineHeight: 20, fontWeight: '600' }}>
+              We've saved your details{user?.email ? ` (${user.email})` : ''} and we'll notify you as soon as Ono-Fix launches in {booking.city || 'your area'}. Thank you for your interest — you'll be among the first to know!
             </Text>
           </View>
           <TouchableOpacity
