@@ -491,6 +491,31 @@ function ClientProfile() {
         </View>
 
 
+        {/* Company */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Company</Text>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/about' as any)} data-testid="myprofile-about-link">
+            <Ionicons name="information-circle-outline" size={22} color="#6b7280" />
+            <Text style={styles.menuText}>About Ono-Fix</Text>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/how-it-works' as any)} data-testid="myprofile-how-link">
+            <Ionicons name="bulb-outline" size={22} color="#6b7280" />
+            <Text style={styles.menuText}>How It Works</Text>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/pricing' as any)} data-testid="myprofile-pricing-link">
+            <Ionicons name="pricetag-outline" size={22} color="#6b7280" />
+            <Text style={styles.menuText}>Pricing</Text>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/contact' as any)} data-testid="myprofile-contact-link">
+            <Ionicons name="mail-outline" size={22} color="#6b7280" />
+            <Text style={styles.menuText}>Contact Us</Text>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+        </View>
+
         {/* Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
@@ -530,6 +555,7 @@ function ClientProfile() {
         </TouchableOpacity>
 
         <Text style={styles.version}>Ono-Fix v1.0.0</Text>
+        <Text style={styles.aboutFine}>Ono-Fix is owned and operated by Nexus Security Solutions LLC.</Text>
       </ScrollView>
 
       {/* Edit Profile Modal */}
@@ -2343,6 +2369,7 @@ const styles = StyleSheet.create({
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginTop: 20, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#fecaca', gap: 10 },
   logoutBtnText: { fontSize: 16, fontWeight: '600', color: '#ef4444' },
   version: { textAlign: 'center', fontSize: 12, color: '#9ca3af', marginVertical: 24 },
+  aboutFine: { textAlign: 'center', fontSize: 10, color: '#cbd5e1', marginTop: -12, marginBottom: 28, paddingHorizontal: 24, lineHeight: 15 },
   bioText: { fontSize: 14, color: '#374151', lineHeight: 20, marginTop: 4 },
   placeholderText: { fontSize: 14, color: '#9ca3af', fontStyle: 'italic', marginTop: 4 },
   rateText: { fontSize: 20, fontWeight: '700', color: '#10b981', marginTop: 4 },

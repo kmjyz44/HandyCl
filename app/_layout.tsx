@@ -48,6 +48,10 @@ export default function RootLayout() {
         <Stack.Screen name="blog/[id]" />
         <Stack.Screen name="blog-create" />
         <Stack.Screen name="help-center" />
+        <Stack.Screen name="about" />
+        <Stack.Screen name="how-it-works" />
+        <Stack.Screen name="pricing" />
+        <Stack.Screen name="contact" />
         <Stack.Screen name="terms" />
         <Stack.Screen name="privacy" />
         <Stack.Screen name="support-chat" />

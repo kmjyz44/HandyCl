@@ -15,6 +15,7 @@ import { showAlertWithButtons } from '../../utils/alert';
 import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
+import { SiteFooter } from '../../components/SiteFooter';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
 
@@ -1256,6 +1257,7 @@ export default function HomeScreen() {
           ) : null}
           </>
           )}
+          {!focusedScan ? <SiteFooter /> : null}
         </ScrollView>
       </View>
     );
