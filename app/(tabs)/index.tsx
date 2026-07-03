@@ -357,6 +357,7 @@ export default function HomeScreen() {
   const [loadingGeo, setLoadingGeo] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [serviceArea, setServiceArea] = useState<any>(null);
+  const [checkingArea, setCheckingArea] = useState(false);
 
   // Load the configured working zone (public) for client-side pre-checks.
   useEffect(() => {
@@ -383,6 +384,46 @@ export default function HomeScreen() {
         if (miles <= (c.radius_miles || 30)) return true;
       }
     }
+    return false;
+  };
+
+  // Geocode (if needed) + service-area check. On failure, saves the person to
+  // the waitlist and switches to the out_of_area screen. Returns true if allowed.
+  const ensureInServiceArea = async (): Promise<boolean> => {
+    if (!serviceArea?.enabled) return true;
+    let gLat = booking.lat;
+    let gLng = booking.lng;
+    if (gLat == null || gLng == null) {
+      const q = [booking.address, booking.city, booking.state, booking.zip].filter(Boolean).join(', ');
+      if (q) {
+        try {
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=us&limit=1&accept-language=en`,
+            { headers: { 'User-Agent': 'Ono-Fix/1.0' } }
+          );
+          const d = await r.json();
+          if (d && d[0]) {
+            gLat = parseFloat(d[0].lat);
+            gLng = parseFloat(d[0].lon);
+            setBooking(b => ({ ...b, lat: gLat!, lng: gLng! }));
+          }
+        } catch { /* ignore geocoding errors */ }
+      }
+    }
+    if (isInServiceArea(booking.state, booking.city, gLat, gLng)) return true;
+    api.addToWaitlist({
+      email: user?.email,
+      name: user?.name || user?.full_name,
+      phone: user?.phone,
+      state: booking.state,
+      city: booking.city,
+      zip: booking.zip,
+      address: booking.address,
+      latitude: gLat,
+      longitude: gLng,
+      source: 'booking',
+    }).catch(() => {});
+    setStep('out_of_area');
     return false;
   };
 
@@ -882,47 +923,15 @@ export default function HomeScreen() {
     submittingRef.current = true;
     setBookingSubmitting(true);
 
-    // Service-area gate. If we don't yet have coordinates (client typed the
-    // address manually), geocode it first so a location that IS inside the
-    // zone (e.g. a Chicago suburb) is NOT wrongly blocked.
-    let gLat = booking.lat;
-    let gLng = booking.lng;
-    if ((gLat == null || gLng == null) && serviceArea?.enabled) {
-      const q = [booking.address, booking.city, booking.state, booking.zip].filter(Boolean).join(', ');
-      if (q) {
-        try {
-          const r = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=us&limit=1&accept-language=en`,
-            { headers: { 'User-Agent': 'Ono-Fix/1.0' } }
-          );
-          const d = await r.json();
-          if (d && d[0]) {
-            gLat = parseFloat(d[0].lat);
-            gLng = parseFloat(d[0].lon);
-            setBooking(b => ({ ...b, lat: gLat!, lng: gLng! }));
-          }
-        } catch { /* ignore geocoding errors */ }
-      }
-    }
-
-    if (!isInServiceArea(booking.state, booking.city, gLat, gLng)) {
-      api.addToWaitlist({
-        email: user?.email,
-        name: user?.name || user?.full_name,
-        phone: user?.phone,
-        state: booking.state,
-        city: booking.city,
-        zip: booking.zip,
-        address: booking.address,
-        latitude: gLat,
-        longitude: gLng,
-        source: 'booking',
-      }).catch(() => {});
+    // Final safety check (also done at the address step).
+    const allowed = await ensureInServiceArea();
+    if (!allowed) {
       submittingRef.current = false;
       setBookingSubmitting(false);
-      setStep('out_of_area');
       return;
     }
+    const gLat = booking.lat;
+    const gLng = booking.lng;
 
     const tasker = booking.selectedTasker;
     const rate = tasker.profile?.hourly_rate || tasker.hourly_rate || 0;
@@ -1805,12 +1814,18 @@ export default function HomeScreen() {
         </Modal>
         <View style={s.bottomBar}>
           <TouchableOpacity
-            style={[s.nextBtn, (!booking.address.trim() || !booking.city.trim() || !booking.state) && s.nextBtnDisabled]}
-            disabled={!booking.address.trim() || !booking.city.trim() || !booking.state}
-            onPress={() => { setAddressSuggestions([]); setStep('datetime'); }}
+            style={[s.nextBtn, (!booking.address.trim() || !booking.city.trim() || !booking.state || checkingArea) && s.nextBtnDisabled]}
+            disabled={!booking.address.trim() || !booking.city.trim() || !booking.state || checkingArea}
+            onPress={async () => {
+              setAddressSuggestions([]);
+              setCheckingArea(true);
+              const ok = await ensureInServiceArea();
+              setCheckingArea(false);
+              if (ok) setStep('datetime');
+            }}
             data-testid="address-continue-btn"
           >
-            <Text style={s.nextBtnText}>Next — Date & time</Text>
+            <Text style={s.nextBtnText}>{checkingArea ? 'Checking location…' : 'Next — Date & time'}</Text>
             <Ionicons name="arrow-forward" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
