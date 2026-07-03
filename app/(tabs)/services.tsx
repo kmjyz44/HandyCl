@@ -313,57 +313,33 @@ export default function Services() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Admin Panel</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: '#10b981' }]}
-            onPress={() => router.push('/admin-payments' as any)}
-            data-testid="open-admin-payments-btn"
-          >
-            <Ionicons name="cash" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: '#7c3aed' }]}
-            onPress={() => router.push('/admin-payment-stats' as any)}
-            data-testid="open-admin-payment-stats-btn"
-          >
-            <Ionicons name="stats-chart" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: '#0ea5e9' }]}
-            onPress={() => router.push('/admin-support-requests' as any)}
-            data-testid="open-admin-support-btn"
-          >
-            <Ionicons name="mail-unread" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: '#6b7280' }]}
-            onPress={() => router.push('/admin-integrations')}
-            data-testid="open-admin-integrations-btn"
-          >
-            <Ionicons name="key" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: '#f59e0b' }]}
-            onPress={() => router.push('/admin-service-area' as any)}
-            data-testid="open-admin-service-area-btn"
-          >
-            <Ionicons name="location" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: '#ec4899' }]}
-            onPress={() => router.push('/admin-waitlist' as any)}
-            data-testid="open-admin-waitlist-btn"
-          >
-            <Ionicons name="people" size={20} color="#fff" />
-          </TouchableOpacity>
+        <View style={styles.headerTopRow}>
+          <Text style={styles.headerTitle}>Admin Panel</Text>
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => activeTab === 'services' ? openServiceModal() : openCategoryModal()}
+            data-testid="admin-add-btn"
           >
             <Ionicons name="add" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
+          {[
+            { icon: 'cash', color: '#10b981', label: 'Payments', route: '/admin-payments', tid: 'open-admin-payments-btn' },
+            { icon: 'stats-chart', color: '#7c3aed', label: 'Stats', route: '/admin-payment-stats', tid: 'open-admin-payment-stats-btn' },
+            { icon: 'mail-unread', color: '#0ea5e9', label: 'Support', route: '/admin-support-requests', tid: 'open-admin-support-btn' },
+            { icon: 'key', color: '#6b7280', label: 'Integrations', route: '/admin-integrations', tid: 'open-admin-integrations-btn' },
+            { icon: 'location', color: '#f59e0b', label: 'Service Area', route: '/admin-service-area', tid: 'open-admin-service-area-btn' },
+            { icon: 'people', color: '#ec4899', label: 'Waitlist', route: '/admin-waitlist', tid: 'open-admin-waitlist-btn' },
+          ].map((b) => (
+            <TouchableOpacity key={b.route} style={styles.navItem} onPress={() => router.push(b.route as any)} data-testid={b.tid}>
+              <View style={[styles.navIcon, { backgroundColor: b.color }]}>
+                <Ionicons name={b.icon as any} size={20} color="#fff" />
+              </View>
+              <Text style={styles.navLabel}>{b.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <View style={styles.tabBar}>
@@ -594,9 +570,14 @@ export default function Services() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f3f4f6' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, backgroundColor: '#fff' },
+  header: { padding: 20, paddingTop: 60, backgroundColor: '#fff' },
+  headerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 24, fontWeight: 'bold' },
   addButton: { backgroundColor: '#2563eb', padding: 10, borderRadius: 25 },
+  navRow: { flexDirection: 'row', gap: 18, paddingTop: 16, paddingRight: 20 },
+  navItem: { alignItems: 'center', width: 64 },
+  navIcon: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  navLabel: { fontSize: 11, color: '#4b5563', marginTop: 5, textAlign: 'center' },
   tabBar: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   tab: { flex: 1, padding: 15, alignItems: 'center' },
   activeTab: { borderBottomWidth: 2, borderBottomColor: '#2563eb' },

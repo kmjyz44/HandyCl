@@ -106,6 +106,9 @@
   if (params.get('lat')) lat = parseFloat(params.get('lat'));
   if (params.get('lng')) lng = parseFloat(params.get('lng'));
   if (params.get('radius')) radius = parseInt(params.get('radius'));
+  const UNIT = params.get('unit') === 'mi' ? 'mi' : 'km';
+  const METERS = UNIT === 'mi' ? 1609.34 : 1000;
+  const MODE = params.get('mode') || '';
 
   // Check if zone was previously saved (restore green state)
   let zoneSaved = false;
@@ -136,7 +139,7 @@
     marker = L.marker([lat, lng], { icon: markerIcon, draggable: true }).addTo(map);
     const circleColor = zoneSaved ? '#16a34a' : '#2563eb';
     circle = L.circle([lat, lng], {
-      radius: radius * 1000, color: circleColor,
+      radius: radius * METERS, color: circleColor,
       fillColor: circleColor, fillOpacity: 0.12, weight: 2,
     }).addTo(map);
     marker.on('dragend', (e) => {
@@ -151,7 +154,7 @@
     radius = r;
     document.querySelectorAll('.r-chip').forEach(c => c.classList.toggle('active', parseInt(c.dataset.r) === r));
     if (circle) {
-      circle.setRadius(r * 1000);
+      circle.setRadius(r * METERS);
       map.fitBounds(circle.getBounds(), { padding: [20, 20] });
     }
   }
@@ -223,7 +226,7 @@
     const chip = document.createElement('button');
     chip.className = 'r-chip' + (r === radius ? ' active' : '');
     chip.dataset.r = r;
-    chip.textContent = r + ' км';
+    chip.textContent = r + ' ' + UNIT;
     chip.onclick = () => updateRadius(r);
     rRow.appendChild(chip);
   });
@@ -251,6 +254,21 @@
 
     // Also call API directly using token from localStorage
     try {
+      if (MODE === 'admin') {
+        // Admin mode: parent (React screen) handles saving via postMessage above.
+        const toast = document.getElementById('toast');
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 2500);
+        btn.textContent = '✅ Saved!';
+        setTimeout(() => {
+          btn.textContent = '✏️ Edit zone';
+          btn.style.background = '#16a34a';
+          btn.disabled = false;
+          if (circle) { circle.setStyle({ color: '#16a34a', fillColor: '#16a34a' }); }
+          localStorage.setItem('zone_saved', JSON.stringify({ lat, lng, radius }));
+        }, 1500);
+        return;
+      }
       const token = localStorage.getItem('session_token');
       if (!token) throw new Error('Не авторизовано');
 

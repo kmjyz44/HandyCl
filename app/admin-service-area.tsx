@@ -1,55 +1,76 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Switch, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { api } from '../utils/api';
 import { showAlert } from '../utils/alert';
 
-type Center = { label: string; lat: number; lng: number; radius_miles: number };
-
 export default function AdminServiceAreaPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [sa, setSa] = useState<any>(null);
   const [enabled, setEnabled] = useState(true);
-  const [states, setStates] = useState<string[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
-  const [centers, setCenters] = useState<Center[]>([]);
   const [message, setMessage] = useState('');
-  const [newState, setNewState] = useState('');
-  const [newCity, setNewCity] = useState('');
 
   useEffect(() => { load(); }, []);
   const load = async () => {
     try {
       const d = await api.adminGetServiceArea();
+      setSa(d);
       setEnabled(!!d.enabled);
-      setStates(d.states || []);
-      setCities(d.cities || []);
-      setCenters(d.centers || []);
       setMessage(d.message || '');
-    } catch (e) { showAlert('Error', 'Failed to load service area'); }
+    } catch { showAlert('Error', 'Failed to load service area'); }
     finally { setLoading(false); }
   };
 
-  const save = async () => {
+  // Persist the zone chosen on the map (center + radius in miles).
+  const saveZone = async (lat: number, lng: number, radiusMiles: number) => {
     setSaving(true);
     try {
-      await api.adminUpdateServiceArea({ enabled, states, cities, centers, message });
-      showAlert('Saved', 'Service area updated');
-    } catch (e) { showAlert('Error', 'Failed to save'); }
+      const updated = await api.adminUpdateServiceArea({
+        enabled: true,
+        message,
+        states: sa?.states || [],
+        cities: sa?.cities || [],
+        centers: [{ label: 'Service zone', lat, lng, radius_miles: radiusMiles }],
+      });
+      setSa(updated);
+      setEnabled(true);
+      showAlert('Saved', `Working zone set: ${radiusMiles} mi radius`);
+    } catch { showAlert('Error', 'Could not save zone'); }
     finally { setSaving(false); }
   };
 
-  const addState = () => { if (newState.trim()) { setStates([...states, newState.trim()]); setNewState(''); } };
-  const addCity = () => { if (newCity.trim()) { setCities([...cities, newCity.trim()]); setNewCity(''); } };
-  const updateCenter = (i: number, key: keyof Center, val: string) => {
-    const next = [...centers];
-    (next[i] as any)[key] = key === 'label' ? val : parseFloat(val) || 0;
-    setCenters(next);
+  // Listen for the map iframe's save message (web only).
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const handler = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.type === 'save' && data.lat != null && data.lng != null) {
+          saveZone(data.lat, data.lng, data.radius || 30);
+        }
+      } catch {}
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [message, sa]);
+
+  const saveSettings = async () => {
+    setSaving(true);
+    try {
+      const updated = await api.adminUpdateServiceArea({ enabled, message });
+      setSa(updated);
+      showAlert('Saved', 'Settings updated');
+    } catch { showAlert('Error', 'Failed to save'); }
+    finally { setSaving(false); }
   };
 
   if (loading) return <View style={s.center}><ActivityIndicator size="large" /></View>;
+
+  const center = (sa?.centers && sa.centers[0]) || { lat: 41.8781, lng: -87.6298, radius_miles: 30 };
+  const mapSrc = `/map.html?mode=admin&unit=mi&lat=${center.lat}&lng=${center.lng}&radius=${Math.round(center.radius_miles || 30)}`;
 
   return (
     <View style={s.container}>
@@ -63,64 +84,43 @@ export default function AdminServiceAreaPage() {
             <Text style={s.label}>Restrict to service area</Text>
             <Text style={s.hint}>When on, bookings outside the zone are blocked and the person is added to the waitlist.</Text>
           </View>
-          <Switch value={enabled} onValueChange={setEnabled} data-testid="service-area-enabled" />
+          <Switch value={enabled} onValueChange={(v) => { setEnabled(v); }} data-testid="service-area-enabled" />
         </View>
 
-        {/* States */}
-        <Text style={s.section}>Allowed states</Text>
-        <View style={s.chips}>
-          {states.map((st, i) => (
-            <View key={i} style={s.chip}>
-              <Text style={s.chipText}>{st}</Text>
-              <TouchableOpacity onPress={() => setStates(states.filter((_, x) => x !== i))}><Ionicons name="close" size={14} color="#6b7280" /></TouchableOpacity>
-            </View>
-          ))}
-        </View>
-        <View style={s.addRow}>
-          <TextInput style={s.input} placeholder="e.g. Illinois" value={newState} onChangeText={setNewState} data-testid="input-new-state" />
-          <TouchableOpacity style={s.addBtn} onPress={addState} data-testid="add-state-btn"><Ionicons name="add" size={20} color="#fff" /></TouchableOpacity>
-        </View>
+        <Text style={s.section}>Working zone</Text>
+        <Text style={s.hint}>Tap the map to set the center, pick a radius, then press "Save zone". Bookings inside the circle are accepted.</Text>
 
-        {/* Cities */}
-        <Text style={s.section}>Allowed cities</Text>
-        <View style={s.chips}>
-          {cities.map((ct, i) => (
-            <View key={i} style={s.chip}>
-              <Text style={s.chipText}>{ct}</Text>
-              <TouchableOpacity onPress={() => setCities(cities.filter((_, x) => x !== i))}><Ionicons name="close" size={14} color="#6b7280" /></TouchableOpacity>
-            </View>
-          ))}
-        </View>
-        <View style={s.addRow}>
-          <TextInput style={s.input} placeholder="e.g. Chicago" value={newCity} onChangeText={setNewCity} data-testid="input-new-city" />
-          <TouchableOpacity style={s.addBtn} onPress={addCity} data-testid="add-city-btn"><Ionicons name="add" size={20} color="#fff" /></TouchableOpacity>
-        </View>
-
-        {/* Radius zones */}
-        <Text style={s.section}>Radius zones (miles)</Text>
-        <Text style={s.hint}>Bookings within the radius of any center are allowed (needs address coordinates).</Text>
-        {centers.map((c, i) => (
-          <View key={i} style={s.centerCard} data-testid={`center-${i}`}>
-            <TextInput style={s.centerInput} placeholder="Label" value={c.label} onChangeText={(v) => updateCenter(i, 'label', v)} />
-            <View style={s.centerRow}>
-              <TextInput style={[s.centerInput, s.flex1]} placeholder="Lat" keyboardType="numeric" value={String(c.lat)} onChangeText={(v) => updateCenter(i, 'lat', v)} />
-              <TextInput style={[s.centerInput, s.flex1]} placeholder="Lng" keyboardType="numeric" value={String(c.lng)} onChangeText={(v) => updateCenter(i, 'lng', v)} />
-              <TextInput style={[s.centerInput, s.flex1]} placeholder="Miles" keyboardType="numeric" value={String(c.radius_miles)} onChangeText={(v) => updateCenter(i, 'radius_miles', v)} />
-            </View>
-            <TouchableOpacity onPress={() => setCenters(centers.filter((_, x) => x !== i))} style={s.removeCenter}><Text style={s.removeCenterText}>Remove</Text></TouchableOpacity>
+        {Platform.OS === 'web' ? (
+          <View style={s.mapWrap}>
+            {/* @ts-ignore web iframe */}
+            <iframe title="admin-service-area" src={mapSrc} style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 } as any} />
           </View>
-        ))}
-        <TouchableOpacity style={s.addCenter} onPress={() => setCenters([...centers, { label: 'Zone', lat: 41.8781, lng: -87.6298, radius_miles: 30 }])} data-testid="add-center-btn">
-          <Ionicons name="add-circle-outline" size={18} color="#2563eb" />
-          <Text style={s.addCenterText}>Add radius zone</Text>
-        </TouchableOpacity>
+        ) : (
+          <View style={s.mapFallback}>
+            <Ionicons name="map-outline" size={30} color="#9ca3af" />
+            <Text style={s.hint}>Open the web dashboard in a browser to set the zone on the map.</Text>
+          </View>
+        )}
 
-        {/* Message */}
+        <View style={s.summary} data-testid="zone-summary">
+          <Ionicons name="location" size={16} color="#2563eb" />
+          <Text style={s.summaryText}>
+            Current: {center.radius_miles || 30} mi around ({Number(center.lat).toFixed(3)}, {Number(center.lng).toFixed(3)})
+          </Text>
+        </View>
+
         <Text style={s.section}>Out-of-area message</Text>
-        <TextInput style={[s.input, { height: 80, textAlignVertical: 'top' }]} multiline placeholder="Message shown to users outside the area" value={message} onChangeText={setMessage} data-testid="input-oos-message" />
+        <TextInput
+          style={[s.input, { height: 80, textAlignVertical: 'top' }]}
+          multiline
+          placeholder="Message shown to users outside the area"
+          value={message}
+          onChangeText={setMessage}
+          data-testid="input-oos-message"
+        />
 
-        <TouchableOpacity style={[s.save, saving && { opacity: 0.6 }]} onPress={save} disabled={saving} data-testid="save-service-area-btn">
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveText}>Save</Text>}
+        <TouchableOpacity style={[s.save, saving && { opacity: 0.6 }]} onPress={saveSettings} disabled={saving} data-testid="save-settings-btn">
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveText}>Save settings</Text>}
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -137,21 +137,12 @@ const s = StyleSheet.create({
   rowBetween: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   label: { fontSize: 15, fontWeight: '700', color: '#111827' },
   hint: { fontSize: 12, color: '#6b7280', marginTop: 4, lineHeight: 17 },
-  section: { fontSize: 14, fontWeight: '700', color: '#111827', marginTop: 26, marginBottom: 10 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#eff6ff', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12 },
-  chipText: { fontSize: 13, color: '#1e40af', fontWeight: '600' },
-  addRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  input: { flex: 1, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 12, fontSize: 14, backgroundColor: '#f9fafb' },
-  addBtn: { width: 46, borderRadius: 10, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' },
-  centerCard: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 12, marginBottom: 10 },
-  centerInput: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 13, backgroundColor: '#f9fafb', marginBottom: 8 },
-  centerRow: { flexDirection: 'row', gap: 8 },
-  flex1: { flex: 1 },
-  removeCenter: { alignSelf: 'flex-start', marginTop: 2 },
-  removeCenterText: { color: '#dc2626', fontSize: 13, fontWeight: '600' },
-  addCenter: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  addCenterText: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
-  save: { backgroundColor: '#2563eb', paddingVertical: 15, borderRadius: 12, alignItems: 'center', marginTop: 30 },
+  section: { fontSize: 14, fontWeight: '700', color: '#111827', marginTop: 26, marginBottom: 6 },
+  mapWrap: { height: 440, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb', marginTop: 10 },
+  mapFallback: { height: 160, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, padding: 16 },
+  summary: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, backgroundColor: '#eff6ff', borderRadius: 10, padding: 12 },
+  summaryText: { flex: 1, fontSize: 13, color: '#1e40af', fontWeight: '600' },
+  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 12, fontSize: 14, backgroundColor: '#f9fafb', marginTop: 8 },
+  save: { backgroundColor: '#2563eb', paddingVertical: 15, borderRadius: 12, alignItems: 'center', marginTop: 24 },
   saveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
