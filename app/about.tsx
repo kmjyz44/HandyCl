@@ -50,6 +50,9 @@ export default function AboutPage() {
           <Text style={styles.p}>
             {COMPANY.brand} is owned and operated by <Text style={styles.bold}>{COMPANY.legalName}</Text>.
           </Text>
+          <Text style={styles.smsNote}>
+            SMS messages are used only for account verification and service-related notifications requested by users. Ono-Fix does not send marketing SMS without separate consent.
+          </Text>
           <TouchableOpacity style={styles.link} onPress={() => router.push('/contact' as any)} data-testid="about-contact-link">
             <Ionicons name="mail-outline" size={16} color="#2563eb" />
             <Text style={styles.linkText}>Contact us</Text>
@@ -87,4 +90,5 @@ const styles = StyleSheet.create({
   companyTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
   link: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
   linkText: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
+  smsNote: { fontSize: 12, color: '#6b7280', lineHeight: 18, marginTop: 10 },
 });
