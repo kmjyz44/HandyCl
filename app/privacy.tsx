@@ -31,7 +31,7 @@ export default function PrivacyPolicy() {
         <Text style={styles.p}>
           <Text style={styles.bold}>a) Information you provide:</Text> name, email, phone number, password, profile photo, payment details, ID for verification, location, reviews, in-app messages.{'\n'}
           <Text style={styles.bold}>b) Information collected automatically:</Text> device info, IP address, browser type, OS, app version, usage logs, approximate geolocation.{'\n'}
-          <Text style={styles.bold}>c) From third parties:</Text> identity verification providers, payment processors (Stripe), and background-check services (for Providers).
+          <Text style={styles.bold}>c) From third parties:</Text> identity verification providers, payment processors (Finix and other supported payment providers), and background-check services (for Providers).
         </Text>
 
         <Text style={styles.h2}>2. How We Use Information</Text>
@@ -41,13 +41,13 @@ export default function PrivacyPolicy() {
 
         <Text style={styles.h2}>3. Sharing of Information</Text>
         <Text style={styles.p}>
-          We share information with: (a) other users as needed to facilitate a booking (e.g., Provider sees Client's name & address after acceptance); (b) payment processors (Stripe, PayPal); (c) SMS/email service providers (Twilio, SendGrid); (d) law enforcement when legally required; (e) service providers acting on our behalf under confidentiality obligations. We do <Text style={styles.bold}>not</Text> sell your personal information to third parties.
+          We share information with: (a) other users as needed to facilitate a booking (e.g., Provider sees Client's name & address after acceptance); (b) payment processors (Finix and other supported payment providers); (c) SMS/email service providers (Twilio and Resend); (d) law enforcement when legally required; (e) service providers acting on our behalf under confidentiality obligations. We do <Text style={styles.bold}>not</Text> sell your personal information to third parties.
         </Text>
 
         <Text style={styles.h2}>4. Communications & TCPA Consent</Text>
         <Text style={styles.p}>
           By providing your phone number, both Clients and Providers agree: <Text style={styles.bold}>"I agree to receive SMS verification messages from OnoFix. Message and data rates may apply. Reply STOP to opt out and HELP for help."</Text>{'\n\n'}
-          We only send SMS for account verification and important updates about your service requests. Standard message and data rates apply. You may opt out at any time by replying STOP, or reply HELP for assistance. Email communications can be unsubscribed via the link in any email or by emailing <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>.
+          SMS messages are sent only for account verification and service-related notifications requested by the user. We do not send promotional or marketing SMS without separate consent. Standard message and data rates apply. You may opt out at any time by replying STOP, or reply HELP for assistance. Email communications can be unsubscribed via the link in any email or by emailing <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>.
         </Text>
 
         <Text style={styles.h2}>5. Cookies & Analytics</Text>
@@ -92,7 +92,15 @@ export default function PrivacyPolicy() {
 
         <Text style={styles.h2}>13. Contact</Text>
         <Text style={styles.p}>
-          Ono-Fix is a service operated by Nexus Security Solutions LLC, 9701 Dee Rd, Niles, IL 60714 · <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>
+          OnoFix is operated by{'\n\n'}
+          <Text style={styles.bold}>Nexus Security Solutions LLC</Text>{'\n\n'}
+          9701 Dee Rd{'\n'}
+          Niles, IL 60714{'\n\n'}
+          Email:{'\n'}
+          <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>{'\n'}
+          <Text style={styles.link}>finscan@finscan.store</Text>{'\n\n'}
+          Website:{'\n'}
+          <Text style={styles.link}>https://ono-fix.com</Text>
         </Text>
 
         <View style={{ height: 40 }} />
