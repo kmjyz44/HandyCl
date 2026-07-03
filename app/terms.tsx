@@ -51,70 +51,75 @@ export default function TermsOfUse() {
           Ono-Fix does <Text style={styles.bold}>not guarantee the safety, quality, completion, or payment</Text> of any service that is arranged, communicated, or paid for outside the Platform. Our trust & safety, dispute resolution, refund, and insurance protections apply only to transactions completed through the Platform.
         </Text>
 
-        <Text style={styles.h2}>6. Fees & Payments</Text>
+        <Text style={styles.h2}>6. SMS Communications</Text>
         <Text style={styles.p}>
-          Clients pay the agreed service price plus a Platform service fee (commission) that is added on top of the Provider's price. Providers receive their full set rate, less applicable Provider taxes. Tips are voluntary and 100% paid to the Provider. All payments are processed by our payment processors (Stripe, etc.). By using the Platform, you authorize Ono-Fix to charge your payment method.
+          By providing your phone number and checking the consent box during registration, you agree to receive SMS messages from OnoFix for account verification and service-related notifications. Message frequency varies. Message and data rates may apply. Reply STOP to opt out. Reply HELP for assistance. OnoFix does not send marketing SMS without separate consent.
+        </Text>
+
+        <Text style={styles.h2}>7. Fees & Payments</Text>
+        <Text style={styles.p}>
+          Clients pay the agreed service price plus a Platform service fee (commission) that is added on top of the Provider's price. Providers receive their full set rate, less applicable Provider taxes. Tips are voluntary and 100% paid to the Provider. All payments are processed by our payment processors (Finix and other supported payment providers). By using the Platform, you authorize Ono-Fix to charge your payment method.
         </Text>
         <Text style={styles.p}>
           <Text style={styles.bold}>Minimum charge:</Text> Every job is billed for a minimum of one (1) hour of labor. A Provider may set a higher personal minimum (e.g., 1.5 or 2 hours), which is displayed on the Provider's profile before the Client confirms a booking. Work performed beyond the minimum is billed per minute at the Provider's hourly rate. Providers are <Text style={styles.bold}>required to clearly inform the Client of their minimum charge before starting any work</Text>. By confirming a booking, the Client acknowledges and agrees to the displayed minimum charge.
         </Text>
 
-        <Text style={styles.h2}>7. Cancellation & Refunds</Text>
+        <Text style={styles.h2}>8. Cancellation & Refunds</Text>
         <Text style={styles.p}>
           Cancellations made more than 24 hours before the scheduled service incur no fee. Cancellations within 24 hours may be subject to a cancellation fee. Refunds for disputed services are evaluated by Ono-Fix's support team on a case-by-case basis.
         </Text>
 
-        <Text style={styles.h2}>8. Prohibited Conduct</Text>
+        <Text style={styles.h2}>9. Prohibited Conduct</Text>
         <Text style={styles.p}>
           You agree not to: (a) violate any law or regulation; (b) impersonate another person; (c) post false, misleading, or fraudulent content; (d) harass, abuse, or threaten other users; (e) circumvent the Platform's fee or communication systems; (f) use the Platform for any illegal purpose; (g) attempt to gain unauthorized access to the Platform.
         </Text>
 
-        <Text style={styles.h2}>9. Reviews & Content</Text>
+        <Text style={styles.h2}>10. Reviews & Content</Text>
         <Text style={styles.p}>
           You may post reviews and content; you grant Ono-Fix a worldwide, royalty-free, perpetual license to use, display, and distribute such content on the Platform. Reviews must be truthful and based on actual experience.
         </Text>
 
-        <Text style={styles.h2}>10. Independent Contractor Status</Text>
+        <Text style={styles.h2}>11. Independent Contractor Status</Text>
         <Text style={styles.p}>
           Providers are independent contractors. Nothing in these Terms creates an employer-employee, partnership, agency, joint venture, or franchise relationship between Ono-Fix and any user. Providers are responsible for their own taxes (IRS Form 1099-NEC may be issued for U.S. Providers earning ≥ $600/year).
         </Text>
 
-        <Text style={styles.h2}>11. Disclaimers & Limitation of Liability</Text>
+        <Text style={styles.h2}>12. Disclaimers & Limitation of Liability</Text>
         <Text style={styles.p}>
-          THE PLATFORM IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND. TO THE MAXIMUM EXTENT PERMITTED BY LAW, HANDYHUB IS NOT LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES. OUR TOTAL LIABILITY SHALL NOT EXCEED THE GREATER OF (A) AMOUNTS YOU PAID US IN THE 12 MONTHS PRECEDING THE CLAIM, OR (B) $100 USD.
+          THE PLATFORM IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND. TO THE MAXIMUM EXTENT PERMITTED BY LAW, ONO-FIX IS NOT LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES. OUR TOTAL LIABILITY SHALL NOT EXCEED THE GREATER OF (A) AMOUNTS YOU PAID US IN THE 12 MONTHS PRECEDING THE CLAIM, OR (B) $100 USD.
         </Text>
 
-        <Text style={styles.h2}>12. Indemnification</Text>
+        <Text style={styles.h2}>13. Indemnification</Text>
         <Text style={styles.p}>
           You agree to indemnify and hold Ono-Fix harmless from any claims, damages, liabilities, and expenses (including attorneys' fees) arising from your use of the Platform, violation of these Terms, or violation of any third-party rights.
         </Text>
 
-        <Text style={styles.h2}>13. Dispute Resolution & Binding Arbitration</Text>
+        <Text style={styles.h2}>14. Dispute Resolution & Binding Arbitration</Text>
         <Text style={styles.p}>
           <Text style={styles.bold}>PLEASE READ CAREFULLY.</Text> Any dispute arising out of or relating to these Terms shall be resolved by binding individual arbitration administered by the American Arbitration Association (AAA) under its Consumer Arbitration Rules, in accordance with the Federal Arbitration Act. You and Ono-Fix waive the right to a jury trial and to participate in class actions. You may opt out by emailing <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text> within 30 days of account creation.
         </Text>
 
-        <Text style={styles.h2}>14. Governing Law</Text>
+        <Text style={styles.h2}>15. Governing Law</Text>
         <Text style={styles.p}>
           These Terms are governed by the laws of the State of Illinois, without regard to conflict-of-laws principles. Subject to Section 13, any litigation shall take place in the state or federal courts located in Cook County, Illinois.
         </Text>
 
-        <Text style={styles.h2}>15. DMCA Notice</Text>
+        <Text style={styles.h2}>16. DMCA Notice</Text>
         <Text style={styles.p}>
           If you believe content on the Platform infringes your copyright, submit a notice under 17 U.S.C. § 512 to <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>.
         </Text>
 
-        <Text style={styles.h2}>16. Termination</Text>
+        <Text style={styles.h2}>17. Termination</Text>
         <Text style={styles.p}>
           We may suspend or terminate your account at any time for violations of these Terms. You may delete your account at any time from Settings.
         </Text>
 
-        <Text style={styles.h2}>17. Changes</Text>
+        <Text style={styles.h2}>18. Changes</Text>
         <Text style={styles.p}>
           We may update these Terms. Material changes will be notified via email and an in-app banner. Continued use after the effective date constitutes acceptance.
         </Text>
 
-        <Text style={styles.h2}>18. Contact</Text>
+        <Text style={styles.h2}>19. Contact</Text>
         <Text style={styles.p}>
           Ono-Fix is a service operated by Nexus Security Solutions LLC, 9701 Dee Rd, Niles, IL 60714 · <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text>
         </Text>
