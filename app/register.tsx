@@ -42,9 +42,9 @@ export default function Register() {
       const response = await api.register({ email, password, name, phone, role, accepted_terms: true } as any);
       await setToken(response.session_token);
       setUser(response.user);
-      // Email verification is optional — send the user to the verify screen
-      // (they can confirm now or skip and verify later via the home banner).
-      router.replace({ pathname: '/verify-email', params: { email } } as any);
+      // Email verification is NOT required — send the user straight into the app.
+      // A reminder banner appears on the home screen and in the profile until verified.
+      router.replace('/(tabs)' as any);
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
       let msg = (typeof detail === 'string' && detail) || error.message || 'Registration error';

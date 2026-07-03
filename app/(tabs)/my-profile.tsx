@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { api } from '../../utils/api';
 import { useAuthStore } from '../../store/authStore';
 import { showAlertWithButtons } from '../../utils/alert';
+import EmailVerificationBanner from '../../components/EmailVerificationBanner';
 
 // Web-safe Alert shim: native Alert.alert renders nothing on React Native Web,
 // causing silent failures (e.g. card validation). Route every call through the
@@ -310,6 +311,9 @@ function ClientProfile() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={{ marginTop: 12 }}>
+          <EmailVerificationBanner />
+        </View>
         {/* Avatar */}
         <View style={styles.avatarSection}>
           <TouchableOpacity onPress={pickProfilePhoto} disabled={uploadingPhoto}>
