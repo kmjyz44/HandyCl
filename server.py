@@ -2137,8 +2137,66 @@ async def delete_service(service_id: str, current_user: User = Depends(require_a
     return {"message": "Service deleted successfully"}
 
 # Booking Routes
+DEFAULT_SERVICE_AREA = {
+    "enabled": True,
+    "states": [],
+    "cities": ["Chicago"],
+    "centers": [{"label": "Chicago", "lat": 41.8781, "lng": -87.6298, "radius_miles": 30}],
+    "message": "Ono-Fix isn't available in your area just yet — but we're expanding fast and will be there soon!",
+}
+
+
+async def _get_service_area() -> dict:
+    doc = await db.settings.find_one({"setting_id": "service_area"}, {"_id": 0})
+    if not doc:
+        return dict(DEFAULT_SERVICE_AREA)
+    sa = dict(DEFAULT_SERVICE_AREA)
+    sa.update({k: v for k, v in doc.items() if k != "setting_id"})
+    return sa
+
+
+def _haversine_miles(lat1, lng1, lat2, lng2) -> float:
+    import math
+    r = 3958.8
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlam / 2) ** 2
+    return r * 2 * math.asin(math.sqrt(a))
+
+
+def _is_location_allowed(sa: dict, state=None, city=None, lat=None, lng=None) -> bool:
+    if not sa or not sa.get("enabled"):
+        return True
+    states = [s.strip().lower() for s in (sa.get("states") or []) if s]
+    cities = [c.strip().lower() for c in (sa.get("cities") or []) if c]
+    centers = sa.get("centers") or []
+    if not states and not cities and not centers:
+        return True
+    if state and states and str(state).strip().lower() in states:
+        return True
+    if city and cities and str(city).strip().lower() in cities:
+        return True
+    if lat is not None and lng is not None and centers:
+        try:
+            for c in centers:
+                if _haversine_miles(float(lat), float(lng), float(c["lat"]), float(c["lng"])) <= float(c.get("radius_miles", 30)):
+                    return True
+        except (TypeError, ValueError, KeyError):
+            pass
+    return False
+
+
+
 @api_router.post("/bookings")
 async def create_booking(booking_data: BookingCreate, current_user: User = Depends(get_current_user)):
+    # Service-area gate: block bookings outside the configured working zone.
+    sa = await _get_service_area()
+    if not _is_location_allowed(sa, booking_data.state, booking_data.city, booking_data.latitude, booking_data.longitude):
+        raise HTTPException(status_code=451, detail={
+            "code": "OUTSIDE_SERVICE_AREA",
+            "message": sa.get("message") or DEFAULT_SERVICE_AREA["message"],
+        })
     # Get service details
     service = None
     if booking_data.service_id:
@@ -9600,6 +9658,90 @@ async def admin_test_sms(payload: Dict[str, Any] = Body(default={}), current_use
         }
     except Exception as e:
         return {"ok": False, "error": f"Twilio connection error: {e}"}
+
+
+@api_router.get("/service-area")
+async def get_service_area_public():
+    """Public: current working zone so the client can pre-check before booking."""
+    sa = await _get_service_area()
+    return sa
+
+
+@api_router.get("/admin/service-area")
+async def admin_get_service_area(current_user: User = Depends(require_admin)):
+    return await _get_service_area()
+
+
+@api_router.put("/admin/service-area")
+async def admin_update_service_area(payload: Dict[str, Any] = Body(...), current_user: User = Depends(require_admin)):
+    allowed = {}
+    if "enabled" in payload:
+        allowed["enabled"] = bool(payload["enabled"])
+    if "states" in payload:
+        allowed["states"] = [str(s).strip() for s in (payload["states"] or []) if str(s).strip()]
+    if "cities" in payload:
+        allowed["cities"] = [str(c).strip() for c in (payload["cities"] or []) if str(c).strip()]
+    if "centers" in payload:
+        centers = []
+        for c in (payload["centers"] or []):
+            try:
+                centers.append({
+                    "label": str(c.get("label") or "").strip() or "Zone",
+                    "lat": float(c["lat"]),
+                    "lng": float(c["lng"]),
+                    "radius_miles": float(c.get("radius_miles") or 30),
+                })
+            except (TypeError, ValueError, KeyError):
+                continue
+        allowed["centers"] = centers
+    if "message" in payload:
+        allowed["message"] = str(payload["message"] or "").strip()
+    allowed["setting_id"] = "service_area"
+    await db.settings.update_one({"setting_id": "service_area"}, {"$set": allowed}, upsert=True)
+    return await _get_service_area()
+
+
+@api_router.post("/waitlist")
+async def add_waitlist_entry(payload: Dict[str, Any] = Body(...)):
+    """Public: capture people whose location isn't covered yet."""
+    entry = {
+        "waitlist_id": f"wl_{uuid.uuid4().hex[:12]}",
+        "email": str(payload.get("email") or "").strip(),
+        "name": str(payload.get("name") or "").strip(),
+        "phone": str(payload.get("phone") or "").strip(),
+        "state": str(payload.get("state") or "").strip(),
+        "city": str(payload.get("city") or "").strip(),
+        "zip": str(payload.get("zip") or "").strip(),
+        "address": str(payload.get("address") or "").strip(),
+        "latitude": payload.get("latitude"),
+        "longitude": payload.get("longitude"),
+        "source": str(payload.get("source") or "booking").strip(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.waitlist.insert_one(entry)
+    entry.pop("_id", None)
+    return {"ok": True, "waitlist_id": entry["waitlist_id"]}
+
+
+@api_router.get("/admin/waitlist")
+async def admin_get_waitlist(current_user: User = Depends(require_admin)):
+    items = await db.waitlist.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    return {"count": len(items), "items": items}
+
+
+@api_router.get("/admin/waitlist/export")
+async def admin_export_waitlist(current_user: User = Depends(require_admin)):
+    items = await db.waitlist.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    import csv, io
+    buf = io.StringIO()
+    cols = ["created_at", "email", "name", "phone", "city", "state", "zip", "address", "source"]
+    w = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
+    w.writeheader()
+    for it in items:
+        w.writerow(it)
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=onofix-waitlist.csv"})
+
 
 
 # ==================== END NEW BLOCK ===================

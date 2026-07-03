@@ -344,6 +344,20 @@ export default function Services() {
             <Ionicons name="key" size={20} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: '#f59e0b' }]}
+            onPress={() => router.push('/admin-service-area' as any)}
+            data-testid="open-admin-service-area-btn"
+          >
+            <Ionicons name="location" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: '#ec4899' }]}
+            onPress={() => router.push('/admin-waitlist' as any)}
+            data-testid="open-admin-waitlist-btn"
+          >
+            <Ionicons name="people" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.addButton}
             onPress={() => activeTab === 'services' ? openServiceModal() : openCategoryModal()}
           >

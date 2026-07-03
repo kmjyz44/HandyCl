@@ -52,6 +52,8 @@ export default function RootLayout() {
         <Stack.Screen name="how-it-works" />
         <Stack.Screen name="pricing" />
         <Stack.Screen name="contact" />
+        <Stack.Screen name="admin-service-area" />
+        <Stack.Screen name="admin-waitlist" />
         <Stack.Screen name="terms" />
         <Stack.Screen name="privacy" />
         <Stack.Screen name="support-chat" />

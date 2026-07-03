@@ -193,6 +193,31 @@ export const api = {
     return res.data;
   },
 
+  getServiceArea: async () => {
+    const res = await client.get('/service-area');
+    return res.data;
+  },
+
+  adminGetServiceArea: async () => {
+    const res = await client.get('/admin/service-area');
+    return res.data;
+  },
+
+  adminUpdateServiceArea: async (data: Record<string, any>) => {
+    const res = await client.put('/admin/service-area', data);
+    return res.data;
+  },
+
+  addToWaitlist: async (data: Record<string, any>) => {
+    const res = await client.post('/waitlist', data);
+    return res.data;
+  },
+
+  adminGetWaitlist: async () => {
+    const res = await client.get('/admin/waitlist');
+    return res.data;
+  },
+
   createCategory: async (data: { name: string; description?: string; icon?: string; image?: string; parent_id?: string; commission_rate?: number; recommended_price?: number }) => {
     const res = await client.post('/admin/categories', data);
     return res.data;

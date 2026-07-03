@@ -25,3 +25,11 @@
 - New `components/SiteFooter.tsx` (dark footer: brand, 7 links About/HowItWorks/Pricing/FAQ→help-center/Contact/Privacy/Terms, "operated by Nexus Security Solutions LLC" fine print). Added to home page (hidden in focused PWA scan mode).
 - Profile menu (my-profile): new "Company" section linking About/HowItWorks/Pricing/Contact; small "operated by Nexus Security Solutions LLC" fine-print at bottom.
 - All files compile (Babel). NOT UI-tested: preview pod serves the Emergent CRA placeholder, not the Expo app — verify visually after deploy.
+
+## 2026-06 — Service-area gating + waitlist
+- Admin-configurable working zone: allowed states + cities + radius centers (lat/lng/miles). Default = Chicago center + 30 mi radius. Admin can expand/narrow. Stored in db.settings {setting_id:"service_area"}.
+- Booking gate: `create_booking` returns 451 OUTSIDE_SERVICE_AREA when the location isn't covered. Frontend pre-checks and shows an "out_of_area" coming-soon step, saving the person to the waitlist.
+- New endpoints: GET /service-area (public), GET/PUT /admin/service-area, POST /waitlist (public), GET /admin/waitlist, GET /admin/waitlist/export (CSV). Verified via curl (Miami→451, Chicago coords→200, Illinois state match→200).
+- Booking payload now includes latitude/longitude (booking.lat/lng) so radius matching works.
+- New admin pages: /admin-service-area (configure zone), /admin-waitlist (list + client-side CSV export); links added to Admin Panel header (services.tsx). Registered in _layout.
+- Helper `_is_location_allowed` / `isInServiceArea` mirrors logic on backend & frontend (state OR city OR within-radius).

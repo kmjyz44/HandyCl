@@ -84,7 +84,7 @@ const SKILL_CATEGORIES = [
 ];
 
 // ─── BOOKING FLOW STEPS ───────────────────────────────────────────────────────
-type BookingStep = 'home' | 'skills' | 'details' | 'address' | 'datetime' | 'taskers' | 'tasker_profile' | 'confirm' | 'success' | 'photo_result';
+type BookingStep = 'home' | 'skills' | 'details' | 'address' | 'datetime' | 'taskers' | 'tasker_profile' | 'confirm' | 'success' | 'out_of_area' | 'photo_result';
 
 interface BookingState {
   categoryId: string;
@@ -356,6 +356,35 @@ export default function HomeScreen() {
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [serviceArea, setServiceArea] = useState<any>(null);
+
+  // Load the configured working zone (public) for client-side pre-checks.
+  useEffect(() => {
+    (async () => {
+      try { setServiceArea(await api.getServiceArea()); } catch {}
+    })();
+  }, []);
+
+  const isInServiceArea = (state?: string, city?: string, lat?: number, lng?: number) => {
+    const sa = serviceArea;
+    if (!sa || !sa.enabled) return true;
+    const states = (sa.states || []).map((x: string) => x.trim().toLowerCase());
+    const cities = (sa.cities || []).map((x: string) => x.trim().toLowerCase());
+    const centers = sa.centers || [];
+    if (!states.length && !cities.length && !centers.length) return true;
+    if (state && states.length && states.includes(String(state).trim().toLowerCase())) return true;
+    if (city && cities.length && cities.includes(String(city).trim().toLowerCase())) return true;
+    if (lat != null && lng != null && centers.length) {
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      for (const c of centers) {
+        const dLat = toRad(c.lat - lat), dLng = toRad(c.lng - lng);
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat)) * Math.cos(toRad(c.lat)) * Math.sin(dLng / 2) ** 2;
+        const miles = 3958.8 * 2 * Math.asin(Math.sqrt(a));
+        if (miles <= (c.radius_miles || 30)) return true;
+      }
+    }
+    return false;
+  };
 
   // Prefill the booking address from the client's saved (default) address.
   useEffect(() => {
@@ -853,6 +882,27 @@ export default function HomeScreen() {
     submittingRef.current = true;
     setBookingSubmitting(true);
 
+    // Service-area gate: if the booking location isn't covered, capture the
+    // person to the waitlist and show a "coming soon" screen instead of booking.
+    if (!isInServiceArea(booking.state, booking.city, booking.lat, booking.lng)) {
+      api.addToWaitlist({
+        email: user?.email,
+        name: user?.name || user?.full_name,
+        phone: user?.phone,
+        state: booking.state,
+        city: booking.city,
+        zip: booking.zip,
+        address: booking.address,
+        latitude: booking.lat,
+        longitude: booking.lng,
+        source: 'booking',
+      }).catch(() => {});
+      submittingRef.current = false;
+      setBookingSubmitting(false);
+      setStep('out_of_area');
+      return;
+    }
+
     const tasker = booking.selectedTasker;
     const rate = tasker.profile?.hourly_rate || tasker.hourly_rate || 0;
     const primaryDate = booking.dates.length > 0 ? booking.dates[0] : booking.date;
@@ -898,6 +948,8 @@ export default function HomeScreen() {
       state: booking.state,
       unit: booking.unit || undefined,
       zip: booking.zip || undefined,
+      latitude: booking.lat ?? undefined,
+      longitude: booking.lng ?? undefined,
       date: primaryDate,
       time: booking.timeFrom || booking.time,
       notes: notes || undefined,
@@ -2422,6 +2474,37 @@ export default function HomeScreen() {
             }}
           >
             <Text style={{ color: '#6b7280', fontSize: 14 }}>Back to home</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (step === 'out_of_area') {
+    const msg = serviceArea?.message || "Ono-Fix isn't available in your area just yet — but we're expanding fast and will be there soon!";
+    return (
+      <View style={[s.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <View style={{ alignItems: 'center', gap: 20 }}>
+          <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="location-outline" size={54} color="#f59e0b" />
+          </View>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827', textAlign: 'center' }}>Coming soon to your area</Text>
+          <Text style={{ fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22 }}>{msg}</Text>
+          <View style={{ width: '100%', backgroundColor: '#ecfdf5', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#a7f3d0' }}>
+            <Text style={{ color: '#047857', textAlign: 'center', fontSize: 14, lineHeight: 20 }}>
+              We've saved your details — we'll reach out the moment Ono-Fix launches near {booking.city || 'you'}. Thank you for your interest!
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[s.nextBtn, { width: '100%', marginTop: 8 }]}
+            onPress={() => {
+              setStep('home');
+              setBooking({ categoryId: '', categoryName: '', skillName: '', taskDescription: '', address: '', city: '', dates: [], date: '', timeFrom: '', timeTo: '', time: '', selectedTasker: null, photos: [] });
+            }}
+            data-testid="out-of-area-home-btn"
+          >
+            <Text style={s.nextBtnText}>Back to home</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
