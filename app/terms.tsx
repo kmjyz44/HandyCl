@@ -66,7 +66,10 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>8. Cancellation & Refunds</Text>
         <Text style={styles.p}>
-          Cancellations made more than 24 hours before the scheduled service incur no fee. Cancellations within 24 hours may be subject to a cancellation fee. Refunds for disputed services are evaluated by Ono-Fix's support team on a case-by-case basis.
+          After a booking is placed, the Client and Provider should use the in-app chat to discuss the task details (scope, timing, access, materials). <Text style={styles.bold}>Until the Provider confirms the job, either the Client or the Provider may cancel it free of charge</Text> — for example if the details cannot be agreed upon in chat.
+        </Text>
+        <Text style={styles.p}>
+          Once the Provider has confirmed the job, cancellations made more than 24 hours before the scheduled service incur no fee. Cancellations within 24 hours may be subject to a cancellation fee. Refunds for disputed services are evaluated by Ono-Fix's support team on a case-by-case basis. See our Refund & Cancellation Policy for full details.
         </Text>
 
         <Text style={styles.h2}>9. Prohibited Conduct</Text>

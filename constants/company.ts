@@ -15,8 +15,12 @@ export const FOOTER_LINKS: FooterLink[] = [
   { label: 'About Ono-Fix', route: '/about' },
   { label: 'How It Works', route: '/how-it-works' },
   { label: 'Pricing', route: '/pricing' },
+  { label: 'Safety & Trust', route: '/safety' },
+  { label: 'Provider Requirements', route: '/provider-requirements' },
   { label: 'FAQ', route: '/help-center' },
+  { label: 'Support', route: '/help-center' },
   { label: 'Contact Us', route: '/contact' },
+  { label: 'Refund & Cancellation', route: '/refund-policy' },
   { label: 'Privacy Policy', route: '/privacy' },
   { label: 'Terms of Service', route: '/terms' },
 ];
