@@ -35,6 +35,17 @@ function timeToY(t: string) {
   return (h - GRID_START + m / 60) * HOUR_HEIGHT;
 }
 
+// Display a 24h "HH:MM" time as US 12-hour with AM/PM (internal storage stays 24h).
+function to12h(t?: string) {
+  if (!t) return '';
+  const [hStr, m] = t.split(':');
+  let h = Number(hStr);
+  const period = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${m} ${period}`;
+}
+
 function webConfirm(msg: string): boolean {
   if (Platform.OS === 'web') return window.confirm(msg);
   return true;
@@ -63,7 +74,7 @@ function TimePicker({ label, value, onChange, filterAfter }: {
     <View style={tp.wrap}>
       <Text style={tp.label}>{label}</Text>
       <TouchableOpacity style={tp.btn} onPress={() => setOpen(true)}>
-        <Text style={[tp.btnText, !value && tp.placeholder]}>{value || 'Select'}</Text>
+        <Text style={[tp.btnText, !value && tp.placeholder]}>{value ? to12h(value) : 'Select'}</Text>
         <Ionicons name="chevron-down" size={16} color="#6b7280" />
       </TouchableOpacity>
       <Modal visible={open} transparent animationType="fade">
@@ -74,7 +85,7 @@ function TimePicker({ label, value, onChange, filterAfter }: {
               {options.map(t => (
                 <TouchableOpacity key={t} style={[tp.option, value === t && tp.optionActive]}
                   onPress={() => { onChange(t); setOpen(false); }}>
-                  <Text style={[tp.optionText, value === t && tp.optionTextActive]}>{t}</Text>
+                  <Text style={[tp.optionText, value === t && tp.optionTextActive]}>{to12h(t)}</Text>
                   {value === t && <Ionicons name="checkmark" size={18} color={ACCENT} />}
                 </TouchableOpacity>
               ))}
@@ -294,7 +305,7 @@ export default function Availability() {
           {/* Hour lines */}
           {Array.from({ length: 18 }, (_, i) => i + 6).map(h => (
             <View key={h} style={[s.hourRow, { top: (h - GRID_START) * HOUR_HEIGHT }]}>
-              <Text style={s.hourLabel}>{String(h).padStart(2, '0')}:00</Text>
+              <Text style={s.hourLabel}>{to12h(`${String(h).padStart(2, '0')}:00`)}</Text>
               <View style={s.hourLine} />
             </View>
           ))}
@@ -307,7 +318,7 @@ export default function Availability() {
               <View key={slot.slot_id} style={[s.slotBlock, { top, height, opacity: slot.is_active ? 1 : 0.45 }]}>
                 <View style={s.slotInner}>
                   <Text style={s.slotTitle}>Available</Text>
-                  <Text style={s.slotTime}>{slot.start_time} – {slot.end_time}</Text>
+                  <Text style={s.slotTime}>{to12h(slot.start_time)} – {to12h(slot.end_time)}</Text>
                 </View>
                 <View style={s.slotActions}>
                   <TouchableOpacity
@@ -378,7 +389,7 @@ export default function Availability() {
             {formStart && formEnd && (
               <View style={m.summary}>
                 <Ionicons name="time-outline" size={18} color={ACCENT} />
-                <Text style={m.summaryText}>{DAYS_FULL[formDay]}: {formStart} – {formEnd}</Text>
+                <Text style={m.summaryText}>{DAYS_FULL[formDay]}: {to12h(formStart)} – {to12h(formEnd)}</Text>
               </View>
             )}
 
@@ -405,7 +416,7 @@ export default function Availability() {
           <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 }}>Delete slot?</Text>
             <Text style={{ fontSize: 15, color: '#6b7280', marginBottom: 24 }}>
-              {confirmDeleteSlot ? `${DAYS_FULL[confirmDeleteSlot.day_of_week]}: ${confirmDeleteSlot.start_time} – ${confirmDeleteSlot.end_time}` : ''}
+              {confirmDeleteSlot ? `${DAYS_FULL[confirmDeleteSlot.day_of_week]}: ${to12h(confirmDeleteSlot.start_time)} – ${to12h(confirmDeleteSlot.end_time)}` : ''}
             </Text>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity
@@ -479,8 +490,8 @@ const s = StyleSheet.create({
 
   gridScroll: { flex: 1 },
   grid: { position: 'relative', marginLeft: 56, marginRight: 16, zIndex: 1 },
-  hourRow: { position: 'absolute', left: -56, right: 0, flexDirection: 'row', alignItems: 'center', height: HOUR_HEIGHT },
-  hourLabel: { width: 48, fontSize: 11, color: '#9ca3af', textAlign: 'right', paddingRight: 8 },
+  hourRow: { position: 'absolute', left: -70, right: 0, flexDirection: 'row', alignItems: 'center', height: HOUR_HEIGHT },
+  hourLabel: { width: 62, fontSize: 10, color: '#9ca3af', textAlign: 'right', paddingRight: 8 },
   hourLine: { flex: 1, height: 1, backgroundColor: '#f3f4f6' },
 
   slotBlock: {
