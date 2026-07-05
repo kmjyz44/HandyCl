@@ -3665,13 +3665,19 @@ async def update_executor_profile(profile_data: ExecutorProfileUpdate, current_u
 
     update_dict["updated_at"] = datetime.now(timezone.utc)
 
+    # Upsert: if the user became a provider (e.g. role changed by an admin) but
+    # has no executor profile yet, create it on first save instead of erroring.
     result = await db.executor_profiles.update_one(
         {"user_id": current_user.user_id},
-        {"$set": update_dict}
+        {
+            "$set": update_dict,
+            "$setOnInsert": {
+                "user_id": current_user.user_id,
+                "created_at": datetime.now(timezone.utc),
+            },
+        },
+        upsert=True,
     )
-
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Profile not found. Create one first.")
 
     updated_profile = await db.executor_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
     return updated_profile

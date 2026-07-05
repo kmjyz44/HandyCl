@@ -1,0 +1,23 @@
+{
+  "summary": "Independently verified the PUT /api/profile/executor upsert fix. Registered a throwaway provider, deleted their executor_profile via Mongo to simulate an admin-promoted user with no profile, and confirmed PUT returns 200 and creates the profile (upsert with $setOnInsert user_id+created_at). GET returns the saved values (service_radius_km=24, hourly_rate=30, lat=42.0334, lng=-87.9073). A second PUT updates in place (no duplicate). Regression: existing seeded provider (provider@handyhub.com) can still PUT to update service_radius_km/hourly_rate without creating duplicates. Regression: minimum_hours=1.5 saves and reads back. All 5 tests passed in 37.74s. Cleanup: throwaway user + profile deleted from Mongo; seeded provider values restored best-effort.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_executor_profile_upsert.py",
+    "/app/test_reports/pytest/executor_profile_upsert.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PUT /api/profile/executor now correctly uses update_one with $set + $setOnInsert(user_id, created_at) and upsert=True (server.py:3670-3680). Fix looks minimal and correct.",
+    "Minor: GET /api/profile/executor still returns 404 with 'Profile not found. Create one first.' when no profile exists (server.py:3652). This is fine for read semantics but the frontend should tolerate 404 on GET and let the first PUT create the profile. Not a blocker.",
+    "Consider adding a unique index on executor_profiles.user_id to guard against any future non-upsert insert path creating duplicates."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100% (5/5 pytest cases passed)", "frontend": "N/A (skipped per request)" },
+  "test_credentials": "Used provider@handyhub.com / Provider2024! from /app/memory/test_credentials.md. Throwaway user: TEST_upsert_<uuid>@example.com (deleted after test).",
+  "seed_data_creation": "Created and deleted one throwaway provider user + executor_profile via API/Mongo within test module scope.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend uses local MongoDB (MONGO_URL=mongodb://localhost:27017, DB_NAME=test_database). Register endpoint /api/auth/register requires accepted_terms:true and returns {user, session_token}. To simulate a freshly-promoted provider, register with role='provider' then delete any auto-created executor_profiles doc for that user_id directly in Mongo before hitting PUT /api/profile/executor. Test file /app/backend/tests/test_executor_profile_upsert.py is idempotent and cleans up after itself.",
+  "rca of the issue": "Original bug: update_executor_profile did a find_one first and raised 404 'Profile not found. Create one first.' when an admin-promoted user (client -> provider) tried to save from the map. Fix (server.py ~3670): replaced with update_one(..., upsert=True) + $setOnInsert{user_id, created_at}, so the first PUT creates the doc. Verified end-to-end: PUT 200, GET returns saved values, second PUT updates without duplication, seeded provider unaffected."
+}
