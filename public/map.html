@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Зона роботи</title>
+<title>Service Area</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -80,18 +80,18 @@
 <div id="map"></div>
 <div id="search-wrap">
   <div id="search-row">
-    <input id="search-input" type="text" placeholder="🔍  Пошук міста або адреси..." autocomplete="off"/>
-    <button id="search-btn">Знайти</button>
+    <input id="search-input" type="text" placeholder="🔍  Search city or address..." autocomplete="off"/>
+    <button id="search-btn">Search</button>
   </div>
   <div id="search-results"></div>
 </div>
 <div id="info">
-  <h3>📍 Зона роботи</h3>
-  <div id="address">Натисніть на карту або введіть місто</div>
+  <h3>📍 Service area</h3>
+  <div id="address">Tap the map or enter a city</div>
   <div class="radius-row" id="radius-row"></div>
-  <button id="save-btn">Зберегти зону</button>
+  <button id="save-btn">Save zone</button>
 </div>
-<div id="toast">✅ Зону збережено!</div>
+<div id="toast">✅ Zone saved!</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -183,7 +183,7 @@
       const data = await res.json();
       searchResults.innerHTML = '';
       if (!data.length) {
-        searchResults.innerHTML = '<div class="sr-item" style="color:#9ca3af">Нічого не знайдено</div>';
+        searchResults.innerHTML = '<div class="sr-item" style="color:#9ca3af">Nothing found</div>';
         searchResults.style.display = 'block';
         return;
       }
@@ -241,7 +241,7 @@
   document.getElementById('save-btn').onclick = async () => {
     const btn = document.getElementById('save-btn');
     btn.disabled = true;
-    btn.textContent = '⏳ Зберігаємо...';
+    btn.textContent = '⏳ Saving...';
 
     // Try postMessage first (for modal/webview usage)
     const msg = JSON.stringify({ type: 'save', lat, lng, radius });
@@ -270,7 +270,7 @@
         return;
       }
       const token = localStorage.getItem('session_token');
-      if (!token) throw new Error('Не авторизовано');
+      if (!token) throw new Error('Not authorized');
 
       const res = await fetch(`${API_BASE}/profile/executor`, {
         method: 'PUT',
@@ -292,9 +292,9 @@
       setTimeout(() => { toast.style.display = 'none'; }, 2500);
 
       // Permanently change button to "Edit zone" and circle to green
-      btn.textContent = '✅ Збережено!';
+      btn.textContent = '✅ Saved!';
       setTimeout(() => {
-        btn.textContent = '✏️ Редагувати зону';
+        btn.textContent = '✏️ Edit zone';
         btn.style.background = '#16a34a';
         btn.disabled = false;
         // Change circle color to green to indicate saved state
@@ -303,8 +303,8 @@
         localStorage.setItem('zone_saved', JSON.stringify({ lat, lng, radius }));
       }, 1500);
     } catch (e) {
-      alert('Помилка збереження: ' + (e.message || e));
-      btn.textContent = 'Зберегти зону';
+      alert('Save error: ' + (e.message || e));
+      btn.textContent = 'Save zone';
       btn.disabled = false;
     }
   };
@@ -321,10 +321,10 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 20px;
   `;
-  locBtn.title = 'Моє місцезнаходження';
+  locBtn.title = 'My location';
   locBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>`;
   locBtn.onclick = () => {
-    if (!navigator.geolocation) { alert('Геолокація не підтримується'); return; }
+    if (!navigator.geolocation) { alert('Geolocation is not supported'); return; }
     locBtn.innerHTML = '⏳';
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -334,7 +334,7 @@
       },
       () => {
         locBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>`;
-        alert('Не вдалося визначити місцезнаходження. Перевірте дозволи браузера.');
+        alert('Could not determine your location. Check your browser permissions.');
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -345,7 +345,7 @@
   const hasParams = params.get('lat') && params.get('lng');
   const hasLocation = hasParams || zoneSaved;
   if (!hasLocation && navigator.geolocation) {
-    document.getElementById('address').textContent = '⏳ Визначаємо ваше місцезнаходження...';
+    document.getElementById('address').textContent = '⏳ Detecting your location...';
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         updateMap(pos.coords.latitude, pos.coords.longitude);
@@ -362,7 +362,7 @@
   // Restore saved button state
   if (zoneSaved) {
     const btn = document.getElementById('save-btn');
-    btn.textContent = '✏️ Редагувати зону';
+    btn.textContent = '✏️ Edit zone';
     btn.style.background = '#16a34a';
   }
 </script>

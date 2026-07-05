@@ -1,0 +1,50 @@
+{
+  "summary": "Verified localization fix for /app/public/map.html (Ukrainian -> English). File contains ZERO Cyrillic characters (U+0400-U+04FF) and every user-facing string is now in English. Confirmed both by regex-based Python scan of the file and by grep. As expected per the request, the public preview host serves the Emergent SPA placeholder at /map.html rather than the raw asset, so the primary acceptance was verified via direct file inspection.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/app/public/map.html",
+        "issues": [
+          "Line 2: <html lang=\"uk\"> still declares Ukrainian as the document language. Not visible to users but affects screen readers and triggers browser 'Translate this page?' prompts. Should be lang=\"en\".",
+          "Lines 164 & 182: Nominatim geocoder calls still pass accept-language=uk. This causes the reverse-geocoded address text (shown in #address) and search result names (shown in #search-results) to be returned in Ukrainian for places that have Ukrainian names. For a US/English-only app both should be accept-language=en."
+        ]
+      }
+    ]
+  },
+  "verification_checklist": {
+    "cyrillic_chars_in_file": 0,
+    "title_english": "Service Area",
+    "search_placeholder_english": "Search city or address...",
+    "search_button_english": "Search",
+    "service_area_heading_english": "Service area",
+    "address_hint_english": "Tap the map or enter a city",
+    "save_button_english": "Save zone",
+    "saving_state_english": "Saving...",
+    "saved_toast_english": "Zone saved!",
+    "edit_zone_english": "Edit zone",
+    "search_no_results_english": "Nothing found",
+    "geolocation_errors_english": ["Geolocation is not supported", "Could not determine your location. Check your browser permissions."],
+    "locate_btn_title_english": "My location",
+    "detecting_location_english": "Detecting your location...",
+    "radius_chip_unit_logic": "chip.textContent = r + ' ' + UNIT; UNIT = params.get('unit') === 'mi' ? 'mi' : 'km' -- correct: admin (unit=mi) -> 'mi', provider (default) -> 'km'"
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Change <html lang=\"uk\"> to <html lang=\"en\"> in /app/public/map.html (line 2).",
+    "Change accept-language=uk to accept-language=en on the two Nominatim fetch URLs in /app/public/map.html (lines 164 and 182) so reverse-geocoded addresses and city search results are returned in English."
+  ],
+  "critical_code_review_comments": [
+    "Localization fix is complete for all hard-coded user-facing strings in map.html. Remaining locale references are not visible text but still bias the UI toward Ukrainian at runtime (document lang + geocoder language)."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (backend testing skipped per request)", "frontend": "100% for the requested string-localization scope; 2 residual non-string locale settings noted" },
+  "test_credentials": "Not used - static asset verification only. /app/memory/test_credentials.md not required.",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Preview pod serves the Expo/Emergent SPA placeholder at any non-API route (including /map.html), so live iframe rendering of the map cannot be exercised via Playwright in this environment. Verify localization by scanning /app/public/map.html for Cyrillic (U+0400-U+04FF) with Python re.findall. Additionally check <html lang> and Nominatim accept-language query params on lines 164/182 to catch non-string locale leaks.",
+  "rca of the issue": "Original file was authored in Ukrainian (lang=\"uk\", Cyrillic labels for placeholder, buttons, headings, toasts, error messages, chip units). The fix translated all user-facing strings to English. Residual Ukrainian locale references remain in the <html lang> attribute and in the accept-language=uk query param on two Nominatim API calls; these do not print Ukrainian literals from the HTML but do cause runtime Ukrainian text to appear in geocoded address/search results."
+}
