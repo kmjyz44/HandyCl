@@ -118,10 +118,12 @@ export default function Availability() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Selected day in weekly view
+  // Selected date in the scrollable strip (weekly schedule is recurring by weekday)
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const todayDow = (today.getDay() + 6) % 7; // 0=Mon
-  const [selectedDay, setSelectedDay] = useState(todayDow);
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const selectedDay = (selectedDate.getDay() + 6) % 7; // 0=Mon, derived from selected date
 
   // Add/Edit modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -242,13 +244,13 @@ export default function Availability() {
     finally { setConfirmDeleteSlot(null); }
   };
 
-  // Build 7-day header dates
-  const weekDates = Array.from({ length: 7 }, (_, i) => {
+  // Build a scrollable strip of the next 28 days (so schedules can be viewed 2+ weeks ahead)
+  const dayList = Array.from({ length: 28 }, (_, i) => {
     const d = new Date(today);
-    const diff = i - todayDow;
-    d.setDate(today.getDate() + diff);
+    d.setDate(today.getDate() + i);
     return d;
   });
+  const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
   const daySlots = slots.filter(s => s.day_of_week === selectedDay).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
@@ -271,25 +273,42 @@ export default function Availability() {
         <Text style={s.areaEdit}>Edit</Text>
       </TouchableOpacity>
 
-      {/* ── Week strip ── */}
-      <View style={s.weekStrip}>
-        {weekDates.map((d, i) => {
-          const hasSl = slots.some(sl => sl.day_of_week === i);
-          const isToday = i === todayDow;
-          const isSel = i === selectedDay;
+      {/* ── Day strip (scrollable, 4 weeks) ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={s.weekStrip}
+        contentContainerStyle={s.weekStripContent}
+        data-testid="availability-day-strip"
+      >
+        {dayList.map((d, idx) => {
+          const dow = (d.getDay() + 6) % 7;
+          const hasSl = slots.some(sl => sl.day_of_week === dow);
+          const isToday = sameDay(d, today);
+          const isSel = sameDay(d, selectedDate);
           return (
-            <TouchableOpacity key={i} style={[s.dayCell, isSel && s.dayCellSel]} onPress={() => setSelectedDay(i)}>
-              <Text style={[s.dayCellDow, isSel && s.dayCellTextSel]}>{DAYS_SHORT[i]}</Text>
+            <TouchableOpacity
+              key={idx}
+              style={[s.dayCell, isSel && s.dayCellSel]}
+              onPress={() => setSelectedDate(d)}
+              data-testid={`day-cell-${idx}`}
+            >
+              <Text style={[s.dayCellDow, isSel && s.dayCellTextSel]}>{DAYS_SHORT[dow]}</Text>
               <Text style={[s.dayCellNum, isSel && s.dayCellTextSel, isToday && !isSel && s.todayNum]}>{d.getDate()}</Text>
               {hasSl && <View style={[s.dotIndicator, isSel && s.dotIndicatorSel]} />}
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       {/* ── Day label ── */}
       <View style={s.dayLabelRow}>
-        <Text style={s.dayLabel}>{DAYS_FULL[selectedDay]}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.dayLabel}>{DAYS_FULL[selectedDay]}</Text>
+          <Text style={s.dayLabelDate}>
+            {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · repeats weekly
+          </Text>
+        </View>
         <TouchableOpacity style={s.addDayBtn} onPress={() => openAdd(selectedDay)}>
           <Ionicons name="add" size={16} color={ACCENT} />
           <Text style={s.addDayBtnText}>Add</Text>
@@ -473,8 +492,9 @@ const s = StyleSheet.create({
   areaText: { flex: 1, fontSize: 14, color: '#1e40af', fontWeight: '600' },
   areaEdit: { fontSize: 13, color: ACCENT, fontWeight: '700' },
 
-  weekStrip: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 8, paddingTop: 4 },
-  dayCell: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 12, marginHorizontal: 2 },
+  weekStrip: { borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 8, paddingTop: 4, flexGrow: 0 },
+  weekStripContent: { paddingHorizontal: 12, alignItems: 'flex-start' },
+  dayCell: { width: 52, alignItems: 'center', paddingVertical: 8, borderRadius: 12, marginHorizontal: 3 },
   dayCellSel: { backgroundColor: ACCENT },
   dayCellDow: { fontSize: 11, fontWeight: '600', color: '#9ca3af', marginBottom: 2 },
   dayCellNum: { fontSize: 17, fontWeight: '700', color: '#111827' },
@@ -485,6 +505,7 @@ const s = StyleSheet.create({
 
   dayLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 },
   dayLabel: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  dayLabelDate: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
   addDayBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: ACCENT },
   addDayBtnText: { fontSize: 13, fontWeight: '700', color: ACCENT },
 
