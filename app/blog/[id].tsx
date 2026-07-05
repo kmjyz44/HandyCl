@@ -201,6 +201,12 @@ export default function BlogPostDetail() {
 
         {/* Body */}
         <View style={styles.body}>
+          {post.is_pinned ? (
+            <View style={styles.pinnedBadge} data-testid="blog-pinned-badge">
+              <Ionicons name="star" size={12} color="#fff" />
+              <Text style={styles.pinnedBadgeText}>Pinned</Text>
+            </View>
+          ) : null}
           <Text style={styles.title}>{post.title}</Text>
           <Text style={styles.description}>{post.description}</Text>
           {post.tags?.length > 0 && (
@@ -298,6 +304,12 @@ const styles = StyleSheet.create({
 
   body: { padding: 16, backgroundColor: '#fff' },
   title: { fontSize: 22, fontWeight: '800', color: '#111827' },
+  pinnedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#f59e0b', paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 999, alignSelf: 'flex-start', marginBottom: 8,
+  },
+  pinnedBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   description: { fontSize: 14, color: '#374151', marginTop: 10, lineHeight: 22 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   tag: { fontSize: 12, color: '#2563eb', backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
