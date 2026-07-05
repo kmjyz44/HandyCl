@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -161,7 +161,7 @@
 
   async function reverseGeocode(lt, ln) {
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lt}&lon=${ln}&format=json&accept-language=uk`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lt}&lon=${ln}&format=json&accept-language=en`);
       const data = await res.json();
       const addr = data.address;
       const city = addr.city || addr.town || addr.village || addr.county || '';
@@ -179,7 +179,7 @@
   async function doSearch(query) {
     if (!query.trim()) { searchResults.style.display = 'none'; return; }
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=uk`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=en`);
       const data = await res.json();
       searchResults.innerHTML = '';
       if (!data.length) {
