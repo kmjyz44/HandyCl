@@ -207,7 +207,7 @@ export default function Availability() {
     if (!formStart || !formEnd) { webAlert('Error', 'Specify start and end times'); return; }
     if (formStart >= formEnd) { webAlert('Error', 'End time must be later than start time'); return; }
     if (hasOverlap(formDay, formStart, formEnd, editingSlot?.slot_id)) {
-      webAlert('Time overlap', `${DAYS_FULL[formDay]} already has a slot overlapping ${formStart}–${formEnd}.`);
+      webAlert('Time overlap', `${DAYS_FULL[formDay]} already has a slot overlapping ${to12h(formStart)}–${to12h(formEnd)}.`);
       return;
     }
     setSaving(true);
@@ -225,7 +225,7 @@ export default function Availability() {
     if (Platform.OS === 'web') {
       setConfirmDeleteSlot(slot);
     } else {
-      Alert.alert('Delete', `${DAYS_FULL[slot.day_of_week]} ${slot.start_time}–${slot.end_time}`, [
+      Alert.alert('Delete', `${DAYS_FULL[slot.day_of_week]} ${to12h(slot.start_time)}–${to12h(slot.end_time)}`, [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: async () => {
           try { await api.deleteAvailabilitySlot(slot.slot_id); load(); }
