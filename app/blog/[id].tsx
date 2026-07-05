@@ -17,9 +17,10 @@ function fmt(ts: string) {
 }
 
 const ROLE_LABEL: Record<string, { text: string; color: string }> = {
-  client:   { text: 'Client',   color: '#3b82f6' },
-  provider: { text: 'Pro',      color: '#16a34a' },
-  admin:    { text: 'Admin',    color: '#a855f7' },
+  client:    { text: 'Client',    color: '#3b82f6' },
+  provider:  { text: 'Pro',       color: '#16a34a' },
+  admin:     { text: 'Admin',     color: '#a855f7' },
+  moderator: { text: 'Moderator', color: '#f59e0b' },
 };
 
 export default function BlogPostDetail() {
@@ -87,6 +88,37 @@ export default function BlogPostDetail() {
     );
   };
 
+  const onEdit = () => {
+    router.push(`/blog-create?edit=${post.post_id}` as any);
+  };
+
+  const onPin = async () => {
+    try {
+      const r = await api.pinBlogPost(post.post_id);
+      setPost((p: any) => ({ ...p, is_pinned: r.is_pinned }));
+      showAlert('Done', r.is_pinned ? 'Post pinned to the top' : 'Post unpinned');
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const onBanAuthor = () => {
+    showConfirm(
+      'Ban this user?',
+      `${post.author_name || 'This user'} will be permanently blocked and logged out.`,
+      async () => {
+        try {
+          await api.blockUser(post.author_id, `Blocked from blog post "${post.title?.slice(0, 60)}"`);
+          showAlert('Done', 'User has been banned');
+        } catch (e: any) {
+          showAlert('Error', e?.response?.data?.detail || 'Failed');
+        }
+      },
+      'Ban',
+      'Cancel',
+    );
+  };
+
   if (loading) {
     return <View style={styles.center}><ActivityIndicator color="#2563eb" /></View>;
   }
@@ -100,7 +132,12 @@ export default function BlogPostDetail() {
   }
 
   const role = ROLE_LABEL[post.author_role] || ROLE_LABEL.client;
-  const canDelete = user && (user.user_id === post.author_id || (user as any).role === 'admin');
+  const myRole = (user as any)?.role;
+  const isMod = myRole === 'admin' || myRole === 'moderator';
+  const isAuthor = user && user.user_id === post.author_id;
+  const canEdit = isAuthor || isMod;
+  const canDelete = isAuthor || isMod;
+  const canBan = isMod && !isAuthor && post.author_role !== 'admin';
 
   return (
     <KeyboardAvoidingView
@@ -110,11 +147,25 @@ export default function BlogPostDetail() {
       <Stack.Screen
         options={{
           title: 'Post',
-          headerRight: () => canDelete ? (
-            <TouchableOpacity onPress={onDelete} style={{ paddingHorizontal: 12 }} data-testid="blog-delete-btn">
-              <Ionicons name="trash-outline" size={20} color="#dc2626" />
-            </TouchableOpacity>
-          ) : null,
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 12 }}>
+              {isMod && (
+                <TouchableOpacity onPress={onPin} data-testid="blog-pin-btn">
+                  <Ionicons name={post.is_pinned ? 'star' : 'star-outline'} size={20} color={post.is_pinned ? '#f59e0b' : '#6b7280'} />
+                </TouchableOpacity>
+              )}
+              {canEdit && (
+                <TouchableOpacity onPress={onEdit} data-testid="blog-edit-btn">
+                  <Ionicons name="create-outline" size={20} color="#2563eb" />
+                </TouchableOpacity>
+              )}
+              {canDelete && (
+                <TouchableOpacity onPress={onDelete} data-testid="blog-delete-btn">
+                  <Ionicons name="trash-outline" size={20} color="#dc2626" />
+                </TouchableOpacity>
+              )}
+            </View>
+          ),
         }}
       />
 
@@ -135,6 +186,12 @@ export default function BlogPostDetail() {
               {' · '}{fmt(post.created_at)}
             </Text>
           </View>
+          {canBan && (
+            <TouchableOpacity onPress={onBanAuthor} style={styles.banBtn} data-testid="blog-ban-author-btn">
+              <Ionicons name="ban-outline" size={14} color="#dc2626" />
+              <Text style={styles.banBtnText}>Ban</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Images */}
@@ -229,6 +286,13 @@ const styles = StyleSheet.create({
   authorName: { fontSize: 14, fontWeight: '700', color: '#111827' },
   authorMeta: { fontSize: 11, color: '#6b7280', marginTop: 2 },
   roleTag: { fontWeight: '700' },
+
+  banBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderWidth: 1, borderColor: '#fecaca', backgroundColor: '#fef2f2',
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+  },
+  banBtnText: { fontSize: 12, color: '#dc2626', fontWeight: '700' },
 
   image: { width: '100%', aspectRatio: 4 / 3, backgroundColor: '#f3f4f6' },
 

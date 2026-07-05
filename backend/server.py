@@ -1125,6 +1125,14 @@ class BlogPostCreate(BaseModel):
     booking_id: Optional[str] = None
 
 
+class BlogPostUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    images: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
+    category: Optional[str] = None
+
+
 class BlogComment(BaseModel):
     comment_id: str
     post_id: str
@@ -1313,6 +1321,11 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 async def require_admin_or_support(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role not in (UserRole.ADMIN, UserRole.SUPPORT):
         raise HTTPException(status_code=403, detail="Admin or support access required")
+    return current_user
+
+async def require_admin_or_moderator(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in (UserRole.ADMIN, UserRole.MODERATOR):
+        raise HTTPException(status_code=403, detail="Admin or moderator access required")
     return current_user
 
 async def get_settings() -> Settings:
@@ -1848,6 +1861,31 @@ async def login(credentials: UserLogin):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     user = User(**user_doc)
+
+    # Reject blocked/banned users (auto-lift expired temporary blocks)
+    if user.is_blocked:
+        blocked_until = user.blocked_until
+        if blocked_until:
+            if isinstance(blocked_until, str):
+                blocked_until = datetime.fromisoformat(blocked_until)
+            if blocked_until.tzinfo is None:
+                blocked_until = blocked_until.replace(tzinfo=timezone.utc)
+            if blocked_until < datetime.now(timezone.utc):
+                await db.users.update_one(
+                    {"user_id": user.user_id},
+                    {"$set": {"is_blocked": False, "blocked_until": None, "blocked_reason": None}}
+                )
+                user.is_blocked = False
+            else:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Account blocked until {blocked_until.isoformat()}. Reason: {user.blocked_reason or 'Not specified'}"
+                )
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Account blocked. Reason: {user.blocked_reason or 'Not specified'}"
+            )
 
     # Create session
     session_token = f"session_{uuid.uuid4().hex}"
@@ -4711,11 +4749,14 @@ async def update_user_role(user_id: str, role: UserRole, current_user: User = De
 @api_router.post("/admin/users/{user_id}/block")
 async def block_user(
     user_id: str,
-    reason: str,
-    duration_hours: Optional[int] = None,
-    current_user: User = Depends(require_admin)
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(require_admin_or_moderator)
 ):
     """Block a user temporarily (with duration) or permanently (without duration)"""
+    reason = (payload.get("reason") or "").strip()
+    duration_hours = payload.get("duration_hours")
+    if not reason:
+        raise HTTPException(status_code=422, detail="A reason is required")
     if user_id == current_user.user_id:
         raise HTTPException(status_code=400, detail="Cannot block yourself")
 
@@ -4752,7 +4793,7 @@ async def block_user(
     }
 
 @api_router.post("/admin/users/{user_id}/unblock")
-async def unblock_user(user_id: str, current_user: User = Depends(require_admin)):
+async def unblock_user(user_id: str, current_user: User = Depends(require_admin_or_moderator)):
     """Unblock a user"""
     result = await db.users.update_one(
         {"user_id": user_id},
@@ -9227,7 +9268,7 @@ async def submit_support_request(data: SupportRequestCreate, request: Request):
     try:
         auth = request.headers.get("authorization", "")
         if auth.startswith("Bearer "):
-            sess = await db.sessions.find_one({"session_token": auth[7:]}, {"_id": 0, "user_id": 1})
+            sess = await db.user_sessions.find_one({"session_token": auth[7:]}, {"_id": 0, "user_id": 1})
             if sess:
                 user_id = sess.get("user_id")
     except Exception:
@@ -9342,7 +9383,7 @@ async def list_blog_posts(
         auth = request.headers.get("authorization", "")
         if auth.startswith("Bearer "):
             token = auth[7:]
-            sess = await db.sessions.find_one({"session_token": token}, {"_id": 0, "user_id": 1})
+            sess = await db.user_sessions.find_one({"session_token": token}, {"_id": 0, "user_id": 1})
             if sess:
                 me_id = sess.get("user_id")
     except Exception:
@@ -9404,7 +9445,7 @@ async def get_blog_post(post_id: str, request: Request):
     try:
         auth = request.headers.get("authorization", "")
         if auth.startswith("Bearer "):
-            sess = await db.sessions.find_one({"session_token": auth[7:]}, {"_id": 0, "user_id": 1})
+            sess = await db.user_sessions.find_one({"session_token": auth[7:]}, {"_id": 0, "user_id": 1})
             if sess:
                 liked = await db.blog_likes.find_one(
                     {"post_id": post_id, "user_id": sess["user_id"]}, {"_id": 0}
@@ -9494,14 +9535,65 @@ async def add_blog_comment(
     return comment.dict()
 
 
+@api_router.put("/blog/posts/{post_id}")
+async def update_blog_post(post_id: str, data: BlogPostUpdate, current_user: User = Depends(get_current_user)):
+    """Author, admin, or moderator can edit a post."""
+    post = await db.blog_posts.find_one({"post_id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    is_mod = role in ("admin", "moderator")
+    if post["author_id"] != current_user.user_id and not is_mod:
+        raise HTTPException(status_code=403, detail="Only the author, an admin or a moderator can edit")
+
+    update: Dict[str, Any] = {}
+    if data.title is not None:
+        title = data.title.strip()
+        if len(title) < 3 or len(title) > 200:
+            raise HTTPException(status_code=422, detail="Title: 3–200 characters")
+        update["title"] = title
+    if data.description is not None:
+        description = data.description.strip()
+        if len(description) < 10 or len(description) > 5000:
+            raise HTTPException(status_code=422, detail="Description: 10–5000 characters")
+        update["description"] = description
+    if data.images is not None:
+        if len(data.images) > 10:
+            raise HTTPException(status_code=422, detail="No more than 10 images")
+        update["images"] = [img for img in data.images if isinstance(img, str)]
+    if data.tags is not None:
+        update["tags"] = [t.strip().lower() for t in data.tags if t and t.strip()][:10]
+    if data.category is not None:
+        update["category"] = data.category.strip() or None
+    if not update:
+        raise HTTPException(status_code=422, detail="Nothing to update")
+    update["updated_at"] = datetime.now(timezone.utc)
+    await db.blog_posts.update_one({"post_id": post_id}, {"$set": update})
+    return await db.blog_posts.find_one({"post_id": post_id}, {"_id": 0})
+
+
+@api_router.post("/blog/posts/{post_id}/pin")
+async def pin_blog_post(post_id: str, current_user: User = Depends(require_admin_or_moderator)):
+    """Admin/moderator pins or unpins a post to the top of the feed."""
+    post = await db.blog_posts.find_one({"post_id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    new_state = not bool(post.get("is_pinned"))
+    await db.blog_posts.update_one(
+        {"post_id": post_id},
+        {"$set": {"is_pinned": new_state, "updated_at": datetime.now(timezone.utc)}},
+    )
+    return {"post_id": post_id, "is_pinned": new_state}
+
+
 @api_router.delete("/blog/posts/{post_id}")
 async def delete_blog_post(post_id: str, current_user: User = Depends(get_current_user)):
     post = await db.blog_posts.find_one({"post_id": post_id}, {"_id": 0})
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    if post["author_id"] != current_user.user_id and role != "admin":
-        raise HTTPException(status_code=403, detail="Only the author or an admin can delete")
+    if post["author_id"] != current_user.user_id and role not in ("admin", "moderator"):
+        raise HTTPException(status_code=403, detail="Only the author, an admin or a moderator can delete")
     await db.blog_posts.delete_one({"post_id": post_id})
     await db.blog_likes.delete_many({"post_id": post_id})
     await db.blog_comments.delete_many({"post_id": post_id})

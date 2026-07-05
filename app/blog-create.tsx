@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   Image, ActivityIndicator, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '../utils/api';
 import { showAlert } from '../utils/alert';
+import { compressBase64Image } from '../utils/imageCompress';
 
 const SUGGESTED_TAGS = [
   'repair', 'cleaning', 'plumbing', 'electrical', 'furniture',
@@ -16,12 +17,30 @@ const SUGGESTED_TAGS = [
 
 export default function BlogCreate() {
   const router = useRouter();
+  const { edit } = useLocalSearchParams<{ edit?: string }>();
+  const isEdit = !!edit;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(isEdit);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    (async () => {
+      try {
+        const p = await api.getBlogPost(edit as string);
+        setTitle(p.title || '');
+        setDescription(p.description || '');
+        setImages(p.images || []);
+        setTags(p.tags || []);
+      } catch (e: any) {
+        showAlert('Error', 'Could not load the post');
+      } finally { setLoading(false); }
+    })();
+  }, [edit]);
 
   const pickImage = async () => {
     if (images.length >= 10) {
@@ -42,10 +61,13 @@ export default function BlogCreate() {
         selectionLimit: 10 - images.length,
       });
       if (result.canceled) return;
-      const added = (result.assets || [])
+      // Aggressively compress on web — phone cameras produce 5–10 MB photos
+      // which bloat the JSON payload and cause "Could not publish" timeouts.
+      const raw = (result.assets || [])
         .map((a) => a.base64 ? `data:image/jpeg;base64,${a.base64}` : a.uri)
         .filter(Boolean) as string[];
-      setImages((prev) => [...prev, ...added].slice(0, 10));
+      const compressed = await Promise.all(raw.map((r) => compressBase64Image(r, 1024, 0.8)));
+      setImages((prev) => [...prev, ...compressed].slice(0, 10));
     } catch (e: any) {
       showAlert('Error', e?.message || 'Could not select a photo');
     }
@@ -72,26 +94,45 @@ export default function BlogCreate() {
     if (description.trim().length < 10) { showAlert('Error', 'Description must be at least 10 characters'); return; }
     setSaving(true);
     try {
-      const r = await api.createBlogPost({
-        title: title.trim(),
-        description: description.trim(),
-        images,
-        tags,
-      });
-      showAlert('Done', 'Post published!');
-      router.replace(`/blog/${r.post_id}` as any);
+      if (isEdit) {
+        await api.updateBlogPost(edit as string, {
+          title: title.trim(),
+          description: description.trim(),
+          images,
+          tags,
+        });
+        showAlert('Done', 'Post updated!');
+        router.replace(`/blog/${edit}` as any);
+      } else {
+        const r = await api.createBlogPost({
+          title: title.trim(),
+          description: description.trim(),
+          images,
+          tags,
+        });
+        showAlert('Done', 'Post published!');
+        router.replace(`/blog/${r.post_id}` as any);
+      }
     } catch (e: any) {
-      showAlert('Error', e?.response?.data?.detail || 'Could not publish');
+      showAlert('Error', e?.response?.data?.detail || (isEdit ? 'Could not save' : 'Could not publish'));
     } finally {
       setSaving(false);
     }
   };
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb' }}>
+        <ActivityIndicator color="#2563eb" />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <Stack.Screen
         options={{
-          title: 'New post',
+          title: isEdit ? 'Edit post' : 'New post',
           headerRight: () => (
             <TouchableOpacity
               onPress={submit}
@@ -101,7 +142,7 @@ export default function BlogCreate() {
             >
               {saving
                 ? <ActivityIndicator color="#2563eb" size="small" />
-                : <Text style={{ color: '#2563eb', fontWeight: '700', fontSize: 14 }}>Publish</Text>}
+                : <Text style={{ color: '#2563eb', fontWeight: '700', fontSize: 14 }}>{isEdit ? 'Save' : 'Publish'}</Text>}
             </TouchableOpacity>
           ),
         }}
@@ -189,7 +230,7 @@ export default function BlogCreate() {
           disabled={saving}
           data-testid="publish-bottom-btn"
         >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.publishBtnText}>Publish</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.publishBtnText}>{isEdit ? 'Save' : 'Publish'}</Text>}
         </TouchableOpacity>
       </ScrollView>
     </View>

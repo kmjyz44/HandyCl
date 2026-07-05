@@ -30,10 +30,18 @@ function fmt(ts: string) {
 }
 
 const ROLE_LABEL: Record<string, { text: string; color: string }> = {
-  client:   { text: 'Client',   color: '#3b82f6' },
-  provider: { text: 'Pro',      color: '#16a34a' },
-  admin:    { text: 'Admin',    color: '#a855f7' },
+  client:    { text: 'Client',    color: '#3b82f6' },
+  provider:  { text: 'Pro',       color: '#16a34a' },
+  admin:     { text: 'Admin',     color: '#a855f7' },
+  moderator: { text: 'Moderator', color: '#f59e0b' },
 };
+
+const PinnedBadge = () => (
+  <View style={styles.pinnedBadge} data-testid="blog-pinned-badge">
+    <Ionicons name="star" size={12} color="#fff" />
+    <Text style={styles.pinnedBadgeText}>Pinned</Text>
+  </View>
+);
 
 export default function BlogFeed() {
   const router = useRouter();
@@ -136,13 +144,21 @@ export default function BlogFeed() {
             const cover = item.images?.[0];
             return (
               <TouchableOpacity
-                style={styles.card}
+                style={[styles.card, item.is_pinned && styles.cardPinned]}
                 onPress={() => router.push(`/blog/${item.post_id}` as any)}
                 data-testid={`blog-post-${item.post_id}`}
                 activeOpacity={0.85}
               >
-                {cover ? <Image source={{ uri: cover }} style={styles.cover} resizeMode="cover" /> : null}
+                {cover ? (
+                  <View>
+                    <Image source={{ uri: cover }} style={styles.cover} resizeMode="cover" />
+                    {item.is_pinned ? <View style={styles.pinnedOverlay}><PinnedBadge /></View> : null}
+                  </View>
+                ) : null}
                 <View style={styles.cardBody}>
+                  {!cover && item.is_pinned ? (
+                    <View style={{ marginBottom: 8, flexDirection: 'row' }}><PinnedBadge /></View>
+                  ) : null}
                   <View style={styles.authorRow}>
                     {item.author_avatar ? (
                       <Image source={{ uri: item.author_avatar }} style={styles.avatar} />
@@ -215,6 +231,14 @@ const styles = StyleSheet.create({
     borderRadius: 14, overflow: 'hidden',
     borderWidth: 1, borderColor: '#e5e7eb',
   },
+  cardPinned: { borderColor: '#fcd34d', borderWidth: 1.5 },
+  pinnedOverlay: { position: 'absolute', top: 10, left: 10 },
+  pinnedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#f59e0b', paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 999, alignSelf: 'flex-start',
+  },
+  pinnedBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   cover: { width: '100%', height: 200, backgroundColor: '#f3f4f6' },
   cardBody: { padding: 14 },
   authorRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },

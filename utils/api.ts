@@ -523,6 +523,14 @@ export const api = {
     const res = await client.post('/blog/posts', data);
     return res.data;
   },
+  updateBlogPost: async (id: string, data: { title?: string; description?: string; images?: string[]; tags?: string[]; category?: string }) => {
+    const res = await client.put(`/blog/posts/${id}`, data);
+    return res.data;
+  },
+  pinBlogPost: async (id: string) => {
+    const res = await client.post(`/blog/posts/${id}/pin`);
+    return res.data;
+  },
   getBlogPost: async (id: string) => {
     const res = await client.get(`/blog/posts/${id}`);
     return res.data;
@@ -830,8 +838,8 @@ export const api = {
     return res.data;
   },
 
-  blockUser: async (userId: string, reason: string, durationHours: number) => {
-    const res = await client.post(`/admin/users/${userId}/block`, { reason, duration_hours: durationHours });
+  blockUser: async (userId: string, reason: string, durationHours?: number) => {
+    const res = await client.post(`/admin/users/${userId}/block`, { reason, duration_hours: durationHours ?? null });
     return res.data;
   },
 

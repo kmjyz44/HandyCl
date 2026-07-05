@@ -33,3 +33,13 @@
 - Booking payload now includes latitude/longitude (booking.lat/lng) so radius matching works.
 - New admin pages: /admin-service-area (configure zone), /admin-waitlist (list + client-side CSV export); links added to Admin Panel header (services.tsx). Registered in _layout.
 - Helper `_is_location_allowed` / `isInServiceArea` mirrors logic on backend & frontend (state OR city OR within-radius).
+
+## 2026-07-05 — Blog fix (P0) + Full admin/moderator blog moderation
+- FIXED "Could not publish" blog bug: `blog-create.tsx` now compresses each picked photo via `compressBase64Image(raw,1024,0.8)` before upload (phone photos were 5–10MB each → payload bloat → timeout). Reused the existing util already used in services.tsx.
+- `blog-create.tsx` now also supports EDIT mode via `?edit=<post_id>` (prefills + PUT).
+- Backend: added PUT /blog/posts/{id} (author/admin/moderator edit) and POST /blog/posts/{id}/pin (admin/moderator toggle). delete_blog_post now also allows moderators. New helper require_admin_or_moderator.
+- Block/ban: block_user & unblock_user now allow admin+moderator (was admin-only). block_user now reads a JSON body {reason, duration_hours} (was query params — mismatched with frontend). Login now rejects blocked users (403) with auto-lift of expired temp blocks.
+- Blog detail (`blog/[id].tsx`): pin/edit/delete header actions + "Ban author" button for admin/moderator; moderator role label added.
+- Fixed blog auth: liked_by_me lookups used wrong collection db.sessions → db.user_sessions.
+- Verified via curl: admin create/pin/edit/delete post OK; block→login 403→unblock→login 200 OK.
+- NOTE: Expo app is NOT served on the preview URL (preview serves the /app/frontend CRA stub). Frontend changes verified by code review + backend curl; browser e2e must be done on the deployed Netlify build.
