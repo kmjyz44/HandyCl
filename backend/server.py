@@ -2226,6 +2226,40 @@ def _is_location_allowed(sa: dict, state=None, city=None, lat=None, lng=None) ->
 
 
 
+_geocode_cache: Dict[str, tuple] = {}
+
+async def _geocode_place(query: Optional[str]):
+    """Server-side geocode a place/city string to (lat, lng).
+
+    Runs server-to-server (no browser CORS/rate-limit issues that make the
+    client-side Nominatim call fail). Cached in-memory. Returns (None, None)
+    on failure so callers can fall back gracefully.
+    """
+    if not query or not str(query).strip():
+        return None, None
+    key = str(query).strip().lower()
+    if key in _geocode_cache:
+        return _geocode_cache[key]
+    result = (None, None)
+    try:
+        # Open-Meteo geocoding matches by place name; use the part before a comma.
+        name = str(query).split(",")[0].strip()
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            r = await client.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": name, "count": 1, "language": "en", "country": "US"},
+                headers={"User-Agent": "Ono-Fix/1.0"},
+            )
+            if r.status_code == 200:
+                res = (r.json() or {}).get("results") or []
+                if res:
+                    result = (float(res[0]["latitude"]), float(res[0]["longitude"]))
+    except Exception:
+        result = (None, None)
+    _geocode_cache[key] = result
+    return result
+
+
 def _provider_service_match(executor: dict, city, lat, lng):
     """Return (has_config, covers) for a provider vs a client location.
 
@@ -4012,6 +4046,14 @@ async def get_executors_by_service(
     ]
 
     result = await db.users.aggregate(pipeline).to_list(1000)
+
+    # If the client supplied a city/address but no coordinates (e.g. the
+    # browser-side geocoder was blocked, common for guests), geocode it
+    # server-side so radius-based provider matching still works.
+    if city and (lat is None or lng is None):
+        glat, glng = await _geocode_place(str(city))
+        if glat is not None:
+            lat, lng = glat, glng
 
     filtered = []
     for executor in result:

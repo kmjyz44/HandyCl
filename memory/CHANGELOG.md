@@ -63,3 +63,12 @@
 - /executors/available now derives the client location (current_user.latitude/longitude, else the configured service-area center) and: (a) hides providers with NO service area configured, (b) hides providers whose area doesn't cover the client.
 - Verified on preview: provider set to Kyiv → ABSENT from both /executors/available and /executors/by-service for a Chicago client; reset to Chicago → PRESENT in both; unconfigured providers hidden.
 - NOTE: also verified LIVE Railway data — provider@handyhub.com there has profile coords=Kyiv(r=5) but user.city=Niles; the live backend runs OLD code (no filter on /executors/available) so it still shows. Requires Railway backend redeploy.
+
+## 2026-07-05 (cont3) — Provider search: server-side geocoding fixes "pro not found"
+- ROOT CAUSE of "provider not found even though location/skill/date match": when the client's address had NO coordinates (the browser-side Nominatim geocoder is frequently blocked/rate-limited, especially for guests), the search sent city-name only. Providers configured by coordinates+radius (e.g. Nexus: coords 42.05,-87.85 r=50mi) could not be matched by city name → excluded. Reproduced on LIVE: by-service with coords → Nexus present; city-only (no coords) → 0.
+- FIX: added server-side geocoder `_geocode_place` (Open-Meteo geocoding API — reachable, no key; Photon/Nominatim are blocked/rate-limited from the pod). get_executors_by_service now geocodes the client city to coords when lat/lng are missing, so radius matching works.
+- Verified on preview (all 3 criteria): 
+  1) Location — Norridge/Chicago (no coords) → provider FOUND via geocode; Kyiv → NOT found.
+  2) Skill — service_name=Electrical → found; Plumbing → not found (provider lacks it).
+  3) Availability by date — filtered CLIENT-side in api.getExecutorsBySkill against availability_slots (providers with no slots are included).
+- NOTE: frontend sends the skill as `service_name` (api maps skill→service_name). Requires Railway backend redeploy to take effect on the live app.
