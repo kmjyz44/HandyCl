@@ -126,7 +126,7 @@ const US_STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorad
 
 
 function getDates() {
-  const dates: { label: string; dayName: string; value: string }[] = [];
+  const dates: { label: string; dayName: string; dayNum: number; value: string }[] = [];
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   for (let i = 0; i < 14; i++) {
@@ -135,6 +135,7 @@ function getDates() {
     dates.push({
       label: `${months[d.getMonth()]} ${d.getDate()}`,
       dayName: days[d.getDay()],
+      dayNum: d.getDate(),
       value: d.toISOString().split('T')[0],
     });
   }
@@ -1951,7 +1952,7 @@ export default function HomeScreen() {
                   fontSize: 16, fontWeight: '700',
                   color: isSel ? '#fff' : (!dayAllowed ? '#d1d5db' : (i === 0 ? '#2563eb' : '#111827'))
                 }}>
-                  {d.label.split(' ')[0]}
+                  {d.dayNum}
                 </Text>
                 {hasTime && (
                   <View style={{
