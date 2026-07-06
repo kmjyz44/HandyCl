@@ -151,7 +151,7 @@ function ProviderDashboard() {
   const [activeTab, setActiveTab] = useState<'available' | 'my'>('available');
   const [statFilter, setStatFilter] = useState<'available' | 'my' | 'done' | null>(null);
   // Sub-filter for 'My tasks' tab — group by stage
-  const [myFilter, setMyFilter] = useState<'all' | 'assigned' | 'in_progress' | 'pending_pay' | 'paid'>('all');
+  const [myFilter, setMyFilter] = useState<'all' | 'pending' | 'assigned' | 'in_progress' | 'pending_pay' | 'paid'>('all');
 
   const load = async () => {
     try {
@@ -167,6 +167,7 @@ function ProviderDashboard() {
 
   const matchesMyFilter = (task: any): boolean => {
     if (myFilter === 'all') return true;
+    if (myFilter === 'pending') return task.status === 'pending_acceptance';
     if (myFilter === 'assigned') return task.status === 'assigned' || task.status === 'accepted';
     if (myFilter === 'in_progress') return ['on_the_way', 'started', 'in_progress'].includes(task.status);
     if (myFilter === 'pending_pay') return task.status === 'completed_pending_payment';
@@ -238,6 +239,7 @@ function ProviderDashboard() {
         >
           {([
             { id: 'all', label: 'All', icon: 'layers-outline', color: '#374151' },
+            { id: 'pending', label: 'Awaiting', icon: 'hourglass-outline', color: '#7c3aed' },
             { id: 'assigned', label: 'Assigned', icon: 'briefcase-outline', color: '#f59e0b' },
             { id: 'in_progress', label: 'In progress', icon: 'time-outline', color: '#2563eb' },
             { id: 'pending_pay', label: 'Awaiting payment', icon: 'card-outline', color: '#dc2626' },
@@ -246,6 +248,7 @@ function ProviderDashboard() {
             const count = chip.id === 'all'
               ? myTasks.length
               : myTasks.filter(t => {
+                  if (chip.id === 'pending') return t.status === 'pending_acceptance';
                   if (chip.id === 'assigned') return ['assigned','accepted'].includes(t.status);
                   if (chip.id === 'in_progress') return ['on_the_way','started','in_progress'].includes(t.status);
                   if (chip.id === 'pending_pay') return t.status === 'completed_pending_payment';
