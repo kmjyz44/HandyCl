@@ -364,6 +364,7 @@ export default function HomeScreen() {
   const [photoResult, setPhotoResult] = useState<any>(null);
   const [scanPhotos, setScanPhotos] = useState<string[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState(0);
+  const [showCatPicker, setShowCatPicker] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [canInstall, setCanInstall] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -656,6 +657,22 @@ export default function HomeScreen() {
       skillName: det.skill || b.skillName,
       taskDescription: det.summary || b.taskDescription,
     }));
+  };
+
+  // Client can correct a wrongly-detected category on the AI suggestion screen.
+  const changeCategory = (catId: string, catName: string) => {
+    setShowCatPicker(false);
+    setPhotoResult((pr: any) => {
+      if (!pr) return pr;
+      const cands = [...(pr.candidates || [])];
+      const c = { ...(cands[selectedCandidate] || {}) };
+      c.detection = { ...(c.detection || {}), category_id: catId, category_name: catName };
+      cands[selectedCandidate] = c;
+      return { ...pr, candidates: cands };
+    });
+    // Category changed manually → search by category (clear the AI skill so we
+    // don't accidentally filter to the wrong skill within the new category).
+    setBooking(b => ({ ...b, categoryId: catId, categoryName: catName, skillName: '' }));
   };
 
   const runPhotoAnalysis = async (images: string[]) => {
@@ -1440,6 +1457,34 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               );
             })}
+
+            <View style={s.catEditWrap}>
+              <Text style={s.catEditLabel}>Category</Text>
+              <TouchableOpacity style={s.catEditBtn} onPress={() => setShowCatPicker(v => !v)} data-testid="ai-category-edit">
+                <Text style={s.catEditValue}>{booking.categoryName || det.category_name || 'Select category'}</Text>
+                <Ionicons name={showCatPicker ? 'chevron-up' : 'chevron-down'} size={18} color="#2563eb" />
+              </TouchableOpacity>
+              {showCatPicker && (
+                <View style={s.catPicker}>
+                  <Text style={s.catPickerHint}>Wrong category? Pick the right one:</Text>
+                  {SKILL_CATEGORIES.map(c => {
+                    const active = (booking.categoryId || det.category_id) === c.id;
+                    return (
+                      <TouchableOpacity
+                        key={c.id}
+                        style={[s.catPickerItem, active && s.catPickerItemActive]}
+                        onPress={() => changeCategory(c.id, c.name)}
+                        data-testid={`ai-category-${c.id}`}
+                      >
+                        <Ionicons name={c.icon} size={18} color={c.color} />
+                        <Text style={[s.catPickerText, active && { color: c.color, fontWeight: '700' }]}>{c.name}</Text>
+                        {active ? <Ionicons name="checkmark" size={16} color={c.color} style={{ marginLeft: 'auto' }} /> : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
 
             <View style={s.estRow}>
               <View style={s.estTile}>
@@ -2640,6 +2685,15 @@ const s = StyleSheet.create({
   detectCat: { fontSize: 13, color: '#2563eb', fontWeight: '600', marginTop: 4 },
   detectSummary: { fontSize: 14, color: '#374151', lineHeight: 20, marginTop: 10 },
   estRow: { flexDirection: 'row', gap: 12, marginTop: 14 },
+  catEditWrap: { marginTop: 4, marginBottom: 4 },
+  catEditLabel: { fontSize: 12, fontWeight: '700', color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  catEditBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1.5, borderColor: '#dbeafe' },
+  catEditValue: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  catPicker: { marginTop: 8, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', padding: 6 },
+  catPickerHint: { fontSize: 12, color: '#6b7280', paddingHorizontal: 8, paddingVertical: 6 },
+  catPickerItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 11, borderRadius: 10 },
+  catPickerItemActive: { backgroundColor: '#f5f3ff' },
+  catPickerText: { fontSize: 14, color: '#374151' },
   estTile: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'flex-start', gap: 6 },
   estLabel: { fontSize: 12, color: '#6b7280' },
   estValue: { fontSize: 18, fontWeight: '800', color: '#111827' },
