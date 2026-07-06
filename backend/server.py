@@ -4004,23 +4004,28 @@ async def get_executors_by_service(
                 continue
 
         # ── Location filter ───────────────────────────────────────────
-        # Only filter if client provided a city or coordinates
+        executor_cities = [c.lower() for c in (profile.get("service_cities") or [])]
+        executor_zones  = [z.lower() for z in (profile.get("service_zones") or [])]
+        # Also try user-level lat/lng as fallback (saved via map)
+        exec_lat  = profile.get("latitude") or executor.get("latitude")
+        exec_lng  = profile.get("longitude") or executor.get("longitude")
+        exec_radius = profile.get("service_radius_km") or executor.get("service_radius_km") or 0
+        user_city = (executor.get("city") or "").lower().strip()
+
+        # Does the provider have ANY declared service location at all?
+        has_geo = bool(exec_lat and exec_lng and exec_radius and exec_radius > 0)
+        has_location_config = bool(executor_cities or executor_zones or user_city or has_geo)
+
+        # A provider who has NOT configured a service area is hidden from
+        # every client — they haven't declared where they work.
+        if not has_location_config:
+            continue
+
+        # If the client provided a location, the provider's area must cover it.
         if city or (lat is not None and lng is not None):
-            executor_cities = [c.lower() for c in (profile.get("service_cities") or [])]
-            executor_zones  = [z.lower() for z in (profile.get("service_zones") or [])]
-            # Also try user-level lat/lng as fallback (saved via map)
-            exec_lat  = profile.get("latitude") or executor.get("latitude")
-            exec_lng  = profile.get("longitude") or executor.get("longitude")
-            exec_radius = profile.get("service_radius_km") or executor.get("service_radius_km") or 0
-            user_city = (executor.get("city") or "").lower().strip()
-
-            # Does the provider have ANY declared service location at all?
-            has_geo = bool(exec_lat and exec_lng and exec_radius and exec_radius > 0)
-            has_location_config = bool(executor_cities or executor_zones or user_city or has_geo)
-
             location_ok = False
 
-            # 1. Check if executor's declared cities/zones/city match the client's city
+            # 1. Match declared cities / zones / user city against the client city
             if city:
                 city_lower = city.lower().strip()
                 for ec in executor_cities + executor_zones:
@@ -4030,20 +4035,13 @@ async def get_executors_by_service(
                 if not location_ok and user_city and (city_lower == user_city or city_lower in user_city or user_city in city_lower):
                     location_ok = True
 
-            # 2. Check radius if executor has set coordinates and radius (miles)
+            # 2. Radius check (miles) when the provider has coordinates + radius
             if not location_ok and has_geo and lat is not None and lng is not None:
                 try:
                     if _haversine_miles(float(lat), float(lng), float(exec_lat), float(exec_lng)) <= float(exec_radius):
                         location_ok = True
                 except (TypeError, ValueError):
                     pass
-
-            # 3. Only providers who have NOT configured any service area at all
-            # are shown everywhere (they haven't declared where they work yet).
-            # A provider who declared a city/zone/coords that doesn't cover the
-            # client's location is strictly excluded.
-            if not location_ok and not has_location_config:
-                location_ok = True
 
             if not location_ok:
                 continue

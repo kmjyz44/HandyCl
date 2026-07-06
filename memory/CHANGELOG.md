@@ -50,3 +50,9 @@
 - BUG: providers who declared a location only via user.city (e.g. "Kyiv") with no coords/service_cities were caught by the "no location → show to everyone" fallback and appeared for US clients.
 - FIX (get_executors_by_service): location filter now treats user.city as declared config, uses miles-consistent _haversine_miles, and only shows truly unconfigured providers (no city/zones/coords) everywhere. Verified via curl: Kyiv-coords pro ABSENT from Chicago search, Kyiv-city (no coords) pro ABSENT, Chicago pro PRESENT.
 - Synced /app/server.py ↔ /app/backend/server.py.
+
+## 2026-07-05 (cont) — Hide unconfigured providers + verify provider order visibility
+- Per user request: providers who have NOT configured a service area (no service_cities/zones, no user.city, no coords+radius) are now HIDDEN from ALL clients in get_executors_by_service (previously shown everywhere). Verified via curl: configured Chicago pro present, unconfigured pros hidden.
+- Verified provider order visibility end-to-end: booked provider@handyhub.com → provider GET /api/tasks returns the task (status pending_acceptance). Backend logic is correct; a pro sees orders assigned to their provider_id.
+- Nexus not seeing orders is explained by (1) the fire-and-forget booking bug (bookings never persisted server-side; now fixed) and/or (2) Nexus's account role must be 'provider' (a client role only sees client tasks).
+- IMPORTANT: all these fixes live in this codebase; the user's LIVE app (Netlify frontend + Railway backend) must be REDEPLOYED for them to take effect.
