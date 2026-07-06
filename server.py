@@ -4084,7 +4084,10 @@ async def get_executors_by_service(
                     skill_names.append((s.get("name") or s.get("label") or s.get("id") or "").lower())
                 else:
                     skill_names.append(str(s).lower())
-            svc_lower = service_name.lower()
+            # Resolve task-like queries (e.g. from AI photo detection:
+            # "Switch replacement") to a canonical skill ("Electrical") so it
+            # matches provider skills. Idempotent for real skill names.
+            svc_lower = (_resolve_canonical_skill(service_name, None) or service_name).lower()
             if not any(svc_lower in s or s in svc_lower for s in skill_names):
                 continue
 
@@ -12186,6 +12189,42 @@ async def send_support_message(data: SupportMessage):
 # ---------------------------------------------------------------------------
 # AI: identify a service from a photo (public — works for guests)
 # ---------------------------------------------------------------------------
+
+# Maps free-text task keywords (what the AI tends to output, e.g. "Switch
+# replacement") to the canonical provider skill names so provider search can
+# match them. Order matters — first keyword hit wins.
+_TASK_KEYWORD_SKILL = [
+    (("switch", "outlet", "socket", "wiring", "wire", "lighting", "light fixture", "chandelier", "ceiling fan", "breaker", "electric", "fuse", "voltage"), "Electrical"),
+    (("faucet", "leak", "pipe", "toilet", "drain", "sink", "water heater", "plumb", "valve", "clog", "tap"), "Plumbing"),
+    (("paint", "primer", "repaint", "wall color"), "Painting"),
+    (("tile", "grout", "backsplash"), "Tiling"),
+    (("floor", "laminate", "hardwood", "vinyl plank"), "Flooring"),
+    (("drywall", "plaster", "wall hole", "patch wall", "sheetrock"), "Drywall"),
+    (("dishwasher", "washing machine", "dryer", "oven", "microwave", "refrigerator", "appliance"), "Appliance installation"),
+    (("door", "hinge", "lock", "cabinet", "drawer", "furniture repair"), "Door & furniture repair"),
+    (("tv mount", "mount tv", "mount the tv", "television mount", "wall mount tv"), "TV mounting"),
+    (("assemble", "assembly", "ikea", "shelf", "wardrobe", "bookcase", "flat-pack"), "Furniture assembly"),
+    (("network", "router", "wifi", "ethernet", "modem"), "Network setup"),
+    (("lawn", "grass", "mow", "hedge", "garden", "weed"), "Lawn care"),
+    (("snow", "shovel"), "Snow removal"),
+    (("move", "moving", "haul", "junk removal", "packing"), "Moving help"),
+]
+
+
+def _resolve_canonical_skill(ai_skill: Optional[str], summary: Optional[str]) -> Optional[str]:
+    """Map an AI-detected task/summary to a canonical provider skill name.
+
+    Returns the original AI skill if no keyword matches (search still filters
+    by category, so the result stays relevant)."""
+    text = f"{ai_skill or ''} {summary or ''}".lower()
+    if not text.strip():
+        return ai_skill
+    for keywords, skill in _TASK_KEYWORD_SKILL:
+        if any(k in text for k in keywords):
+            return skill
+    return ai_skill
+
+
 class AnalyzePhotoRequest(BaseModel):
     image_base64: Optional[str] = None
     images: Optional[List[str]] = None
@@ -12292,7 +12331,8 @@ async def analyze_task_photo(req: AnalyzePhotoRequest):
             "detection": {
                 "category_id": category_id,
                 "category_name": category_name,
-                "skill": item.get("skill") or category_name,
+                "skill": _resolve_canonical_skill(item.get("skill"), item.get("summary")) or category_name,
+                "detected_task": item.get("skill") or "",
                 "confidence": round(_f(item.get("confidence"), 0.7), 2),
                 "summary": item.get("summary") or "",
             },

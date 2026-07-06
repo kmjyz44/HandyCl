@@ -79,3 +79,11 @@
 - api.getExecutorsBySkill now forwards date & timeFrom to the backend and no longer does the fragile client-side filter.
 - Verified on preview (provider with a Tue 08:00–16:30 slot): Tue→present, Fri→absent, Tue+10:00→present, Tue+18:00→absent, no date→present.
 - All 3 booking criteria now enforced server-side & verified: location (with server geocoding), skill/category, availability by date/time.
+
+## 2026-07-05 (cont5) — AI photo detection: skill mismatch made pros disappear
+- ROOT CAUSE: AI photo analysis returns skill as a specific TASK (e.g. "Switch replacement"), not the canonical skill name. Provider skills are broad ("Electrical"). The by-service skill filter does substring matching, so "switch replacement" never matched "electrical" → provider excluded. Manual selection sends the canonical skill ("Electrical") so it worked.
+- FIX: added `_resolve_canonical_skill(ai_skill, summary)` with a task-keyword→skill map (switch/outlet/wiring→Electrical, faucet/leak/pipe→Plumbing, tile→Tiling, tv mount→TV mounting, etc.).
+  - analyze-task-photo now returns detection.skill = canonical skill (+ detection.detected_task = original AI task for display).
+  - get_executors_by_service also resolves the incoming service_name via the same helper before matching (idempotent for real skill names, so manual flow unaffected).
+- Verified on preview: service_name="Switch replacement" → provider present; "Faucet repair" → absent (no plumbing); manual "Electrical" → present.
+- Requires Railway backend redeploy.
