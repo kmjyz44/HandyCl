@@ -934,8 +934,17 @@ export default function HomeScreen() {
     const gLng = booking.lng;
 
     const tasker = booking.selectedTasker;
+    const providerId = tasker.user_id || tasker.provider_id;
     const rate = tasker.profile?.hourly_rate || tasker.hourly_rate || 0;
     const primaryDate = booking.dates.length > 0 ? booking.dates[0] : booking.date;
+    const fullAddress = `${booking.unit ? booking.address + ', ' + booking.unit : booking.address}, ${booking.city}, ${booking.state}${booking.zip ? ' ' + booking.zip : ''}`;
+
+    if (!providerId) {
+      submittingRef.current = false;
+      setBookingSubmitting(false);
+      showAlertWithButtons('Booking failed', 'We could not identify the selected pro. Please pick the pro again.', [{ text: 'OK' }]);
+      return;
+    }
 
     // Build notes with date/time info
     let notes = '';
@@ -947,47 +956,55 @@ export default function HomeScreen() {
       notes = `Time: ${booking.timeFrom}–${booking.timeTo}`;
     }
 
-    // OPTIMISTIC UI: add to local store immediately and navigate to success
-    const localBookingId = `local_${Date.now()}`;
-    addBooking({
-      booking_id: localBookingId,
-      client_id: user?.user_id || '',
-      provider_id: tasker.user_id || tasker.provider_id,
-      service_id: '',
-      date: primaryDate,
-      time: booking.timeFrom || booking.time,
-      address: `${booking.unit ? booking.address + ', ' + booking.unit : booking.address}, ${booking.city}, ${booking.state}${booking.zip ? ' ' + booking.zip : ''}`,
-      status: 'pending',
-      total_price: rate,
-      payment_status: 'pending',
-    });
-    submittingRef.current = false;
-    setBookingSubmitting(false);
-    setStep('success');
+    // Create the booking on the server AND WAIT for confirmation.
+    // (Previously fire-and-forget: a server rejection — e.g. out of service
+    // area or validation — still showed "success" locally, so the pro was
+    // never actually booked and got no email/notification.)
+    try {
+      const created: any = await api.createBooking({
+        title: booking.skillName,
+        description: booking.taskDescription || booking.skillName,
+        problem_photos: booking.photos.length > 0 ? booking.photos : undefined,
+        provider_id: providerId,
+        provider_hourly_rate: rate,
+        category: booking.categoryId,
+        address: fullAddress,
+        city: booking.city,
+        state: booking.state,
+        unit: booking.unit || undefined,
+        zip: booking.zip || undefined,
+        latitude: gLat ?? booking.lat ?? undefined,
+        longitude: gLng ?? booking.lng ?? undefined,
+        date: primaryDate,
+        time: booking.timeFrom || booking.time,
+        notes: notes || undefined,
+        total_price: rate,
+      });
 
-    // Send request to server in background (fire-and-forget)
-    api.createBooking({
-      title: booking.skillName,
-      description: booking.taskDescription || booking.skillName,
-      problem_photos: booking.photos.length > 0 ? booking.photos : undefined,
-      provider_id: tasker.user_id || tasker.provider_id,
-      provider_hourly_rate: rate,
-      category: booking.categoryId,
-      address: `${booking.unit ? booking.address + ', ' + booking.unit : booking.address}, ${booking.city}, ${booking.state}${booking.zip ? ' ' + booking.zip : ''}`,
-      city: booking.city,
-      state: booking.state,
-      unit: booking.unit || undefined,
-      zip: booking.zip || undefined,
-      latitude: gLat ?? booking.lat ?? undefined,
-      longitude: gLng ?? booking.lng ?? undefined,
-      date: primaryDate,
-      time: booking.timeFrom || booking.time,
-      notes: notes || undefined,
-      total_price: rate,
-    }).catch((e: any) => {
-      // Background error — booking was already shown as confirmed locally
-      console.warn('[submitBooking] background error:', e?.message);
-    });
+      addBooking({
+        booking_id: created?.booking_id || `local_${Date.now()}`,
+        client_id: user?.user_id || '',
+        provider_id: providerId,
+        service_id: '',
+        date: primaryDate,
+        time: booking.timeFrom || booking.time,
+        address: fullAddress,
+        status: created?.status || 'pending',
+        total_price: created?.total_price ?? rate,
+        payment_status: 'pending',
+      });
+      submittingRef.current = false;
+      setBookingSubmitting(false);
+      setStep('success');
+    } catch (e: any) {
+      submittingRef.current = false;
+      setBookingSubmitting(false);
+      const detail = e?.response?.data?.detail;
+      const msg = typeof detail === 'string' && detail
+        ? detail
+        : 'We couldn’t create your booking. Please check your details and try again.';
+      showAlertWithButtons('Booking failed', msg, [{ text: 'OK' }]);
+    }
   };
 
   // Merged list: hardcoded SKILL_CATEGORIES + admin-created DB-only ones.
