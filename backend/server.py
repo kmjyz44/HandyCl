@@ -2226,6 +2226,47 @@ def _is_location_allowed(sa: dict, state=None, city=None, lat=None, lng=None) ->
 
 
 
+def _provider_service_match(executor: dict, city, lat, lng):
+    """Return (has_config, covers) for a provider vs a client location.
+
+    has_config=False  → the provider hasn't declared any service area at all
+                        (hidden from every client).
+    covers            → whether the provider's area covers the given location.
+                        When no client location is supplied, covers defaults to
+                        True (nothing to match against). Radius is in miles.
+    """
+    profile = executor.get("profile") or {}
+    executor_cities = [c.lower() for c in (profile.get("service_cities") or [])]
+    executor_zones  = [z.lower() for z in (profile.get("service_zones") or [])]
+    exec_lat  = profile.get("latitude") or executor.get("latitude")
+    exec_lng  = profile.get("longitude") or executor.get("longitude")
+    exec_radius = profile.get("service_radius_km") or executor.get("service_radius_km") or 0
+    user_city = (executor.get("city") or "").lower().strip()
+    has_geo = bool(exec_lat and exec_lng and exec_radius and exec_radius > 0)
+    has_config = bool(executor_cities or executor_zones or user_city or has_geo)
+    if not has_config:
+        return False, False
+    if not city and (lat is None or lng is None):
+        return True, True
+    covers = False
+    if city:
+        cl = str(city).lower().strip()
+        for ec in executor_cities + executor_zones:
+            if cl == ec or cl in ec or ec in cl:
+                covers = True
+                break
+        if not covers and user_city and (cl == user_city or cl in user_city or user_city in cl):
+            covers = True
+    if not covers and has_geo and lat is not None and lng is not None:
+        try:
+            if _haversine_miles(float(lat), float(lng), float(exec_lat), float(exec_lng)) <= float(exec_radius):
+                covers = True
+        except (TypeError, ValueError):
+            pass
+    return True, covers
+
+
+
 @api_router.post("/bookings")
 async def create_booking(booking_data: BookingCreate, current_user: User = Depends(get_current_user)):
     # Service-area gate: block bookings outside the configured working zone.
@@ -4004,47 +4045,13 @@ async def get_executors_by_service(
                 continue
 
         # ── Location filter ───────────────────────────────────────────
-        executor_cities = [c.lower() for c in (profile.get("service_cities") or [])]
-        executor_zones  = [z.lower() for z in (profile.get("service_zones") or [])]
-        # Also try user-level lat/lng as fallback (saved via map)
-        exec_lat  = profile.get("latitude") or executor.get("latitude")
-        exec_lng  = profile.get("longitude") or executor.get("longitude")
-        exec_radius = profile.get("service_radius_km") or executor.get("service_radius_km") or 0
-        user_city = (executor.get("city") or "").lower().strip()
-
-        # Does the provider have ANY declared service location at all?
-        has_geo = bool(exec_lat and exec_lng and exec_radius and exec_radius > 0)
-        has_location_config = bool(executor_cities or executor_zones or user_city or has_geo)
-
-        # A provider who has NOT configured a service area is hidden from
-        # every client — they haven't declared where they work.
-        if not has_location_config:
+        has_config, covers = _provider_service_match(executor, city, lat, lng)
+        # A provider who hasn't configured a service area is hidden from everyone.
+        if not has_config:
             continue
-
-        # If the client provided a location, the provider's area must cover it.
-        if city or (lat is not None and lng is not None):
-            location_ok = False
-
-            # 1. Match declared cities / zones / user city against the client city
-            if city:
-                city_lower = city.lower().strip()
-                for ec in executor_cities + executor_zones:
-                    if city_lower == ec or city_lower in ec or ec in city_lower:
-                        location_ok = True
-                        break
-                if not location_ok and user_city and (city_lower == user_city or city_lower in user_city or user_city in city_lower):
-                    location_ok = True
-
-            # 2. Radius check (miles) when the provider has coordinates + radius
-            if not location_ok and has_geo and lat is not None and lng is not None:
-                try:
-                    if _haversine_miles(float(lat), float(lng), float(exec_lat), float(exec_lng)) <= float(exec_radius):
-                        location_ok = True
-                except (TypeError, ValueError):
-                    pass
-
-            if not location_ok:
-                continue
+        # If the client supplied a location, the provider's area must cover it.
+        if (city or (lat is not None and lng is not None)) and not covers:
+            continue
 
         # ── Admin listing filters ──────────────────────────────────────
         rating = round(executor.get("average_rating") or 0, 2)
@@ -4318,9 +4325,31 @@ async def get_available_executors(
 
     executors = await db.users.aggregate(pipeline).to_list(1000)
 
+    # ── Client location for service-area matching ───────────────────────
+    # Use the client's saved coordinates; fall back to the configured service
+    # area center. Providers who haven't set a service area, or whose area
+    # doesn't cover the client, are hidden.
+    client_lat = getattr(current_user, "latitude", None)
+    client_lng = getattr(current_user, "longitude", None)
+    client_city = None
+    if client_lat is None or client_lng is None:
+        sa_doc = await _get_service_area()
+        centers = (sa_doc or {}).get("centers") or []
+        if centers:
+            if client_lat is None:
+                client_lat = centers[0].get("lat")
+            if client_lng is None:
+                client_lng = centers[0].get("lng")
+            client_city = centers[0].get("label")
+
     # Apply filters
     filtered = []
     for executor in executors:
+        # Service-area match (hide unconfigured pros + pros who don't cover client)
+        has_config, covers = _provider_service_match(executor, client_city, client_lat, client_lng)
+        if not has_config or not covers:
+            continue
+
         # Filter by rating
         if min_rating and executor.get("average_rating", 0) < min_rating:
             continue

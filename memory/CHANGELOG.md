@@ -56,3 +56,10 @@
 - Verified provider order visibility end-to-end: booked provider@handyhub.com → provider GET /api/tasks returns the task (status pending_acceptance). Backend logic is correct; a pro sees orders assigned to their provider_id.
 - Nexus not seeing orders is explained by (1) the fire-and-forget booking bug (bookings never persisted server-side; now fixed) and/or (2) Nexus's account role must be 'provider' (a client role only sees client tasks).
 - IMPORTANT: all these fixes live in this codebase; the user's LIVE app (Netlify frontend + Railway backend) must be REDEPLOYED for them to take effect.
+
+## 2026-07-05 (cont2) — Location filter on the "Browse pros" tab (root cause of Kyiv pro showing)
+- ROOT CAUSE of "Kyiv pro shows to Chicago clients": the Executors browse tab (app/(tabs)/executors.tsx) calls GET /executors/available, which had NO client-location filtering — it listed every provider. (get_executors_by_service already filtered, so the booking flow was fine when city was passed.)
+- Added shared helper `_provider_service_match(executor, city, lat, lng) -> (has_config, covers)`. Refactored get_executors_by_service to use it.
+- /executors/available now derives the client location (current_user.latitude/longitude, else the configured service-area center) and: (a) hides providers with NO service area configured, (b) hides providers whose area doesn't cover the client.
+- Verified on preview: provider set to Kyiv → ABSENT from both /executors/available and /executors/by-service for a Chicago client; reset to Chicago → PRESENT in both; unconfigured providers hidden.
+- NOTE: also verified LIVE Railway data — provider@handyhub.com there has profile coords=Kyiv(r=5) but user.city=Niles; the live backend runs OLD code (no filter on /executors/available) so it still shows. Requires Railway backend redeploy.
