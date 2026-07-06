@@ -3973,6 +3973,8 @@ async def get_executors_by_service(
     city: Optional[str] = None,
     lat: Optional[float] = None,
     lng: Optional[float] = None,
+    date: Optional[str] = None,
+    time: Optional[str] = None,
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Get executors filtered by service/skill AND location.
@@ -4094,6 +4096,31 @@ async def get_executors_by_service(
         # If the client supplied a location, the provider's area must cover it.
         if (city or (lat is not None and lng is not None)) and not covers:
             continue
+
+        # ── Availability filter (by selected date & time) ─────────────
+        # Provider must have an active availability slot for the selected
+        # day (and covering the time, if given). Providers who have NOT
+        # configured any availability are still shown (not hidden).
+        if date:
+            try:
+                dow = datetime.strptime(str(date)[:10], "%Y-%m-%d").isoweekday() % 7  # Sun=0..Sat=6
+            except Exception:
+                dow = None
+            if dow is not None:
+                slots = executor.get("availability_slots") or []
+                if slots:
+                    def _slot_ok(sl):
+                        if sl.get("is_active") is False:
+                            return False
+                        if sl.get("day_of_week") != dow:
+                            return False
+                        if time:
+                            st = sl.get("start_time") or "00:00"
+                            en = sl.get("end_time") or "23:59"
+                            return st <= str(time) < en
+                        return True
+                    if not any(_slot_ok(s) for s in slots):
+                        continue
 
         # ── Admin listing filters ──────────────────────────────────────
         rating = round(executor.get("average_rating") or 0, 2)

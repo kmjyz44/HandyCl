@@ -72,3 +72,10 @@
   2) Skill — service_name=Electrical → found; Plumbing → not found (provider lacks it).
   3) Availability by date — filtered CLIENT-side in api.getExecutorsBySkill against availability_slots (providers with no slots are included).
 - NOTE: frontend sends the skill as `service_name` (api maps skill→service_name). Requires Railway backend redeploy to take effect on the live app.
+
+## 2026-07-05 (cont4) — Availability filter moved to backend (fix + robustness)
+- The client-side availability filter in api.getExecutorsBySkill used `new Date(dateStr).getDay()` which is timezone-dependent (UTC parse of an ISO date shifts the weekday by one in US timezones) — a source of "No pros found" even when the pro is available.
+- MOVED availability filtering to the backend get_executors_by_service (new `date` & `time` query params). day_of_week = datetime.strptime(date).isoweekday() % 7 (Sun=0..Sat=6, matches the provider availability UI's getDay convention). Providers with NO configured slots are still shown; providers with slots must have an active slot for the day (and covering the time if given).
+- api.getExecutorsBySkill now forwards date & timeFrom to the backend and no longer does the fragile client-side filter.
+- Verified on preview (provider with a Tue 08:00–16:30 slot): Tue→present, Fri→absent, Tue+10:00→present, Tue+18:00→absent, no date→present.
+- All 3 booking criteria now enforced server-side & verified: location (with server geocoding), skill/category, availability by date/time.

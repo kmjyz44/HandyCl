@@ -256,22 +256,11 @@ export const api = {
       if (params.city) queryParams.city = params.city;
       if (params.lat != null) queryParams.lat = params.lat;
       if (params.lng != null) queryParams.lng = params.lng;
+      // Availability is filtered on the backend (avoids client timezone bugs).
+      if (params.date) queryParams.date = params.date;
+      if (params.timeFrom) queryParams.time = params.timeFrom;
       const res = await client.get('/executors/by-service', { params: queryParams });
-      let list = Array.isArray(res.data) ? res.data : (res.data?.executors || []);
-      // Client-side availability filter: if date + time selected, only show executors available that day/time
-      if (params.date && params.timeFrom) {
-        const dayOfWeek = new Date(params.date).getDay(); // 0=Sun, 1=Mon, ...
-        list = list.filter((ex: any) => {
-          const slots = ex.availability_slots || [];
-          if (!slots.length) return true; // no slots set — include
-          return slots.some((slot: any) =>
-            slot.is_active !== false &&
-            slot.day_of_week === dayOfWeek &&
-            slot.start_time <= params.timeFrom! &&
-            slot.end_time > params.timeFrom!
-          );
-        });
-      }
+      const list = Array.isArray(res.data) ? res.data : (res.data?.executors || []);
       return list;
     } catch {
       // On error return empty list (do NOT fallback to all executors — would ignore city filter)
