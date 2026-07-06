@@ -43,3 +43,10 @@
 - Fixed blog auth: liked_by_me lookups used wrong collection db.sessions → db.user_sessions.
 - Verified via curl: admin create/pin/edit/delete post OK; block→login 403→unblock→login 200 OK.
 - NOTE: Expo app is NOT served on the preview URL (preview serves the /app/frontend CRA stub). Frontend changes verified by code review + backend curl; browser e2e must be done on the deployed Netlify build.
+
+## 2026-07-05 — Booking notification root-cause + provider location filter
+- ROOT CAUSE of "pro didn't get email when booked": submitBooking in index.tsx was FIRE-AND-FORGET — it showed "success" locally and ran api.createBooking in the background with a silent .catch. Any server rejection (validation/network/service-area) meant the booking was never created → the pro was never booked → no in-app/email/push notification fired. Confirmed: target pro had 0 real provider-bookings in DB, only the test one. Backend email itself works (Resend 200, message id returned).
+- FIX (index.tsx): submitBooking now AWAITS api.createBooking; shows success only on real success, and surfaces the exact error on failure. Added provider_id presence guard.
+- BUG: providers who declared a location only via user.city (e.g. "Kyiv") with no coords/service_cities were caught by the "no location → show to everyone" fallback and appeared for US clients.
+- FIX (get_executors_by_service): location filter now treats user.city as declared config, uses miles-consistent _haversine_miles, and only shows truly unconfigured providers (no city/zones/coords) everywhere. Verified via curl: Kyiv-coords pro ABSENT from Chicago search, Kyiv-city (no coords) pro ABSENT, Chicago pro PRESENT.
+- Synced /app/server.py ↔ /app/backend/server.py.

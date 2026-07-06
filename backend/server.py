@@ -4011,47 +4011,41 @@ async def get_executors_by_service(
             # Also try user-level lat/lng as fallback (saved via map)
             exec_lat  = profile.get("latitude") or executor.get("latitude")
             exec_lng  = profile.get("longitude") or executor.get("longitude")
-            exec_radius_km = profile.get("service_radius_km") or executor.get("service_radius_km") or 0
+            exec_radius = profile.get("service_radius_km") or executor.get("service_radius_km") or 0
+            user_city = (executor.get("city") or "").lower().strip()
+
+            # Does the provider have ANY declared service location at all?
+            has_geo = bool(exec_lat and exec_lng and exec_radius and exec_radius > 0)
+            has_location_config = bool(executor_cities or executor_zones or user_city or has_geo)
 
             location_ok = False
 
-            # 1. Check if executor's city list matches client's city
+            # 1. Check if executor's declared cities/zones/city match the client's city
             if city:
                 city_lower = city.lower().strip()
-                # Match full city or city is contained in executor's zones/cities
                 for ec in executor_cities + executor_zones:
-                    if city_lower in ec or ec in city_lower:
+                    if city_lower == ec or city_lower in ec or ec in city_lower:
                         location_ok = True
                         break
-                # Also check user-level city field
-                if not location_ok:
-                    user_city = (executor.get("city") or "").lower().strip()
-                    if user_city and (city_lower in user_city or user_city in city_lower):
-                        location_ok = True
+                if not location_ok and user_city and (city_lower == user_city or city_lower in user_city or user_city in city_lower):
+                    location_ok = True
 
-            # 2. Check radius if executor has set coordinates and radius
-            import math
-            if not location_ok and exec_lat and exec_lng and exec_radius_km > 0:
-                # If client provided coordinates, use them; otherwise geocode city
-                client_lat, client_lng = lat, lng
-                if client_lat is None and city:
-                    # We can't geocode here, but we already checked city names above
+            # 2. Check radius if executor has set coordinates and radius (miles)
+            if not location_ok and has_geo and lat is not None and lng is not None:
+                try:
+                    if _haversine_miles(float(lat), float(lng), float(exec_lat), float(exec_lng)) <= float(exec_radius):
+                        location_ok = True
+                except (TypeError, ValueError):
                     pass
-                if client_lat is not None and client_lng is not None:
-                    dlat = math.radians(client_lat - exec_lat)
-                    dlng = math.radians(client_lng - exec_lng)
-                    a = math.sin(dlat/2)**2 + math.cos(math.radians(exec_lat)) * math.cos(math.radians(client_lat)) * math.sin(dlng/2)**2
-                    distance_km = 6371 * 2 * math.asin(math.sqrt(a))
-                    if distance_km <= exec_radius_km:
-                        location_ok = True
 
-            # 3. If executor has NO location set at all — include them (they haven't configured yet)
-            if not location_ok and not executor_cities and not executor_zones and not exec_lat:
+            # 3. Only providers who have NOT configured any service area at all
+            # are shown everywhere (they haven't declared where they work yet).
+            # A provider who declared a city/zone/coords that doesn't cover the
+            # client's location is strictly excluded.
+            if not location_ok and not has_location_config:
                 location_ok = True
 
             if not location_ok:
-                # Strict filter: do not show executors whose service area
-                # does not cover the client's location.
                 continue
 
         # ── Admin listing filters ──────────────────────────────────────
