@@ -193,7 +193,7 @@ function ProviderDashboard() {
       <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12 }}>
         {[
           { label: 'New', count: tasks.length, color: '#2563eb', bg: '#eff6ff', tab: 'available' },
-          { label: 'Mine', count: myTasks.filter(t => ['assigned','on_the_way','started'].includes(t.status)).length, color: '#059669', bg: '#ecfdf5', tab: 'my' },
+          { label: 'Mine', count: myTasks.filter(t => !['paid','completed_pending_payment','completed'].includes(t.status)).length, color: '#059669', bg: '#ecfdf5', tab: 'my' },
           { label: 'Done', count: myTasks.filter(t => ['paid','completed_pending_payment','completed'].includes(t.status)).length, color: '#7c3aed', bg: '#f5f3ff', tab: 'done' },
         ].map(stat => {
           const isActive = statFilter === stat.tab;
