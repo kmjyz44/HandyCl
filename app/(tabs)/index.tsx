@@ -109,6 +109,19 @@ interface BookingState {
 
 const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
 
+// Convert a 24h "HH:MM" value to a US 12h AM/PM label (display only — the
+// stored value stays "HH:MM" so time comparisons/sorting keep working).
+const to12h = (t?: string) => {
+  if (!t) return '';
+  const [hStr, m] = t.split(':');
+  let h = parseInt(hStr, 10);
+  if (isNaN(h)) return t;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${m} ${ampm}`;
+};
+
 const US_STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'];
 
 
@@ -120,7 +133,7 @@ function getDates() {
     const d = new Date();
     d.setDate(d.getDate() + i);
     dates.push({
-      label: `${d.getDate()} ${months[d.getMonth()]}`,
+      label: `${months[d.getMonth()]} ${d.getDate()}`,
       dayName: days[d.getDay()],
       value: d.toISOString().split('T')[0],
     });
@@ -954,9 +967,9 @@ export default function HomeScreen() {
     if ((booking as any)._anyDayTime) {
       notes = 'Any day and time works';
     } else if (booking.dates.length > 1) {
-      notes = `Preferred dates: ${booking.dates.join(', ')}. Time: ${booking.timeFrom}${booking.timeTo ? '–' + booking.timeTo : ''}`;
+      notes = `Preferred dates: ${booking.dates.join(', ')}. Time: ${to12h(booking.timeFrom)}${booking.timeTo ? '–' + to12h(booking.timeTo) : ''}`;
     } else if (booking.timeTo) {
-      notes = `Time: ${booking.timeFrom}–${booking.timeTo}`;
+      notes = `Time: ${to12h(booking.timeFrom)}–${to12h(booking.timeTo)}`;
     }
 
     // Create the booking on the server AND WAIT for confirmation.
@@ -1982,7 +1995,7 @@ export default function HomeScreen() {
               <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151' }}>From (start)</Text>
               {booking.timeFrom ? (
                 <View style={{ backgroundColor: '#2563eb', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4, marginTop: 4 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{booking.timeFrom}</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{to12h(booking.timeFrom)}</Text>
                 </View>
               ) : (
                 <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>not selected</Text>
@@ -1993,7 +2006,7 @@ export default function HomeScreen() {
               <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151' }}>To (end)</Text>
               {booking.timeTo ? (
                 <View style={{ backgroundColor: '#059669', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4, marginTop: 4 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{booking.timeTo}</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{to12h(booking.timeTo)}</Text>
                 </View>
               ) : (
                 <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>not selected</Text>
@@ -2020,7 +2033,7 @@ export default function HomeScreen() {
                       borderColor: '#e5e7eb',
                     }]}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: isFrom ? '700' : '500', color: isFrom ? '#fff' : '#374151' }}>{t}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: isFrom ? '700' : '500', color: isFrom ? '#fff' : '#374151' }}>{to12h(t)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -2041,7 +2054,7 @@ export default function HomeScreen() {
                       borderColor: '#e5e7eb',
                     }]}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: isTo ? '700' : '500', color: isTo ? '#fff' : '#374151' }}>{t}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: isTo ? '700' : '500', color: isTo ? '#fff' : '#374151' }}>{to12h(t)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -2123,7 +2136,7 @@ export default function HomeScreen() {
           {!anyDayTime && booking.dates.length > 0 && booking.timeFrom && (
             <Text style={{ textAlign: 'center', fontSize: 13, color: '#6b7280', marginBottom: 8 }}>
               📅 {booking.dates.map(v => { const d = dates.find(x => x.value === v); return d ? `${d.dayName} ${d.label}` : v; }).join(', ')}
-              {'  '}⏰ {booking.timeFrom}{booking.timeTo ? `–${booking.timeTo}` : ''}
+              {'  '}⏰ {to12h(booking.timeFrom)}{booking.timeTo ? `–${to12h(booking.timeTo)}` : ''}
             </Text>
           )}
           {anyDayTime && (
@@ -2168,7 +2181,7 @@ export default function HomeScreen() {
         {/* Summary bar */}
         <View style={s.summaryBar}>
           <Ionicons name="location-outline" size={16} color="#6b7280" />
-          <Text style={s.summaryText}>{booking.city} · {booking.date} · {booking.time}</Text>
+          <Text style={s.summaryText}>{booking.city} · {booking.date} · {to12h(booking.time)}</Text>
         </View>
 
         {loadingTaskers ? (
@@ -2306,7 +2319,7 @@ export default function HomeScreen() {
             </View>
             <View style={s.bookingSummaryRow}>
               <Ionicons name="calendar-outline" size={16} color="#6b7280" />
-              <Text style={s.bookingSummaryText}>{booking.date} at {booking.time}</Text>
+              <Text style={s.bookingSummaryText}>{booking.date} at {to12h(booking.time)}</Text>
             </View>
           </View>
 
@@ -2411,8 +2424,8 @@ export default function HomeScreen() {
                 value: anyDayTime
                   ? 'Any convenient time'
                   : booking.timeFrom
-                    ? (booking.timeTo ? `${booking.timeFrom} – ${booking.timeTo}` : booking.timeFrom)
-                    : booking.time || 'not specified'
+                    ? (booking.timeTo ? `${to12h(booking.timeFrom)} – ${to12h(booking.timeTo)}` : to12h(booking.timeFrom))
+                    : to12h(booking.time) || 'not specified'
               },
             ].map(row => (
               <View key={row.label} style={s.confirmRow}>
@@ -2509,7 +2522,7 @@ export default function HomeScreen() {
             <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>Order details</Text>
             <Text style={{ color: '#6b7280' }}>📋 {booking.skillName || booking.categoryName}</Text>
             {booking.address ? <Text style={{ color: '#6b7280' }}>📍 {booking.address}, {booking.city}</Text> : null}
-            {booking.date || (booking.dates.length > 0) ? <Text style={{ color: '#6b7280' }}>📅 {booking.dates.length > 0 ? booking.dates[0] : booking.date} at {booking.timeFrom || booking.time}</Text> : null}
+            {booking.date || (booking.dates.length > 0) ? <Text style={{ color: '#6b7280' }}>📅 {booking.dates.length > 0 ? booking.dates[0] : booking.date} at {to12h(booking.timeFrom || booking.time)}</Text> : null}
           </View>
           <TouchableOpacity
             style={[s.nextBtn, { width: '100%', marginTop: 8 }]}
