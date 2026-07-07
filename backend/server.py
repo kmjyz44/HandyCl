@@ -2272,12 +2272,14 @@ def _provider_service_match(executor: dict, city, lat, lng):
     profile = executor.get("profile") or {}
     executor_cities = [c.lower() for c in (profile.get("service_cities") or [])]
     executor_zones  = [z.lower() for z in (profile.get("service_zones") or [])]
-    exec_lat  = profile.get("latitude") or executor.get("latitude")
-    exec_lng  = profile.get("longitude") or executor.get("longitude")
-    exec_radius = profile.get("service_radius_km") or executor.get("service_radius_km") or 0
-    user_city = (executor.get("city") or "").lower().strip()
+    # Work zone comes from the PROFILE only (service area set on the map).
+    # The provider's residential city/coords (user-level) is NOT a work-zone
+    # declaration and must not be used for coverage.
+    exec_lat  = profile.get("latitude")
+    exec_lng  = profile.get("longitude")
+    exec_radius = profile.get("service_radius_km") or 0
     has_geo = bool(exec_lat and exec_lng and exec_radius and exec_radius > 0)
-    has_config = bool(executor_cities or executor_zones or user_city or has_geo)
+    has_config = bool(executor_cities or executor_zones or has_geo)
     if not has_config:
         return False, False
     if not city and (lat is None or lng is None):
@@ -2289,8 +2291,6 @@ def _provider_service_match(executor: dict, city, lat, lng):
             if cl == ec or cl in ec or ec in cl:
                 covers = True
                 break
-        if not covers and user_city and (cl == user_city or cl in user_city or user_city in cl):
-            covers = True
     if not covers and has_geo and lat is not None and lng is not None:
         try:
             if _haversine_miles(float(lat), float(lng), float(exec_lat), float(exec_lng)) <= float(exec_radius):
