@@ -21,14 +21,18 @@ self.addEventListener('push', (event) => {
   } catch (e) {
     data = { title: 'HandyHub', body: event.data ? event.data.text() : '' };
   }
-  const title = data.title || 'HandyHub';
+  const title = data.title || 'Ono-Fix';
+  // Chrome throws (and shows nothing) if renotify:true is used without a
+  // non-empty tag. Always provide a tag so the notification actually appears.
+  const tag = data.tag || ('ono-fix-' + (data.ts || Date.now()));
   const options = {
     body: data.body || '',
     icon: '/favicon.png',
     badge: '/favicon.png',
     data: { url: data.url || '/', ts: data.ts || Date.now() },
-    tag: data.tag || undefined,
+    tag: tag,
     renotify: true,
+    requireInteraction: false,
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });

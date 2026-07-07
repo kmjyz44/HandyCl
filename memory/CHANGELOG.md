@@ -87,3 +87,9 @@
   - get_executors_by_service also resolves the incoming service_name via the same helper before matching (idempotent for real skill names, so manual flow unaffected).
 - Verified on preview: service_name="Switch replacement" → provider present; "Faucet repair" → absent (no plumbing); manual "Electrical" → present.
 - Requires Railway backend redeploy.
+
+## 2026-07-05 (cont6) — Push delivered but not shown: sw.js renotify/tag bug
+- SYMPTOM: test push reported "Subscriptions: 2. Delivered: 2" (backend + push service OK) but NO system notification appeared on the phone.
+- ROOT CAUSE: public/sw.js set `renotify: true` with `tag: data.tag || undefined`. The backend push payload has no `tag`. Chrome REJECTS showNotification when renotify:true is used without a non-empty tag → the notification silently fails to display even though the push was delivered.
+- FIX: sw.js now always sets a non-empty tag (`data.tag || 'ono-fix-'+ts`), added requireInteraction:false, rebranded title HandyHub→Ono-Fix.
+- Requires Netlify redeploy + the device to pick up the new service worker (skipWaiting/clients.claim help; user may fully close & reopen the installed PWA once).
