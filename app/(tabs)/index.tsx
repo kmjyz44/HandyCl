@@ -122,6 +122,23 @@ const to12h = (t?: string) => {
   return `${h}:${m} ${ampm}`;
 };
 
+// Short weekday labels indexed by JS getDay() (0=Sun … 6=Sat).
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Convert an executor's availability_slots (day_of_week is Monday-indexed:
+// 0=Mon … 6=Sun) into JS getDay() day numbers (0=Sun … 6=Sat) so they line up
+// with the booking calendar's date strip.
+const getProviderAvailableDays = (slots?: any[]): number[] => {
+  if (!Array.isArray(slots)) return [];
+  const set = new Set<number>();
+  for (const s of slots) {
+    if (s && s.is_active && typeof s.day_of_week === 'number') {
+      set.add((s.day_of_week + 1) % 7);
+    }
+  }
+  return Array.from(set).sort((a, b) => a - b);
+};
+
 const US_STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'];
 
 
@@ -2311,8 +2328,30 @@ export default function HomeScreen() {
               const displayName = tasker.name || tasker.full_name || tasker.username || 'Pro';
               const skills = Array.isArray(profile.skills) ? profile.skills : [];
               const minHours = Math.max(1, Number(tasker.minimum_hours || profile.minimum_hours || 1));
+              const availDays = getProviderAvailableDays(tasker.availability_slots);
               return (
-              <TouchableOpacity key={tasker.user_id || idx} style={s.taskerCard} onPress={() => { setBooking(b => ({ ...b, selectedTasker: tasker })); setStep('tasker_profile'); }}>
+              <TouchableOpacity
+                key={tasker.user_id || idx}
+                style={s.taskerCard}
+                data-testid={`tasker-card-${idx}`}
+                onPress={() => {
+                  if (showingOtherDates) {
+                    // "Other dates" flow: lock the calendar to this pro's working
+                    // days and send the client back to pick a date that fits.
+                    setForcedProvider(tasker);
+                    setProviderAvailableDays(availDays);
+                    setBooking(b => ({ ...b, selectedTasker: tasker }));
+                    if (availDays.length > 0) {
+                      const idx2 = dates.findIndex(d => availDays.includes(new Date(d.value + 'T00:00:00').getDay()));
+                      if (idx2 >= 0) setCalDayIdx(idx2);
+                    }
+                    setStep('datetime');
+                  } else {
+                    setBooking(b => ({ ...b, selectedTasker: tasker }));
+                    setStep('tasker_profile');
+                  }
+                }}
+              >
                 <View style={s.taskerCardLeft}>
                   {tasker.picture && !tasker.picture.includes('base64') ? (
                     <Image source={{ uri: tasker.picture }} style={s.taskerAvatar} />
@@ -2338,6 +2377,14 @@ export default function HomeScreen() {
                     {skills.slice(0, 3).map((sk: any) => typeof sk === 'string' ? sk : sk?.name).filter(Boolean).join(' · ') || 'Pro'}
                   </Text>
                   <Text style={s.taskerMinHint}>Min {minHours} hr{minHours > 1 ? 's' : ''} · ≈ ${(rate * minHours).toFixed(0)}</Text>
+                  {showingOtherDates && availDays.length > 0 ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }} data-testid={`tasker-avail-days-${idx}`}>
+                      <Ionicons name="calendar-outline" size={12} color="#059669" />
+                      <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700' }}>
+                        Available: {availDays.map(d => WEEKDAY_LABELS[d]).join(', ')}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 <View style={s.taskerCardRight}>
                   <Text style={s.taskerRate}>${rate}</Text>

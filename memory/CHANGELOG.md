@@ -98,3 +98,10 @@
 - When the date/time search returns 0 pros, index.tsx now does a fallback search (same region + skill, NO date/time). If that has results, the empty state shows "No pros available for your date" + "N pros available on other dates" with a "View pros on other dates" button (viewOtherDates) and a "Change date & time" button. A yellow banner is shown when browsing other-date pros.
 - If no pros exist in region+skill at all, the original "No pros found → Change address" empty state is kept.
 - Frontend-only; relies on the already-verified backend availability filter (date→slot filter, no date→all region pros). Needs Netlify redeploy.
+
+## 2026-06 (cont8) — "Other dates" pro click → calendar restricted to that pro's days
+- Completes the fallback flow: when browsing pros available on OTHER dates (showingOtherDates), tapping a pro now sets forcedProvider, computes their working weekdays and routes to the Date & time step restricted to those days (instead of opening the profile).
+- Added module-level helpers in app/(tabs)/index.tsx: WEEKDAY_LABELS + getProviderAvailableDays(slots) — converts availability_slots.day_of_week (Mon-indexed 0=Mon..6=Sun) to JS getDay (0=Sun..6=Sat), only is_active slots. The by-service endpoint already $lookups availability_slots into each tasker.
+- Each pro card in the "other dates" list now shows "Available: Mon, Wed, Fri" (green calendar line) below the min-hours hint.
+- On tap: jumps calDayIdx to the first allowed day, setStep('datetime'); the existing datetime "Review booking" → confirm path handles forcedProvider.
+- Frontend-only. tsc noise (jsx/module-resolution) is config, not code. Needs Netlify redeploy for visual confirmation.
