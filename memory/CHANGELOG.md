@@ -93,3 +93,8 @@
 - ROOT CAUSE: public/sw.js set `renotify: true` with `tag: data.tag || undefined`. The backend push payload has no `tag`. Chrome REJECTS showNotification when renotify:true is used without a non-empty tag → the notification silently fails to display even though the push was delivered.
 - FIX: sw.js now always sets a non-empty tag (`data.tag || 'ono-fix-'+ts`), added requireInteraction:false, rebranded title HandyHub→Ono-Fix.
 - Requires Netlify redeploy + the device to pick up the new service worker (skipWaiting/clients.claim help; user may fully close & reopen the installed PWA once).
+
+## 2026-07-05 (cont7) — "No pros on your date → view pros available on other dates"
+- When the date/time search returns 0 pros, index.tsx now does a fallback search (same region + skill, NO date/time). If that has results, the empty state shows "No pros available for your date" + "N pros available on other dates" with a "View pros on other dates" button (viewOtherDates) and a "Change date & time" button. A yellow banner is shown when browsing other-date pros.
+- If no pros exist in region+skill at all, the original "No pros found → Change address" empty state is kept.
+- Frontend-only; relies on the already-verified backend availability filter (date→slot filter, no date→all region pros). Needs Netlify redeploy.

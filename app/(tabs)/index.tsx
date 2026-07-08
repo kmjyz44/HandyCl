@@ -359,6 +359,8 @@ export default function HomeScreen() {
   });
   const [taskers, setTaskers] = useState<any[]>([]);
   const [loadingTaskers, setLoadingTaskers] = useState(false);
+  const [otherDatesTaskers, setOtherDatesTaskers] = useState<any[]>([]);
+  const [showingOtherDates, setShowingOtherDates] = useState(false);
   const [booking_submitting, setBookingSubmitting] = useState(false);
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [photoResult, setPhotoResult] = useState<any>(null);
@@ -875,13 +877,37 @@ export default function HomeScreen() {
         date: primaryDate || undefined,
         timeFrom: booking.timeFrom || undefined,
       });
-      setTaskers(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setTaskers(list);
+      setShowingOtherDates(false);
+      setOtherDatesTaskers([]);
+
+      // If nobody is free on the chosen date/time, check whether the same
+      // region + skill has pros available on OTHER dates, so we can offer them.
+      if (list.length === 0 && (primaryDate || booking.timeFrom)) {
+        try {
+          const alt = await api.getExecutorsBySkill({
+            skill: booking.skillName,
+            category: booking.categoryId,
+            city: booking.city,
+            lat: clientLat ?? undefined,
+            lng: clientLng ?? undefined,
+          });
+          setOtherDatesTaskers(Array.isArray(alt) ? alt : []);
+        } catch { /* ignore */ }
+      }
     } catch {
       // On error show empty list (do NOT fallback to all executors — would show wrong city)
       setTaskers([]);
+      setOtherDatesTaskers([]);
     } finally {
       setLoadingTaskers(false);
     }
+  };
+
+  const viewOtherDates = () => {
+    setTaskers(otherDatesTaskers);
+    setShowingOtherDates(true);
   };
 
   const detectLocation = async () => {
@@ -2237,15 +2263,41 @@ export default function HomeScreen() {
           </View>
         ) : taskers.length === 0 ? (
           <View style={s.centered}>
-            <Ionicons name="people-outline" size={64} color="#d1d5db" />
-            <Text style={s.emptyTitle}>No pros found</Text>
-            <Text style={s.emptyText}>Try changing the city or date</Text>
-            <TouchableOpacity style={s.retryBtn} onPress={() => setStep('address')}>
-              <Text style={s.retryBtnText}>Change address</Text>
-            </TouchableOpacity>
+            <Ionicons name="calendar-outline" size={64} color="#d1d5db" />
+            {otherDatesTaskers.length > 0 ? (
+              <>
+                <Text style={s.emptyTitle}>No pros available for your date</Text>
+                <Text style={s.emptyText}>
+                  {otherDatesTaskers.length} {otherDatesTaskers.length === 1 ? 'pro is' : 'pros are'} available in your area on other dates.
+                </Text>
+                <TouchableOpacity style={s.retryBtn} onPress={viewOtherDates} data-testid="view-other-dates-btn">
+                  <Text style={s.retryBtnText}>View pros on other dates</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.retryBtnGhost} onPress={() => setStep('datetime')} data-testid="change-date-btn">
+                  <Text style={s.retryBtnGhostText}>Change date &amp; time</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={s.emptyTitle}>No pros found</Text>
+                <Text style={s.emptyText}>Try changing the city or date</Text>
+                <TouchableOpacity style={s.retryBtn} onPress={() => setStep('address')}>
+                  <Text style={s.retryBtnText}>Change address</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         ) : (
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+            {showingOtherDates ? (
+              <View style={s.otherDatesBanner} data-testid="other-dates-banner">
+                <Ionicons name="information-circle" size={18} color="#b45309" />
+                <Text style={s.otherDatesBannerText}>
+                  These pros aren't free on your selected date — pick one and adjust the date, or{' '}
+                  <Text style={{ fontWeight: '800', textDecorationLine: 'underline' }} onPress={() => setStep('datetime')}>change your date</Text>.
+                </Text>
+              </View>
+            ) : null}
             <Text style={s.taskerCount}>{taskers.length} pros in {booking.city}</Text>
             {taskers.map((tasker, idx) => {
               const profile = tasker.profile || {};
@@ -2773,6 +2825,10 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 14, color: '#9ca3af', marginTop: 6, textAlign: 'center' },
   retryBtn: { marginTop: 20, backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
   retryBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  retryBtnGhost: { marginTop: 12, paddingHorizontal: 24, paddingVertical: 10 },
+  retryBtnGhostText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
+  otherDatesBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 12, padding: 12, marginBottom: 12 },
+  otherDatesBannerText: { flex: 1, fontSize: 13, color: '#92400e', lineHeight: 18 },
   taskerHero: { alignItems: 'center', backgroundColor: '#fff', paddingVertical: 28, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   taskerHeroAvatar: { width: 96, height: 96, borderRadius: 48, marginBottom: 12 },
   taskerHeroName: { fontSize: 22, fontWeight: '800', color: '#111827', marginBottom: 6 },
