@@ -852,9 +852,24 @@ export default function TaskDetail() {
                 )}
               </>
             )}
-            {!task.final_price && !price && (
-              <Text style={s.noPrice}>Price will be calculated after completion</Text>
-            )}
+            {/* Before completion — show the agreed rate the executor set */}
+            {!task.final_price && (() => {
+              const provRate = task.provider_hourly_rate || task.executor_take || task.hourly_rate || 0;
+              const clientRate = task.estimated_price || task.total_price || 0;
+              const shownRate = isProvider ? (provRate || clientRate) : (clientRate || provRate);
+              if (shownRate) {
+                return (
+                  <>
+                    <View style={s.priceRow}>
+                      <Text style={s.priceLabel}>{isProvider ? 'Your rate' : 'Hourly rate'}</Text>
+                      <Text style={[s.priceGreen, { fontSize: 20, fontWeight: '800' }]} data-testid="task-price-rate">${Math.round(shownRate)}/hr</Text>
+                    </View>
+                    <Text style={[s.noPrice, { marginTop: 6 }]}>Final total is calculated from the hours worked after the job is completed.</Text>
+                  </>
+                );
+              }
+              return <Text style={s.noPrice}>Price will be calculated after completion</Text>;
+            })()}
           </View>
         </View>
 
