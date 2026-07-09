@@ -115,3 +115,9 @@
   - Frontend provider calendar (availability.tsx): fetches the pro's confirmed tasks and renders orange "Booked" blocks on the day grid (tap → task-detail) + orange dot on booked days in the day strip.
 - TESTED: testing_agent iteration_22.json — 10/10 backend pytest PASS (0.5h math, reschedule, validation 400s, client/foreign 403, client notification, day-of-week Mon=0 filter, busy exclusion at overlapping vs non-overlapping time). Post-review hardening (strict time regex + overflow reject) re-verified via curl. Frontend compiles (esbuild) but Expo web is not served in preview → needs Netlify redeploy for visual confirmation.
 - NEXT: client-side view of confirmed appointment + reschedule notification surfacing.
+
+## 2026-06 (cont10) — Client-side confirmed appointment + in-chat scheduling button
+- Extracted the scheduling UI into a shared component components/ScheduleModal.tsx (day strip + start-time chips + 0.5h duration stepper + live end-time). task-detail.tsx now uses it (removed the duplicated inline modal + local state/helpers).
+- CLIENT view (task-detail.tsx, shared Date&time block, role-aware): client sees the confirmed window with a green "Confirmed by pro" badge + duration, or "Waiting for the pro to confirm the time" when not yet set. Client already receives the in-app/email/SMS/push 'task_scheduled' notification from the backend when the pro confirms/reschedules.
+- CHAT (task-chat.tsx): loads the task; shows an appointment banner (both roles) — "Appointment: <date> · 9:00 AM–11:00 AM" or "No appointment time confirmed yet". For the assigned executor it shows a "Set time"/"Change time" button that opens the same ScheduleModal, so rescheduling can be agreed and set right inside the conversation. Reuses POST /api/tasks/{id}/schedule (backend already tested 10/10).
+- All changed files compile (esbuild). Backend unchanged this round. Needs Netlify redeploy for visual confirmation.

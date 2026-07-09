@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
 import { showAlert } from '../utils/alert';
+import { ScheduleModal } from '../components/ScheduleModal';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { label: string; color: string; icon: string }> = {
@@ -83,27 +84,6 @@ function to12h(t?: string | null): string {
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   return `${h}:${m ?? '00'} ${ampm}`;
-}
-
-const SCHED_TIMES = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
-
-// Add fractional hours to an 'HH:MM' time, clamped to 23:59.
-function addHoursTo(hhmm: string, hours: number): string {
-  const [h, m] = String(hhmm).split(':');
-  let tot = parseInt(h, 10) * 60 + parseInt(m || '0', 10) + Math.round(hours * 60);
-  tot = Math.max(0, Math.min(tot, 23 * 60 + 59));
-  return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}`;
-}
-
-function nextDates(count = 14): { value: string; dayName: string; label: string }[] {
-  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const out: { value: string; dayName: string; label: string }[] = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(); d.setDate(d.getDate() + i);
-    out.push({ value: d.toISOString().split('T')[0], dayName: days[d.getDay()], label: `${months[d.getMonth()]} ${d.getDate()}` });
-  }
-  return out;
 }
 
 // ─── Payment methods by country ───────────────────────────────────────────────
@@ -271,10 +251,6 @@ export default function TaskDetail() {
 
   // Executor appointment scheduling (date + start time + duration)
   const [showSchedule, setShowSchedule] = useState(false);
-  const [schedDate, setSchedDate] = useState('');
-  const [schedStart, setSchedStart] = useState('09:00');
-  const [schedDuration, setSchedDuration] = useState(2);
-  const [schedLoading, setSchedLoading] = useState(false);
 
   useEffect(() => { loadTask(); }, [taskId]);
 
@@ -630,38 +606,7 @@ export default function TaskDetail() {
     }
   };
 
-  const openSchedule = () => {
-    const d = task?.confirmed_date || task?.scheduled_date || task?.date || nextDates(1)[0].value;
-    const st = task?.confirmed_start_time || task?.scheduled_time || task?.time || '09:00';
-    // normalize an accidental 12h value back to a known 24h option
-    const st24 = SCHED_TIMES.includes(st) ? st : '09:00';
-    setSchedDate(String(d).slice(0, 10));
-    setSchedStart(st24);
-    setSchedDuration(task?.duration_hours ? Number(task.duration_hours) : 2);
-    setShowSchedule(true);
-  };
-
-  const handleSchedule = async () => {
-    if (!schedDate || !schedStart || schedDuration <= 0) {
-      Alert.alert('Missing info', 'Pick a date, start time and duration.');
-      return;
-    }
-    setSchedLoading(true);
-    try {
-      await api.scheduleTask(taskId, { date: schedDate, start_time: schedStart, duration_hours: schedDuration });
-      setShowSchedule(false);
-      await loadTask();
-      const msg = 'Appointment saved. The client has been notified.';
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Saved', msg);
-    } catch (e: any) {
-      const msg = e?.response?.data?.detail || e.message || 'Error';
-      if (Platform.OS === 'web') window.alert('Error: ' + msg);
-      else Alert.alert('Error', msg);
-    } finally {
-      setSchedLoading(false);
-    }
-  };
+  const openSchedule = () => setShowSchedule(true);
 
   if (loading) {
     return <View style={s.centered}><ActivityIndicator size="large" color="#2563eb" /></View>;
@@ -883,7 +828,7 @@ export default function TaskDetail() {
                         {task.confirmed_date} · {to12h(task.confirmed_start_time)}–{to12h(task.confirmed_end_time)}
                       </Text>
                       <View style={{ backgroundColor: '#dcfce7', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#16a34a' }}>Confirmed</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#16a34a' }}>{isClient ? 'Confirmed by pro' : 'Confirmed'}</Text>
                       </View>
                     </View>
                     {!!task.duration_hours && (
@@ -899,7 +844,7 @@ export default function TaskDetail() {
                       {(task.scheduled_date || task.date) && (task.scheduled_time || task.time) ? ' at ' : ''}
                       {task.scheduled_time || task.time || ''}
                     </Text>
-                    <Text style={{ fontSize: 12, color: '#f59e0b', marginTop: 2 }}>Requested by client — not confirmed yet</Text>
+                    <Text style={{ fontSize: 12, color: '#f59e0b', marginTop: 2 }}>{isClient ? 'Waiting for the pro to confirm the time' : 'Requested by client — not confirmed yet'}</Text>
                   </>
                 )}
                 {canSchedule && (
@@ -1759,100 +1704,12 @@ export default function TaskDetail() {
       </Modal>
 
       {/* ── Appointment scheduling modal (executor) ── */}
-      <Modal visible={showSchedule} animationType="slide" transparent>
-        <View style={s.overlay}>
-          <View style={[s.modalBox, { maxHeight: '82%' }]}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>{task.schedule_confirmed ? 'Reschedule appointment' : 'Set appointment time'}</Text>
-              <TouchableOpacity onPress={() => setShowSchedule(false)} data-testid="close-schedule-btn">
-                <Ionicons name="close" size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={s.modalBody} contentContainerStyle={{ paddingBottom: 8 }}>
-              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
-                Pick the day, start time and how long the job will take. This time is blocked in your calendar and the client is notified.
-              </Text>
-
-              <Text style={[s.inputLabel, { marginBottom: 6 }]}>Day</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8 }}>
-                {nextDates(14).map(d => {
-                  const active = schedDate === d.value;
-                  return (
-                    <TouchableOpacity
-                      key={d.value}
-                      onPress={() => setSchedDate(d.value)}
-                      data-testid={`sched-day-${d.value}`}
-                      style={{ minWidth: 56, alignItems: 'center', paddingVertical: 8, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1.5, borderColor: active ? '#2563eb' : '#e5e7eb', backgroundColor: active ? '#eff6ff' : '#fff' }}
-                    >
-                      <Text style={{ fontSize: 11, color: active ? '#2563eb' : '#6b7280', fontWeight: '600' }}>{d.dayName}</Text>
-                      <Text style={{ fontSize: 13, color: active ? '#2563eb' : '#111827', fontWeight: '700', marginTop: 2 }}>{d.label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              <Text style={[s.inputLabel, { marginBottom: 6 }]}>Start time</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-                {SCHED_TIMES.map(t => {
-                  const active = schedStart === t;
-                  return (
-                    <TouchableOpacity
-                      key={t}
-                      onPress={() => setSchedStart(t)}
-                      data-testid={`sched-time-${t}`}
-                      style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: active ? '#2563eb' : '#e5e7eb', backgroundColor: active ? '#2563eb' : '#fff' }}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : '#374151' }}>{to12h(t)}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <Text style={[s.inputLabel, { marginBottom: 6 }]}>Duration (hours)</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 8 }}>
-                <TouchableOpacity
-                  onPress={() => setSchedDuration(d => Math.max(0.5, Math.round((d - 0.5) * 2) / 2))}
-                  data-testid="sched-duration-minus"
-                  style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: '#e5e7eb', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Ionicons name="remove" size={22} color="#2563eb" />
-                </TouchableOpacity>
-                <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827', minWidth: 70, textAlign: 'center' }} data-testid="sched-duration-value">
-                  {schedDuration} hr{schedDuration > 1 ? 's' : ''}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setSchedDuration(d => Math.min(12, Math.round((d + 0.5) * 2) / 2))}
-                  data-testid="sched-duration-plus"
-                  style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: '#e5e7eb', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Ionicons name="add" size={22} color="#2563eb" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ backgroundColor: '#f0fdf4', borderRadius: 10, padding: 12, marginTop: 6 }}>
-                <Text style={{ fontSize: 13, color: '#166534', fontWeight: '600' }} data-testid="sched-summary">
-                  {schedDate} · {to12h(schedStart)}–{to12h(addHoursTo(schedStart, schedDuration))}
-                </Text>
-              </View>
-            </ScrollView>
-
-            <View style={s.modalFooter}>
-              <TouchableOpacity style={[s.modalBtn, s.cancelBtn]} onPress={() => setShowSchedule(false)}>
-                <Text style={s.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalBtn, { backgroundColor: '#2563eb', flex: 1 }, schedLoading && s.btnDisabled]}
-                onPress={handleSchedule}
-                disabled={schedLoading}
-                data-testid="save-schedule-btn"
-              >
-                {schedLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.submitBtnText}>{task.schedule_confirmed ? 'Update time' : 'Confirm time'}</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ScheduleModal
+        visible={showSchedule}
+        task={task}
+        onClose={() => setShowSchedule(false)}
+        onSaved={loadTask}
+      />
     </View>
   );
 }

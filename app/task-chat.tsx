@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
+import { ScheduleModal } from '../components/ScheduleModal';
 
 const ROLE_LABELS: Record<string, string> = {
   client:    'Client',
@@ -14,6 +15,16 @@ const ROLE_LABELS: Record<string, string> = {
   admin:     'Admin',
   moderator: 'Moderator',
 };
+
+function to12h(t?: string | null): string {
+  if (!t) return '';
+  const [hs, mm] = String(t).split(':');
+  let h = parseInt(hs, 10);
+  if (isNaN(h)) return String(t);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${mm ?? '00'} ${ampm}`;
+}
 
 const ROLE_COLORS: Record<string, string> = {
   client:    '#2563eb',
@@ -96,6 +107,8 @@ export default function TaskChat() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [task, setTask] = useState<any>(null);
+  const [showSchedule, setShowSchedule] = useState(false);
   const listRef = useRef<FlatList>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevMsgCountRef = useRef<number>(0);
@@ -107,6 +120,12 @@ export default function TaskChat() {
       Notification.requestPermission();
     }
   }, []);
+
+  const loadTask = useCallback(async () => {
+    try { setTask(await api.getTask(taskId)); } catch {}
+  }, [taskId]);
+
+  useEffect(() => { loadTask(); }, [loadTask]);
 
   const loadMessages = useCallback(async () => {
     try {
@@ -276,7 +295,28 @@ export default function TaskChat() {
         </View>
       </View>
 
-      {/* Messages */}
+      {/* Appointment banner + scheduling (executor can set/change) */}
+      {task && (
+        <View style={s.schedBanner}>
+          <Ionicons name="calendar" size={18} color={task.schedule_confirmed ? '#16a34a' : '#f59e0b'} />
+          <View style={{ flex: 1 }}>
+            {task.schedule_confirmed ? (
+              <Text style={s.schedText} data-testid="chat-appointment-text">
+                Appointment: {task.confirmed_date} · {to12h(task.confirmed_start_time)}–{to12h(task.confirmed_end_time)}
+              </Text>
+            ) : (
+              <Text style={s.schedText} data-testid="chat-appointment-text">No appointment time confirmed yet</Text>
+            )}
+          </View>
+          {task && user?.role === 'provider' && task.provider_id === user?.user_id &&
+            ['pending_acceptance', 'assigned', 'accepted', 'on_the_way'].includes(task.status) && (
+            <TouchableOpacity style={s.schedBtn} onPress={() => setShowSchedule(true)} data-testid="chat-schedule-btn">
+              <Ionicons name="time-outline" size={14} color="#fff" />
+              <Text style={s.schedBtnText}>{task.schedule_confirmed ? 'Change time' : 'Set time'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
       {loading ? (
         <View style={s.centered}><ActivityIndicator size="large" color="#2563eb" /></View>
       ) : (
@@ -337,6 +377,13 @@ export default function TaskChat() {
           }
         </TouchableOpacity>
       </View>
+
+      <ScheduleModal
+        visible={showSchedule}
+        task={task}
+        onClose={() => setShowSchedule(false)}
+        onSaved={loadTask}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -344,6 +391,18 @@ export default function TaskChat() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   centered:  { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  schedBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#fff',
+    borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+  },
+  schedText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  schedBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#2563eb', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 7,
+  },
+  schedBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
 
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
