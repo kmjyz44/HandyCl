@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Header, Depends, Query, Body
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -5281,6 +5281,100 @@ async def admin_sms_consents(q: Optional[str] = None, limit: int = 100, current_
 
     total = await db.sms_consents.count_documents({})
     return JSONResponse(content=clean_bson({"consents": recs, "total": total, "shown": len(recs)}))
+
+
+_COVERAGE_MAP_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Coverage Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; }
+  #map { width: 100%; height: 100vh; position: absolute; top: 0; left: 0; }
+  #legend {
+    position: absolute; bottom: 14px; left: 14px; z-index: 1000;
+    background: #fff; border-radius: 12px; padding: 10px 14px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.16); font-size: 12px; color: #374151;
+  }
+  #legend .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  #legend .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.1); }
+  .cov-label {
+    background: #fff; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: 800;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.2); white-space: nowrap; border: 2px solid;
+  }
+  .leaflet-control-attribution { font-size: 9px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="legend">
+  <div class="row"><span class="dot" style="background:#3b82f6;"></span> Pro work zone</div>
+  <div class="row"><span class="dot" style="background:#16a34a;"></span> Covered (3+ pros)</div>
+  <div class="row"><span class="dot" style="background:#f59e0b;"></span> Few pros (1-2)</div>
+  <div class="row"><span class="dot" style="background:#dc2626;"></span> No pros (0)</div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const MI_TO_M = 1609.34;
+  const LEVEL_COLORS = { green: '#16a34a', yellow: '#f59e0b', red: '#dc2626' };
+  const map = L.map('map', { zoomControl: true, attributionControl: true }).setView([41.8781, -87.6298], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+  let layer = L.layerGroup().addTo(map);
+  function render(data) {
+    layer.clearLayers();
+    const providers = data.providers || [];
+    const points = data.coverage_points || [];
+    const bounds = [];
+    providers.forEach(function (p) {
+      if (p.lat == null || p.lng == null) return;
+      const c = L.circle([p.lat, p.lng], {
+        radius: (p.radius_miles || 1) * MI_TO_M,
+        color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.14, weight: 2,
+      }).addTo(layer);
+      c.bindPopup('<b>' + (p.name || 'Pro') + '</b><br/>' + (p.categories || []).join(', ') + '<br/>' + (p.radius_miles || 0) + ' mi radius');
+      L.circleMarker([p.lat, p.lng], { radius: 4, color: '#2563eb', fillColor: '#2563eb', fillOpacity: 1 }).addTo(layer);
+      bounds.push([p.lat, p.lng]);
+    });
+    points.forEach(function (pt) {
+      if (pt.lat == null || pt.lng == null) return;
+      const color = LEVEL_COLORS[pt.level] || '#6b7280';
+      const warn = pt.count === 0 ? ' \\u26A0\\uFE0F' : '';
+      const icon = L.divIcon({
+        className: '',
+        html: '<div class="cov-label" style="color:' + color + ';border-color:' + color + ';">' + pt.label + ': ' + pt.count + warn + '</div>',
+        iconSize: [null, null], iconAnchor: [0, 12],
+      });
+      L.marker([pt.lat, pt.lng], { icon: icon }).addTo(layer);
+      bounds.push([pt.lat, pt.lng]);
+    });
+    if (bounds.length) {
+      try { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 }); } catch (e) {}
+    }
+  }
+  window.addEventListener('message', function (event) {
+    try {
+      const d = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (d && d.type === 'coverage') render(d);
+    } catch (e) {}
+  });
+  function announceReady() {
+    try { if (window.parent) window.parent.postMessage(JSON.stringify({ type: 'coverage-ready' }), '*'); } catch (e) {}
+  }
+  announceReady();
+  setTimeout(announceReady, 400);
+</script>
+</body>
+</html>"""
+
+
+@api_router.get("/admin/coverage-map", response_class=HTMLResponse)
+async def admin_coverage_map():
+    """Serves the Leaflet coverage-map shell from the backend so it does not
+    depend on the frontend static deploy. Data is pushed in via postMessage."""
+    return HTMLResponse(content=_COVERAGE_MAP_HTML)
 
 
 # Admin Settings Routes

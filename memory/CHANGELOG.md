@@ -142,3 +142,9 @@
 - Backend GET /api/admin/sms-consents?q=&limit= (require_admin): returns sms_consents records (newest first) enriched with user_name/user_email, plus total count. `q` filters by phone or user name/email.
 - Frontend app/admin-sms-consents.tsx: searchable list; each card shows phone, user, timestamp, IP, consent version + "Opted in" badge; tap to expand full consent text, user agent, source. api.adminGetSmsConsents added. Linked in admin panel (services.tsx → 'SMS Opt-ins'), registered in _layout.tsx.
 - TESTED (curl): list returns the stored opt-in (phone/email/IP/version/time); ?q=<phone> filters correctly. Frontend compiles. Needs Netlify redeploy for visual confirmation.
+
+## 2026-06 (cont15) — Fix Coverage Map "Unmatched Route"
+- Root cause: public/admin-coverage.html was a new static file not present in the deployed Netlify dist, so the /* -> index.html SPA fallback served the Expo app (Expo Router -> "Unmatched Route") inside the iframe.
+- Fix: serve the Leaflet coverage-map shell from the BACKEND at GET /api/admin/coverage-map (HTMLResponse, _COVERAGE_MAP_HTML). admin-coverage.tsx iframe now points to `${API_URL}/api/admin/coverage-map` (API_URL from EXPO_PUBLIC_API_URL, Railway fallback). Removes dependency on frontend static-file deploy; data still pushed via postMessage.
+- Verified on preview backend: /api/admin/coverage-map -> 200 text/html; screenshot with injected sample data renders blue pro circles + green "Chicago: 2" + red "Aurora: 0 ⚠️" + legend.
+- REQUIRES redeploy of BOTH backend (Railway, so the route exists on prod — currently 404) and frontend (Netlify, so iframe uses the new src).

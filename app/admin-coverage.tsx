@@ -17,6 +17,9 @@ type Coverage = {
 
 const LEVEL_COLOR: Record<string, string> = { green: '#16a34a', yellow: '#f59e0b', red: '#dc2626' };
 
+const API_URL = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '') || 'https://backend-production-a461.up.railway.app';
+const MAP_SRC = `${API_URL}/api/admin/coverage-map`;
+
 export default function AdminCoveragePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -111,7 +114,7 @@ export default function AdminCoveragePage() {
             <iframe
               ref={iframeRef}
               title="admin-coverage"
-              src="/admin-coverage.html"
+              src={MAP_SRC}
               onLoad={() => { mapReadyRef.current = true; postToMap(); }}
               style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 } as any}
             />
