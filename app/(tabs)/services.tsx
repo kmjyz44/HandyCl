@@ -330,6 +330,7 @@ export default function Services() {
             { icon: 'mail-unread', color: '#0ea5e9', label: 'Support', route: '/admin-support-requests', tid: 'open-admin-support-btn' },
             { icon: 'key', color: '#6b7280', label: 'Integrations', route: '/admin-integrations', tid: 'open-admin-integrations-btn' },
             { icon: 'location', color: '#f59e0b', label: 'Service Area', route: '/admin-service-area', tid: 'open-admin-service-area-btn' },
+            { icon: 'map', color: '#0891b2', label: 'Coverage', route: '/admin-coverage', tid: 'open-admin-coverage-btn' },
             { icon: 'people', color: '#ec4899', label: 'Waitlist', route: '/admin-waitlist', tid: 'open-admin-waitlist-btn' },
           ].map((b) => (
             <TouchableOpacity key={b.route} style={styles.navItem} onPress={() => router.push(b.route as any)} data-testid={b.tid}>

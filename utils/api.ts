@@ -208,6 +208,11 @@ export const api = {
     return res.data;
   },
 
+  adminGetCoverage: async (category?: string) => {
+    const res = await client.get('/admin/coverage', { params: category ? { category } : {} });
+    return res.data;
+  },
+
   addToWaitlist: async (data: Record<string, any>) => {
     const res = await client.post('/waitlist', data);
     return res.data;

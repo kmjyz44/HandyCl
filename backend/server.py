@@ -5113,6 +5113,109 @@ async def get_all_executors_admin(current_user: User = Depends(require_admin)):
     return JSONResponse(content=clean_bson(result))
 
 
+@api_router.get("/admin/coverage")
+async def admin_coverage(category: Optional[str] = None, current_user: User = Depends(require_admin)):
+    """Admin Coverage Map data: active providers (with a configured work zone)
+    as circles, per-category counts, and per-city coverage levels (green/
+    yellow/red) based on the configured service-area cities/zones."""
+    pipeline = [
+        {"$match": {"role": "provider", "is_blocked": {"$ne": True}}},
+        {"$lookup": {"from": "executor_profiles", "localField": "user_id", "foreignField": "user_id", "as": "profile"}},
+        {"$addFields": {"profile": {"$arrayElemAt": ["$profile", 0]}}},
+        {"$project": {"_id": 0, "password_hash": 0, "profile._id": 0}},
+    ]
+    users = await db.users.aggregate(pipeline).to_list(2000)
+
+    cat_docs = await db.categories.find({}, {"_id": 0, "category_id": 1, "name": 1}).to_list(200)
+    cat_names = {c["category_id"]: c.get("name") for c in cat_docs if c.get("category_id")}
+
+    def _pretty(cid: str) -> str:
+        return cat_names.get(cid) or cid.replace("_", " ").title()
+
+    def _provider_categories(profile: dict) -> set:
+        cats = set()
+        for sk in (profile.get("skills") or []):
+            if isinstance(sk, dict):
+                cid = (sk.get("category_id") or "").strip()
+                if cid:
+                    cats.add(cid)
+                nm = (sk.get("name") or sk.get("label") or "").lower().strip()
+                if nm in SKILL_TO_CATEGORIES:
+                    cats.add(SKILL_TO_CATEGORIES[nm])
+            else:
+                nm = str(sk).lower().strip()
+                if nm in SKILL_TO_CATEGORIES:
+                    cats.add(SKILL_TO_CATEGORIES[nm])
+        return cats
+
+    all_active = []  # every active provider (for global category counts)
+    for u in users:
+        prof = u.get("profile") or {}
+        lat = prof.get("latitude")
+        lng = prof.get("longitude")
+        radius = prof.get("service_radius_km") or 0
+        if not (lat and lng and radius and float(radius) > 0):
+            continue  # active = configured work zone only
+        cats = _provider_categories(prof)
+        all_active.append({
+            "user_id": u.get("user_id"),
+            "name": u.get("full_name") or u.get("name") or u.get("username") or "Pro",
+            "lat": float(lat), "lng": float(lng), "radius_miles": float(radius),
+            "categories": sorted(cats),
+        })
+
+    # Global per-category counts (independent of the current filter)
+    cat_counts: Dict[str, int] = {}
+    for p in all_active:
+        for c in p["categories"]:
+            cat_counts[c] = cat_counts.get(c, 0) + 1
+    categories = sorted(
+        [{"id": cid, "name": _pretty(cid), "count": n} for cid, n in cat_counts.items()],
+        key=lambda x: (-x["count"], x["name"]),
+    )
+
+    # Providers shown on the map (apply category filter)
+    providers = [p for p in all_active if (not category or category in p["categories"])]
+
+    # Coverage points from the configured service area (zone centers + cities)
+    sa = await _get_service_area()
+    points = []
+    seen = set()
+    for c in (sa.get("centers") or []):
+        if c.get("lat") is not None and c.get("lng") is not None:
+            label = c.get("label") or "Zone"
+            points.append({"label": label, "lat": float(c["lat"]), "lng": float(c["lng"])})
+            seen.add(label.lower())
+    for city in (sa.get("cities") or []):
+        if not city or city.lower() in seen:
+            continue
+        glat, glng = await _geocode_place(city)
+        if glat is not None:
+            points.append({"label": city, "lat": float(glat), "lng": float(glng)})
+            seen.add(city.lower())
+
+    for pt in points:
+        cnt = 0
+        for pr in providers:
+            try:
+                if _haversine_miles(pt["lat"], pt["lng"], pr["lat"], pr["lng"]) <= pr["radius_miles"]:
+                    cnt += 1
+            except (TypeError, ValueError):
+                pass
+        pt["count"] = cnt
+        pt["level"] = "green" if cnt >= 3 else ("yellow" if cnt >= 1 else "red")
+
+    return JSONResponse(content=clean_bson({
+        "providers": providers,
+        "categories": categories,
+        "coverage_points": points,
+        "total_active": len(all_active),
+        "total_shown": len(providers),
+        "states": sa.get("states") or [],
+        "filter_category": category,
+    }))
+
+
 # Admin Settings Routes
 @api_router.get("/admin/settings")
 async def get_admin_settings(current_user: User = Depends(require_admin)):
