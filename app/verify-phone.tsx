@@ -13,7 +13,10 @@ export default function VerifyPhone() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
   const { phone: phoneParam } = useLocalSearchParams<{ phone?: string }>();
-  const [phone, setPhone] = useState(phoneParam || user?.phone || '');
+  // Never seed the phone field with something that isn't a phone (e.g. an email
+  // pulled from the profile or injected by a browser autofill).
+  const seedPhone = (phoneParam || user?.phone || '');
+  const [phone, setPhone] = useState(/[a-zA-Z@]/.test(seedPhone) ? '' : seedPhone);
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -96,7 +99,7 @@ export default function VerifyPhone() {
             <TextInput
               style={s.phoneInput}
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={t => setPhone(t.replace(/[^\d+()\-\s]/g, ''))}
               keyboardType="phone-pad"
               placeholder="+1 (___) ___-____"
               placeholderTextColor="#d1d5db"
