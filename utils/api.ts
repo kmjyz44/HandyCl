@@ -662,6 +662,11 @@ export const api = {
     return res.data;
   },
 
+  scheduleTask: async (id: string, data: { date?: string; start_time: string; duration_hours: number }) => {
+    const res = await client.post(`/tasks/${id}/schedule`, data);
+    return res.data;
+  },
+
   completeTask: async (id: string, data: any) => {
     const res = await client.post(`/tasks/${id}/complete`, data);
     return res.data;

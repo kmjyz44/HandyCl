@@ -2917,6 +2917,108 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
     return {"message": "Booking accepted", "status": BookingStatus.ASSIGNED, "task_id": new_task_id, "new_task_id": new_task_id}
 
 
+def _fmt12(hhmm: str) -> str:
+    """Format a 24h 'HH:MM' string as US 12h (e.g. '9:00 AM'). Best-effort."""
+    try:
+        h_str, m = str(hhmm).split(":")
+        h = int(h_str)
+        ampm = "PM" if h >= 12 else "AM"
+        h = h % 12 or 12
+        return f"{h}:{m} {ampm}"
+    except Exception:
+        return str(hhmm)
+
+
+def _add_minutes(hhmm: str, hours: float) -> str:
+    """Add `hours` (may be fractional, e.g. 1.5) to an 'HH:MM' time, clamped to 23:59."""
+    try:
+        h_str, m_str = str(hhmm).split(":")
+        total = int(h_str) * 60 + int(m_str) + int(round(float(hours) * 60))
+        total = max(0, min(total, 23 * 60 + 59))
+        return f"{total // 60:02d}:{total % 60:02d}"
+    except Exception:
+        return str(hhmm)
+
+
+class TaskScheduleRequest(BaseModel):
+    date: Optional[str] = None            # YYYY-MM-DD; defaults to the task's date
+    start_time: str                        # "HH:MM"
+    duration_hours: float                  # supports 0.5 steps
+
+
+@api_router.post("/tasks/{task_id}/schedule")
+async def schedule_task(
+    task_id: str,
+    req: TaskScheduleRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Executor confirms (or reschedules) the date/time window for a task.
+    The confirmed window is blocked in the executor's calendar so other
+    clients cannot book the same slot, and the client is notified."""
+    if current_user.role != UserRole.PROVIDER:
+        raise HTTPException(status_code=403, detail="Only providers can schedule tasks")
+
+    task = await _resolve_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    real_task_id = task["task_id"]
+
+    if task.get("provider_id") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="This task is not assigned to you")
+
+    date = (req.date or task.get("confirmed_date") or task.get("scheduled_date") or task.get("date") or "").strip()[:10]
+    if not date:
+        raise HTTPException(status_code=400, detail="A date is required")
+    start = (req.start_time or "").strip()
+    if ":" not in start:
+        raise HTTPException(status_code=400, detail="A valid start time is required")
+    dur = float(req.duration_hours or 0)
+    if dur <= 0:
+        raise HTTPException(status_code=400, detail="Duration must be greater than 0")
+    end = _add_minutes(start, dur)
+
+    was_confirmed = bool(task.get("schedule_confirmed"))
+    now = datetime.now(timezone.utc)
+    updates = {
+        "confirmed_date": date,
+        "confirmed_start_time": start,
+        "confirmed_end_time": end,
+        "duration_hours": dur,
+        "schedule_confirmed": True,
+        "scheduled_date": date,
+        "scheduled_time": start,
+        "updated_at": now,
+    }
+    await db.tasks.update_one({"task_id": real_task_id}, {"$set": updates})
+    if task.get("booking_id"):
+        await db.bookings.update_one(
+            {"booking_id": task["booking_id"]},
+            {"$set": {
+                "confirmed_date": date, "confirmed_start_time": start,
+                "confirmed_end_time": end, "duration_hours": dur,
+                "schedule_confirmed": True, "date": date, "time": start,
+            }},
+        )
+
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        title = "Appointment rescheduled" if was_confirmed else "Appointment confirmed"
+        verb = "rescheduled" if was_confirmed else "scheduled"
+        msg = (f"The pro {verb} \"{task.get('title') or 'your task'}\" for "
+               f"{date}, {_fmt12(start)}–{_fmt12(end)}.")
+        await notify_user(
+            client_id, "task_scheduled", title, msg,
+            related_id=task.get("booking_id") or real_task_id, related_type="booking",
+        )
+
+    return {
+        "message": "Schedule saved", "task_id": real_task_id,
+        "confirmed_date": date, "confirmed_start_time": start,
+        "confirmed_end_time": end, "duration_hours": dur,
+        "rescheduled": was_confirmed,
+    }
+
+
 async def _resolve_task(task_id: str):
     """Find task in tasks collection, falling back to booking_id lookup."""
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
@@ -4057,10 +4159,29 @@ async def get_executors_by_service(
         if glat is not None:
             lat, lng = glat, glng
 
+    # Pre-fetch confirmed (scheduled) appointments for the selected date so we
+    # can hide executors who are already booked for the requested time window.
+    busy_by_provider: Dict[str, list] = {}
+    if date:
+        try:
+            _busy = await db.tasks.find(
+                {
+                    "confirmed_date": str(date)[:10],
+                    "schedule_confirmed": True,
+                    "status": {"$nin": ["cancelled", "declined", "completed", "paid", "completed_pending_payment"]},
+                },
+                {"_id": 0, "provider_id": 1, "confirmed_start_time": 1, "confirmed_end_time": 1},
+            ).to_list(2000)
+            for bt in _busy:
+                pid = bt.get("provider_id")
+                if pid:
+                    busy_by_provider.setdefault(pid, []).append(bt)
+        except Exception:
+            busy_by_provider = {}
+
     filtered = []
     for executor in result:
         profile = executor.get("profile") or {}
-
         # ── Category filter ───────────────────────────────────────────
         # The executor must have at least one skill belonging to the
         # requested category. This prevents an "assembly-only" provider
@@ -4106,7 +4227,9 @@ async def get_executors_by_service(
         # configured any availability are still shown (not hidden).
         if date:
             try:
-                dow = datetime.strptime(str(date)[:10], "%Y-%m-%d").isoweekday() % 7  # Sun=0..Sat=6
+                # Stored availability slots use Monday-indexed day_of_week
+                # (0=Mon … 6=Sun), so match the requested date the same way.
+                dow = datetime.strptime(str(date)[:10], "%Y-%m-%d").isoweekday() - 1  # Mon=0..Sun=6
             except Exception:
                 dow = None
             if dow is not None:
@@ -4123,6 +4246,18 @@ async def get_executors_by_service(
                             return st <= str(time) < en
                         return True
                     if not any(_slot_ok(s) for s in slots):
+                        continue
+
+            # Hide executors already booked (confirmed appointment) over the
+            # requested time on this date — the slot is no longer available.
+            if time:
+                _busy_for_exec = busy_by_provider.get(executor.get("user_id")) or []
+                if _busy_for_exec:
+                    def _overlaps(bt):
+                        st = bt.get("confirmed_start_time") or "00:00"
+                        en = bt.get("confirmed_end_time") or "23:59"
+                        return st <= str(time) < en
+                    if any(_overlaps(bt) for bt in _busy_for_exec):
                         continue
 
         # ── Admin listing filters ──────────────────────────────────────

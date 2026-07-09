@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { api } from '../../utils/api';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -114,7 +115,9 @@ const tp = StyleSheet.create({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Availability() {
+  const router = useRouter();
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [bookedTasks, setBookedTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -147,6 +150,12 @@ export default function Availability() {
     try {
       const res = await api.getMyAvailability();
       setSlots(res.slots || []);
+    } catch {}
+    try {
+      const t = await api.getTasks();
+      const list = Array.isArray(t) ? t : [];
+      setBookedTasks(list.filter((x: any) => x.schedule_confirmed && x.confirmed_date &&
+        !['cancelled', 'declined', 'completed', 'paid', 'completed_pending_payment'].includes(x.status)));
     } catch {}
     setLoading(false);
     setRefreshing(false);
@@ -254,6 +263,10 @@ export default function Availability() {
 
   const daySlots = slots.filter(s => s.day_of_week === selectedDay).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
+  const fmtDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const selectedDateStr = fmtDate(selectedDate);
+  const dayBooked = bookedTasks.filter(t => String(t.confirmed_date).slice(0, 10) === selectedDateStr);
+
   if (loading) return <View style={s.centered}><ActivityIndicator size="large" color={ACCENT} /></View>;
 
   return (
@@ -284,6 +297,7 @@ export default function Availability() {
         {dayList.map((d, idx) => {
           const dow = (d.getDay() + 6) % 7;
           const hasSl = slots.some(sl => sl.day_of_week === dow);
+          const hasBooked = bookedTasks.some(t => String(t.confirmed_date).slice(0, 10) === fmtDate(d));
           const isToday = sameDay(d, today);
           const isSel = sameDay(d, selectedDate);
           return (
@@ -295,7 +309,10 @@ export default function Availability() {
             >
               <Text style={[s.dayCellDow, isSel && s.dayCellTextSel]}>{DAYS_SHORT[dow]}</Text>
               <Text style={[s.dayCellNum, isSel && s.dayCellTextSel, isToday && !isSel && s.todayNum]}>{d.getDate()}</Text>
-              {hasSl && <View style={[s.dotIndicator, isSel && s.dotIndicatorSel]} />}
+              <View style={{ flexDirection: 'row', gap: 3, marginTop: 2 }}>
+                {hasSl && <View style={[s.dotIndicator, isSel && s.dotIndicatorSel]} />}
+                {hasBooked && <View style={[s.dotIndicator, { backgroundColor: '#f97316' }]} />}
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -361,8 +378,28 @@ export default function Availability() {
             );
           })}
 
+          {/* Booked appointment blocks (specific date, not recurring) */}
+          {dayBooked.map(t => {
+            const start = t.confirmed_start_time || '09:00';
+            const end = t.confirmed_end_time || start;
+            const top = timeToY(start);
+            const height = Math.max(HOUR_HEIGHT * 0.5, timeToY(end) - top);
+            return (
+              <TouchableOpacity
+                key={`booked-${t.task_id}`}
+                style={[s.bookedBlock, { top, height }]}
+                onPress={() => router.push({ pathname: '/task-detail', params: { id: t.task_id } })}
+                data-testid={`booked-block-${t.task_id}`}
+                activeOpacity={0.8}
+              >
+                <Text style={s.bookedTitle} numberOfLines={1}>{t.title || 'Booked job'}</Text>
+                <Text style={s.bookedTime}>{to12h(start)} – {to12h(end)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+
           {/* Empty state */}
-          {daySlots.length === 0 && (
+          {daySlots.length === 0 && dayBooked.length === 0 && (
             <TouchableOpacity style={s.emptyBlock} onPress={() => openAdd(selectedDay)}>
               <Ionicons name="add-circle-outline" size={32} color="#d1d5db" />
               <Text style={s.emptyText}>Tap to add availability</Text>
@@ -527,6 +564,15 @@ const s = StyleSheet.create({
   slotInner: { flex: 1 },
   slotTitle: { fontSize: 14, fontWeight: '700', color: '#fff' },
   slotTime: { fontSize: 12, color: '#bfdbfe', marginTop: 2 },
+  bookedBlock: {
+    position: 'absolute', left: 0, right: 0,
+    backgroundColor: '#f97316',
+    borderRadius: 12, borderWidth: 2, borderColor: '#ea580c',
+    paddingHorizontal: 12, paddingVertical: 8,
+    zIndex: 15,
+  },
+  bookedTitle: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  bookedTime: { fontSize: 12, color: '#ffedd5', marginTop: 2, fontWeight: '600' },
   slotActions: { flexDirection: 'column', gap: 6, justifyContent: 'center', zIndex: 20 },
   slotActionBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center', zIndex: 20 },
   slotDeleteBtn: { backgroundColor: 'rgba(239,68,68,0.7)' },
