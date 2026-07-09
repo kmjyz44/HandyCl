@@ -2970,11 +2970,16 @@ async def schedule_task(
     if not date:
         raise HTTPException(status_code=400, detail="A date is required")
     start = (req.start_time or "").strip()
-    if ":" not in start:
-        raise HTTPException(status_code=400, detail="A valid start time is required")
+    if not re.match(r"^\d{1,2}:\d{2}$", start):
+        raise HTTPException(status_code=400, detail="A valid start time (HH:MM) is required")
+    _sh, _sm = int(start.split(":")[0]), int(start.split(":")[1])
+    if _sh > 23 or _sm > 59:
+        raise HTTPException(status_code=400, detail="A valid start time (HH:MM) is required")
     dur = float(req.duration_hours or 0)
     if dur <= 0:
         raise HTTPException(status_code=400, detail="Duration must be greater than 0")
+    if _sh * 60 + _sm + int(round(dur * 60)) > 23 * 60 + 59:
+        raise HTTPException(status_code=400, detail="The appointment would run past midnight — pick an earlier start or shorter duration")
     end = _add_minutes(start, dur)
 
     was_confirmed = bool(task.get("schedule_confirmed"))
