@@ -137,3 +137,8 @@
 - Frontend verify-phone.tsx sends {sms_consent, consent_version, consent_text}; layout compacted (smaller icon/margins) so the full consent copy + rates + STOP/HELP + Privacy Policy | Terms links + "Send Verification Code" button all fit on one screen without scrolling.
 - api.sendPhoneCode signature extended.
 - TESTED (curl): no-consent → 422; with-consent → 200; verified sms_consents record + user snapshot persisted with IP 203.0.113.9. (SMS itself not delivered — Twilio keys not configured, unrelated.) Frontend compiles. Needs Netlify redeploy.
+
+## 2026-06 (cont14) — Admin "SMS Opt-in Log" screen
+- Backend GET /api/admin/sms-consents?q=&limit= (require_admin): returns sms_consents records (newest first) enriched with user_name/user_email, plus total count. `q` filters by phone or user name/email.
+- Frontend app/admin-sms-consents.tsx: searchable list; each card shows phone, user, timestamp, IP, consent version + "Opted in" badge; tap to expand full consent text, user agent, source. api.adminGetSmsConsents added. Linked in admin panel (services.tsx → 'SMS Opt-ins'), registered in _layout.tsx.
+- TESTED (curl): list returns the stored opt-in (phone/email/IP/version/time); ?q=<phone> filters correctly. Frontend compiles. Needs Netlify redeploy for visual confirmation.

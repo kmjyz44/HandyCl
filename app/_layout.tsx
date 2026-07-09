@@ -57,6 +57,7 @@ export default function RootLayout() {
         <Stack.Screen name="refund-policy" />
         <Stack.Screen name="admin-service-area" />
         <Stack.Screen name="admin-coverage" />
+        <Stack.Screen name="admin-sms-consents" />
         <Stack.Screen name="admin-waitlist" />
         <Stack.Screen name="terms" />
         <Stack.Screen name="privacy" />

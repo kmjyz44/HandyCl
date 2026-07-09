@@ -213,6 +213,11 @@ export const api = {
     return res.data;
   },
 
+  adminGetSmsConsents: async (q?: string) => {
+    const res = await client.get('/admin/sms-consents', { params: q ? { q } : {} });
+    return res.data;
+  },
+
   addToWaitlist: async (data: Record<string, any>) => {
     const res = await client.post('/waitlist', data);
     return res.data;

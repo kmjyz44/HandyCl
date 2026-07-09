@@ -5256,6 +5256,33 @@ async def admin_coverage(category: Optional[str] = None, current_user: User = De
     }))
 
 
+@api_router.get("/admin/sms-consents")
+async def admin_sms_consents(q: Optional[str] = None, limit: int = 100, current_user: User = Depends(require_admin)):
+    """Audit log of SMS opt-in proofs. Optional `q` filters by phone or user email/name."""
+    query: Dict[str, Any] = {}
+    if q:
+        rx = {"$regex": re.escape(q.strip()), "$options": "i"}
+        matched_ids = []
+        async for u in db.users.find({"$or": [{"email": rx}, {"full_name": rx}, {"name": rx}]}, {"_id": 0, "user_id": 1}):
+            matched_ids.append(u["user_id"])
+        query = {"$or": [{"phone": rx}] + ([{"user_id": {"$in": matched_ids}}] if matched_ids else [])}
+    limit = max(1, min(int(limit or 100), 500))
+    recs = await db.sms_consents.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+
+    user_ids = list({r.get("user_id") for r in recs if r.get("user_id")})
+    users = {}
+    if user_ids:
+        async for u in db.users.find({"user_id": {"$in": user_ids}}, {"_id": 0, "user_id": 1, "full_name": 1, "name": 1, "email": 1}):
+            users[u["user_id"]] = u
+    for r in recs:
+        u = users.get(r.get("user_id")) or {}
+        r["user_name"] = u.get("full_name") or u.get("name") or "—"
+        r["user_email"] = u.get("email") or "—"
+
+    total = await db.sms_consents.count_documents({})
+    return JSONResponse(content=clean_bson({"consents": recs, "total": total, "shown": len(recs)}))
+
+
 # Admin Settings Routes
 @api_router.get("/admin/settings")
 async def get_admin_settings(current_user: User = Depends(require_admin)):
