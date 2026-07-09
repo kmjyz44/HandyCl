@@ -128,12 +128,6 @@ export default function VerifyPhone() {
               </Text>
             </View>
 
-            <View style={s.linksRow}>
-              <Text style={s.link} onPress={() => router.push('/privacy')} data-testid="consent-privacy-link">Privacy Policy</Text>
-              <Text style={s.linkSep}> | </Text>
-              <Text style={s.link} onPress={() => router.push('/terms')} data-testid="consent-terms-link">Terms of Service</Text>
-            </View>
-
             <TouchableOpacity
               style={[s.btn, (sending || !smsConsent) && s.btnDisabled]}
               onPress={sendCode}
