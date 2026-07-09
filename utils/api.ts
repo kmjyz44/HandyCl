@@ -61,7 +61,7 @@ export const api = {
     return res.data;
   },
 
-  sendPhoneCode: async (data?: { phone?: string }) => {
+  sendPhoneCode: async (data?: { phone?: string; sms_consent?: boolean; consent_version?: string; consent_text?: string }) => {
     const res = await client.post('/auth/send-phone-code', data || {});
     return res.data;
   },

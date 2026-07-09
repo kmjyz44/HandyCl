@@ -5,6 +5,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
 
+const CONSENT_VERSION = '2026-06-v1';
+const CONSENT_TEXT =
+  'I agree to receive SMS messages from Ono-Fix for account verification, appointment updates, job notifications, and customer support. Message frequency varies. Message and data rates may apply. Reply STOP to opt out and HELP for help. I have read and agree to the Privacy Policy and Terms of Service.';
+
 export default function VerifyPhone() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
@@ -36,7 +40,7 @@ export default function VerifyPhone() {
     setSending(true);
     setError('');
     try {
-      const res = await api.sendPhoneCode({ phone });
+      const res = await api.sendPhoneCode({ phone, sms_consent: true, consent_version: CONSENT_VERSION, consent_text: CONSENT_TEXT });
       if (res?.sent) {
         setSent(true);
         setCooldown(60);
@@ -83,7 +87,7 @@ export default function VerifyPhone() {
       </View>
       <View style={s.body}>
         <View style={s.iconCircle}>
-          <Ionicons name="chatbubble-ellipses-outline" size={48} color="#2563eb" />
+          <Ionicons name="chatbubble-ellipses-outline" size={32} color="#2563eb" />
         </View>
         {!sent ? (
           <>
@@ -187,9 +191,9 @@ const s = StyleSheet.create({
   back: { padding: 4, marginRight: 12 },
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
   body: { flex: 1, padding: 24, alignItems: 'center' },
-  iconCircle: { width: 96, height: 96, borderRadius: 48, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', marginTop: 32, marginBottom: 24 },
-  h1: { fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 32, lineHeight: 20 },
+  iconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', marginTop: 16, marginBottom: 14 },
+  h1: { fontSize: 22, fontWeight: '800', color: '#111827', marginBottom: 6 },
+  subtitle: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 18, lineHeight: 20 },
   phoneInput: { width: '100%', maxWidth: 320, height: 56, borderWidth: 2, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, fontSize: 18, color: '#111827', marginBottom: 12 },
   input: { width: '100%', maxWidth: 280, height: 64, borderWidth: 2, borderColor: '#e5e7eb', borderRadius: 12, textAlign: 'center', fontSize: 28, fontWeight: '700', letterSpacing: 8, color: '#111827', marginBottom: 12 },
   error: { fontSize: 13, color: '#dc2626', marginBottom: 12 },

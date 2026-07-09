@@ -1975,16 +1975,56 @@ async def resend_verification(payload: Dict[str, Any] = Body(...)):
     return {"ok": True, "email_sent": sent}
 
 
+SMS_CONSENT_VERSION = "2026-06-v1"
+SMS_CONSENT_TEXT = (
+    "I agree to receive SMS messages from Ono-Fix for account verification, "
+    "appointment updates, job notifications, and customer support. Message "
+    "frequency varies. Message and data rates may apply. Reply STOP to opt out "
+    "and HELP for help. I have read and agree to the Privacy Policy and Terms of Service."
+)
+
+
 @api_router.post("/auth/send-phone-code")
-async def send_phone_code(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(get_current_user)):
+async def send_phone_code(request: Request, payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(get_current_user)):
     """Send a 6-digit SMS code to verify the current user's phone.
-    Optional body: {"phone": "+1..."} to set/update the phone before sending. 60s cooldown."""
+    Optional body: {"phone": "+1...", "sms_consent": true, "consent_text": "...", "consent_version": "..."}.
+    A signed opt-in proof (timestamp, IP, user-agent, consent text/version) is stored. 60s cooldown."""
     phone = (payload.get("phone") or current_user.phone or "").strip()
     if not phone:
         raise HTTPException(status_code=422, detail="Phone number required")
+    # Carrier compliance: an explicit opt-in is required before we may text.
+    if not payload.get("sms_consent"):
+        raise HTTPException(status_code=422, detail="SMS consent is required to send a verification code")
     # If a new phone is provided, update the user record (and reset verified flag)
     if payload.get("phone") and payload["phone"].strip() != (current_user.phone or ""):
         await db.users.update_one({"user_id": current_user.user_id}, {"$set": {"phone": phone, "phone_verified": False}})
+
+    # Store an immutable proof-of-consent record (kept for compliance/audit).
+    fwd = request.headers.get("x-forwarded-for") or ""
+    client_ip = (fwd.split(",")[0].strip() if fwd else None) or (request.client.host if request.client else None)
+    now = datetime.now(timezone.utc)
+    await db.sms_consents.insert_one({
+        "user_id": current_user.user_id,
+        "phone": phone,
+        "consent": True,
+        "consent_version": payload.get("consent_version") or SMS_CONSENT_VERSION,
+        "consent_text": payload.get("consent_text") or SMS_CONSENT_TEXT,
+        "ip_address": client_ip,
+        "user_agent": request.headers.get("user-agent"),
+        "source": "verify-phone",
+        "created_at": now,
+    })
+    # Snapshot the latest opt-in on the user for quick lookups.
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {
+            "sms_opt_in": True,
+            "sms_opt_in_at": now,
+            "sms_opt_in_ip": client_ip,
+            "sms_consent_version": payload.get("consent_version") or SMS_CONSENT_VERSION,
+        }},
+    )
+
     # 60s cooldown
     last = await db.phone_verifications.find_one({"user_id": current_user.user_id})
     if last and last.get("created_at"):

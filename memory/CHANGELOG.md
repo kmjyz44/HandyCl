@@ -131,3 +131,9 @@
 
 ## 2026-06 (cont12) — SMS verification screen: compliance copy update
 - app/verify-phone.tsx: label "Phone Number", placeholder "+1 (___) ___-____", full carrier-compliance consent checkbox text ("I agree to receive SMS messages from Ono-Fix for account verification, appointment updates, job notifications, and customer support. Message frequency varies. Message and data rates may apply. Reply STOP to opt out and HELP for help. I have read and agree to the Privacy Policy and Terms of Service."), inline + separate tappable Privacy Policy | Terms of Service links (route /privacy, /terms), button relabeled "Send Verification Code". Frontend-only; compiles; needs Netlify redeploy.
+
+## 2026-06 (cont13) — SMS opt-in proof stored + single-screen consent
+- Backend POST /api/auth/send-phone-code now REQUIRES sms_consent=true (else 422) and stores an audit-grade proof-of-consent record in collection sms_consents: {user_id, phone, consent, consent_version, consent_text, ip_address (X-Forwarded-For aware), user_agent, source, created_at}. Also snapshots sms_opt_in/sms_opt_in_at/sms_opt_in_ip/sms_consent_version on the user. Constants SMS_CONSENT_VERSION='2026-06-v1' + SMS_CONSENT_TEXT as server fallback.
+- Frontend verify-phone.tsx sends {sms_consent, consent_version, consent_text}; layout compacted (smaller icon/margins) so the full consent copy + rates + STOP/HELP + Privacy Policy | Terms links + "Send Verification Code" button all fit on one screen without scrolling.
+- api.sendPhoneCode signature extended.
+- TESTED (curl): no-consent → 422; with-consent → 200; verified sms_consents record + user snapshot persisted with IP 203.0.113.9. (SMS itself not delivered — Twilio keys not configured, unrelated.) Frontend compiles. Needs Netlify redeploy.
