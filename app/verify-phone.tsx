@@ -5,9 +5,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
 
-const CONSENT_VERSION = '2026-06-v1';
+const CONSENT_VERSION = '2026-06-v2';
 const CONSENT_TEXT =
-  'I agree to receive SMS messages from Ono-Fix for account verification, appointment updates, job notifications, and customer support. Message frequency varies. Message and data rates may apply. Reply STOP to opt out and HELP for help. I have read and agree to the Privacy Policy and Terms of Service.';
+  'I agree to receive SMS verification codes from Ono-Fix to verify my phone number. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out. Reply HELP for help.';
 
 export default function VerifyPhone() {
   const router = useRouter();
@@ -126,16 +126,17 @@ export default function VerifyPhone() {
                   color={smsConsent ? '#2563eb' : '#9ca3af'}
                 />
               </TouchableOpacity>
-              <Text style={s.consentText}>
-                <Text onPress={() => setSmsConsent(v => !v)}>
-                  I agree to receive SMS messages from Ono-Fix for account verification, appointment updates, job notifications, and customer support. Message frequency varies. Message and data rates may apply. Reply STOP to opt out and HELP for help. I have read and agree to the{' '}
-                </Text>
-                <Text style={s.link} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
-                <Text onPress={() => setSmsConsent(v => !v)}> and </Text>
-                <Text style={s.link} onPress={() => router.push('/terms')}>Terms of Service</Text>
-                <Text onPress={() => setSmsConsent(v => !v)}>.</Text>
+              <Text style={s.consentText} onPress={() => setSmsConsent(v => !v)}>
+                I agree to receive SMS verification codes from Ono-Fix to verify my phone number. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out. Reply HELP for help.
               </Text>
             </View>
+
+            <Text style={s.legalNote}>
+              By continuing, you acknowledge that you have read our{' '}
+              <Text style={s.link} onPress={() => router.push('/privacy')} data-testid="consent-privacy-link">Privacy Policy</Text>
+              {' '}and{' '}
+              <Text style={s.link} onPress={() => router.push('/terms')} data-testid="consent-terms-link">Terms of Service</Text>.
+            </Text>
 
             <TouchableOpacity
               style={[s.btn, (sending || !smsConsent) && s.btnDisabled]}
@@ -202,9 +203,8 @@ const s = StyleSheet.create({
   error: { fontSize: 13, color: '#dc2626', marginBottom: 12 },
   consentRow: { flexDirection: 'row', alignItems: 'flex-start', width: '100%', maxWidth: 340, marginBottom: 12, paddingHorizontal: 4 },
   consentText: { flex: 1, marginLeft: 10, fontSize: 12, color: '#6b7280', lineHeight: 18 },
+  legalNote: { width: '100%', maxWidth: 340, fontSize: 12, color: '#6b7280', lineHeight: 18, marginBottom: 16, paddingHorizontal: 4 },
   link: { color: '#2563eb', fontWeight: '700', textDecorationLine: 'underline' },
-  linksRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 340, marginBottom: 16 },
-  linkSep: { fontSize: 12, color: '#9ca3af' },
   btn: { width: '100%', maxWidth: 320, height: 50, backgroundColor: '#2563eb', borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   btnDisabled: { backgroundColor: '#9ca3af' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },

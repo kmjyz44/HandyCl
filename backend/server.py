@@ -1975,12 +1975,11 @@ async def resend_verification(payload: Dict[str, Any] = Body(...)):
     return {"ok": True, "email_sent": sent}
 
 
-SMS_CONSENT_VERSION = "2026-06-v1"
+SMS_CONSENT_VERSION = "2026-06-v2"
 SMS_CONSENT_TEXT = (
-    "I agree to receive SMS messages from Ono-Fix for account verification, "
-    "appointment updates, job notifications, and customer support. Message "
-    "frequency varies. Message and data rates may apply. Reply STOP to opt out "
-    "and HELP for help. I have read and agree to the Privacy Policy and Terms of Service."
+    "I agree to receive SMS verification codes from Ono-Fix to verify my phone "
+    "number. Message frequency varies. Msg & data rates may apply. Reply STOP to "
+    "opt out. Reply HELP for help."
 )
 
 
