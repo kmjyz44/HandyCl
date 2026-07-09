@@ -101,6 +101,12 @@ export default function VerifyPhone() {
               placeholder="+1 (___) ___-____"
               placeholderTextColor="#d1d5db"
               data-testid="phone-input"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
+              autoCapitalize="none"
+              autoCorrect={false}
+              inputMode="tel"
+              {...(typeof document !== 'undefined' ? { name: 'phone', id: 'phone', type: 'tel' } : {})}
             />
             {!!error && <Text style={s.error}>{error}</Text>}
 
