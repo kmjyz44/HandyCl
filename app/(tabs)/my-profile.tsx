@@ -923,6 +923,43 @@ function ProviderProfile() {
   const [selectedSkillDetail, setSelectedSkillDetail] = useState<{ categoryId: string; skill: typeof SKILL_CATEGORIES[0]['skills'][0] } | null>(null);
   const [newSkillRate, setNewSkillRate] = useState('');
 
+  // Admin-created (DB) categories, merged into the built-in skill catalog so
+  // providers can pick them too.
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
+  useEffect(() => {
+    api.getCategories()
+      .then((data: any[]) => { if (Array.isArray(data)) setDbCategories(data); })
+      .catch(() => {});
+  }, []);
+
+  const allSkillCategories = React.useMemo(() => {
+    const builtinIds = new Set(SKILL_CATEGORIES.map(c => c.id));
+    const dbOnly = dbCategories
+      .filter((c: any) => c.is_active !== false)
+      .filter((c: any) => !builtinIds.has(c.category_id || c.id))
+      .map((c: any) => {
+        const id = c.category_id || c.id;
+        return {
+          id,
+          name: c.name || 'Category',
+          icon: 'apps-outline' as any,
+          color: '#475569',
+          bg: '#f1f5f9',
+          skills: [{
+            id: `${id}_general`,
+            name: c.name || 'Category',
+            tools: [] as string[],
+            description: c.description || `Offer "${c.name}" services to clients in your service area.`,
+          }],
+        };
+      });
+    return [...SKILL_CATEGORIES, ...dbOnly];
+  }, [dbCategories]);
+
+  const findSkillCategory = (id: string) =>
+    allSkillCategories.find(c => c.id === id) || SKILL_CATEGORIES[SKILL_CATEGORIES.length - 1];
+
+
   // Service detail modal
   const [serviceDetailVisible, setServiceDetailVisible] = useState(false);
   const [selectedProviderSkill, setSelectedProviderSkill] = useState<ProviderSkill | null>(null);
@@ -1218,7 +1255,7 @@ function ProviderProfile() {
     }
   };
 
-  const skillsByCategory = SKILL_CATEGORIES.map(cat => ({
+  const skillsByCategory = allSkillCategories.map(cat => ({
     ...cat,
     mySkills: providerSkills.filter(s => s.category_id === cat.id),
   })).filter(cat => cat.mySkills.length > 0);
@@ -1559,7 +1596,7 @@ function ProviderProfile() {
             </TouchableOpacity>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-            {SKILL_CATEGORIES.map(cat => (
+            {allSkillCategories.map(cat => (
               <View key={cat.id}>
                 <TouchableOpacity style={pStyles.categoryRow} onPress={() => setExpandedCategory(expandedCategory === cat.id ? null : cat.id)}>
                   <Ionicons name={cat.icon} size={22} color="#374151" style={{ marginRight: 12 }} />
@@ -1601,7 +1638,7 @@ function ProviderProfile() {
       {/* ── Skill Detail Modal ── */}
       <Modal visible={!!selectedSkillDetail} animationType="slide" transparent={false}>
         {selectedSkillDetail && (() => {
-          const cat = SKILL_CATEGORIES.find(c => c.id === selectedSkillDetail.categoryId)!;
+          const cat = findSkillCategory(selectedSkillDetail.categoryId);
           const skill = selectedSkillDetail.skill;
           return (
             <View style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -1666,7 +1703,7 @@ function ProviderProfile() {
       {/* ── Service Detail Modal ── */}
       <Modal visible={serviceDetailVisible} animationType="slide" transparent={false}>
         {selectedProviderSkill && (() => {
-          const cat = SKILL_CATEGORIES.find(c => c.id === selectedProviderSkill.category_id) || SKILL_CATEGORIES[SKILL_CATEGORIES.length - 1];
+          const cat = findSkillCategory(selectedProviderSkill.category_id);
           return (
             <View style={{ flex: 1, backgroundColor: '#fff' }}>
               <View style={pStyles.modalTopBar}>

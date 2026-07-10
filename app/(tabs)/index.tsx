@@ -35,6 +35,18 @@ const FALLBACK_COVERS: Record<string, string> = {
   other:             'https://images.unsplash.com/photo-1581092334651-ddf26d9a09d0?w=500&q=75&auto=format&fit=crop',
 };
 
+// Keyword-based cover fallback for admin-created categories that have no
+// uploaded image and no id in FALLBACK_COVERS (e.g. "CCTV install").
+const KEYWORD_COVERS: { kw: string[]; url: string }[] = [
+  { kw: ['cctv', 'surveillance', 'security camera', 'camera install', 'security system', 'alarm', 'video doorbell'], url: 'https://images.unsplash.com/photo-1549109926-58f039549485?w=500&q=75&auto=format&fit=crop' },
+];
+const coverByKeyword = (name?: string): string | undefined => {
+  if (!name) return undefined;
+  const n = name.toLowerCase();
+  for (const e of KEYWORD_COVERS) if (e.kw.some(k => n.includes(k))) return e.url;
+  return undefined;
+};
+
 const SKILL_CATEGORIES = [
   {
     id: 'assembly', name: 'Furniture Assembly', icon: 'cube-outline' as const,
@@ -1341,8 +1353,8 @@ export default function HomeScreen() {
           <View style={s.grid}>
             {filteredCategories.map(cat => {
               const dbCat = dbCatById[cat.id];
-              const coverImage = dbCat?.image || FALLBACK_COVERS[cat.id];
               const displayName = dbCat?.name || cat.name;
+              const coverImage = dbCat?.image || FALLBACK_COVERS[cat.id] || coverByKeyword(displayName);
               if (coverImage) {
                 // Premium card: real photo with gradient overlay + label
                 return (
