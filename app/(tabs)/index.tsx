@@ -612,8 +612,24 @@ export default function HomeScreen() {
   const [dbCategories, setDbCategories] = useState<any[]>([]);
   React.useEffect(() => {
     api.getCategories()
-      .then((data: any[]) => {
-        if (Array.isArray(data)) setDbCategories(data);
+      .then(async (data: any[]) => {
+        if (!Array.isArray(data)) return;
+        setDbCategories(data);
+        // The list response omits the heavy base64 cover image (only a
+        // `has_image` flag). Lazily fetch the actual image for DB categories
+        // that have one so custom categories show their photo on the grid.
+        const needImg = data.filter((c: any) => c.has_image && !c.image);
+        if (needImg.length) {
+          const fetched = await Promise.all(needImg.map(async (c: any) => {
+            const id = c.category_id || c.id;
+            try { const full = await api.getCategoryOne(id); return { id, image: full?.image }; }
+            catch { return { id, image: null }; }
+          }));
+          setDbCategories(prev => prev.map((c: any) => {
+            const hit = fetched.find(f => f.id === (c.category_id || c.id));
+            return hit && hit.image ? { ...c, image: hit.image } : c;
+          }));
+        }
       })
       .catch(() => { /* keep defaults */ });
   }, []);

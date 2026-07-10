@@ -148,3 +148,8 @@
 - Fix: serve the Leaflet coverage-map shell from the BACKEND at GET /api/admin/coverage-map (HTMLResponse, _COVERAGE_MAP_HTML). admin-coverage.tsx iframe now points to `${API_URL}/api/admin/coverage-map` (API_URL from EXPO_PUBLIC_API_URL, Railway fallback). Removes dependency on frontend static-file deploy; data still pushed via postMessage.
 - Verified on preview backend: /api/admin/coverage-map -> 200 text/html; screenshot with injected sample data renders blue pro circles + green "Chicago: 2" + red "Aurora: 0 ⚠️" + legend.
 - REQUIRES redeploy of BOTH backend (Railway, so the route exists on prod — currently 404) and frontend (Netlify, so iframe uses the new src).
+
+## 2026-06 (cont16) — Fix custom category cover image not showing on home grid
+- Root cause: GET /categories (list) intentionally strips the heavy base64 cover image (returns only has_image flag), but the home grid read cover from dbCat.image -> DB-category photos never rendered (custom cats like "CCTV install" fell back to a bland icon card).
+- Fix: app/(tabs)/index.tsx now lazily fetches the full image via GET /categories/{id} for any DB category with has_image=true and merges it into dbCategories, so custom categories show their uploaded cover. List stays lightweight.
+- Verified API: list returns has_image (no image); /categories/{id} returns full image. Admin category modal already supports image upload (services.tsx). Frontend compiles. Needs Netlify redeploy. User must ensure a cover image is uploaded for the CCTV category and add services under it (0 services until then).
