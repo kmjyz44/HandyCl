@@ -39,6 +39,6 @@ export const HOW_IMAGES = {
 
 // Optional walkthrough videos — leave empty until provided by the owner.
 export const HOW_VIDEOS = {
-  client: '',
+  client: 'https://www.youtube.com/embed/JX1KvqsPjvE',
   provider: '',
 };

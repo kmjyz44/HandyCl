@@ -69,7 +69,7 @@ export default function HowItWorksPage() {
         {video ? (
           <View style={styles.videoWrap}>
             {/* @ts-ignore web-only iframe */}
-            <iframe src={video} style={{ width: '100%', height: 220, border: 0, borderRadius: 12 }} allowFullScreen />
+            <iframe src={video} title="Ono-Fix — How it works" style={{ width: '100%', height: 220, border: 0, borderRadius: 12 }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
           </View>
         ) : (
           <View style={styles.videoPlaceholder} data-testid="how-video-placeholder">
