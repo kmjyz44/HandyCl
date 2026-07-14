@@ -70,8 +70,8 @@ export default function ServiceAreaScreen() {
   const lng = profile?.longitude || '';
   const radius = profile?.service_radius_km || 10;
   const src = lat && lng
-    ? `/map.html?lat=${lat}&lng=${lng}&radius=${radius}`
-    : `/map.html`;
+    ? `/map.html?unit=mi&lat=${lat}&lng=${lng}&radius=${radius}`
+    : `/map.html?unit=mi`;
 
   return (
     <View style={{ flex: 1 }}>

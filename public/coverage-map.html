@@ -58,7 +58,7 @@
 
   // Coverage circle
   const circle = L.circle([lat, lng], {
-    radius: radius * 1000,
+    radius: radius * 1609.34,
     color: '#2563eb',
     fillColor: '#3b82f6',
     fillOpacity: 0.18,
@@ -82,14 +82,14 @@
   // Badge text
   async function setBadge() {
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=uk`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`);
       const data = await res.json();
       const addr = data.address;
       const city = addr.city || addr.town || addr.village || addr.county || '';
       document.getElementById('badge-text').textContent =
-        (city ? city + ' · ' : '') + radius + ' км';
+        (city ? city + ' · ' : '') + radius + ' mi';
     } catch {
-      document.getElementById('badge-text').textContent = radius + ' км';
+      document.getElementById('badge-text').textContent = radius + ' mi';
     }
   }
   setBadge();

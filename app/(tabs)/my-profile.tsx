@@ -1917,7 +1917,7 @@ function ProviderProfile() {
             <View style={{ flex: 1 }}>
               <iframe
                 title="service-area-map"
-                src={`/map.html?lat=${profile?.latitude || 50.45}&lng=${profile?.longitude || 30.52}&radius=${profile?.service_radius_km || 10}`}
+                src={`/map.html?unit=mi&lat=${profile?.latitude || 50.45}&lng=${profile?.longitude || 30.52}&radius=${profile?.service_radius_km || 10}`}
                 style={{ width: '100%', height: '100%', border: 'none' } as any}
                 onLoad={(e: any) => {
                   // Listen for save messages from iframe

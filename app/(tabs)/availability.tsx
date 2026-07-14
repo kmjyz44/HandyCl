@@ -502,7 +502,7 @@ export default function Availability() {
             <Text style={s.mapHeaderTitle}>Service area</Text>
           </View>
           {Platform.OS === 'web' ? (
-            <iframe title="map" src={`/map.html?lat=${areaLat}&lng=${areaLng}&radius=${areaRadius}`}
+            <iframe title="map" src={`/map.html?unit=mi&lat=${areaLat}&lng=${areaLng}&radius=${areaRadius}`}
               style={{ width: '100%', height: '100%', border: 'none' } as any} allow="geolocation" />
           ) : (
             <View style={s.mapNative}>
