@@ -390,6 +390,8 @@ export default function HomeScreen() {
   const [loadingTaskers, setLoadingTaskers] = useState(false);
   const [otherDatesTaskers, setOtherDatesTaskers] = useState<any[]>([]);
   const [showingOtherDates, setShowingOtherDates] = useState(false);
+  const [waitlistJoined, setWaitlistJoined] = useState(false);
+  const waitlistRecordedRef = React.useRef<string>('');
   const [booking_submitting, setBookingSubmitting] = useState(false);
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [photoResult, setPhotoResult] = useState<any>(null);
@@ -470,6 +472,8 @@ export default function HomeScreen() {
       address: booking.address,
       latitude: gLat,
       longitude: gLng,
+      category: booking.categoryId,
+      category_name: booking.categoryName,
       source: 'booking',
     }).catch(() => {});
     setStep('out_of_area');
@@ -501,6 +505,30 @@ export default function HomeScreen() {
     })();
     return () => { cancelled = true; };
   }, [user]);
+
+  // When a skill search returns no pros at all in the client's area, quietly log
+  // the unmet demand (so admins can track where to recruit) and reassure the client.
+  useEffect(() => {
+    if (step !== 'taskers' || loadingTaskers) return;
+    if (taskers.length !== 0 || otherDatesTaskers.length !== 0) return;
+    const key = `${booking.categoryId}|${booking.city}`.toLowerCase();
+    if (!booking.city || waitlistRecordedRef.current === key) return;
+    waitlistRecordedRef.current = key;
+    api.addToWaitlist({
+      email: user?.email,
+      name: user?.name || user?.full_name,
+      phone: user?.phone,
+      state: booking.state,
+      city: booking.city,
+      zip: booking.zip,
+      address: booking.address,
+      latitude: booking.lat,
+      longitude: booking.lng,
+      category: booking.categoryId,
+      category_name: booking.categoryName || booking.skillName,
+      source: 'no_pros',
+    }).then(() => setWaitlistJoined(true)).catch(() => {});
+  }, [step, loadingTaskers, taskers.length, otherDatesTaskers.length]);
 
   // "Book this pro" entry — launched from an executor profile with params.
   useEffect(() => {
@@ -2324,9 +2352,15 @@ export default function HomeScreen() {
               </>
             ) : (
               <>
-                <Text style={s.emptyTitle}>No pros found</Text>
-                <Text style={s.emptyText}>Try changing the city or date</Text>
-                <TouchableOpacity style={s.retryBtn} onPress={() => setStep('address')}>
+                <Text style={s.emptyTitle}>No pros available yet</Text>
+                <Text style={s.emptyText}>
+                  There are currently no available pros for your request{booking.categoryName ? ` (${booking.categoryName})` : ''} in {booking.city || 'your area'}. As soon as a pro joins your area, we'll notify you.
+                </Text>
+                <View style={s.notifyBadge} data-testid="waitlist-notify-badge">
+                  <Ionicons name="notifications-outline" size={16} color="#059669" />
+                  <Text style={s.notifyBadgeText}>You're on the notify list for this request</Text>
+                </View>
+                <TouchableOpacity style={s.retryBtn} onPress={() => setStep('address')} data-testid="change-address-btn">
                   <Text style={s.retryBtnText}>Change address</Text>
                 </TouchableOpacity>
               </>
@@ -2898,6 +2932,8 @@ const s = StyleSheet.create({
   taskerRateLabel: { fontSize: 12, color: '#6b7280' },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginTop: 16 },
   emptyText: { fontSize: 14, color: '#9ca3af', marginTop: 6, textAlign: 'center' },
+  notifyBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
+  notifyBadgeText: { fontSize: 12, fontWeight: '700', color: '#059669' },
   retryBtn: { marginTop: 20, backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
   retryBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   retryBtnGhost: { marginTop: 12, paddingHorizontal: 24, paddingVertical: 10 },

@@ -10309,6 +10309,8 @@ async def add_waitlist_entry(payload: Dict[str, Any] = Body(...)):
         "address": str(payload.get("address") or "").strip(),
         "latitude": payload.get("latitude"),
         "longitude": payload.get("longitude"),
+        "category": str(payload.get("category") or "").strip(),
+        "category_name": str(payload.get("category_name") or "").strip(),
         "source": str(payload.get("source") or "booking").strip(),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -10328,7 +10330,7 @@ async def admin_export_waitlist(current_user: User = Depends(require_admin)):
     items = await db.waitlist.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
     import csv, io
     buf = io.StringIO()
-    cols = ["created_at", "email", "name", "phone", "city", "state", "zip", "address", "source"]
+    cols = ["created_at", "category_name", "email", "name", "phone", "city", "state", "zip", "address", "source"]
     w = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
     w.writeheader()
     for it in items:

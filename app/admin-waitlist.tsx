@@ -20,7 +20,7 @@ export default function AdminWaitlistPage() {
   };
 
   const exportCsv = () => {
-    const cols = ['created_at', 'email', 'name', 'phone', 'city', 'state', 'zip', 'address', 'source'];
+    const cols = ['created_at', 'category_name', 'email', 'name', 'phone', 'city', 'state', 'zip', 'address', 'source'];
     const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const csv = [cols.join(','), ...items.map((it) => cols.map((c) => esc(it[c])).join(','))].join('\n');
     if (Platform.OS === 'web') {
@@ -55,6 +55,13 @@ export default function AdminWaitlistPage() {
               <Text style={s.name}>{it.name || 'Anonymous'}</Text>
               <Text style={s.date}>{it.created_at ? new Date(it.created_at).toLocaleDateString() : ''}</Text>
             </View>
+            {!!it.category_name && (
+              <View style={s.catChip}>
+                <Ionicons name="pricetag-outline" size={12} color="#2563eb" />
+                <Text style={s.catChipText}>{it.category_name}</Text>
+                {it.source === 'no_pros' && <Text style={s.noProsTag}>· no pros in area</Text>}
+              </View>
+            )}
             {!!it.email && <Text style={s.line}><Ionicons name="mail-outline" size={12} color="#6b7280" /> {it.email}</Text>}
             {!!it.phone && <Text style={s.line}><Ionicons name="call-outline" size={12} color="#6b7280" /> {it.phone}</Text>}
             <Text style={s.line}><Ionicons name="location-outline" size={12} color="#6b7280" /> {[it.city, it.state, it.zip].filter(Boolean).join(', ') || '—'}</Text>
@@ -83,4 +90,7 @@ const s = StyleSheet.create({
   date: { fontSize: 12, color: '#9ca3af' },
   line: { fontSize: 13, color: '#374151', marginTop: 3 },
   addr: { fontSize: 12, color: '#6b7280', marginTop: 4 },
+  catChip: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', backgroundColor: '#eff6ff', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 6 },
+  catChipText: { fontSize: 12, fontWeight: '700', color: '#2563eb' },
+  noProsTag: { fontSize: 11, color: '#b45309', fontWeight: '600' },
 });
