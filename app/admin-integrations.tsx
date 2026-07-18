@@ -1,7 +1,7 @@
 /**
  * Admin: Integration Keys & Feature Toggles
  *
- * Lets the admin paste in SendGrid / Stripe / Twilio / VAPID / Telegram
+ * Lets the admin paste in SendGrid / Stripe / Plivo / VAPID / Telegram
  * credentials and toggle each notification channel on/off. Stored on the
  * backend in db.integration_keys; secrets are returned masked.
  */
@@ -105,14 +105,14 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
-    title: 'Twilio (SMS)',
+    title: 'Plivo (SMS)',
     toggle: 'enable_sms_notifications',
     toggleLabel: 'Enable SMS notifications',
     testSms: true,
     keys: [
-      { id: 'twilio_account_sid', label: 'Account SID', placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
-      { id: 'twilio_auth_token', label: 'Auth Token', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', secret: true },
-      { id: 'twilio_from_phone', label: 'From phone', placeholder: '+12025551234' },
+      { id: 'plivo_auth_id', label: 'Auth ID', placeholder: 'MAXXXXXXXXXXXXXXXXXX' },
+      { id: 'plivo_auth_token', label: 'Auth Token', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', secret: true },
+      { id: 'plivo_src', label: 'Sender number (10DLC / Toll-Free)', placeholder: '+12025551234' },
     ],
   },
   {
@@ -260,14 +260,13 @@ export default function AdminIntegrations() {
                 {smsResult ? (
                   <View style={[s.resultBox, { backgroundColor: smsResult.ok ? '#ecfdf5' : '#fef2f2', borderColor: smsResult.ok ? '#a7f3d0' : '#fecaca' }]} data-testid="test-sms-result">
                     <Text style={{ fontSize: 13, fontWeight: '700', color: smsResult.ok ? '#047857' : '#b91c1c' }}>
-                      {smsResult.ok ? '✓ Twilio accepted the message' : '✗ SMS failed'}
+                      {smsResult.ok ? '✓ Plivo accepted the message' : '✗ SMS failed'}
                     </Text>
-                    {smsResult.message_status ? <Text style={s.resultLine}>Status: {smsResult.message_status}</Text> : null}
-                    {smsResult.message_sid ? <Text style={s.resultLine}>SID: {smsResult.message_sid}</Text> : null}
-                    {smsResult.twilio_error_code ? <Text style={s.resultLine}>Twilio code: {smsResult.twilio_error_code}</Text> : null}
-                    {smsResult.twilio_error_message ? <Text style={s.resultLine}>{smsResult.twilio_error_message}</Text> : null}
+                    {smsResult.api_id ? <Text style={s.resultLine}>API ID: {smsResult.api_id}</Text> : null}
+                    {smsResult.message_uuid ? <Text style={s.resultLine}>Message UUID: {smsResult.message_uuid}</Text> : null}
+                    {smsResult.plivo_error_message ? <Text style={s.resultLine}>{smsResult.plivo_error_message}</Text> : null}
                     {smsResult.error ? <Text style={s.resultLine}>{smsResult.error}</Text> : null}
-                    {smsResult.ok ? <Text style={[s.resultLine, { marginTop: 6, fontStyle: 'italic' }]}>Note: "accepted"/"queued" means Twilio took it — final delivery still depends on toll-free / A2P verification.</Text> : null}
+                    {smsResult.ok ? <Text style={[s.resultLine, { marginTop: 6, fontStyle: 'italic' }]}>Note: "accepted" means Plivo queued it — final delivery still depends on 10DLC / Toll-Free registration.</Text> : null}
                   </View>
                 ) : null}
               </View>

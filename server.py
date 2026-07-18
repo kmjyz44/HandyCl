@@ -1380,10 +1380,23 @@ async def create_notification(
 # provider charges for travelling to the client. Charged once, on top of the
 # per-minute labor. Optional per provider (0 = none).
 async def _get_integration_keys() -> Dict[str, Any]:
-    """Read admin-managed integration keys from DB. Returns {} if not configured."""
+    """Read admin-managed integration keys from DB. Returns {} if not configured.
+    Seeds the default Plivo SMS credentials on first read so SMS works out of the box."""
     try:
         doc = await db.integration_keys.find_one({"setting_id": "integration_keys"}, {"_id": 0})
-        return doc or {}
+        doc = doc or {}
+        if not doc.get("plivo_auth_id") or not doc.get("plivo_auth_token"):
+            await db.integration_keys.update_one(
+                {"setting_id": "integration_keys"},
+                {"$set": {
+                    "plivo_auth_id": doc.get("plivo_auth_id") or PLIVO_DEFAULT_AUTH_ID,
+                    "plivo_auth_token": doc.get("plivo_auth_token") or PLIVO_DEFAULT_AUTH_TOKEN,
+                }},
+                upsert=True,
+            )
+            doc["plivo_auth_id"] = doc.get("plivo_auth_id") or PLIVO_DEFAULT_AUTH_ID
+            doc["plivo_auth_token"] = doc.get("plivo_auth_token") or PLIVO_DEFAULT_AUTH_TOKEN
+        return doc
     except Exception:
         return {}
 
@@ -1469,54 +1482,61 @@ async def _send_email(to_email: str, subject: str, body_text: str) -> bool:
     return False
 
 
-async def _send_sms_twilio(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
-    """Send an SMS via Twilio. Returns (success, error_message).
+PLIVO_DEFAULT_AUTH_ID = "MANDEWMTDLZJCTZJJINC"
+PLIVO_DEFAULT_AUTH_TOKEN = "ZjAzYjUzNTEtN2Y2MS00ZDI2LTYxZWItMGQ2NmVk"
+
+
+def _plivo_creds(keys: dict) -> Tuple[str, str, str]:
+    """Resolve Plivo Auth ID / Auth Token / sender number, falling back to the
+    platform defaults for the credentials when the admin hasn't set them."""
+    auth_id = (keys.get("plivo_auth_id") or PLIVO_DEFAULT_AUTH_ID or "").strip()
+    auth_token = (keys.get("plivo_auth_token") or PLIVO_DEFAULT_AUTH_TOKEN or "").strip()
+    src = (keys.get("plivo_src") or keys.get("twilio_from_phone") or "").strip()
+    return auth_id, auth_token, src
+
+
+async def _send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
+    """Send an SMS via Plivo. Returns (success, error_message).
     error_message is a human-readable reason when success is False, else None."""
     if not to_phone:
         return False, "Phone number not provided"
     keys = await _get_integration_keys()
     if not keys.get("enable_sms_notifications", True):
         return False, "SMS notifications are disabled in admin settings"
-    sid = keys.get("twilio_account_sid")
-    token = keys.get("twilio_auth_token")
-    from_phone = keys.get("twilio_from_phone")
-    if not sid or not token or not from_phone:
-        logger.info("Twilio not configured — skipping SMS to %s", to_phone)
-        return False, "Twilio is not configured (set Account SID, Auth Token, and sender number in admin)"
-    # Twilio requires E.164 format (e.g. +14155551234)
+    auth_id, auth_token, src = _plivo_creds(keys)
+    if not auth_id or not auth_token:
+        logger.info("Plivo not configured — skipping SMS to %s", to_phone)
+        return False, "Plivo is not configured (set Auth ID and Auth Token in admin)"
+    if not src:
+        return False, "Plivo sender number is not configured (set a registered 10DLC/Toll-Free number in admin)"
+    # Plivo requires E.164 format (e.g. +14155551234)
     if not to_phone.strip().startswith("+"):
         return False, "Number must be in E.164 format, e.g. +14155551234"
     try:
-        async with httpx.AsyncClient(timeout=10.0, auth=(sid, token)) as http:
+        async with httpx.AsyncClient(timeout=10.0, auth=(auth_id, auth_token)) as http:
             r = await http.post(
-                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
-                data={"From": from_phone, "To": to_phone, "Body": body[:1500]},
+                f"https://api.plivo.com/v1/Account/{auth_id}/Message/",
+                json={"src": src, "dst": to_phone.strip(), "text": body[:1500]},
+                headers={"Content-Type": "application/json"},
             )
-        if r.status_code >= 400:
-            logger.warning("Twilio SMS failed %s: %s", r.status_code, r.text[:400])
-            # Surface the real Twilio reason to the caller
-            err_msg = f"Twilio error {r.status_code}"
+        # Plivo returns 202 Accepted when the message is queued
+        if r.status_code != 202:
+            logger.warning("Plivo SMS failed %s: %s", r.status_code, r.text[:400])
+            err_msg = f"Plivo error {r.status_code}"
             try:
                 data = r.json()
-                tw_code = data.get("code")
-                tw_message = data.get("message") or ""
-                if tw_code == 21608:
-                    err_msg = ("A Twilio trial account can only send SMS to numbers verified "
-                               "in the Twilio Console (Verified Caller IDs). Add the number or upgrade the account.")
-                elif tw_code == 21211:
-                    err_msg = "Invalid number format. Use E.164, e.g. +14155551234"
-                elif tw_code == 21408 or tw_code == 21610:
-                    err_msg = "Twilio cannot send SMS to this number/region (check Geo Permissions)"
-                elif tw_message:
-                    err_msg = f"Twilio: {tw_message}"
+                p_message = data.get("error") or data.get("message") or ""
+                if p_message:
+                    err_msg = f"Plivo: {p_message}"
             except Exception:
                 pass
             return False, err_msg
-        logger.info("Twilio SMS sent to %s", to_phone)
+        logger.info("Plivo SMS sent to %s", to_phone)
         return True, None
     except Exception as e:
-        logger.warning("Twilio SMS error: %s", e)
-        return False, f"Twilio connection error: {e}"
+        logger.warning("Plivo SMS error: %s", e)
+        return False, f"Plivo connection error: {e}"
+
 
 
 async def _send_web_push_one(subscription: Dict[str, Any], payload: Dict[str, Any], vapid_priv: str, vapid_subject: str) -> bool:
@@ -1604,7 +1624,7 @@ async def notify_user(
                 # don't await — fire-and-forget so the API request doesn't slow down
                 asyncio.create_task(_send_email(user_doc["email"], title, message))
             if "sms" in channels and user_doc.get("phone"):
-                asyncio.create_task(_send_sms_twilio(user_doc["phone"], f"{title}: {message}"))
+                asyncio.create_task(_send_sms(user_doc["phone"], f"{title}: {message}"))
     # Web push — fire-and-forget; routes notification to /notifications by default
     if "push" in channels:
         push_url = None
@@ -2040,7 +2060,7 @@ async def send_phone_code(request: Request, payload: Dict[str, Any] = Body(defau
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
         "created_at": datetime.now(timezone.utc), "attempts": 0,
     })
-    sent, sms_error = await _send_sms_twilio(phone, f"Ono-Fix: your verification code is {code}. It expires in 10 minutes.")
+    sent, sms_error = await _send_sms(phone, f"Ono-Fix: your verification code is {code}. It expires in 10 minutes.")
     resp: Dict[str, Any] = {"ok": True, "sent": sent}
     if not sent and sms_error:
         resp["error"] = sms_error
@@ -2337,6 +2357,71 @@ def _provider_service_match(executor: dict, city, lat, lng):
         except (TypeError, ValueError):
             pass
     return True, covers
+
+
+_WAITLIST_TRIGGER_FIELDS = {
+    "skills", "service_zones", "service_radius_km",
+    "service_cities", "latitude", "longitude",
+}
+
+
+async def _notify_waitlist_matches(user_id: str):
+    """When a provider updates their skills or service area, notify any
+    waitlisted clients whose category + location are now covered.
+
+    Email only (per product decision). Idempotent: each waitlist entry is
+    marked with `notified_at` so a client is never emailed twice."""
+    try:
+        profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
+        if not profile:
+            return
+        skills = profile.get("skills") or []
+        if not skills:
+            return
+        entries = await db.waitlist.find({
+            "notified_at": {"$exists": False},
+            "email": {"$nin": [None, ""]},
+        }).to_list(2000)
+        if not entries:
+            return
+        for entry in entries:
+            category = entry.get("category") or ""
+            # 1. Category / skill match
+            if category and not any(_skill_matches_category(s, category) for s in skills):
+                continue
+            # 2. Location coverage (radius in miles / city match)
+            _has_cfg, covers = _provider_service_match(
+                {"profile": profile},
+                entry.get("city"),
+                entry.get("latitude"),
+                entry.get("longitude"),
+            )
+            if not covers:
+                continue
+            # 3. Notify via email
+            cat_name = entry.get("category_name") or category or "your request"
+            name = entry.get("name") or "there"
+            subject = f'Good news — a pro for "{cat_name}" is now available on Ono-Fix'
+            body = (
+                f"Hi {name},\n\n"
+                f'You asked us to notify you when a professional for "{cat_name}" '
+                f"becomes available in your area. Great news — a pro just joined and "
+                f"can now help you!\n\n"
+                f"Open the app to book your service now.\n\n"
+                f"— The Ono-Fix Team"
+            )
+            ok = await _send_email(entry["email"], subject, body)
+            await db.waitlist.update_one(
+                {"waitlist_id": entry.get("waitlist_id")},
+                {"$set": {
+                    "notified_at": datetime.now(timezone.utc).isoformat(),
+                    "matched_provider_id": user_id,
+                    "notify_email_sent": bool(ok),
+                }},
+            )
+    except Exception as e:
+        logger.warning("Waitlist match notification failed for %s: %s", user_id, e)
+
 
 
 
@@ -3860,6 +3945,9 @@ async def create_executor_profile(profile_data: ExecutorProfileCreate, current_u
             {"$set": update_dict}
         )
 
+        if _WAITLIST_TRIGGER_FIELDS & set(update_dict.keys()):
+            asyncio.create_task(_notify_waitlist_matches(current_user.user_id))
+
         updated_profile = await db.executor_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
         return updated_profile
     else:
@@ -3937,6 +4025,9 @@ async def update_executor_profile(profile_data: ExecutorProfileUpdate, current_u
         },
         upsert=True,
     )
+
+    if _WAITLIST_TRIGGER_FIELDS & set(update_dict.keys()):
+        asyncio.create_task(_notify_waitlist_matches(current_user.user_id))
 
     updated_profile = await db.executor_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
     return updated_profile
@@ -8802,6 +8893,9 @@ class IntegrationKeysUpdate(BaseModel):
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
     twilio_from_phone: Optional[str] = None
+    plivo_auth_id: Optional[str] = None
+    plivo_auth_token: Optional[str] = None
+    plivo_src: Optional[str] = None
     vapid_public_key: Optional[str] = None
     vapid_private_key: Optional[str] = None
     vapid_subject_email: Optional[str] = None
@@ -10170,7 +10264,7 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
     out = {}
     secret_fields = {
         "sendgrid_api_key", "resend_api_key", "stripe_secret_key", "stripe_webhook_secret",
-        "twilio_auth_token", "vapid_private_key", "telegram_bot_token", "finix_api_password",
+        "twilio_auth_token", "plivo_auth_token", "vapid_private_key", "telegram_bot_token", "finix_api_password",
     }
     for k in IntegrationKeysUpdate.model_fields.keys():
         v = doc.get(k)
@@ -10215,25 +10309,24 @@ async def set_integration_keys(payload: IntegrationKeysUpdate, current_user: Use
 
 @api_router.post("/admin/test-sms")
 async def admin_test_sms(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
-    """Admin diagnostic: send a test SMS and return the full Twilio response so the
-    exact delivery failure reason is visible (e.g. unverified toll-free number)."""
+    """Admin diagnostic: send a test SMS and return the full Plivo response so the
+    exact delivery failure reason is visible (e.g. unregistered sender number)."""
     to_phone = (payload.get("phone") or "").strip()
     if not to_phone:
         raise HTTPException(status_code=422, detail="Phone number required (E.164, e.g. +14155551234)")
     keys = await _get_integration_keys()
-    sid = keys.get("twilio_account_sid")
-    token = keys.get("twilio_auth_token")
-    from_phone = keys.get("twilio_from_phone")
-    if not sid or not token or not from_phone:
-        return {"ok": False, "error": "Twilio is not configured (Account SID, Auth Token, From phone all required)",
-                "configured": {"account_sid": bool(sid), "auth_token": bool(token), "from_phone": bool(from_phone)}}
+    auth_id, token, src = _plivo_creds(keys)
+    if not auth_id or not token or not src:
+        return {"ok": False, "error": "Plivo is not configured (Auth ID, Auth Token, sender number all required)",
+                "configured": {"auth_id": bool(auth_id), "auth_token": bool(token), "src": bool(src)}}
     if not to_phone.startswith("+"):
         return {"ok": False, "error": "Number must be in E.164 format, e.g. +14155551234"}
     try:
-        async with httpx.AsyncClient(timeout=15.0, auth=(sid, token)) as http:
+        async with httpx.AsyncClient(timeout=15.0, auth=(auth_id, token)) as http:
             r = await http.post(
-                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
-                data={"From": from_phone, "To": to_phone, "Body": "Ono-Fix test message ✅"},
+                f"https://api.plivo.com/v1/Account/{auth_id}/Message/",
+                json={"src": src, "dst": to_phone, "text": "Ono-Fix test message ✅"},
+                headers={"Content-Type": "application/json"},
             )
         data = {}
         try:
@@ -10241,17 +10334,16 @@ async def admin_test_sms(payload: Dict[str, Any] = Body(default={}), current_use
         except Exception:
             pass
         return {
-            "ok": r.status_code < 400,
+            "ok": r.status_code == 202,
             "status_code": r.status_code,
-            "message_sid": data.get("sid"),
-            "message_status": data.get("status"),
-            "twilio_error_code": data.get("code"),
-            "twilio_error_message": data.get("message"),
-            "from": from_phone,
+            "message_uuid": (data.get("message_uuid") or [None])[0] if isinstance(data.get("message_uuid"), list) else data.get("message_uuid"),
+            "api_id": data.get("api_id"),
+            "plivo_error_message": data.get("error") or data.get("message"),
+            "from": src,
             "to": to_phone,
         }
     except Exception as e:
-        return {"ok": False, "error": f"Twilio connection error: {e}"}
+        return {"ok": False, "error": f"Plivo connection error: {e}"}
 
 
 @api_router.get("/service-area")

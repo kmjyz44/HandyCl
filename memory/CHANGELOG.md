@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06 — Waitlist auto-notifications + Plivo diagnostic
+- Added `_notify_waitlist_matches(user_id)` in `backend/server.py`: when a provider updates skills or service area, un-notified waitlist clients whose category + location are now covered get an Email (Resend only, per product decision). Idempotent via `notified_at` marker on each waitlist entry.
+- Hooked trigger (fire-and-forget) into `POST /profile/executor` and `PUT /profile/executor`, gated by `_WAITLIST_TRIGGER_FIELDS` = {skills, service_zones, service_radius_km, service_cities, latitude, longitude}.
+- New waitlist fields: `notified_at`, `matched_provider_id`, `notify_email_sent`.
+- Tested via API: NYC/cleaning match → notified; LA/cleaning → not notified (out of 30mi radius); NYC/moving → not notified (no matching skill). Idempotency verified.
+- PLIVO DIAGNOSTIC: default Auth ID/Token (MANDEWMTDLZJCTZJJINC) are VALID (account "Leonid Zhovtiak", $10 credit). BLOCKER: account has 0 rented numbers and `plivo_src` is unset in DB → SMS cannot send until a 10DLC/Toll-Free sender number is rented in Plivo and saved as `plivo_src` in Admin → Integrations.
+
+
 ## 2026-06 — Address expansion (State → City → Street/Num → Unit → ZIP)
 - Verified `POST /api/users/saved-addresses` accepts full payload (label, street, city, state, unit, zip) — 422 error resolved.
 - Fixed `BookingCreate` model: added `state`, `unit`, `zip` fields (were silently dropped by Pydantic).

@@ -49,7 +49,7 @@ export default function VerifyPhone() {
         setCooldown(60);
         Alert.alert('Sent', 'A verification code was sent via SMS');
       } else {
-        // HTTP 200 but Twilio did not deliver — surface the real reason
+        // HTTP 200 but Plivo did not deliver — surface the real reason
         setError(res?.error || 'Could not send SMS. Please try again later.');
       }
     } catch (e: any) {
