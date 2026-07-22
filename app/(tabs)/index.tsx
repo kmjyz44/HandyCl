@@ -391,6 +391,7 @@ export default function HomeScreen() {
   const [otherDatesTaskers, setOtherDatesTaskers] = useState<any[]>([]);
   const [showingOtherDates, setShowingOtherDates] = useState(false);
   const [waitlistJoined, setWaitlistJoined] = useState(false);
+  const [expandedTaskerSkill, setExpandedTaskerSkill] = useState<number | null>(null);
   const waitlistRecordedRef = React.useRef<string>('');
   const [booking_submitting, setBookingSubmitting] = useState(false);
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
@@ -2475,6 +2476,16 @@ export default function HomeScreen() {
     const tName = tasker.name || tasker.full_name || tasker.username || 'Pro';
     const tSkills = Array.isArray(tProfile.skills) ? tProfile.skills : [];
     const tPhotos = Array.isArray(tProfile.portfolio_photos) ? tProfile.portfolio_photos : [];
+    // Work photos for the exact category the client is booking (option a).
+    const searchedCatId = String(booking.categoryId || '').toLowerCase();
+    const catPhotos: { uri: string; caption?: string }[] = [];
+    tSkills.forEach((sk: any) => {
+      if (sk && typeof sk === 'object' && String(sk.category_id || '').toLowerCase() === searchedCatId) {
+        (Array.isArray(sk.photos) ? sk.photos : []).forEach((p: any) => {
+          if (p && p.uri) catPhotos.push({ uri: p.uri, caption: p.caption });
+        });
+      }
+    });
     const tMinHours = Math.max(1, Number(tasker.minimum_hours || tProfile.minimum_hours || 1));
     return (
       <View style={s.container}>
@@ -2538,21 +2549,71 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {/* Skills */}
-          {tSkills.length > 0 ? (
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>Skills</Text>
-              <View style={s.skillsWrap}>
-                {tSkills.slice(0, 8).map((sk: any, i: number) => (
-                  <View key={i} style={s.skillBadge}>
-                    <Text style={s.skillBadgeText}>{typeof sk === 'string' ? sk : sk.name}</Text>
+          {/* Work photos for the searched category (option a) — hidden when none */}
+          {catPhotos.length > 0 ? (
+            <View style={s.section} data-testid="tasker-category-photos">
+              <Text style={s.sectionTitle}>{booking.categoryName || 'Work'} — this pro's work</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                {catPhotos.map((ph, i) => (
+                  <View key={i} style={{ marginRight: 10, width: 160 }}>
+                    <Image source={{ uri: ph.uri }} style={s.catPhotoThumb} resizeMode="cover" />
+                    {ph.caption ? <Text style={s.catPhotoCaption} numberOfLines={2}>{ph.caption}</Text> : null}
                   </View>
                 ))}
-              </View>
+              </ScrollView>
             </View>
           ) : null}
 
-          {/* Portfolio */}
+          {/* Skills — tap to expand description + work photos (option b) */}
+          {tSkills.length > 0 ? (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Skills</Text>
+              <Text style={s.servicesHint}>Tap a skill to see the pro's experience and photos of completed work.</Text>
+              {tSkills.slice(0, 12).map((sk: any, i: number) => {
+                const skill: any = typeof sk === 'string' ? { name: sk } : (sk || {});
+                const photos = (Array.isArray(skill.photos) ? skill.photos : []).filter((p: any) => p && p.uri);
+                const isOpen = expandedTaskerSkill === i;
+                return (
+                  <View key={i} style={s.skillCard} data-testid={`tasker-skill-${i}`}>
+                    <TouchableOpacity
+                      style={s.skillCardHeader}
+                      activeOpacity={0.7}
+                      onPress={() => setExpandedTaskerSkill(isOpen ? null : i)}
+                      data-testid={`tasker-skill-toggle-${i}`}
+                    >
+                      <Ionicons name="checkmark-circle" size={18} color="#10b981" />
+                      <Text style={s.skillCardTitle}>{skill.name}</Text>
+                      {skill.hourly_rate ? <Text style={s.skillCardRate}>${skill.hourly_rate}/hr</Text> : null}
+                      <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color="#9ca3af" style={{ marginLeft: 8 }} />
+                    </TouchableOpacity>
+                    {isOpen ? (
+                      <View style={s.skillExpanded}>
+                        {skill.experience ? (
+                          <Text style={s.skillCardExp}>{skill.experience}</Text>
+                        ) : (
+                          <Text style={s.skillEmptyText}>No description added yet for this service.</Text>
+                        )}
+                        {photos.length > 0 ? (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
+                            {photos.map((ph: any, pi: number) => (
+                              <View key={pi} style={{ marginRight: 10, width: 160 }}>
+                                <Image source={{ uri: ph.uri }} style={s.catPhotoThumb} resizeMode="cover" />
+                                {ph.caption ? <Text style={s.catPhotoCaption} numberOfLines={2}>{ph.caption}</Text> : null}
+                              </View>
+                            ))}
+                          </ScrollView>
+                        ) : (
+                          <Text style={s.skillEmptyText}>No work photos yet.</Text>
+                        )}
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {/* General portfolio (kept, only when photos exist) */}
           {tPhotos.length > 0 ? (
             <View style={s.section}>
               <Text style={s.sectionTitle}>Work photos</Text>
@@ -2956,6 +3017,16 @@ const s = StyleSheet.create({
   skillBadge: { backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   skillBadgeText: { fontSize: 13, color: '#374151' },
   portfolioThumb: { width: 120, height: 90, borderRadius: 10, marginRight: 10 },
+  servicesHint: { fontSize: 13, color: '#6b7280', marginTop: 4, marginBottom: 10 },
+  skillCard: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, marginBottom: 10, overflow: 'hidden', backgroundColor: '#fff' },
+  skillCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 13 },
+  skillCardTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: '#111827' },
+  skillCardRate: { fontSize: 13, fontWeight: '700', color: '#2563eb' },
+  skillExpanded: { paddingHorizontal: 14, paddingBottom: 14, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingTop: 10 },
+  skillCardExp: { fontSize: 14, color: '#4b5563', lineHeight: 20 },
+  skillEmptyText: { fontSize: 13, color: '#9ca3af', fontStyle: 'italic', marginTop: 6 },
+  catPhotoThumb: { width: 160, height: 120, borderRadius: 12, backgroundColor: '#e5e7eb' },
+  catPhotoCaption: { fontSize: 12, color: '#6b7280', marginTop: 6 },
   confirmCard: { backgroundColor: '#fff', borderRadius: 16, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: '#f3f4f6' },
   confirmTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 14 },
   confirmRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },

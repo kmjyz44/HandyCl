@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06 — Pro-profile work photos on booking screen
+- `app/(tabs)/index.tsx` `tasker_profile` step: (a) added a work-photos strip filtered to the category the client is booking (`booking.categoryId` vs `skill.category_id`), shown at top; hidden when the pro has no photos for that category (option 2a).
+- (b) Skills are now tappable cards that expand to show the skill's experience/description + a horizontal strip of that skill's work photos (mirrors `app/executor/[id].tsx`).
+- Added state `expandedTaskerSkill` + styles: servicesHint, skillCard/Header/Title/Rate, skillExpanded, skillCardExp, skillEmptyText, catPhotoThumb, catPhotoCaption. data-testids: tasker-category-photos, tasker-skill-{i}, tasker-skill-toggle-{i}.
+- NOTE: Expo app has no local node_modules in preview (builds via Netlify). Verified by code review; requires Netlify redeploy to see live.
+
+
 ## 2026-06 — Waitlist auto-notifications + Plivo diagnostic
 - Added `_notify_waitlist_matches(user_id)` in `backend/server.py`: when a provider updates skills or service area, un-notified waitlist clients whose category + location are now covered get an Email (Resend only, per product decision). Idempotent via `notified_at` marker on each waitlist entry.
 - Hooked trigger (fire-and-forget) into `POST /profile/executor` and `PUT /profile/executor`, gated by `_WAITLIST_TRIGGER_FIELDS` = {skills, service_zones, service_radius_km, service_cities, latitude, longitude}.
