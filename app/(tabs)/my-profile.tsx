@@ -11,6 +11,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -866,6 +867,7 @@ function ProviderProfile() {
 
   // Active tab
   const [activeTab, setActiveTab] = useState<'performance' | 'skills' | 'service'>('performance');
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({ email: true, sms: true, push: true, telegram: true });
 
   // Provider skills
   const [providerSkills, setProviderSkills] = useState<ProviderSkill[]>([]);
@@ -1388,6 +1390,20 @@ function ProviderProfile() {
   );
 
   // ── Service Tab (TaskRabbit-style account menu) ──
+  useEffect(() => {
+    api.getNotificationPrefs().then((p) => p && setNotifPrefs(p)).catch(() => {});
+  }, []);
+
+  const toggleNotif = async (channel: string, value: boolean) => {
+    setNotifPrefs((s) => ({ ...s, [channel]: value }));
+    try {
+      const updated = await api.updateNotificationPrefs({ [channel]: value });
+      if (updated) setNotifPrefs(updated);
+    } catch {
+      setNotifPrefs((s) => ({ ...s, [channel]: !value }));
+    }
+  };
+
   const renderService = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
@@ -1466,6 +1482,28 @@ function ProviderProfile() {
 
       {/* SETTINGS */}
       <Text style={pStyles.menuSectionLabel}>SETTINGS</Text>
+
+      {/* NOTIFICATIONS — per-channel switches */}
+      <Text style={pStyles.notifGroupTitle}>Notifications</Text>
+      <Text style={pStyles.notifGroupHint}>Turn off any channel you don't want to receive.</Text>
+      {([
+        { key: 'push', label: 'Push notifications', icon: 'notifications-outline' },
+        { key: 'email', label: 'Email', icon: 'mail-outline' },
+        { key: 'telegram', label: 'Telegram', icon: 'paper-plane-outline' },
+        { key: 'sms', label: 'SMS', icon: 'chatbubble-outline' },
+      ] as const).map((row) => (
+        <View key={row.key} style={pStyles.notifRow} data-testid={`notif-row-${row.key}`}>
+          <Ionicons name={row.icon as any} size={20} color="#374151" style={pStyles.menuRowIcon} />
+          <Text style={[pStyles.menuRowText, { flex: 1 }]}>{row.label}</Text>
+          <Switch
+            value={notifPrefs[row.key] !== false}
+            onValueChange={(v) => toggleNotif(row.key, v)}
+            trackColor={{ true: '#2563eb', false: '#d1d5db' }}
+            data-testid={`notif-toggle-${row.key}`}
+          />
+        </View>
+      ))}
+      <View style={pStyles.menuDivider} />
 
       <TouchableOpacity style={pStyles.menuRow} onPress={() => { setTwoFaStep('choose'); setTwoFaVisible(true); }}>
         <Ionicons name="shield-checkmark-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
@@ -2527,6 +2565,9 @@ const pStyles = StyleSheet.create({
   menuSectionLabel: { fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8, backgroundColor: '#f9fafb' },
   menuRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 16 },
   menuRowIcon: { marginRight: 14 },
+  notifGroupTitle: { fontSize: 15, fontWeight: '700', color: '#111827', paddingHorizontal: 20, paddingTop: 6 },
+  notifGroupHint: { fontSize: 12, color: '#6b7280', paddingHorizontal: 20, paddingBottom: 6 },
+  notifRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 12 },
   menuRowText: { fontSize: 16, color: '#111827', fontWeight: '500' },
   menuRowSub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   menuDivider: { height: 1, backgroundColor: '#f3f4f6', marginLeft: 56 },

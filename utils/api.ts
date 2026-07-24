@@ -220,6 +220,16 @@ export const api = {
     return res.data;
   },
 
+  getNotificationPrefs: async () => {
+    const res = await client.get('/users/notification-prefs');
+    return res.data;
+  },
+
+  updateNotificationPrefs: async (data: Record<string, boolean>) => {
+    const res = await client.put('/users/notification-prefs', data);
+    return res.data;
+  },
+
   getServiceArea: async () => {
     const res = await client.get('/service-area');
     return res.data;

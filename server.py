@@ -175,6 +175,8 @@ class User(BaseModel):
     password_hash: Optional[str] = None
     telegram_chat_id: Optional[str] = None
     fcm_token: Optional[str] = None
+    # Per-user notification channel switches. Missing key = enabled (opt-out model).
+    notification_prefs: Optional[Dict[str, bool]] = None
     is_blocked: bool = False
     hidden_from_clients: bool = False  # Admin can hide executor from client listing
     blocked_until: Optional[datetime] = None
@@ -1678,36 +1680,77 @@ async def notify_user(
     related_type: Optional[str] = None,
     channels: Optional[List[str]] = None,
 ):
-    """Multi-channel notification: in-app + email + SMS (best-effort).
-    `channels` defaults to ['inapp', 'email', 'sms']. Fails silently per channel."""
-    channels = channels or ["inapp", "email", "sms", "push"]
-    # 1. In-app (always)
+    """Multi-channel notification: in-app + email + SMS + push + telegram (best-effort).
+    Honours the recipient's `notification_prefs` (opt-out model: a channel is on
+    unless the user set it to False). In-app is always delivered so nothing is lost."""
+    channels = channels or ["inapp", "email", "sms", "push", "telegram"]
+    # 1. In-app (always — this is the notification center, not a push)
     if "inapp" in channels:
         try:
             await create_notification(user_id, notification_type, title, message, related_id, related_type)
         except Exception as e:
             logger.warning("In-app notification failed for %s: %s", user_id, e)
-    # Lookup user contact info for email/SMS
-    if "email" in channels or "sms" in channels:
-        try:
-            user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "email": 1, "phone": 1})
-        except Exception:
-            user_doc = None
-        if user_doc:
-            if "email" in channels and user_doc.get("email"):
-                # don't await — fire-and-forget so the API request doesn't slow down
-                asyncio.create_task(_send_email(user_doc["email"], title, message))
-            if "sms" in channels and user_doc.get("phone"):
-                asyncio.create_task(_send_sms(user_doc["phone"], f"{title}: {message}"))
+    # Load recipient once (contact info + channel prefs)
+    try:
+        user_doc = await db.users.find_one(
+            {"user_id": user_id},
+            {"_id": 0, "email": 1, "phone": 1, "telegram_chat_id": 1, "notification_prefs": 1},
+        )
+    except Exception:
+        user_doc = None
+    if not user_doc:
+        return
+    prefs = user_doc.get("notification_prefs") or {}
+    def _wants(ch: str) -> bool:
+        return prefs.get(ch, True) is not False
+    if "email" in channels and _wants("email") and user_doc.get("email"):
+        asyncio.create_task(_send_email(user_doc["email"], title, message))
+    if "sms" in channels and _wants("sms") and user_doc.get("phone"):
+        asyncio.create_task(_send_sms(user_doc["phone"], f"{title}: {message}"))
     # Web push — fire-and-forget; routes notification to /notifications by default
-    if "push" in channels:
+    if "push" in channels and _wants("push"):
         push_url = None
         if related_type == "booking" and related_id:
             push_url = f"/task-detail?id={related_id}"
         asyncio.create_task(_send_web_push(user_id, title, message, push_url))
+    if "telegram" in channels and _wants("telegram") and user_doc.get("telegram_chat_id"):
+        asyncio.create_task(send_telegram_notification(str(user_doc["telegram_chat_id"]), f"<b>{title}</b>\n{message}"))
 
 
 # ==================== NOTIFICATION ROUTES ====================
+# ==================== NOTIFICATION ROUTES ====================
+
+_NOTIF_CHANNELS = ["email", "sms", "push", "telegram"]
+
+
+def _pref_on(doc: Optional[dict], ch: str) -> bool:
+    """Channel enabled for a user doc (opt-out: missing = enabled)."""
+    return ((doc or {}).get("notification_prefs") or {}).get(ch, True) is not False
+
+
+@api_router.get("/users/notification-prefs")
+async def get_notification_prefs(current_user: User = Depends(get_current_user)):
+    """Return the user's channel switches. Missing = enabled (opt-out model)."""
+    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "notification_prefs": 1})
+    prefs = (u or {}).get("notification_prefs") or {}
+    return {ch: (prefs.get(ch, True) is not False) for ch in _NOTIF_CHANNELS}
+
+
+@api_router.put("/users/notification-prefs")
+async def update_notification_prefs(payload: Dict[str, Any] = Body(...), current_user: User = Depends(get_current_user)):
+    """Update channel switches. Body: any subset of {email,sms,push,telegram: bool}."""
+    updates = {}
+    for ch in _NOTIF_CHANNELS:
+        if ch in payload:
+            updates[f"notification_prefs.{ch}"] = bool(payload[ch])
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid channels provided")
+    await db.users.update_one({"user_id": current_user.user_id}, {"$set": updates})
+    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "notification_prefs": 1})
+    prefs = (u or {}).get("notification_prefs") or {}
+    return {ch: (prefs.get(ch, True) is not False) for ch in _NOTIF_CHANNELS}
+
+
 
 @api_router.get("/notifications")
 async def get_notifications(
@@ -2753,7 +2796,7 @@ async def update_booking(booking_id: str, status: BookingStatus, provider_id: Op
     # Send notification if provider assigned
     if provider_id:
         provider = await db.users.find_one({"user_id": provider_id}, {"_id": 0})
-        if provider and provider.get("telegram_chat_id"):
+        if provider and provider.get("telegram_chat_id") and _pref_on(provider, "telegram"):
             service = await db.services.find_one({"service_id": booking["service_id"]}, {"_id": 0})
             message = f"🔔 *New order!*\n\nService: {service['name']}\nDate: {booking['date']} at {booking['time']}\nAddress: {booking['address']}"
             await send_telegram_notification(provider["telegram_chat_id"], message)
@@ -2813,7 +2856,7 @@ async def admin_assign_booking(
 
     # Send notification to executor
     provider = await db.users.find_one({"user_id": assign_data.provider_id}, {"_id": 0})
-    if provider and provider.get("telegram_chat_id"):
+    if provider and provider.get("telegram_chat_id") and _pref_on(provider, "telegram"):
         message = f"📋 *New task!*\n\nService: {service['name'] if service else 'Service'}\nDate: {booking['date']} at {booking['time']}\nAddress: {booking['address']}\nPrice: ${assign_data.custom_price or booking['total_price']}"
         await send_telegram_notification(provider["telegram_chat_id"], message)
 
@@ -2890,7 +2933,7 @@ async def create_task(task_data: TaskCreate, current_user: User = Depends(requir
 
     # Send Telegram notification
     provider = await db.users.find_one({"user_id": task_data.provider_id}, {"_id": 0})
-    if provider and provider.get("telegram_chat_id"):
+    if provider and provider.get("telegram_chat_id") and _pref_on(provider, "telegram"):
         message = f"📋 *New task!*\n\nTitle: {task_data.title}\nDescription: {task_data.description}\nDate: {task_data.due_date or 'Not specified'}"
         await send_telegram_notification(provider["telegram_chat_id"], message)
 
@@ -8172,7 +8215,7 @@ async def admin_reassign_booking(
         )
 
     # Send notification to new provider
-    if new_provider.get("telegram_chat_id"):
+    if new_provider.get("telegram_chat_id") and _pref_on(new_provider, "telegram"):
         service = await db.services.find_one({"service_id": booking.get("service_id")}, {"_id": 0})
         message = f"📋 *An order was reassigned to you!*\n\nService: {service['name'] if service else 'Service'}\nDate: {booking['date']} at {booking['time']}\nAddress: {booking['address']}"
         await send_telegram_notification(new_provider["telegram_chat_id"], message)
@@ -8723,7 +8766,7 @@ async def client_create_booking(
 
         # Send notification to provider
         provider = await db.users.find_one({"user_id": data.provider_id}, {"_id": 0})
-        if provider and provider.get("telegram_chat_id"):
+        if provider and provider.get("telegram_chat_id") and _pref_on(provider, "telegram"):
             message = f"📋 *New task!*\n\nService: {service.get('name', 'Service')}\nDate: {data.date} at {data.time}\nAddress: {data.address}\nYour rate: ${pricing['executor_take']}"
             await send_telegram_notification(provider["telegram_chat_id"], message)
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06 — Per-user notification channel switches
+- User model: added `notification_prefs: Dict[str,bool]` (opt-out model — missing key = enabled).
+- `notify_user` rewritten to honour prefs: filters email/sms/push and now also sends **telegram** (to the user's own telegram_chat_id) when enabled. In-app stays always-on (notification center).
+- Provider booking-flow Telegram calls gated with `_pref_on(provider, "telegram")` (5 sites).
+- New endpoints: `GET/PUT /users/notification-prefs` (body: subset of {email,sms,push,telegram}). Tested via curl: default all-true, disable sms+telegram, re-enable sms.
+- Frontend `app/(tabs)/my-profile.tsx` → Profile tab → SETTINGS → "Notifications" with 4 Switches (push/email/telegram/sms). `utils/api.ts`: getNotificationPrefs / updateNotificationPrefs. data-testids: notif-toggle-{channel}. (Expo builds on Netlify — needs redeploy to see live.)
+
+
 ## 2026-06 — Telegram admin notifications + account linking
 - Rewrote `send_telegram_notification` to use httpx + resolve token from `integration_keys` (primary) → `settings` (fallback). Fixes mismatch where admin-UI token (integration_keys) was ignored by the sender (settings).
 - Added `_notify_admins_telegram(text)` → sends to global `telegram_admin_chat_id` + every admin/moderator user with a linked `telegram_chat_id`. Respects `enable_telegram_notifications`.
