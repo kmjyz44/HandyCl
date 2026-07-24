@@ -973,6 +973,10 @@ function ProviderProfile() {
 
   useEffect(() => { loadProfile(); }, []);
 
+  useEffect(() => {
+    api.getNotificationPrefs().then((p) => p && setNotifPrefs(p)).catch(() => {});
+  }, []);
+
   const loadProfile = async () => {
     try {
       const data = await api.getMyExecutorProfile();
@@ -1390,10 +1394,6 @@ function ProviderProfile() {
   );
 
   // ── Service Tab (TaskRabbit-style account menu) ──
-  useEffect(() => {
-    api.getNotificationPrefs().then((p) => p && setNotifPrefs(p)).catch(() => {});
-  }, []);
-
   const toggleNotif = async (channel: string, value: boolean) => {
     setNotifPrefs((s) => ({ ...s, [channel]: value }));
     try {
