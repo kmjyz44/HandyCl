@@ -868,6 +868,7 @@ function ProviderProfile() {
   // Active tab
   const [activeTab, setActiveTab] = useState<'performance' | 'skills' | 'service'>('performance');
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({ email: true, sms: true, push: true, telegram: true });
+  const [notifModalVisible, setNotifModalVisible] = useState(false);
 
   // Provider skills
   const [providerSkills, setProviderSkills] = useState<ProviderSkill[]>([]);
@@ -1483,26 +1484,15 @@ function ProviderProfile() {
       {/* SETTINGS */}
       <Text style={pStyles.menuSectionLabel}>SETTINGS</Text>
 
-      {/* NOTIFICATIONS — per-channel switches */}
-      <Text style={pStyles.notifGroupTitle}>Notifications</Text>
-      <Text style={pStyles.notifGroupHint}>Turn off any channel you don't want to receive.</Text>
-      {([
-        { key: 'push', label: 'Push notifications', icon: 'notifications-outline' },
-        { key: 'email', label: 'Email', icon: 'mail-outline' },
-        { key: 'telegram', label: 'Telegram', icon: 'paper-plane-outline' },
-        { key: 'sms', label: 'SMS', icon: 'chatbubble-outline' },
-      ] as const).map((row) => (
-        <View key={row.key} style={pStyles.notifRow} data-testid={`notif-row-${row.key}`}>
-          <Ionicons name={row.icon as any} size={20} color="#374151" style={pStyles.menuRowIcon} />
-          <Text style={[pStyles.menuRowText, { flex: 1 }]}>{row.label}</Text>
-          <Switch
-            value={notifPrefs[row.key] !== false}
-            onValueChange={(v) => toggleNotif(row.key, v)}
-            trackColor={{ true: '#2563eb', false: '#d1d5db' }}
-            data-testid={`notif-toggle-${row.key}`}
-          />
+      {/* NOTIFICATIONS — opens a settings modal with per-channel switches */}
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => setNotifModalVisible(true)} data-testid="notifications-menu-row">
+        <Ionicons name="notifications-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Notifications</Text>
+          <Text style={pStyles.menuRowSub}>Choose which alerts you receive</Text>
         </View>
-      ))}
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
       <TouchableOpacity style={pStyles.menuRow} onPress={() => { setTwoFaStep('choose'); setTwoFaVisible(true); }}>
@@ -1940,6 +1930,40 @@ function ProviderProfile() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* ── Notifications Modal ── */}
+      <Modal visible={notifModalVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <TouchableOpacity onPress={() => setNotifModalVisible(false)} data-testid="notif-modal-close">
+              <Ionicons name="arrow-back" size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Notifications</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 8 }}>
+            <Text style={pStyles.notifGroupHint}>Turn off any channel you don't want to receive.</Text>
+            {([
+              { key: 'push', label: 'Push notifications', icon: 'notifications-outline' },
+              { key: 'email', label: 'Email', icon: 'mail-outline' },
+              { key: 'telegram', label: 'Telegram', icon: 'paper-plane-outline' },
+              { key: 'sms', label: 'SMS', icon: 'chatbubble-outline' },
+            ] as const).map((row) => (
+              <View key={row.key} style={pStyles.notifRow} data-testid={`notif-row-${row.key}`}>
+                <Ionicons name={row.icon as any} size={20} color="#374151" style={pStyles.menuRowIcon} />
+                <Text style={[pStyles.menuRowText, { flex: 1 }]}>{row.label}</Text>
+                <Switch
+                  value={notifPrefs[row.key] !== false}
+                  onValueChange={(v) => toggleNotif(row.key, v)}
+                  trackColor={{ true: '#2563eb', false: '#d1d5db' }}
+                  data-testid={`notif-toggle-${row.key}`}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
 
       {/* ── Service Area Modal ── */}
       <Modal visible={serviceAreaVisible} animationType="slide">
