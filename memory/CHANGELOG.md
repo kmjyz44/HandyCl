@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06 — Experience-based executor ranking (per category)
+- New ranking in `GET /executors/by-service` (computed on-the-fly, no schema change / backfill):
+  score(category) = Σ actual_hours from completed/paid bookings in that category + review adjustment.
+  Review map: 5★+5, 4★+3, 3★+1, 2★−1, 1★−2 hours; PLUS extra −5 when a 1-2★ review has written text (negative review). Score may go negative.
+- New providers (registered < 3 days) are BOOSTED to the top of the list (globally, newest-first among them) so they can earn a rating.
+- Helpers: `_compute_category_ranking(category, provider_ids)` (2 aggregations: bookings hours + reviews→bookings category join), `_is_new_provider_boosted(created_at)`. Constants `_RANKING_DONE_STATUSES`, `_REVIEW_STAR_HOURS`, `_NEW_PROVIDER_BOOST_DAYS=3`.
+- Endpoint now returns per executor: `category_hours` (raw worked hours, for display), `ranking_score`, `ranking_position`, `is_new_boost`. Sort applies experience ranking when a category is passed (price/newest/oldest admin sorts still honored).
+- Frontend `app/(tabs)/index.tsx` tasker cards: "#N" rank badge (top 3), "X hrs experience in [category]" line, and "New pro — be their first client!" for boosted new providers.
+- Tested via seeded data: new pro top → 100h → 80h; review deltas verified (100−2−5=93; 80+5=85). Needs Netlify redeploy for the UI badges.
+
+
 ## 2026-06 — Telegram: webhook-free long polling (fixes env mismatch)
 - ROOT CAUSE of "connect not working": bot webhook pointed to the preview backend while the deployed app runs on Railway → link codes stored in Railway DB, but /start hit preview → mismatch.
 - FIX: added `_telegram_poll_loop()` (started in `startup_event`) — deletes any webhook, then long-polls `getUpdates` and feeds updates to the shared `_process_telegram_update()`. No webhook URL / secret / "Register webhook" step needed; whichever backend runs the app also polls, so codes always match.

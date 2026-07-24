@@ -4346,6 +4346,86 @@ def _skill_matches_category(skill_value: Any, target_category: Optional[str]) ->
     return SKILL_TO_CATEGORIES.get(name) == target
 
 
+# Statuses that count as "work actually done" for ranking hours.
+_RANKING_DONE_STATUSES = ["completed_pending_payment", "paid"]
+
+# Review star → ranking-hours mapping.
+_REVIEW_STAR_HOURS = {5: 5, 4: 3, 3: 1, 2: -1, 1: -2}
+_NEW_PROVIDER_BOOST_DAYS = 3
+
+
+async def _compute_category_ranking(category: str, provider_ids: List[str]):
+    """Return (hours_map, adj_map) for the given category, keyed by provider_id.
+
+    hours_map  = sum of actual_hours from completed/paid bookings in this category.
+    adj_map    = review adjustment: 5★+5, 4★+3, 3★+1, 2★-1, 1★-2 hours; plus an
+                 extra -5 when a 1-2★ review also has written text (negative review).
+    ranking score = hours + adj. Score may go negative (per product decision)."""
+    hours_map: Dict[str, float] = {}
+    adj_map: Dict[str, float] = {}
+    if not category or not provider_ids:
+        return hours_map, adj_map
+    # 1. Worked hours per provider in this category
+    try:
+        hours_rows = await db.bookings.aggregate([
+            {"$match": {
+                "provider_id": {"$in": provider_ids},
+                "category": category,
+                "status": {"$in": _RANKING_DONE_STATUSES},
+            }},
+            {"$group": {"_id": "$provider_id", "hours": {"$sum": {"$ifNull": ["$actual_hours", 0]}}}},
+        ]).to_list(5000)
+        for r in hours_rows:
+            hours_map[r["_id"]] = round(float(r.get("hours") or 0), 2)
+    except Exception as e:
+        logger.warning("ranking hours aggregation failed: %s", e)
+    # 2. Review adjustment per provider in this category (join reviews -> bookings)
+    try:
+        adj_rows = await db.reviews.aggregate([
+            {"$match": {"provider_id": {"$in": provider_ids}}},
+            {"$lookup": {"from": "bookings", "localField": "booking_id",
+                         "foreignField": "booking_id", "as": "bk"}},
+            {"$addFields": {"cat": {"$arrayElemAt": ["$bk.category", 0]}}},
+            {"$match": {"cat": category}},
+            {"$addFields": {
+                "star_h": {"$switch": {"branches": [
+                    {"case": {"$eq": ["$rating", 5]}, "then": 5},
+                    {"case": {"$eq": ["$rating", 4]}, "then": 3},
+                    {"case": {"$eq": ["$rating", 3]}, "then": 1},
+                    {"case": {"$eq": ["$rating", 2]}, "then": -1},
+                    {"case": {"$eq": ["$rating", 1]}, "then": -2},
+                ], "default": 0}},
+                "neg_pen": {"$cond": [{"$and": [
+                    {"$lte": ["$rating", 2]},
+                    {"$gt": [{"$strLenCP": {"$ifNull": ["$comment", ""]}}, 0]},
+                ]}, -5, 0]},
+            }},
+            {"$group": {"_id": "$provider_id", "adj": {"$sum": {"$add": ["$star_h", "$neg_pen"]}}}},
+        ]).to_list(5000)
+        for r in adj_rows:
+            adj_map[r["_id"]] = round(float(r.get("adj") or 0), 2)
+    except Exception as e:
+        logger.warning("ranking review aggregation failed: %s", e)
+    return hours_map, adj_map
+
+
+def _is_new_provider_boosted(created_at) -> bool:
+    """True if the provider registered within the boost window (top of list)."""
+    if not created_at:
+        return False
+    try:
+        if isinstance(created_at, str):
+            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        else:
+            dt = created_at
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).days < _NEW_PROVIDER_BOOST_DAYS
+    except Exception:
+        return False
+
+
+
 @api_router.get("/executors/by-service")
 async def get_executors_by_service(
     service_name: Optional[str] = None,
@@ -4575,13 +4655,22 @@ async def get_executors_by_service(
 
         filtered.append(executor)
 
-    # ── Admin-controlled sort ─────────────────────────────────────────
+    # ── Experience-based ranking (per category) ───────────────────────
+    # Score = worked hours in this category + review adjustment. New providers
+    # (registered < 3 days) are boosted to the top so they can earn a rating.
+    if category and filtered:
+        pids = [e.get("user_id") for e in filtered if e.get("user_id")]
+        hours_map, adj_map = await _compute_category_ranking(category, pids)
+        for e in filtered:
+            uid = e.get("user_id")
+            ch = hours_map.get(uid, 0.0)
+            e["category_hours"] = ch
+            e["ranking_score"] = round(ch + adj_map.get(uid, 0.0), 2)
+            e["is_new_boost"] = _is_new_provider_boosted(e.get("created_at"))
+
+    # ── Sort ──────────────────────────────────────────────────────────
     sort = settings.executor_listing_sort
-    if sort == "rating":
-        filtered.sort(key=lambda x: -(x.get("average_rating") or 0))
-    elif sort == "tasks":
-        filtered.sort(key=lambda x: -(x.get("completed_tasks_count") or 0))
-    elif sort == "price_asc":
+    if sort == "price_asc":
         filtered.sort(key=lambda x: x.get("final_hourly_rate") or 0)
     elif sort == "price_desc":
         filtered.sort(key=lambda x: -(x.get("final_hourly_rate") or 0))
@@ -4589,6 +4678,20 @@ async def get_executors_by_service(
         filtered.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
     elif sort == "oldest":
         filtered.sort(key=lambda x: str(x.get("created_at") or ""))
+    elif category:
+        # Experience ranking: boosted new providers first (newest of them on
+        # top), then everyone else by ranking score (hours + review adjustment).
+        boosted = [e for e in filtered if e.get("is_new_boost")]
+        rest = [e for e in filtered if not e.get("is_new_boost")]
+        boosted.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+        rest.sort(key=lambda x: -(x.get("ranking_score") or 0))
+        filtered = boosted + rest
+        for i, e in enumerate(filtered):
+            e["ranking_position"] = i + 1
+    elif sort == "rating":
+        filtered.sort(key=lambda x: -(x.get("average_rating") or 0))
+    elif sort == "tasks":
+        filtered.sort(key=lambda x: -(x.get("completed_tasks_count") or 0))
     else:  # recommended
         filtered.sort(key=lambda x: (
             -(x.get("average_rating") or 0) * 0.6 +

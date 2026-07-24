@@ -2428,6 +2428,11 @@ export default function HomeScreen() {
                       <Text style={s.eliteBadgeText}>ELITE</Text>
                     </View>
                   )}
+                  {tasker.ranking_position && tasker.ranking_position <= 3 && !tasker.is_new_boost ? (
+                    <View style={s.rankBadge} data-testid={`tasker-rank-${idx}`}>
+                      <Text style={s.rankBadgeText}>#{tasker.ranking_position}</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={s.taskerName}>{displayName}</Text>
@@ -2440,6 +2445,17 @@ export default function HomeScreen() {
                     {skills.slice(0, 3).map((sk: any) => typeof sk === 'string' ? sk : sk?.name).filter(Boolean).join(' · ') || 'Pro'}
                   </Text>
                   <Text style={s.taskerMinHint}>Min {minHours} hr{minHours > 1 ? 's' : ''} · ≈ ${(rate * minHours).toFixed(0)}</Text>
+                  {tasker.category_hours > 0 ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }} data-testid={`tasker-exp-${idx}`}>
+                      <Ionicons name="time-outline" size={12} color="#2563eb" />
+                      <Text style={s.taskerExp}>{Math.round(tasker.category_hours)} hrs experience in {booking.categoryName || 'this service'}</Text>
+                    </View>
+                  ) : tasker.is_new_boost ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }} data-testid={`tasker-newpro-${idx}`}>
+                      <Ionicons name="sparkles-outline" size={12} color="#059669" />
+                      <Text style={[s.taskerExp, { color: '#059669' }]}>New pro — be their first client!</Text>
+                    </View>
+                  ) : null}
                   {showingOtherDates && availDays.length > 0 ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }} data-testid={`tasker-avail-days-${idx}`}>
                       <Ionicons name="calendar-outline" size={12} color="#059669" />
@@ -2982,6 +2998,9 @@ const s = StyleSheet.create({
   taskerAvatar: { width: 56, height: 56, borderRadius: 28 },
   eliteBadge: { position: 'absolute', bottom: -4, left: 0, right: 0, backgroundColor: '#f59e0b', borderRadius: 4, alignItems: 'center' },
   eliteBadgeText: { fontSize: 8, fontWeight: '800', color: '#fff', paddingHorizontal: 2 },
+  rankBadge: { position: 'absolute', top: -6, left: -6, backgroundColor: '#111827', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, borderWidth: 2, borderColor: '#fff' },
+  rankBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
+  taskerExp: { fontSize: 11, color: '#2563eb', fontWeight: '700' },
   taskerName: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 2 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 },
   ratingText: { fontSize: 13, fontWeight: '600', color: '#111827' },
