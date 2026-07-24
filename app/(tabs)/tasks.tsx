@@ -95,6 +95,25 @@ export default function AvailableTasks() {
   const activeMyTasks = myTasks.filter(t => !COMPLETED_STATUSES.includes(t.status));
   const pendingPayTasks = myTasks.filter(isPendingConfirmation);
   const doneTasks = myTasks.filter(t => COMPLETED_STATUSES.includes(t.status) && !isPendingConfirmation(t));
+
+  // Sub-status filter for the "Mine" tab
+  const MY_FILTERS: { key: string; label: string; statuses: string[] }[] = [
+    { key: 'all', label: 'All', statuses: [] },
+    { key: 'pending', label: 'Pending', statuses: ['pending_acceptance', 'posted', 'offering'] },
+    { key: 'approved', label: 'Approved', statuses: ['assigned', 'hold_placed'] },
+    { key: 'inprogress', label: 'In progress', statuses: ['on_the_way', 'started'] },
+  ];
+  const [myFilter, setMyFilter] = useState<string>('all');
+  const myFilterCount = (key: string) => {
+    const f = MY_FILTERS.find(x => x.key === key);
+    if (!f || f.statuses.length === 0) return activeMyTasks.length;
+    return activeMyTasks.filter(t => f.statuses.includes(t.status)).length;
+  };
+  const visibleMyTasks = (() => {
+    const f = MY_FILTERS.find(x => x.key === myFilter);
+    if (!f || f.statuses.length === 0) return activeMyTasks;
+    return activeMyTasks.filter(t => f.statuses.includes(t.status));
+  })();
   // Support deep-link tab param from dashboard tiles
   const initialTab = (params.tab === 'my' || params.tab === 'done' || params.tab === 'pending')
     ? params.tab
@@ -354,6 +373,31 @@ export default function AvailableTasks() {
         </TouchableOpacity>
       </View>
 
+      {/* Sub-status filter (Mine tab only) */}
+      {activeTab === 'my' && activeMyTasks.length > 0 ? (
+        <View style={styles.subFilterWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFilterRow}>
+            {MY_FILTERS.map(f => {
+              const active = myFilter === f.key;
+              const count = myFilterCount(f.key);
+              return (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[styles.subChip, active && styles.subChipActive]}
+                  onPress={() => setMyFilter(f.key)}
+                  data-testid={`my-filter-${f.key}`}
+                >
+                  <Text style={[styles.subChipText, active && styles.subChipTextActive]}>
+                    {f.label} ({count})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
+
       <ScrollView
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -369,8 +413,14 @@ export default function AvailableTasks() {
             </View>
           )
         ) : activeTab === 'my' ? (
-          activeMyTasks.length > 0 ? (
-            activeMyTasks.map(task => renderTaskCard(task, true))
+          visibleMyTasks.length > 0 ? (
+            visibleMyTasks.map(task => renderTaskCard(task, true))
+          ) : activeMyTasks.length > 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="filter-outline" size={64} color="#d1d5db" />
+              <Text style={styles.emptyTitle}>No tasks in this filter</Text>
+              <Text style={styles.emptySubtitle}>Try a different status filter above</Text>
+            </View>
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="briefcase-outline" size={64} color="#d1d5db" />
@@ -515,6 +565,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#111827',
   },
+  subFilterWrap: { backgroundColor: '#fff', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  subFilterRow: { paddingHorizontal: 16, gap: 8, flexDirection: 'row' },
+  subChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: '#f1f5f9', marginRight: 8 },
+  subChipActive: { backgroundColor: '#111827' },
+  subChipText: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  subChipTextActive: { color: '#fff' },
   tabs: {
     flexDirection: 'row',
     backgroundColor: '#fff',
