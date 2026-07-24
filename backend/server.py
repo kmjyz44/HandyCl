@@ -1338,19 +1338,93 @@ async def get_settings() -> Settings:
         return default_settings
     return Settings(**settings_doc)
 
-async def send_telegram_notification(chat_id: str, message: str):
-    """Send Telegram notification if configured"""
+async def _resolve_telegram_token() -> Optional[str]:
+    """Bot token, preferring the admin Integrations panel (integration_keys)
+    and falling back to app settings for backward compatibility."""
+    try:
+        keys = await _get_integration_keys()
+        tok = (keys.get("telegram_bot_token") or "").strip()
+        if tok:
+            return tok
+    except Exception:
+        pass
     try:
         settings = await get_settings()
-        if not settings.telegram_bot_token:
-            logger.warning("Telegram bot token not configured")
-            return
+        return (settings.telegram_bot_token or "").strip() or None
+    except Exception:
+        return None
 
-        bot = Bot(token=settings.telegram_bot_token)
-        await bot.send_message(chat_id=int(chat_id), text=message, parse_mode=ParseMode.MARKDOWN)
-        logger.info(f"Telegram notification sent to {chat_id}")
+
+async def send_telegram_notification(chat_id: str, message: str, parse_mode: str = "HTML"):
+    """Send a Telegram message via the Bot API (httpx). Best-effort."""
+    if not chat_id:
+        return False
+    token = await _resolve_telegram_token()
+    if not token:
+        logger.info("Telegram bot token not configured — skipping message")
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            r = await http.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": message[:4000],
+                      "parse_mode": parse_mode, "disable_web_page_preview": True},
+            )
+        if r.status_code != 200:
+            logger.warning("Telegram sendMessage failed %s: %s", r.status_code, r.text[:300])
+            return False
+        return True
     except Exception as e:
-        logger.error(f"Failed to send Telegram notification: {str(e)}")
+        logger.error("Telegram send error: %s", e)
+        return False
+
+
+async def _telegram_admin_chat_ids() -> List[str]:
+    """All chat ids that should receive admin alerts: the global admin chat id
+    (Integrations panel) plus every admin user who linked their Telegram."""
+    ids: List[str] = []
+    try:
+        keys = await _get_integration_keys()
+        gid = (keys.get("telegram_admin_chat_id") or "").strip()
+        if gid:
+            ids.append(gid)
+    except Exception:
+        pass
+    try:
+        admins = await db.users.find(
+            {"role": {"$in": ["admin", "moderator"]}, "telegram_chat_id": {"$nin": [None, ""]}},
+            {"_id": 0, "telegram_chat_id": 1},
+        ).to_list(100)
+        for a in admins:
+            cid = str(a.get("telegram_chat_id") or "").strip()
+            if cid:
+                ids.append(cid)
+    except Exception:
+        pass
+    # de-dupe, keep order
+    seen = set()
+    out = []
+    for c in ids:
+        if c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
+async def _notify_admins_telegram(message: str):
+    """Fire-and-forget Telegram alert to all admin chat ids. Respects the
+    enable_telegram_notifications toggle (default on when a token exists)."""
+    try:
+        keys = await _get_integration_keys()
+        if keys.get("enable_telegram_notifications") is False:
+            return
+        if not await _resolve_telegram_token():
+            return
+        for cid in await _telegram_admin_chat_ids():
+            await send_telegram_notification(cid, message)
+    except Exception as e:
+        logger.warning("Admin Telegram notify failed: %s", e)
+
 
 async def create_notification(
     user_id: str,
@@ -2559,6 +2633,24 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
         )
 
     booking_dict.pop("_id", None)
+
+    # Telegram alert to admins — a new order was created on the platform.
+    try:
+        _cat = booking_data.category or booking_data.title or "New order"
+        _addr = ", ".join([p for p in [booking_data.address, booking_data.city, booking_data.state] if p])
+        _price = booking_dict.get("total_price") or price or 0
+        _msg = (
+            f"🆕 <b>New order</b>\n"
+            f"Service: {_cat}\n"
+            f"Client: {current_user.name}\n"
+            f"When: {booking_data.date} {booking_data.time}\n"
+            f"Where: {_addr}\n"
+            f"Total: ${float(_price):.0f}"
+        )
+        asyncio.create_task(_notify_admins_telegram(_msg))
+    except Exception as e:
+        logger.warning("Telegram new-order alert failed: %s", e)
+
     return JSONResponse(content=clean_bson(booking_dict))
 
 @api_router.get("/bookings")
@@ -3541,6 +3633,10 @@ async def send_message(message_data: MessageCreate, current_user: User = Depends
     )
 
     await db.messages.insert_one(message.dict())
+    if current_user.role not in [UserRole.ADMIN, UserRole.MODERATOR]:
+        _preview = (getattr(message_data, "text", None) or "[attachment]")[:200]
+        asyncio.create_task(_notify_admins_telegram(
+            f"💬 <b>New chat message</b>\nFrom: {current_user.name} ({current_user.role})\n{_preview}"))
     return message.dict()
 
 @api_router.get("/messages")
@@ -3638,6 +3734,10 @@ async def send_task_message(task_id: str, body: MessageCreate, current_user: Use
 
     # Enrich with sender
     msg["sender"] = {"name": current_user.name, "role": current_user.role, "picture": getattr(current_user, "picture", None)}
+    if current_user.role not in [UserRole.ADMIN, UserRole.MODERATOR]:
+        _preview = (body.text or "[attachment]")[:200]
+        asyncio.create_task(_notify_admins_telegram(
+            f"💬 <b>New chat message</b>\nFrom: {current_user.name} ({current_user.role})\nTask: {real_task_id}\n{_preview}"))
     return msg
 
 @api_router.get("/messages/unread-count")
@@ -8900,6 +9000,9 @@ class IntegrationKeysUpdate(BaseModel):
     vapid_private_key: Optional[str] = None
     vapid_subject_email: Optional[str] = None
     telegram_bot_token: Optional[str] = None
+    telegram_bot_username: Optional[str] = None
+    telegram_admin_chat_id: Optional[str] = None
+    telegram_webhook_secret: Optional[str] = None
     # admin-controlled feature toggles
     enable_email_notifications: Optional[bool] = None
     enable_sms_notifications: Optional[bool] = None
@@ -10264,7 +10367,7 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
     out = {}
     secret_fields = {
         "sendgrid_api_key", "resend_api_key", "stripe_secret_key", "stripe_webhook_secret",
-        "twilio_auth_token", "plivo_auth_token", "vapid_private_key", "telegram_bot_token", "finix_api_password",
+        "twilio_auth_token", "plivo_auth_token", "vapid_private_key", "telegram_bot_token", "telegram_webhook_secret", "finix_api_password",
     }
     for k in IntegrationKeysUpdate.model_fields.keys():
         v = doc.get(k)
@@ -10305,6 +10408,169 @@ async def set_integration_keys(payload: IntegrationKeysUpdate, current_user: Use
         upsert=True,
     )
     return {"ok": True, "updated": list(update.keys())}
+
+
+# ==================== TELEGRAM LINKING & WEBHOOK ====================
+
+async def _telegram_get_me(token: str) -> Optional[dict]:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            r = await http.get(f"https://api.telegram.org/bot{token}/getMe")
+        if r.status_code == 200 and r.json().get("ok"):
+            return r.json()["result"]
+    except Exception as e:
+        logger.warning("Telegram getMe failed: %s", e)
+    return None
+
+
+@api_router.post("/telegram/link/start")
+async def telegram_link_start(current_user: User = Depends(get_current_user)):
+    """Generate a one-time code + deep link so the user can connect their
+    Telegram. They tap the link, press Start, and the webhook stores chat_id."""
+    keys = await _get_integration_keys()
+    token = (keys.get("telegram_bot_token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Telegram bot is not configured yet. Ask the admin to add the bot token.")
+    username = (keys.get("telegram_bot_username") or "").strip()
+    if not username:
+        me = await _telegram_get_me(token)
+        username = (me or {}).get("username") or ""
+        if username:
+            await db.integration_keys.update_one(
+                {"setting_id": "integration_keys"},
+                {"$set": {"telegram_bot_username": username}}, upsert=True,
+            )
+    if not username:
+        raise HTTPException(status_code=400, detail="Could not resolve the bot username. Check the bot token.")
+    code = secrets.token_urlsafe(6)
+    await db.telegram_link_codes.delete_many({"user_id": current_user.user_id})
+    await db.telegram_link_codes.insert_one({
+        "code": code,
+        "user_id": current_user.user_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {
+        "code": code,
+        "bot_username": username,
+        "deep_link": f"https://t.me/{username}?start={code}",
+    }
+
+
+@api_router.get("/telegram/link/status")
+async def telegram_link_status(current_user: User = Depends(get_current_user)):
+    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "telegram_chat_id": 1})
+    cid = (u or {}).get("telegram_chat_id")
+    return {"connected": bool(cid), "chat_id": cid}
+
+
+@api_router.post("/telegram/unlink")
+async def telegram_unlink(current_user: User = Depends(get_current_user)):
+    await db.users.update_one({"user_id": current_user.user_id}, {"$unset": {"telegram_chat_id": ""}})
+    return {"ok": True, "connected": False}
+
+
+@api_router.post("/telegram/webhook/{secret}")
+async def telegram_webhook(secret: str, request: Request):
+    """Public endpoint Telegram calls. Validates the shared secret, then handles
+    /start <code> to link a user's chat_id."""
+    keys = await _get_integration_keys()
+    expected = (keys.get("telegram_webhook_secret") or "").strip()
+    if not expected or secret != expected:
+        raise HTTPException(status_code=403, detail="Invalid webhook secret")
+    try:
+        update = await request.json()
+    except Exception:
+        return {"ok": True}
+    msg = update.get("message") or update.get("edited_message") or {}
+    text = (msg.get("text") or "").strip()
+    chat = msg.get("chat") or {}
+    chat_id = chat.get("id")
+    if not chat_id:
+        return {"ok": True}
+    token = (keys.get("telegram_bot_token") or "").strip()
+    if text.startswith("/start"):
+        parts = text.split(maxsplit=1)
+        code = parts[1].strip() if len(parts) > 1 else ""
+        if code:
+            link = await db.telegram_link_codes.find_one({"code": code}, {"_id": 0})
+            if link:
+                await db.users.update_one(
+                    {"user_id": link["user_id"]},
+                    {"$set": {"telegram_chat_id": str(chat_id)}},
+                )
+                await db.telegram_link_codes.delete_many({"code": code})
+                if token:
+                    await send_telegram_notification(str(chat_id),
+                        "✅ <b>Connected!</b> You'll now receive Ono-Fix notifications here.")
+                return {"ok": True}
+        if token:
+            await send_telegram_notification(str(chat_id),
+                "👋 Welcome to <b>Ono-Fix</b>. Open the app → Profile → <b>Connect Telegram</b> to link your account.")
+    return {"ok": True}
+
+
+@api_router.post("/admin/telegram/setup")
+async def admin_telegram_setup(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
+    """Admin: verify the bot token, cache its username, generate a webhook secret
+    and register the webhook. Provide `base_url` = the PUBLIC https URL of THIS
+    backend (e.g. https://your-api.com). No trailing /api."""
+    keys = await _get_integration_keys()
+    token = (keys.get("telegram_bot_token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Save the Telegram bot token first (Integrations panel).")
+    me = await _telegram_get_me(token)
+    if not me:
+        raise HTTPException(status_code=400, detail="Invalid bot token — getMe failed.")
+    username = me.get("username") or ""
+    base_url = (payload.get("base_url") or "").strip().rstrip("/")
+    if not base_url:
+        raise HTTPException(status_code=422, detail="base_url is required (public https URL of this backend).")
+    secret = (keys.get("telegram_webhook_secret") or "").strip() or secrets.token_urlsafe(16)
+    webhook_url = f"{base_url}/api/telegram/webhook/{secret}"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as http:
+            r = await http.post(
+                f"https://api.telegram.org/bot{token}/setWebhook",
+                json={"url": webhook_url, "allowed_updates": ["message", "edited_message"]},
+            )
+        wh_ok = r.status_code == 200 and r.json().get("ok")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"setWebhook failed: {e}")
+    await db.integration_keys.update_one(
+        {"setting_id": "integration_keys"},
+        {"$set": {"telegram_bot_username": username, "telegram_webhook_secret": secret}},
+        upsert=True,
+    )
+    return {
+        "ok": bool(wh_ok),
+        "bot_username": username,
+        "webhook_url": webhook_url,
+        "webhook_set": bool(wh_ok),
+        "setWebhook_response": (r.json() if r is not None else None),
+    }
+
+
+@api_router.get("/admin/telegram/status")
+async def admin_telegram_status(current_user: User = Depends(require_admin)):
+    keys = await _get_integration_keys()
+    token = (keys.get("telegram_bot_token") or "").strip()
+    info = None
+    if token:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as http:
+                r = await http.get(f"https://api.telegram.org/bot{token}/getWebhookInfo")
+            if r.status_code == 200:
+                info = r.json().get("result")
+        except Exception:
+            pass
+    return {
+        "token_configured": bool(token),
+        "bot_username": keys.get("telegram_bot_username"),
+        "admin_chat_ids": await _telegram_admin_chat_ids(),
+        "notifications_enabled": keys.get("enable_telegram_notifications") is not False,
+        "webhook": info,
+    }
+
 
 
 @api_router.post("/admin/test-sms")

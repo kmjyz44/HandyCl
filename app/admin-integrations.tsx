@@ -8,16 +8,16 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Switch, Platform,
+  StyleSheet, ActivityIndicator, Switch, Platform, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { api } from '../utils/api';
+import { api, BACKEND_BASE_URL } from '../utils/api';
 import { showAlert } from '../utils/alert';
 
 type KeyDef = { id: string; label: string; placeholder: string; secret?: boolean };
 
-const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: KeyDef[]; testSms?: boolean }[] = [
+const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: KeyDef[]; testSms?: boolean; telegramSetup?: boolean }[] = [
   {
     title: 'Resend (Email — default)',
     toggle: 'enable_email_notifications',
@@ -129,8 +129,10 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     title: 'Telegram (Bot)',
     toggle: 'enable_telegram_notifications',
     toggleLabel: 'Enable Telegram notifications',
+    telegramSetup: true,
     keys: [
-      { id: 'telegram_bot_token', label: 'Bot Token', placeholder: '7234567890:AAxxxxxxxxxxxxx', secret: true },
+      { id: 'telegram_bot_token', label: 'Bot Token (from @BotFather)', placeholder: '7234567890:AAxxxxxxxxxxxxx', secret: true },
+      { id: 'telegram_admin_chat_id', label: 'Admin chat ID (optional — for a group/channel)', placeholder: '-1001234567890 or leave empty' },
     ],
   },
 ];
@@ -142,6 +144,9 @@ export default function AdminIntegrations() {
   const [testPhone, setTestPhone] = useState('');
   const [testingSms, setTestingSms] = useState(false);
   const [smsResult, setSmsResult] = useState<any>(null);
+  const [tgBusy, setTgBusy] = useState(false);
+  const [tgStatus, setTgStatus] = useState<any>(null);
+  const [tgConnected, setTgConnected] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -183,6 +188,40 @@ export default function AdminIntegrations() {
     } catch (e: any) {
       setSmsResult({ ok: false, error: e?.response?.data?.detail || 'Request failed' });
     } finally { setTestingSms(false); }
+  };
+
+  const refreshTgStatus = async () => {
+    try {
+      const st = await api.adminTelegramStatus();
+      setTgStatus(st);
+      const link = await api.telegramLinkStatus();
+      setTgConnected(!!link?.connected);
+    } catch {}
+  };
+
+  const registerWebhook = async () => {
+    setTgBusy(true);
+    try {
+      const res = await api.adminTelegramSetup(BACKEND_BASE_URL);
+      showAlert(res?.ok ? 'Webhook registered' : 'Setup finished',
+        res?.ok ? `Bot @${res.bot_username} is ready. Webhook set.` : `Bot @${res.bot_username || '?'} — webhook may not be set. Check the URL.`);
+      await refreshTgStatus();
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Setup failed. Save the bot token first.');
+    } finally { setTgBusy(false); }
+  };
+
+  const connectTelegram = async () => {
+    setTgBusy(true);
+    try {
+      const res = await api.telegramLinkStart();
+      if (res?.deep_link) {
+        Linking.openURL(res.deep_link);
+        showAlert('Connect Telegram', 'Telegram will open — press START. Then tap "Refresh status" here.');
+      }
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Could not start linking. Register the webhook first.');
+    } finally { setTgBusy(false); }
   };
 
   if (loading) return <View style={s.center}><ActivityIndicator size="large" /></View>;
@@ -271,6 +310,41 @@ export default function AdminIntegrations() {
                 ) : null}
               </View>
             ) : null}
+            {sec.telegramSetup ? (
+              <View style={s.testBox} data-testid="telegram-setup-box">
+                <Text style={s.tgHint}>
+                  Steps: 1) paste the bot token above and tap "Save all changes". 2) tap "Register webhook". 3) tap "Connect my Telegram" and press START in the bot.
+                </Text>
+                <TouchableOpacity
+                  style={[s.testBtn, tgBusy && { opacity: 0.5 }]}
+                  onPress={registerWebhook}
+                  disabled={tgBusy}
+                  data-testid="tg-register-webhook-btn"
+                >
+                  {tgBusy ? <ActivityIndicator color="#fff" /> : <Text style={s.testBtnText}>Register webhook</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.testBtn, { backgroundColor: '#0088cc', marginTop: 8 }, tgBusy && { opacity: 0.5 }]}
+                  onPress={connectTelegram}
+                  disabled={tgBusy}
+                  data-testid="tg-connect-btn"
+                >
+                  <Text style={s.testBtnText}>{tgConnected ? '✓ Connected — reconnect' : 'Connect my Telegram'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={refreshTgStatus} style={{ marginTop: 10 }} data-testid="tg-refresh-btn">
+                  <Text style={{ color: '#2563eb', fontWeight: '600', fontSize: 13 }}>Refresh status</Text>
+                </TouchableOpacity>
+                {tgStatus ? (
+                  <View style={[s.resultBox, { backgroundColor: '#f9fafb', borderColor: '#e5e7eb' }]} data-testid="tg-status">
+                    <Text style={s.resultLine}>Bot: {tgStatus.bot_username ? '@' + tgStatus.bot_username : '—'}</Text>
+                    <Text style={s.resultLine}>Token configured: {tgStatus.token_configured ? 'yes' : 'no'}</Text>
+                    <Text style={s.resultLine}>Admin chats receiving alerts: {(tgStatus.admin_chat_ids || []).length}</Text>
+                    <Text style={s.resultLine}>My Telegram: {tgConnected ? 'connected ✓' : 'not connected'}</Text>
+                    {tgStatus.webhook?.url ? <Text style={s.resultLine}>Webhook: set ✓</Text> : <Text style={s.resultLine}>Webhook: not set</Text>}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         ))}
         <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.5 }]} onPress={save} disabled={saving} data-testid="save-integrations-btn">
@@ -304,5 +378,6 @@ const s = StyleSheet.create({
   testBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   resultBox: { marginTop: 12, padding: 12, borderRadius: 8, borderWidth: 1 },
   resultLine: { fontSize: 12, color: '#374151', marginTop: 3 },
+  tgHint: { fontSize: 12, color: '#6b7280', marginBottom: 12, lineHeight: 18 },
   help: { fontSize: 12, color: '#6b7280', marginTop: 16, textAlign: 'center', lineHeight: 18 },
 });

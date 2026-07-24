@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06 — Telegram admin notifications + account linking
+- Rewrote `send_telegram_notification` to use httpx + resolve token from `integration_keys` (primary) → `settings` (fallback). Fixes mismatch where admin-UI token (integration_keys) was ignored by the sender (settings).
+- Added `_notify_admins_telegram(text)` → sends to global `telegram_admin_chat_id` + every admin/moderator user with a linked `telegram_chat_id`. Respects `enable_telegram_notifications`.
+- Hooked admin alerts into: `POST /bookings` (new order created) and both chat endpoints `POST /messages`, `POST /tasks/{id}/messages` (new chat message; skipped when sender is admin/moderator).
+- Linking flow (deep-link + webhook): `POST /telegram/link/start` (returns t.me deep link with one-time code), `GET /telegram/link/status`, `POST /telegram/unlink`, `POST /telegram/webhook/{secret}` (handles `/start <code>` → stores chat_id), `POST /admin/telegram/setup` (getMe + setWebhook, stores bot username + webhook secret), `GET /admin/telegram/status`.
+- IntegrationKeysUpdate: added telegram_bot_username, telegram_admin_chat_id, telegram_webhook_secret (secret masked).
+- Frontend: `admin-integrations.tsx` Telegram section now has admin chat id field + "Register webhook" / "Connect my Telegram" / "Refresh status" buttons + status box. `utils/api.ts` new methods + exported `BACKEND_BASE_URL`.
+- Tested via curl/DB: endpoint guards (no token→400, bad secret→403), and full webhook linking (`/start <code>` set telegram_chat_id + consumed code). Real send/getMe/setWebhook require the user's bot token. NOTE: production backend is on Railway (EXPO_PUBLIC_API_URL) — backend redeploy required, frontend redeploy on Netlify.
+
+
 ## 2026-06 — Pro-profile work photos on booking screen
 - `app/(tabs)/index.tsx` `tasker_profile` step: (a) added a work-photos strip filtered to the category the client is booking (`booking.categoryId` vs `skill.category_id`), shown at top; hidden when the pro has no photos for that category (option 2a).
 - (b) Skills are now tappable cards that expand to show the skill's experience/description + a horizontal strip of that skill's work photos (mirrors `app/executor/[id].tsx`).

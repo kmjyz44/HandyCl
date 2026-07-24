@@ -5,6 +5,8 @@ const API_URL =
   (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '') ||
   'https://backend-production-a461.up.railway.app';
 
+export const BACKEND_BASE_URL = API_URL;
+
 const client = axios.create({
   baseURL: `${API_URL}/api`,
   headers: { 'Content-Type': 'application/json' },
@@ -190,6 +192,31 @@ export const api = {
 
   adminTestSms: async (phone: string) => {
     const res = await client.post('/admin/test-sms', { phone });
+    return res.data;
+  },
+
+  adminTelegramSetup: async (baseUrl: string) => {
+    const res = await client.post('/admin/telegram/setup', { base_url: baseUrl });
+    return res.data;
+  },
+
+  adminTelegramStatus: async () => {
+    const res = await client.get('/admin/telegram/status');
+    return res.data;
+  },
+
+  telegramLinkStart: async () => {
+    const res = await client.post('/telegram/link/start');
+    return res.data;
+  },
+
+  telegramLinkStatus: async () => {
+    const res = await client.get('/telegram/link/status');
+    return res.data;
+  },
+
+  telegramUnlink: async () => {
+    const res = await client.post('/telegram/unlink');
     return res.data;
   },
 
