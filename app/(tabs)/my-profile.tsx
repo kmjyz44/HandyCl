@@ -20,6 +20,7 @@ import { api } from '../../utils/api';
 import { useAuthStore } from '../../store/authStore';
 import { showAlertWithButtons } from '../../utils/alert';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
+import { NotificationSettingsModal } from '../../components/NotificationSettingsModal';
 
 // Web-safe Alert shim: native Alert.alert renders nothing on React Native Web,
 // causing silent failures (e.g. card validation). Route every call through the
@@ -44,6 +45,7 @@ function ClientProfile() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [addPaymentVisible, setAddPaymentVisible] = useState(false);
   const [addAddressVisible, setAddAddressVisible] = useState(false);
+  const [notifModalVisible, setNotifModalVisible] = useState(false);
 
   // Edit form
   const [editName, setEditName] = useState(user?.name || '');
@@ -521,6 +523,20 @@ function ClientProfile() {
           </TouchableOpacity>
         </View>
 
+        {/* Settings */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Settings</Text>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => setNotifModalVisible(true)}
+            data-testid="notifications-menu-row"
+          >
+            <Ionicons name="notifications-outline" size={22} color="#6b7280" />
+            <Text style={styles.menuText}>Notifications</Text>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+        </View>
+
         {/* Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
@@ -562,6 +578,10 @@ function ClientProfile() {
         <Text style={styles.version}>Ono-Fix v1.0.0</Text>
         <Text style={styles.aboutFine}>Ono-Fix is owned and operated by Nexus Security Solutions LLC.</Text>
       </ScrollView>
+
+      {/* Notifications Modal */}
+      <NotificationSettingsModal visible={notifModalVisible} onClose={() => setNotifModalVisible(false)} />
+
 
       {/* Edit Profile Modal */}
       <Modal visible={editModalVisible} animationType="slide" transparent>
@@ -867,7 +887,6 @@ function ProviderProfile() {
 
   // Active tab
   const [activeTab, setActiveTab] = useState<'performance' | 'skills' | 'service'>('performance');
-  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({ email: true, sms: true, push: true, telegram: true });
   const [notifModalVisible, setNotifModalVisible] = useState(false);
 
   // Provider skills
@@ -973,10 +992,6 @@ function ProviderProfile() {
   const [savingSkill, setSavingSkill] = useState(false);
 
   useEffect(() => { loadProfile(); }, []);
-
-  useEffect(() => {
-    api.getNotificationPrefs().then((p) => p && setNotifPrefs(p)).catch(() => {});
-  }, []);
 
   const loadProfile = async () => {
     try {
@@ -1395,16 +1410,6 @@ function ProviderProfile() {
   );
 
   // ── Service Tab (TaskRabbit-style account menu) ──
-  const toggleNotif = async (channel: string, value: boolean) => {
-    setNotifPrefs((s) => ({ ...s, [channel]: value }));
-    try {
-      const updated = await api.updateNotificationPrefs({ [channel]: value });
-      if (updated) setNotifPrefs(updated);
-    } catch {
-      setNotifPrefs((s) => ({ ...s, [channel]: !value }));
-    }
-  };
-
   const renderService = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
@@ -1932,37 +1937,7 @@ function ProviderProfile() {
       </Modal>
 
       {/* ── Notifications Modal ── */}
-      <Modal visible={notifModalVisible} animationType="slide">
-        <View style={{ flex: 1, backgroundColor: '#fff' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-            <TouchableOpacity onPress={() => setNotifModalVisible(false)} data-testid="notif-modal-close">
-              <Ionicons name="arrow-back" size={24} color="#111827" />
-            </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>Notifications</Text>
-            <View style={{ width: 40 }} />
-          </View>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 8 }}>
-            <Text style={pStyles.notifGroupHint}>Turn off any channel you don't want to receive.</Text>
-            {([
-              { key: 'push', label: 'Push notifications', icon: 'notifications-outline' },
-              { key: 'email', label: 'Email', icon: 'mail-outline' },
-              { key: 'telegram', label: 'Telegram', icon: 'paper-plane-outline' },
-              { key: 'sms', label: 'SMS', icon: 'chatbubble-outline' },
-            ] as const).map((row) => (
-              <View key={row.key} style={pStyles.notifRow} data-testid={`notif-row-${row.key}`}>
-                <Ionicons name={row.icon as any} size={20} color="#374151" style={pStyles.menuRowIcon} />
-                <Text style={[pStyles.menuRowText, { flex: 1 }]}>{row.label}</Text>
-                <Switch
-                  value={notifPrefs[row.key] !== false}
-                  onValueChange={(v) => toggleNotif(row.key, v)}
-                  trackColor={{ true: '#2563eb', false: '#d1d5db' }}
-                  data-testid={`notif-toggle-${row.key}`}
-                />
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </Modal>
+      <NotificationSettingsModal visible={notifModalVisible} onClose={() => setNotifModalVisible(false)} />
 
 
       {/* ── Service Area Modal ── */}
