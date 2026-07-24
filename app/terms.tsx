@@ -48,6 +48,9 @@ export default function TermsOfUse() {
           <Text style={styles.bold}>You agree to conduct all payments and communications exclusively through the Ono-Fix platform.</Text> Off-platform payments (cash, wire transfer, peer-to-peer apps outside the Platform's integration, etc.) and off-platform communication (personal phone numbers, third-party messengers, email exchanged outside the in-app chat) are strictly prohibited. Violations may result in immediate account suspension or termination.
         </Text>
         <Text style={styles.p}>
+          <Text style={styles.bold}>No phone contact outside the Platform.</Text> Clients and Providers may not share or request personal phone numbers, nor arrange phone calls, video calls, or messaging through any channel other than the in-app chat. All Client–Provider communication must remain inside the Platform so it can be recorded and used for safety and dispute-resolution purposes. Requesting to "take it off the app" is itself a violation of these Terms.
+        </Text>
+        <Text style={styles.p}>
           Ono-Fix does <Text style={styles.bold}>not guarantee the safety, quality, completion, or payment</Text> of any service that is arranged, communicated, or paid for outside the Platform. Our trust & safety, dispute resolution, refund, and insurance protections apply only to transactions completed through the Platform.
         </Text>
 
@@ -64,12 +67,15 @@ export default function TermsOfUse() {
           <Text style={styles.bold}>Minimum charge:</Text> Every job is billed for a minimum of one (1) hour of labor. A Provider may set a higher personal minimum (e.g., 1.5 or 2 hours), which is displayed on the Provider's profile before the Client confirms a booking. Work performed beyond the minimum is billed per minute at the Provider's hourly rate. Providers are <Text style={styles.bold}>required to clearly inform the Client of their minimum charge before starting any work</Text>. By confirming a booking, the Client acknowledges and agrees to the displayed minimum charge.
         </Text>
 
-        <Text style={styles.h2}>8. Cancellation & Refunds</Text>
+        <Text style={styles.h2}>8. Cancellation, Refunds & Dispute Evidence</Text>
         <Text style={styles.p}>
           After a booking is placed, the Client and Provider should use the in-app chat to discuss the task details (scope, timing, access, materials). <Text style={styles.bold}>Until the Provider confirms the job, either the Client or the Provider may cancel it free of charge</Text> — for example if the details cannot be agreed upon in chat.
         </Text>
         <Text style={styles.p}>
           Once the Provider has confirmed the job, cancellations made more than 24 hours before the scheduled service incur no fee. Cancellations within 24 hours may be subject to a cancellation fee. Refunds for disputed services are evaluated by Ono-Fix's support team on a case-by-case basis. See our Refund & Cancellation Policy for full details.
+        </Text>
+        <Text style={styles.p}>
+          <Text style={styles.bold}>Before-and-After Photos (mandatory dispute evidence).</Text> For every job, the Provider is <Text style={styles.bold}>required</Text> to take clear photographs of the work area <Text style={styles.bold}>before starting</Text> and <Text style={styles.bold}>after completing</Text> the work, and to upload them to the Platform. These photos are the primary evidence used to resolve disputes. <Text style={styles.bold}>If the Provider fails to provide adequate before-and-after photos, any dispute regarding the scope, quality, or completion of the work will be resolved in favor of the Client</Text> (which may include a full or partial refund to the Client).
         </Text>
 
         <Text style={styles.h2}>9. Prohibited Conduct</Text>
@@ -77,9 +83,23 @@ export default function TermsOfUse() {
           You agree not to: (a) violate any law or regulation; (b) impersonate another person; (c) post false, misleading, or fraudulent content; (d) harass, abuse, or threaten other users; (e) circumvent the Platform's fee or communication systems; (f) use the Platform for any illegal purpose; (g) attempt to gain unauthorized access to the Platform.
         </Text>
 
-        <Text style={styles.h2}>10. Reviews & Content</Text>
+        <Text style={styles.h2}>10. Reviews, Ratings & Provider Ranking</Text>
         <Text style={styles.p}>
           You may post reviews and content; you grant Ono-Fix a worldwide, royalty-free, perpetual license to use, display, and distribute such content on the Platform. Reviews must be truthful and based on actual experience.
+        </Text>
+        <Text style={styles.p}>
+          <Text style={styles.bold}>How ranking is calculated.</Text> A Provider's position in the search results is determined by an <Text style={styles.bold}>experience-based score calculated separately for each service category</Text>. The score equals the total number of hours the Provider has <Text style={styles.bold}>actually worked in that category</Text> (from completed and paid jobs) plus an adjustment based on client reviews in that category:
+        </Text>
+        <Text style={styles.p}>
+          • 5 stars: <Text style={styles.bold}>+5 hours</Text>{'\n'}
+          • 4 stars: <Text style={styles.bold}>+3 hours</Text>{'\n'}
+          • 3 stars: <Text style={styles.bold}>+1 hour</Text>{'\n'}
+          • 2 stars: <Text style={styles.bold}>−1 hour</Text>{'\n'}
+          • 1 star: <Text style={styles.bold}>−2 hours</Text>{'\n'}
+          • A negative written review (1–2 stars with written feedback): an additional <Text style={styles.bold}>−5 hours</Text>
+        </Text>
+        <Text style={styles.p}>
+          For example, an electrician with 100 worked hours ranks above one with 80 hours in the Electrical category. Scores may be negative. <Text style={styles.bold}>New Providers are featured at the top of the list for their first three (3) days</Text> after registration — even before they have any hours or reviews — so they have a fair chance to earn their first ratings. Ratings and rankings are informational, are updated automatically, may change at any time, and do not guarantee any Provider a booking.
         </Text>
 
         <Text style={styles.h2}>11. Independent Contractor Status</Text>
