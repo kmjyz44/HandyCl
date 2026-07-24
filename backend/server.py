@@ -10512,28 +10512,15 @@ async def telegram_unlink(current_user: User = Depends(get_current_user)):
     return {"ok": True, "connected": False}
 
 
-@api_router.post("/telegram/webhook/{secret}")
-async def telegram_webhook(secret: str, request: Request):
-    """Public endpoint Telegram calls. Validates the shared secret, then handles
-    /start <code> to link a user's chat_id."""
-    keys = await _get_integration_keys()
-    expected = (keys.get("telegram_webhook_secret") or "").strip()
-    if not expected or secret != expected:
-        raise HTTPException(status_code=403, detail="Invalid webhook secret")
-    try:
-        update = await request.json()
-    except Exception:
-        return {"ok": True}
+async def _process_telegram_update(update: dict):
+    """Shared handler for a Telegram update (used by both webhook and polling).
+    Links a user's chat_id from a "/start <code>" payload or a bare pasted code."""
     msg = update.get("message") or update.get("edited_message") or {}
     text = (msg.get("text") or "").strip()
     chat = msg.get("chat") or {}
     chat_id = chat.get("id")
     if not chat_id:
-        return {"ok": True}
-    token = (keys.get("telegram_bot_token") or "").strip()
-    # Determine a link code: from "/start <code>" payload, or a bare code the
-    # user pasted/typed (handles Telegram not resending the deep-link payload
-    # when the bot chat already exists).
+        return
     code = ""
     if text.startswith("/start"):
         parts = text.split(maxsplit=1)
@@ -10548,14 +10535,27 @@ async def telegram_webhook(secret: str, request: Request):
                 {"$set": {"telegram_chat_id": str(chat_id)}},
             )
             await db.telegram_link_codes.delete_many({"code": code})
-            if token:
-                await send_telegram_notification(str(chat_id),
-                    "✅ <b>Connected!</b> You'll now receive Ono-Fix notifications here.")
-            return {"ok": True}
-    if text.startswith("/start"):
-        if token:
             await send_telegram_notification(str(chat_id),
-                "👋 Welcome to <b>Ono-Fix</b>. Open the app → Profile → Notifications → <b>Connect Telegram</b>, then paste the code shown there here in the chat.")
+                "✅ <b>Connected!</b> You'll now receive Ono-Fix notifications here.")
+            return
+    if text.startswith("/start"):
+        await send_telegram_notification(str(chat_id),
+            "👋 Welcome to <b>Ono-Fix</b>. Open the app → Profile → Notifications → <b>Connect Telegram</b>, then paste the code shown there here in the chat.")
+
+
+@api_router.post("/telegram/webhook/{secret}")
+async def telegram_webhook(secret: str, request: Request):
+    """Public endpoint Telegram calls (when a webhook is configured). Validates
+    the shared secret, then delegates to the shared update handler."""
+    keys = await _get_integration_keys()
+    expected = (keys.get("telegram_webhook_secret") or "").strip()
+    if not expected or secret != expected:
+        raise HTTPException(status_code=403, detail="Invalid webhook secret")
+    try:
+        update = await request.json()
+    except Exception:
+        return {"ok": True}
+    await _process_telegram_update(update)
     return {"ok": True}
 
 
@@ -13277,6 +13277,53 @@ async def startup_event():
     asyncio.create_task(_auto_cleanup_loop())
     asyncio.create_task(_create_seed_accounts())
     asyncio.create_task(_seed_default_categories())
+    asyncio.create_task(_telegram_poll_loop())
+
+
+async def _telegram_poll_loop():
+    """Webhook-free Telegram updates via long polling. Runs only when a bot
+    token is configured. Removes any existing webhook first (getUpdates and
+    webhooks are mutually exclusive), then processes /start <code> linking."""
+    offset = None
+    webhook_cleared = False
+    await asyncio.sleep(4)
+    if os.environ.get("ENABLE_TELEGRAM_POLLING", "true").lower() != "true":
+        logger.info("Telegram polling disabled via ENABLE_TELEGRAM_POLLING")
+        return
+    while True:
+        try:
+            token = await _resolve_telegram_token()
+            if not token:
+                await asyncio.sleep(30)
+                continue
+            if not webhook_cleared:
+                try:
+                    async with httpx.AsyncClient(timeout=10.0) as http:
+                        await http.post(f"https://api.telegram.org/bot{token}/deleteWebhook")
+                    webhook_cleared = True
+                except Exception:
+                    pass
+            async with httpx.AsyncClient(timeout=40.0) as http:
+                params: Dict[str, Any] = {"timeout": 30, "allowed_updates": '["message"]'}
+                if offset is not None:
+                    params["offset"] = offset
+                r = await http.get(f"https://api.telegram.org/bot{token}/getUpdates", params=params)
+            if r.status_code == 409:
+                # Another poller/webhook is active — back off.
+                await asyncio.sleep(15)
+                continue
+            if r.status_code != 200:
+                await asyncio.sleep(5)
+                continue
+            for upd in (r.json() or {}).get("result", []):
+                offset = upd["update_id"] + 1
+                try:
+                    await _process_telegram_update(upd)
+                except Exception as e:
+                    logger.warning("Telegram update processing failed: %s", e)
+        except Exception as e:
+            logger.warning("Telegram poll loop error: %s", e)
+            await asyncio.sleep(5)
 
 
 async def _seed_default_categories():

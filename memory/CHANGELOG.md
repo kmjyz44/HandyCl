@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06 — Telegram: webhook-free long polling (fixes env mismatch)
+- ROOT CAUSE of "connect not working": bot webhook pointed to the preview backend while the deployed app runs on Railway → link codes stored in Railway DB, but /start hit preview → mismatch.
+- FIX: added `_telegram_poll_loop()` (started in `startup_event`) — deletes any webhook, then long-polls `getUpdates` and feeds updates to the shared `_process_telegram_update()`. No webhook URL / secret / "Register webhook" step needed; whichever backend runs the app also polls, so codes always match.
+- Extracted linking logic into `_process_telegram_update()` (used by both the poll loop and the legacy `/telegram/webhook/{secret}` endpoint). Supports `/start <code>` AND a bare pasted code.
+- Env gate `ENABLE_TELEGRAM_POLLING` (default "true"). Set to "false" in preview `/app/backend/.env` so preview doesn't fight production for the same bot (getUpdates 409). Production needs NO env var — defaults on.
+- Frontend `NotificationSettingsModal`: connect alert now shows the link code so the user can paste it to the bot if the deep-link START doesn't carry it.
+- Verified on preview: deleteWebhook + getUpdates return 200, loop iterates, disabled-flag respected. Linking handler verified earlier (bare code sets telegram_chat_id).
+- ACTION FOR USER: redeploy backend (Railway) + frontend (Netlify). Then Profile → Notifications → Connect Telegram → paste the shown code to the bot. No admin webhook step.
+
+
 ## 2026-06 — Per-user notification channel switches
 - User model: added `notification_prefs: Dict[str,bool]` (opt-out model — missing key = enabled).
 - `notify_user` rewritten to honour prefs: filters email/sms/push and now also sends **telegram** (to the user's own telegram_chat_id) when enabled. In-app stays always-on (notification center).
