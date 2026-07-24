@@ -39,7 +39,14 @@ export const NotificationSettingsModal = ({ visible, onClose }: { visible: boole
       if (res?.deep_link) {
         if (Platform.OS === 'web') window.open(res.deep_link, '_blank');
         else Linking.openURL(res.deep_link);
-        showAlert('Connect Telegram', 'Telegram will open — tap START in the bot, then come back and tap "Refresh".');
+        showAlert(
+          'Connect Telegram',
+          `Telegram opened @${res.bot_username || 'the bot'}.\n\n` +
+          `1) Tap START.\n` +
+          `2) If nothing happens, just send this code to the bot:\n\n` +
+          `${res.code}\n\n` +
+          `Then come back and tap "Refresh status".`
+        );
       }
     } catch (e: any) {
       showAlert('Telegram unavailable', e?.response?.data?.detail || 'Telegram notifications are not set up yet.');

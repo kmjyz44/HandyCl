@@ -10531,24 +10531,31 @@ async def telegram_webhook(secret: str, request: Request):
     if not chat_id:
         return {"ok": True}
     token = (keys.get("telegram_bot_token") or "").strip()
+    # Determine a link code: from "/start <code>" payload, or a bare code the
+    # user pasted/typed (handles Telegram not resending the deep-link payload
+    # when the bot chat already exists).
+    code = ""
     if text.startswith("/start"):
         parts = text.split(maxsplit=1)
         code = parts[1].strip() if len(parts) > 1 else ""
-        if code:
-            link = await db.telegram_link_codes.find_one({"code": code}, {"_id": 0})
-            if link:
-                await db.users.update_one(
-                    {"user_id": link["user_id"]},
-                    {"$set": {"telegram_chat_id": str(chat_id)}},
-                )
-                await db.telegram_link_codes.delete_many({"code": code})
-                if token:
-                    await send_telegram_notification(str(chat_id),
-                        "✅ <b>Connected!</b> You'll now receive Ono-Fix notifications here.")
-                return {"ok": True}
+    elif text and not text.startswith("/"):
+        code = text.strip()
+    if code:
+        link = await db.telegram_link_codes.find_one({"code": code}, {"_id": 0})
+        if link:
+            await db.users.update_one(
+                {"user_id": link["user_id"]},
+                {"$set": {"telegram_chat_id": str(chat_id)}},
+            )
+            await db.telegram_link_codes.delete_many({"code": code})
+            if token:
+                await send_telegram_notification(str(chat_id),
+                    "✅ <b>Connected!</b> You'll now receive Ono-Fix notifications here.")
+            return {"ok": True}
+    if text.startswith("/start"):
         if token:
             await send_telegram_notification(str(chat_id),
-                "👋 Welcome to <b>Ono-Fix</b>. Open the app → Profile → <b>Connect Telegram</b> to link your account.")
+                "👋 Welcome to <b>Ono-Fix</b>. Open the app → Profile → Notifications → <b>Connect Telegram</b>, then paste the code shown there here in the chat.")
     return {"ok": True}
 
 
