@@ -4914,26 +4914,25 @@ async def get_available_executors(
     executors = await db.users.aggregate(pipeline).to_list(1000)
 
     # ── Client location for service-area matching ───────────────────────
-    # Use the client's saved coordinates; fall back to the configured service
-    # area center. Providers who haven't set a service area, or whose area
-    # doesn't cover the client, are hidden.
+    # Use the client's own saved coordinates. If the client hasn't set a
+    # location, we DON'T fall back to the platform's default centre — instead
+    # we show every pro who has configured a work zone (distance coverage is
+    # then enforced at booking time). This keeps the "Pros" browse tab useful
+    # for clients who haven't entered an address yet.
     client_lat = getattr(current_user, "latitude", None)
     client_lng = getattr(current_user, "longitude", None)
-    client_city = None
-    if client_lat is None or client_lng is None:
-        sa_doc = await _get_service_area()
-        centers = (sa_doc or {}).get("centers") or []
-        if centers:
-            if client_lat is None:
-                client_lat = centers[0].get("lat")
-            if client_lng is None:
-                client_lng = centers[0].get("lng")
-            client_city = centers[0].get("label")
+    # Only use city for coverage matching when we also have coordinates; a bare
+    # city string shouldn't hide geo-configured pros on the browse tab.
+    has_client_loc = client_lat is not None and client_lng is not None
+    client_city = getattr(current_user, "city", None) if has_client_loc else None
+    if not has_client_loc:
+        client_lat = client_lng = None
 
     # Apply filters
     filtered = []
     for executor in executors:
-        # Service-area match (hide unconfigured pros + pros who don't cover client)
+        # Hide pros with no configured work zone. When the client has a known
+        # location, also hide pros whose zone doesn't cover it.
         has_config, covers = _provider_service_match(executor, client_city, client_lat, client_lng)
         if not has_config or not covers:
             continue

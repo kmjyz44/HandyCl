@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06 — Fix: empty "Pros" tab for clients without an address
+- ROOT CAUSE: `/executors/available` (Pros browse tab) filtered pros by service-area coverage. When a client had no saved lat/lng, it fell back to the platform's default service-area centre (e.g. Chicago) and hid every pro whose zone didn't cover that centre → empty list for new clients like client5.
+- FIX: removed the default-centre fallback. Now, when the client has no coordinates, all pros with a configured work zone are shown (coverage is still enforced at booking time). Coverage filtering only applies when the client actually has lat/lng. Bare city string no longer hides geo-configured pros.
+- Verified on preview: client with no location now returns all 3 configured pros (was 0). Pros with NO configured work zone remain hidden (cannot be booked). Requires Railway backend redeploy to take effect in production.
+
+
 ## 2026-06 — Performance: DB indexes + asset caching
 - DIAGNOSIS (prod measurements): network fine (ping 42ms). Slowness is backend: /api/categories ~0.8s and /api/executors/by-service ~3.1s. Root causes: (1) NO DB indexes anywhere (full collection scans), (2) high Railway↔MongoDB latency (~0.8s baseline on trivial queries → DB likely in a different region than the backend), (3) JS bundle 617KB gzip served with Cache-Control max-age=0 (re-downloaded every visit).
 - FIX 1: `_ensure_indexes()` on startup — indexes for users(user_id/email/role), executor_profiles(user_id), bookings(provider_id+category+status, client_id, booking_id, status), reviews(provider_id, booking_id), tasks(provider_id+status, task_id, client_id), categories, notifications, messages, user_sessions(session_token), offers, telegram_link_codes, waitlist. Idempotent. Preview result: executors endpoint 3.1s → 0.14s.
