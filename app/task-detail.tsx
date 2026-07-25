@@ -344,9 +344,9 @@ export default function TaskDetail() {
   };
 
   const onMethodTap = (methodId: string) => {
+    // Just select/highlight the method. Payment is started only by the
+    // explicit "Confirm payment" button so the user is always in control.
     setSelectedMethod(methodId);
-    // Trigger payment immediately — no extra confirm step
-    setTimeout(() => submitPayment(methodId), 100);
   };
 
   const submitPayment = async (forceMethod?: string) => {
@@ -1324,13 +1324,13 @@ export default function TaskDetail() {
                 <Text style={s.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[s.modalBtn, s.submitBtn, { backgroundColor: '#10b981' }, actionLoading && s.btnDisabled]}
-                onPress={submitPayment}
-                disabled={actionLoading}
+                style={[s.modalBtn, s.submitBtn, { backgroundColor: '#10b981' }, (actionLoading || !selectedMethod) && s.btnDisabled]}
+                onPress={() => submitPayment()}
+                disabled={actionLoading || !selectedMethod}
               >
                 {actionLoading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.submitBtnText}>Confirm payment</Text>
+                  : <Text style={s.submitBtnText}>{selectedMethod ? 'Confirm payment' : 'Select a method'}</Text>
                 }
               </TouchableOpacity>
             </View>
