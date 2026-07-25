@@ -421,3 +421,9 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 ## 2026-07-01 (cont.) — Executor profile: clickable services accordion + About
 - Per user: the bio area should be an "About" self-description; services should be clickable → each opens to reveal that service's real description (per-skill experience) + photos of completed work.
 - executor/[id].tsx: added "About" label above bio. Removed the aggregated top Portfolio gallery. Services section is now an accordion — each service row is a TouchableOpacity (chevron up/down); tapping expands to show that skill's experience text (or "No description yet") + a 2-col photo grid with captions; tapping a photo opens the existing fullscreen image Modal. State: expandedSkill. New styles: aboutLabel, servicesHint, skillExpanded, skillEmptyText. babel OK. Needs Save to GitHub.
+
+## 2026-06-01 — Payout setup: Finix-only mode (hide manual methods when admin enables Finix)
+- USER DECISION: when admin has ENABLED Finix, the executor should see ONLY the Finix card — all manual payout options hidden (regardless of onboarding state). Manual methods return only if the admin DISABLES Finix.
+- FIX (app/payout-setup.tsx): wrapped the entire manual block — "or save details manually" divider, "Alternative payout methods" (PayPal/Zelle/Venmo), saved-accounts list, Debit-card/Bank-ACH tabs, and the manual card/bank form — in `{!enabledMethods.includes('finix') && (...)}`. Stripe Connect card + the Finix onboarding card remain (gated by their own admin flags).
+- BUGFIX (same file): `Platform` was used (Stripe web-redirect logic + useEffect) but NOT imported from react-native → the screen would ReferenceError/crash on mount. Added `Platform` to the react-native import.
+- VERIFIED: esbuild compiles clean (only unrelated expo tsconfig warning). Visual verification pending on Netlify (pod serves CRA placeholder, not the Expo app) after Save to GitHub.

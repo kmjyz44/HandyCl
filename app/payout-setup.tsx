@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
@@ -351,6 +352,9 @@ export default function PayoutSetup() {
         </View>
         )}
 
+        {/* Manual / alternative payout methods — hidden when admin has enabled Finix (Finix-only payouts) */}
+        {!enabledMethods.includes('finix') && (
+        <>
         <Text style={styles.dividerLabel}>or save details manually (for reference)</Text>
 
         {/* PayPal / Zelle / Venmo contacts — for manual-split methods */}
@@ -566,6 +570,8 @@ export default function PayoutSetup() {
             be transferred to this card/account after each completed task.
           </Text>
         </View>
+        </>
+        )}
       </ScrollView>
 
       {/* Finix KYC onboarding form */}
