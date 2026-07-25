@@ -13377,10 +13377,50 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_event():
     """Start background tasks on app startup."""
+    asyncio.create_task(_ensure_indexes())
     asyncio.create_task(_auto_cleanup_loop())
     asyncio.create_task(_create_seed_accounts())
     asyncio.create_task(_seed_default_categories())
     asyncio.create_task(_telegram_poll_loop())
+
+
+async def _ensure_indexes():
+    """Create DB indexes for the hot query paths. Idempotent & safe to re-run.
+    Biggest single performance win — without these, every query is a full scan."""
+    try:
+        specs = [
+            ("users", [("user_id", 1)]),
+            ("users", [("email", 1)]),
+            ("users", [("role", 1)]),
+            ("executor_profiles", [("user_id", 1)]),
+            ("bookings", [("provider_id", 1), ("category", 1), ("status", 1)]),
+            ("bookings", [("client_id", 1)]),
+            ("bookings", [("booking_id", 1)]),
+            ("bookings", [("status", 1)]),
+            ("reviews", [("provider_id", 1)]),
+            ("reviews", [("booking_id", 1)]),
+            ("tasks", [("provider_id", 1), ("status", 1)]),
+            ("tasks", [("task_id", 1)]),
+            ("tasks", [("client_id", 1)]),
+            ("categories", [("category_id", 1)]),
+            ("notifications", [("user_id", 1), ("created_at", -1)]),
+            ("messages", [("booking_id", 1)]),
+            ("messages", [("task_id", 1)]),
+            ("sessions", [("session_token", 1)]),
+            ("user_sessions", [("session_token", 1)]),
+            ("offers", [("booking_id", 1)]),
+            ("telegram_link_codes", [("code", 1)]),
+            ("waitlist", [("category", 1)]),
+        ]
+        for coll, keys in specs:
+            try:
+                await db[coll].create_index(keys, background=True)
+            except Exception as e:
+                logger.warning("index %s %s failed: %s", coll, keys, e)
+        logger.info("DB indexes ensured")
+    except Exception as e:
+        logger.warning("ensure_indexes failed: %s", e)
+
 
 
 async def _telegram_poll_loop():

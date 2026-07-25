@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06 — Performance: DB indexes + asset caching
+- DIAGNOSIS (prod measurements): network fine (ping 42ms). Slowness is backend: /api/categories ~0.8s and /api/executors/by-service ~3.1s. Root causes: (1) NO DB indexes anywhere (full collection scans), (2) high Railway↔MongoDB latency (~0.8s baseline on trivial queries → DB likely in a different region than the backend), (3) JS bundle 617KB gzip served with Cache-Control max-age=0 (re-downloaded every visit).
+- FIX 1: `_ensure_indexes()` on startup — indexes for users(user_id/email/role), executor_profiles(user_id), bookings(provider_id+category+status, client_id, booking_id, status), reviews(provider_id, booking_id), tasks(provider_id+status, task_id, client_id), categories, notifications, messages, user_sessions(session_token), offers, telegram_link_codes, waitlist. Idempotent. Preview result: executors endpoint 3.1s → 0.14s.
+- FIX 2: netlify.toml — immutable 1-year Cache-Control for /_expo/static/* and /assets/* (hashed files) → fixes repeat-visit re-downloads.
+- USER ACTION (biggest win): co-locate MongoDB Atlas region with the Railway service region; ensure Railway plan isn't cold/tiny. Redeploy backend (Railway) + frontend (Netlify).
+
+
 ## 2026-06 — Experience-based executor ranking (per category)
 - New ranking in `GET /executors/by-service` (computed on-the-fly, no schema change / backfill):
   score(category) = Σ actual_hours from completed/paid bookings in that category + review adjustment.
