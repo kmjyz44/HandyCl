@@ -21,6 +21,7 @@ import { useAuthStore } from '../../store/authStore';
 import { showAlertWithButtons } from '../../utils/alert';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
 import { NotificationSettingsModal } from '../../components/NotificationSettingsModal';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 
 // Web-safe Alert shim: native Alert.alert renders nothing on React Native Web,
 // causing silent failures (e.g. card validation). Route every call through the
@@ -708,7 +709,19 @@ function ClientProfile() {
               <Text style={styles.label}>City</Text>
               <TextInput style={styles.input} value={addressCity} onChangeText={setAddressCity} placeholder="Chicago" data-testid="addr-city-input" />
               <Text style={styles.label}>Street and number</Text>
-              <TextInput style={styles.input} value={addressText} onChangeText={setAddressText} placeholder="123 Main St" data-testid="addr-street-input" />
+              <AddressAutocomplete
+                value={addressText}
+                onChangeText={setAddressText}
+                city={addressCity}
+                state={addressState}
+                placeholder="123 Main St"
+                testID="addr-street-input"
+                onSelect={(_formatted, parts) => {
+                  if (parts.city) setAddressCity(parts.city);
+                  if (parts.state) setAddressState(parts.state);
+                  if (parts.postal_code) setAddressZip(parts.postal_code);
+                }}
+              />
               <Text style={styles.label}>Apt / Unit / Floor (optional)</Text>
               <TextInput style={styles.input} value={addressUnit} onChangeText={setAddressUnit} placeholder="Apt 4B" data-testid="addr-unit-input" />
               <Text style={styles.label}>ZIP code (optional)</Text>
