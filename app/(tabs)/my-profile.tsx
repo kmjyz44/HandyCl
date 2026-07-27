@@ -1530,28 +1530,6 @@ function ProviderProfile() {
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => {
-        const doSuspend = async () => {
-          try {
-            await api.updateExecutorProfile({ is_suspended: true });
-            Alert.alert('Suspended', 'Your account is suspended. You will not be shown to clients.');
-          } catch (e: any) { Alert.alert('Error', e.message || 'Failed'); }
-        };
-        if (Platform.OS === 'web') {
-          if (window.confirm('Suspend account? You will become invisible to clients.')) doSuspend();
-        } else {
-          Alert.alert('Suspend account', 'You will become invisible to clients. You can reactivate it in settings.', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Suspend', style: 'destructive', onPress: doSuspend },
-          ]);
-        }
-      }}>
-        <Ionicons name="pause-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Suspend account</Text>
-        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
-      </TouchableOpacity>
-      <View style={pStyles.menuDivider} />
-
       <TouchableOpacity style={pStyles.menuRow} onPress={handleLogout}>
         <Ionicons name="log-out-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <Text style={[pStyles.menuRowText, { flex: 1 }]}>Log out</Text>
