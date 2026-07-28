@@ -10192,6 +10192,33 @@ async def update_support_request(
 
 # ==================== BLOG / COMMUNITY FEED ROUTES ====================
 
+def _blog_safe_name(name: Optional[str]) -> str:
+    """Return a display name that never exposes an email or other contact info."""
+    n = (name or "").strip()
+    if not n or "@" in n:
+        return "Ono-Fix user"
+    return n
+
+
+async def _resolve_blog_author_names(docs: List[Dict[str, Any]]):
+    """Overwrite each doc's author_name with the author's current profile name.
+    Guarantees no email/contact info is ever shown (fixes legacy posts that stored the email)."""
+    ids = list({d.get("author_id") for d in docs if d.get("author_id")})
+    names: Dict[str, str] = {}
+    if ids:
+        users = await db.users.find(
+            {"user_id": {"$in": ids}}, {"_id": 0, "user_id": 1, "name": 1}
+        ).to_list(len(ids))
+        names = {u["user_id"]: (u.get("name") or "").strip() for u in users}
+    for d in docs:
+        real = names.get(d.get("author_id"), "")
+        if real and "@" not in real:
+            d["author_name"] = real
+        else:
+            d["author_name"] = _blog_safe_name(d.get("author_name"))
+
+
+
 @api_router.get("/blog/posts")
 async def list_blog_posts(
     request: Request,
@@ -10240,6 +10267,7 @@ async def list_blog_posts(
             p["liked_by_me"] = False
 
     total = await db.blog_posts.count_documents(q)
+    await _resolve_blog_author_names(posts)
     return {"posts": posts, "total": total, "offset": offset, "limit": limit}
 
 
@@ -10259,7 +10287,7 @@ async def create_blog_post(data: BlogPostCreate, current_user: User = Depends(ge
         post_id=f"post_{uuid.uuid4().hex[:12]}",
         author_id=current_user.user_id,
         author_role=current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
-        author_name=getattr(current_user, "full_name", None) or getattr(current_user, "username", None) or current_user.email,
+        author_name=_blog_safe_name(getattr(current_user, "name", None)),
         author_avatar=getattr(current_user, "picture", None),
         title=title,
         description=description,
@@ -10292,6 +10320,8 @@ async def get_blog_post(post_id: str, request: Request):
     except Exception:
         pass
     post["comments"] = comments
+    await _resolve_blog_author_names([post])
+    await _resolve_blog_author_names(comments)
     return post
 
 
@@ -10349,7 +10379,7 @@ async def add_blog_comment(
         comment_id=f"cmt_{uuid.uuid4().hex[:12]}",
         post_id=post_id,
         author_id=current_user.user_id,
-        author_name=getattr(current_user, "full_name", None) or getattr(current_user, "username", None) or current_user.email,
+        author_name=_blog_safe_name(getattr(current_user, "name", None)),
         author_avatar=getattr(current_user, "picture", None),
         text=text,
     )

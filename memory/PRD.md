@@ -432,3 +432,19 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - ROOT CAUSE: the button used `onPress={submitPayment}` — React Native passes the press event object as the first arg (`forceMethod`). Being truthy, it bypassed the `if (!method)` guard, fell through all method branches to the LEGACY fallback (`payTask` in a silent try/catch) which closed the modal and opened the review modal → review reached with no real payment.
 - FIX (app/task-detail.tsx): (1) Confirm button now `onPress={() => submitPayment()}` (no event leak) and is DISABLED until a method is selected (label shows "Select a method" until then). (2) onMethodTap no longer auto-submits — it only highlights the method; payment starts only via the explicit "Confirm payment" button. Flow is now: pick method → Confirm payment → (Finix card form → Pay) → review opens ONLY after a successful charge (handleFinixToken success path, unchanged).
 - VERIFIED: esbuild compiles clean. Visual check pending on Netlify (pod serves CRA placeholder) after Save to GitHub.
+
+## 2026-07-28 — FIX: blog showed author EMAIL instead of name (privacy)
+- BUG (user): community/blog posts displayed the author's email (e.g. nexus.ss.llc@gmail.com) instead of their name. Requirement: never show email/contact info, only the name.
+- ROOT CAUSE (server.py): create_blog_post/add_blog_comment set author_name = getattr(user,'full_name') or getattr(user,'username') or user.email — but the User model only has `name` (no full_name/username) → always fell back to the EMAIL.
+- FIX: (1) create paths now use _blog_safe_name(current_user.name) (never email). (2) Added _resolve_blog_author_names(docs) called in GET /blog/posts (list), GET /blog/posts/{id} (post + its comments) — it re-derives author_name from the users collection by author_id and strips anything containing '@'. This SELF-HEALS legacy posts already stored with the email. Unknown author or email-like name → "Ono-Fix user".
+- VERIFIED via curl on pod (local DB seed): legacy post with email author_name + matching user → "Leo."; orphan post (no user) → "Ono-Fix user"; no email ever exposed. server.py synced to root /app/server.py; backend restarted clean.
+- Deploy: prod (Railway) fixes on next Save to GitHub; existing posts auto-corrected on read.
+
+## 2026-07-28 — FIX: "Suspend account" (provider) returned 400 → removed (duplicated calendar)
+- BUG: tapping Suspend account errored 400. ROOT CAUSE: frontend sent {is_suspended:true} to PUT /profile/executor, but ExecutorProfileUpdate has no such field → Pydantic dropped it → empty update → 400 "No fields to update". is_suspended was also never read anywhere in the backend (non-functional).
+- DECISION (user): remove the option — it duplicates availability/calendar (a pro simply shows no availability to go invisible).
+- FIX (app/(tabs)/my-profile.tsx): removed the "Suspend account" menu row + its handler. Settings menu now: Notifications → Account security → About → Log out → Delete account. esbuild clean.
+
+## 2026-07-28 — FIX (P0): "Confirm payment" opened review WITHOUT paying (task-detail.tsx)
+- Root cause: button used onPress={submitPayment} → RN passes the event object as forceMethod (truthy) → bypassed the !method guard → legacy fallback opened the review modal with no real payment.
+- Fix: onPress={() => submitPayment()}; button DISABLED until a method is selected (label "Select a method"); onMethodTap only highlights (no auto-submit). Review opens only after a successful Finix charge. esbuild clean.
