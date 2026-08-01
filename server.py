@@ -10413,18 +10413,105 @@ async def loyalty_gift_card_history(current_user: User = Depends(get_current_use
     return {"gift_cards": cards}
 
 
+GIFTBIT_DEFAULT_BRAND = "visavirtualus"  # Visa Incentive Virtual Card
+
+
+def _giftbit_base_url(env: Optional[str]) -> str:
+    return "https://api.giftbit.com/papi/v1" if (env or "").lower() == "production" else "https://api-testbed.giftbit.com/papi/v1"
+
+
+async def _giftbit_send_gift(keys: Dict[str, Any], email: str, name: str, value_usd: int, campaign_id: str) -> Dict[str, Any]:
+    """Send a gift card via Giftbit. Raises on any failure. campaign_id is the idempotency key."""
+    api_key = keys.get("giftbit_api_key")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Rewards are not configured yet. Please try again later.")
+    brand = keys.get("giftbit_default_brand") or GIFTBIT_DEFAULT_BRAND
+    parts = (name or "Ono-Fix Customer").strip().split(" ", 1)
+    firstname = parts[0] or "Ono-Fix"
+    lastname = parts[1] if len(parts) > 1 else "Customer"
+    body = {
+        "id": campaign_id,
+        "price_in_cents": int(value_usd) * 100,
+        "brand_codes": [brand],
+        "delivery_type": "GIFTBIT_EMAIL",
+        "subject": f"Your ${value_usd} Ono-Fix reward is here! 🎁",
+        "message": "Thank you for being an Ono-Fix customer. Enjoy your gift card!",
+        "contacts": [{"email": email, "firstname": firstname, "lastname": lastname}],
+    }
+    url = f"{_giftbit_base_url(keys.get('giftbit_environment'))}/campaign"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(url, headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, json=body)
+    try:
+        data = resp.json()
+    except Exception:
+        data = {}
+    if resp.status_code != 200 or (data.get("campaign") or {}).get("contacts_failure_count", 0) > 0:
+        logger.error("Giftbit campaign failed [%s]: %s", resp.status_code, str(data)[:400])
+        raise HTTPException(status_code=502, detail="The gift-card provider could not process this right now. Your points were not spent.")
+    return data.get("campaign") or {}
+
+
 @api_router.post("/loyalty/gift-cards/redeem")
 async def loyalty_redeem_gift_card(payload: Dict[str, Any] = Body(...), current_user: User = Depends(get_current_user)):
-    """Phase 2 will send the card via Giftbit. For now validate points and inform the user."""
+    """Redeem points for a gift card, sent to the client's email via Giftbit."""
     value = int(payload.get("value") or 0)
     tier = next((t for t in GIFT_CARD_TIERS if t["value"] == value), None)
     if not tier:
         raise HTTPException(status_code=400, detail="Invalid gift-card value")
-    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "balance_points": 1})
-    points = int((u or {}).get("balance_points") or 0)
-    if points < tier["points"]:
-        raise HTTPException(status_code=400, detail=f"Not enough points. You need {tier['points'] - points} more.")
-    raise HTTPException(status_code=503, detail="Gift-card redemption is launching very soon. Your points are safe and keep growing.")
+
+    keys = await _get_integration_keys()
+    if not keys.get("enable_giftbit") or not keys.get("giftbit_api_key"):
+        raise HTTPException(status_code=503, detail="Gift-card rewards are temporarily unavailable. Your points are safe.")
+
+    pts = int(tier["points"])
+    # Atomically deduct points only if the balance is sufficient (prevents races / negative balance)
+    deducted = await db.users.find_one_and_update(
+        {"user_id": current_user.user_id, "balance_points": {"$gte": pts}},
+        {"$inc": {"balance_points": -pts}},
+    )
+    if not deducted:
+        cur = int((await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "balance_points": 1}) or {}).get("balance_points") or 0)
+        raise HTTPException(status_code=400, detail=f"Not enough points. You need {max(0, pts - cur)} more.")
+
+    card_id = f"gc_{uuid.uuid4().hex[:14]}"
+    email = current_user.email
+    now = datetime.now(timezone.utc)
+    await db.gift_cards.insert_one({
+        "card_id": card_id, "user_id": current_user.user_id, "value": value,
+        "points_cost": pts, "recipient_email": email, "status": "pending",
+        "giftbit_campaign_id": None, "created_at": now,
+    })
+    await db.points_transactions.insert_one({
+        "txn_id": f"pts_{uuid.uuid4().hex[:12]}", "user_id": current_user.user_id,
+        "amount": -pts, "source": "redemption", "reference_id": card_id,
+        "description": f"Redeemed {pts} points for a ${value} gift card", "created_at": now,
+    })
+
+    try:
+        campaign = await _giftbit_send_gift(keys, email, getattr(current_user, "name", "") or "", value, card_id)
+    except HTTPException:
+        # Refund points on provider failure
+        await db.users.update_one({"user_id": current_user.user_id}, {"$inc": {"balance_points": pts}})
+        await db.gift_cards.update_one({"card_id": card_id}, {"$set": {"status": "failed"}})
+        await db.points_transactions.insert_one({
+            "txn_id": f"pts_{uuid.uuid4().hex[:12]}", "user_id": current_user.user_id,
+            "amount": pts, "source": "reversal", "reference_id": card_id,
+            "description": "Refund — gift card could not be issued", "created_at": datetime.now(timezone.utc),
+        })
+        raise
+
+    await db.gift_cards.update_one(
+        {"card_id": card_id},
+        {"$set": {"status": "delivered", "giftbit_campaign_id": campaign.get("uuid"), "delivered_at": datetime.now(timezone.utc)}},
+    )
+    try:
+        await notify_user(current_user.user_id, "gift_card_sent", "Gift card on its way 🎁",
+                          f"Your ${value} gift card was sent to {email}. Check your inbox!",
+                          related_id=card_id, related_type="gift_card", channels=["inapp", "push", "email"])
+    except Exception:
+        pass
+    return {"success": True, "card_id": card_id, "value": value, "recipient_email": email,
+            "message": f"Your ${value} gift card was sent to {email}."}
 
 
 

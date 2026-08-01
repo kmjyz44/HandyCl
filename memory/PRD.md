@@ -479,3 +479,11 @@ FRONTEND (compiles clean via esbuild; visual check pending on Netlify — pod se
 - utils/api.ts: getLoyaltyBalance/Transactions, getReferralStats, generateReferralCode, getGiftCardHistory, redeemGiftCard.
 
 PHASE 2 (pending): wire /loyalty/gift-cards/redeem to Giftbit POST /campaign (deduct points, create gift_cards doc, poll status). Giftbit testbed key already installed & valid. Default brand recommendation: visavirtualus.
+
+## 2026-08-01 — Loyalty Phase 2 COMPLETE (Giftbit redemption — Visa card to email)
+BACKEND (server.py, synced to root):
+- Added _giftbit_base_url(env) (testbed vs production) + _giftbit_send_gift(keys,email,name,value,campaign_id): POST /papi/v1/campaign {id(idempotent=card_id), price_in_cents, brand_codes:[visavirtualus default or giftbit_default_brand], delivery_type:GIFTBIT_EMAIL, subject, message, contacts:[{email,firstname,lastname}]}. Raises 502 on non-200 or contacts_failure_count>0.
+- GIFTBIT_DEFAULT_BRAND = "visavirtualus" (Visa Incentive Virtual Card) → emailed to client.
+- Rewrote POST /loyalty/gift-cards/redeem: validates tier; requires enable_giftbit+key (else 503); ATOMIC deduct via find_one_and_update({balance_points:{$gte:pts}}) to prevent race/negative (else 400 with points-needed); creates gift_cards doc (pending) + redemption ledger; calls Giftbit; on failure REFUNDS points (+ reversal ledger, card=failed); on success card=delivered + stores giftbit_campaign_id (uuid) + notify_user (inapp/push/email).
+- VERIFIED on real Giftbit TESTBED: grant 3000pts → redeem $25 → HTTP200, real campaign uuid returned, balance 3000→500, gift_cards history shows $25 delivered w/ uuid. Guards: 0 pts → 400 "need 2500 more"; invalid value → 400.
+FRONTEND: rewards.tsx onRedeem now confirms (web) before spending, shows server message on success. No other change (Phase 1 UI already wired to api.redeemGiftCard).

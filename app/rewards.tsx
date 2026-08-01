@@ -66,10 +66,15 @@ export default function Rewards() {
   };
 
   const onRedeem = async (value: number) => {
+    const proceed = Platform.OS === 'web'
+      // eslint-disable-next-line no-alert
+      ? (typeof window !== 'undefined' && window.confirm(`Redeem points for a $${value} gift card? It will be emailed to you.`))
+      : true;
+    if (!proceed) return;
     setRedeeming(value);
     try {
-      await api.redeemGiftCard(value);
-      showAlert('Success', `Your $${value} gift card is on its way!`);
+      const res = await api.redeemGiftCard(value);
+      showAlert('Gift card sent 🎁', res?.message || `Your $${value} gift card is on its way!`);
       load();
     } catch (e: any) {
       showAlert('Rewards', e?.response?.data?.detail || 'Could not redeem right now');
