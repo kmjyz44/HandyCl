@@ -1574,7 +1574,7 @@ async def _send_email(to_email: str, subject: str, body_text: str) -> bool:
 PLIVO_DEFAULT_AUTH_ID = "MANDEWMTDLZJCTZJJINC"
 PLIVO_DEFAULT_AUTH_TOKEN = "ZjAzYjUzNTEtN2Y2MS00ZDI2LTYxZWItMGQ2NmVk"
 # Giftbit (loyalty rewards gift cards) — default testbed key, admin can override in the panel.
-GIFTBIT_DEFAULT_API_KEY = "e3c59edf33426e265df581010b2e6322"
+GIFTBIT_DEFAULT_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJTSEEyNTYifQ==.OHlPSzdyMnVLUzVrSjc4MHhmL0V1RG5KTXRVNElLbW5jZHNXVFBsZUhiTWowckQ5MEdQWFh4OWRydjRVa2tseXk5a1dlc1pXSHJZUEpoVFlNNzd3V3BzVTVDTmpIRDRCMXhoRmdiaHZmUzJsRVJVYThKSmE1clFoREY0Qkd0L0o=.A1Nl6QDow5iYxdKku+PcBn9ydaBUO8J4lQ+kqsna/BQ="
 
 
 def _plivo_creds(keys: dict) -> Tuple[str, str, str]:

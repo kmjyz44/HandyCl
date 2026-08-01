@@ -456,3 +456,8 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - VERIFIED (pod): key seeded, GET /admin/integration-keys returns masked e3c5••••••••6322, enable_giftbit=true, env=testbed.
 - ⚠️ KEY INVALID: the provided key e3c59edf...6322 returns HTTP 401 ERROR_UNAUTHORIZED on BOTH https://api-testbed.giftbit.com/papi/v1 and https://api.giftbit.com/papi/v1 (/funds, /brands, /ping). Giftbit access tokens are long JWT-style strings, not 32-char hex → user must regenerate a real key (Dashboard → username → API Keys → Generate New Key). Phase 2 (redemption via POST /campaign) is BLOCKED until a valid key is entered.
 - Giftbit integration facts (from playbook): base URLs testbed/production above; Bearer auth; send = POST /papi/v1/campaign {contacts[], price_in_cents, brand_codes[], subject, message, id(idempotent)}; no webhooks → poll GET /gifts + GET /campaign/{id}. Store amounts in integer cents.
+
+## 2026-08-01 (cont.) — Giftbit VALID token installed
+- User supplied a proper JWT-style Giftbit token. VERIFIED on testbed: GET /funds → USD available 1,000,000,000 cents (virtual); GET /brands (USD) → amazonus (Amazon.com), walmart (Walmart), visavirtualus (Visa Incentive Virtual Card).
+- Updated GIFTBIT_DEFAULT_API_KEY constant (self-heals prod seed) + overwrote pod DB integration_keys.giftbit_api_key. Admin GET shows masked eyJ0••••••••/BQ=, enable_giftbit=true, env=testbed. Synced to root server.py.
+- READY for Phase 2 redemption (POST /papi/v1/campaign with brand_codes, price_in_cents, idempotent id). Brands to offer: Visa (visavirtualus) recommended as the flexible default; Amazon/Walmart optional.
