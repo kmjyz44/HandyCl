@@ -993,4 +993,30 @@ export const api = {
       await client.post(`/tasks/${taskId}/messages/read`);
     } catch {}
   },
+
+  // ─── Loyalty & Rewards ───────────────────────────────────────────
+  getLoyaltyBalance: async () => {
+    const res = await client.get('/loyalty/balance');
+    return res.data;
+  },
+  getLoyaltyTransactions: async () => {
+    const res = await client.get('/loyalty/transactions');
+    return res.data;
+  },
+  getReferralStats: async () => {
+    const res = await client.get('/loyalty/referrals/stats');
+    return res.data;
+  },
+  generateReferralCode: async () => {
+    const res = await client.post('/loyalty/referrals/generate');
+    return res.data;
+  },
+  getGiftCardHistory: async () => {
+    const res = await client.get('/loyalty/gift-cards/history');
+    return res.data;
+  },
+  redeemGiftCard: async (value: number) => {
+    const res = await client.post('/loyalty/gift-cards/redeem', { value });
+    return res.data;
+  },
 };

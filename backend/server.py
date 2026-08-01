@@ -203,6 +203,7 @@ class UserRegister(BaseModel):
     role: UserRole
     phone: Optional[str] = None
     accepted_terms: Optional[bool] = False
+    referral_code: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -1937,7 +1938,24 @@ async def register(user_data: UserRegister):
 
     await db.users.insert_one(user_dict)
 
-    # Generate 6-digit verification code (valid 10 min)
+    # Loyalty: link this new user to their referrer (if a valid referral code was used)
+    ref_code = (user_data.referral_code or "").strip().upper()
+    if ref_code:
+        try:
+            referrer = await db.users.find_one({"referral_code": ref_code}, {"_id": 0, "user_id": 1})
+            if referrer and referrer["user_id"] != user_id:
+                await db.users.update_one({"user_id": user_id}, {"$set": {"referred_by": referrer["user_id"]}})
+                await db.referrals.insert_one({
+                    "referral_id": f"ref_{uuid.uuid4().hex[:12]}",
+                    "referrer_id": referrer["user_id"],
+                    "referred_id": user_id,
+                    "total_spent": 0.0,
+                    "status": "pending",
+                    "bonus_awarded": False,
+                    "created_at": datetime.now(timezone.utc),
+                })
+        except Exception:
+            pass
     import random as _r
     code = f"{_r.randint(0, 999999):06d}"
     await db.email_verifications.delete_many(_ci_email(reg_email))
@@ -6710,6 +6728,8 @@ async def finix_charge(
         await db.tasks.update_one({"booking_id": booking_id},
             {"$set": {"status": TaskStatus.PAID, "payment_status": "paid",
                       "paid_at": now_paid, "payment_method": "finix", "updated_at": now_paid}})
+        # Loyalty: award points to the client for this paid order
+        await _accrue_order_points(booking_id, total_cents / 100.0)
         # Notify all parties that payment arrived
         try:
             title = "Payment received"
@@ -9535,6 +9555,8 @@ async def _finalize_payment_if_both_confirmed(booking_id: str):
             {"booking_id": booking_id},
             {"$set": {"status": TaskStatus.PAID, "payment_status": "paid", "paid_at": now, "updated_at": now}},
         )
+        # Loyalty: award points to the client once the manual payment is fully confirmed
+        await _accrue_order_points(booking_id, float(b.get("final_price") or b.get("total_amount") or 0))
         # Notify all participants
         for uid_key, role_label in (("client_id", "client"), ("provider_id", "pro")):
             uid = b.get(uid_key)
@@ -10211,6 +10233,200 @@ async def update_support_request(
 
 
 # ==================== BLOG / COMMUNITY FEED ROUTES ====================
+
+# ==================== LOYALTY & REWARDS (points + referrals) ====================
+# 1 point per $1 spent (client). 100 points = $1 in gift-card value at redemption.
+LOYALTY_POINTS_PER_DOLLAR = 1
+LOYALTY_POINT_VALUE_USD = 0.01
+REFERRAL_ACTIVATION_THRESHOLD = 100.0   # friend must complete >= $100 of paid orders
+REFERRAL_BONUS_POINTS = 500             # referrer gets 500 pts ($5) per activated friend
+GIFT_CARD_TIERS = [
+    {"value": 25, "points": 2500},
+    {"value": 50, "points": 5000},
+    {"value": 100, "points": 10000},
+    {"value": 200, "points": 20000},
+    {"value": 500, "points": 50000},
+]
+
+
+def _gen_referral_code() -> str:
+    return "ONO" + secrets.token_hex(3).upper()  # e.g. ONO7F2A1C
+
+
+async def _ensure_referral_code(user_id: str) -> str:
+    u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "referral_code": 1})
+    code = (u or {}).get("referral_code")
+    if code:
+        return code
+    for _ in range(6):
+        code = _gen_referral_code()
+        if not await db.users.find_one({"referral_code": code}, {"_id": 0, "user_id": 1}):
+            await db.users.update_one({"user_id": user_id}, {"$set": {"referral_code": code}})
+            return code
+    code = _gen_referral_code() + secrets.token_hex(1).upper()
+    await db.users.update_one({"user_id": user_id}, {"$set": {"referral_code": code}})
+    return code
+
+
+async def _award_points(user_id: str, amount: int, source: str, reference_id: Optional[str], description: str):
+    """Atomically change a user's point balance and record a ledger entry. amount may be negative."""
+    if not user_id or amount == 0:
+        return
+    await db.users.update_one({"user_id": user_id}, {"$inc": {"balance_points": int(amount)}})
+    await db.points_transactions.insert_one({
+        "txn_id": f"pts_{uuid.uuid4().hex[:12]}",
+        "user_id": user_id,
+        "amount": int(amount),
+        "source": source,            # order | referral | redemption | reversal
+        "reference_id": reference_id,
+        "description": description,
+        "created_at": datetime.now(timezone.utc),
+    })
+
+
+async def _process_referral_progress(client_id: str, amount: float, direction: int = 1):
+    """Advance (direction=+1) or roll back (direction=-1) a friend's spend toward the
+    $100 activation threshold; award/revoke the referrer's 500-point bonus accordingly."""
+    ref = await db.referrals.find_one({"referred_id": client_id}, {"_id": 0})
+    if not ref:
+        return
+    new_total = max(0.0, round(float(ref.get("total_spent", 0)) + direction * float(amount), 2))
+    updates = {"total_spent": new_total, "updated_at": datetime.now(timezone.utc)}
+    awarded = bool(ref.get("bonus_awarded"))
+    referrer = ref.get("referrer_id")
+    if new_total >= REFERRAL_ACTIVATION_THRESHOLD and not awarded and referrer:
+        updates.update({"status": "active", "bonus_awarded": True, "activated_at": datetime.now(timezone.utc)})
+        await db.referrals.update_one({"referral_id": ref["referral_id"]}, {"$set": updates})
+        await _award_points(referrer, REFERRAL_BONUS_POINTS, "referral", ref["referral_id"],
+                            "Referral bonus — your friend reached $100 in orders")
+        try:
+            await notify_user(referrer, "referral_bonus", "Referral reward earned 🎉",
+                              f"Your friend completed $100 in orders — you earned {REFERRAL_BONUS_POINTS} points (${REFERRAL_BONUS_POINTS*LOYALTY_POINT_VALUE_USD:.0f})!",
+                              related_id=ref["referral_id"], related_type="referral",
+                              channels=["inapp", "push", "email"])
+        except Exception:
+            pass
+    elif new_total < REFERRAL_ACTIVATION_THRESHOLD and awarded and referrer:
+        # roll back a previously-awarded bonus (friend cancelled below threshold)
+        updates.update({"status": "pending", "bonus_awarded": False})
+        await db.referrals.update_one({"referral_id": ref["referral_id"]}, {"$set": updates})
+        await _award_points(referrer, -REFERRAL_BONUS_POINTS, "reversal", ref["referral_id"],
+                            "Referral bonus reversed — friend's orders dropped below $100")
+    else:
+        await db.referrals.update_one({"referral_id": ref["referral_id"]}, {"$set": updates})
+
+
+async def _accrue_order_points(booking_id: str, client_amount: float):
+    """Award loyalty points to the client for a PAID order (idempotent per booking)."""
+    try:
+        b = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+        if not b or b.get("loyalty_awarded"):
+            return
+        client_id = b.get("client_id")
+        amount = round(float(client_amount or b.get("final_price") or 0), 2)
+        if not client_id or amount <= 0:
+            return
+        pts = int(amount) * LOYALTY_POINTS_PER_DOLLAR
+        await db.bookings.update_one({"booking_id": booking_id},
+                                     {"$set": {"loyalty_awarded": True, "loyalty_points": pts, "loyalty_amount": amount}})
+        await db.users.update_one({"user_id": client_id}, {"$inc": {"lifetime_spent": amount}})
+        if pts > 0:
+            await _award_points(client_id, pts, "order", booking_id, f"Earned {pts} points for a ${amount:.0f} order")
+        await _process_referral_progress(client_id, amount, direction=1)
+    except Exception as ex:
+        logger.warning("loyalty accrual failed for %s: %s", booking_id, ex)
+
+
+async def _reverse_order_points(booking_id: str):
+    """Reverse points for a cancelled/refunded order that had already earned points."""
+    try:
+        b = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+        if not b or not b.get("loyalty_awarded"):
+            return
+        client_id = b.get("client_id")
+        pts = int(b.get("loyalty_points") or 0)
+        amount = float(b.get("loyalty_amount") or 0)
+        await db.bookings.update_one({"booking_id": booking_id}, {"$set": {"loyalty_awarded": False}})
+        if client_id and amount > 0:
+            await db.users.update_one({"user_id": client_id}, {"$inc": {"lifetime_spent": -amount}})
+        if client_id and pts > 0:
+            await _award_points(client_id, -pts, "reversal", booking_id, "Points reversed — order cancelled")
+            await _process_referral_progress(client_id, amount, direction=-1)
+    except Exception as ex:
+        logger.warning("loyalty reversal failed for %s: %s", booking_id, ex)
+
+
+async def _loyalty_next_tier(points: int) -> Optional[Dict[str, Any]]:
+    for t in GIFT_CARD_TIERS:
+        if points < t["points"]:
+            return {"value": t["value"], "points_needed": t["points"], "points_to_go": t["points"] - points}
+    return None  # already past the top tier
+
+
+@api_router.get("/loyalty/balance")
+async def loyalty_balance(current_user: User = Depends(get_current_user)):
+    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "balance_points": 1, "lifetime_spent": 1, "referral_code": 1})
+    points = int((u or {}).get("balance_points") or 0)
+    code = (u or {}).get("referral_code") or await _ensure_referral_code(current_user.user_id)
+    return {
+        "balance_points": points,
+        "balance_usd": round(points * LOYALTY_POINT_VALUE_USD, 2),
+        "lifetime_spent": round(float((u or {}).get("lifetime_spent") or 0), 2),
+        "next_tier": await _loyalty_next_tier(points),
+        "tiers": [{**t, "usd": round(t["points"] * LOYALTY_POINT_VALUE_USD, 2), "can_redeem": points >= t["points"]} for t in GIFT_CARD_TIERS],
+        "referral_code": code,
+        "referral_link": f"https://ono-fix.com/?ref={code}",
+        "point_value_usd": LOYALTY_POINT_VALUE_USD,
+    }
+
+
+@api_router.get("/loyalty/transactions")
+async def loyalty_transactions(current_user: User = Depends(get_current_user), limit: int = 50):
+    txns = await db.points_transactions.find({"user_id": current_user.user_id}, {"_id": 0}).sort("created_at", -1).limit(min(100, max(1, limit))).to_list(100)
+    return {"transactions": txns}
+
+
+@api_router.post("/loyalty/referrals/generate")
+async def loyalty_generate_code(current_user: User = Depends(get_current_user)):
+    code = await _ensure_referral_code(current_user.user_id)
+    return {"referral_code": code, "referral_link": f"https://ono-fix.com/?ref={code}"}
+
+
+@api_router.get("/loyalty/referrals/stats")
+async def loyalty_referral_stats(current_user: User = Depends(get_current_user)):
+    refs = await db.referrals.find({"referrer_id": current_user.user_id}, {"_id": 0}).to_list(500)
+    active = [r for r in refs if r.get("status") == "active"]
+    code = await _ensure_referral_code(current_user.user_id)
+    return {
+        "referred_count": len(refs),
+        "active_count": len(active),
+        "points_earned": len(active) * REFERRAL_BONUS_POINTS,
+        "usd_earned": round(len(active) * REFERRAL_BONUS_POINTS * LOYALTY_POINT_VALUE_USD, 2),
+        "referral_code": code,
+        "referral_link": f"https://ono-fix.com/?ref={code}",
+    }
+
+
+@api_router.get("/loyalty/gift-cards/history")
+async def loyalty_gift_card_history(current_user: User = Depends(get_current_user)):
+    cards = await db.gift_cards.find({"user_id": current_user.user_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"gift_cards": cards}
+
+
+@api_router.post("/loyalty/gift-cards/redeem")
+async def loyalty_redeem_gift_card(payload: Dict[str, Any] = Body(...), current_user: User = Depends(get_current_user)):
+    """Phase 2 will send the card via Giftbit. For now validate points and inform the user."""
+    value = int(payload.get("value") or 0)
+    tier = next((t for t in GIFT_CARD_TIERS if t["value"] == value), None)
+    if not tier:
+        raise HTTPException(status_code=400, detail="Invalid gift-card value")
+    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "balance_points": 1})
+    points = int((u or {}).get("balance_points") or 0)
+    if points < tier["points"]:
+        raise HTTPException(status_code=400, detail=f"Not enough points. You need {tier['points'] - points} more.")
+    raise HTTPException(status_code=503, detail="Gift-card redemption is launching very soon. Your points are safe and keep growing.")
+
+
 
 def _blog_safe_name(name: Optional[str]) -> str:
     """Return a display name that never exposes an email or other contact info."""
@@ -11566,6 +11782,10 @@ async def approve_refund(
         {"refund_id": refund_id},
         {"$set": update_data}
     )
+
+    # Loyalty: reverse points earned for this order when a refund is approved (anti-fraud)
+    if approved and refund.get("booking_id"):
+        await _reverse_order_points(refund["booking_id"])
 
     return {"message": "Refund processed", "approved": approved}
 

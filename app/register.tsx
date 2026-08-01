@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../utils/api';
@@ -12,6 +12,7 @@ import Head from 'expo-router/head';
 
 export default function Register() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { setUser, setToken } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,6 +23,9 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [referralCode, setReferralCode] = useState(
+    typeof params?.ref === 'string' ? (params.ref as string).toUpperCase() : ''
+  );
 
   const handleRegister = async () => {
     if (!email || !password || !name) {
@@ -39,7 +43,7 @@ export default function Register() {
     setErrorMsg('');
     setLoading(true);
     try {
-      const response = await api.register({ email, password, name, phone, role, accepted_terms: true } as any);
+      const response = await api.register({ email, password, name, phone, role, accepted_terms: true, referral_code: referralCode || undefined } as any);
       await setToken(response.session_token);
       setUser(response.user);
       // Email verification is NOT required — send the user straight into the app.
@@ -92,6 +96,10 @@ export default function Register() {
           <View style={styles.inputContainer}>
             <Ionicons name="call-outline" size={20} color="#6b7280" style={styles.inputIcon} />
             <TextInput style={styles.input} placeholder="Phone (optional)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+          </View>
+          <View style={styles.inputContainer}>
+            <Ionicons name="gift-outline" size={20} color="#6b7280" style={styles.inputIcon} />
+            <TextInput style={styles.input} placeholder="Referral code (optional)" value={referralCode} onChangeText={(t) => setReferralCode(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} data-testid="register-referral-input" />
           </View>
           <View style={styles.inputContainer}>
             <Ionicons name="lock-closed-outline" size={20} color="#6b7280" style={styles.inputIcon} />

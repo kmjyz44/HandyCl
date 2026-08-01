@@ -461,3 +461,21 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 - User supplied a proper JWT-style Giftbit token. VERIFIED on testbed: GET /funds → USD available 1,000,000,000 cents (virtual); GET /brands (USD) → amazonus (Amazon.com), walmart (Walmart), visavirtualus (Visa Incentive Virtual Card).
 - Updated GIFTBIT_DEFAULT_API_KEY constant (self-heals prod seed) + overwrote pod DB integration_keys.giftbit_api_key. Admin GET shows masked eyJ0••••••••/BQ=, enable_giftbit=true, env=testbed. Synced to root server.py.
 - READY for Phase 2 redemption (POST /papi/v1/campaign with brand_codes, price_in_cents, idempotent id). Brands to offer: Visa (visavirtualus) recommended as the flexible default; Amazon/Walmart optional.
+
+## 2026-08-01 — Loyalty Phase 1 COMPLETE (points + referrals + Rewards UI)
+BACKEND (server.py, synced to root):
+- Constants: 1pt/$1, 100pts=$1, referral activation $100 → 500pts. GIFT_CARD_TIERS 25/50/100/200/500 → 2500/5000/10000/20000/50000 pts.
+- Helpers: _ensure_referral_code (ONO+hex), _award_points (atomic $inc + points_transactions ledger), _process_referral_progress (advance/rollback friend spend, award/revoke referrer 500pt bonus + notify), _accrue_order_points (idempotent per booking via loyalty_awarded flag; +pts to client, +lifetime_spent, feeds referral progress), _reverse_order_points (refund/cancel → deduct pts + roll back referral).
+- Hooks: Finix charge success (6704 block) + _finalize_payment_if_both_confirmed (manual paid) → accrue; admin refund approve → reverse. Register accepts referral_code → sets referred_by + creates pending referrals doc.
+- Endpoints: GET /loyalty/balance (points, usd, next_tier, tiers[can_redeem], code, link), GET /loyalty/transactions, POST /loyalty/referrals/generate, GET /loyalty/referrals/stats, GET /loyalty/gift-cards/history, POST /loyalty/gift-cards/redeem (Phase 1 → 503 "launching soon" after validating points).
+- Collections: users.{balance_points,lifetime_spent,referral_code,referred_by}, points_transactions, referrals, gift_cards.
+- VERIFIED: direct helper test — order1 $50→+50 (referral pending), order2 $60→friend 110 + referrer +500 (active), idempotent re-accrue no double, reverse order1 → friend -50 + referrer -500 + referral back to pending. Endpoints via curl: balance/stats/generate/transactions/history OK; redeem w/o points → 400 with points-needed msg.
+
+FRONTEND (compiles clean via esbuild; visual check pending on Netlify — pod serves CRA stub):
+- NEW app/rewards.tsx: dark hero balance card + progress-to-next-tier bar, gift-card tiers list w/ Redeem (locked until enough pts), referral card (code + Copy + Share + invited/activated/earned stats), recent activity ledger. Route registered in _layout.
+- NEW components/RewardsBanner.tsx: compact dark banner on client home (only for clients) → tap to /rewards, shows pts + progress. Inserted after EmailVerificationBanner in (tabs)/index.tsx.
+- my-profile.tsx: client menu new "Rewards" section → /rewards; provider menu "Invite friends" stub row rewired to /rewards.
+- register.tsx: captures ?ref= param + optional "Referral code" input → passed to /auth/register.
+- utils/api.ts: getLoyaltyBalance/Transactions, getReferralStats, generateReferralCode, getGiftCardHistory, redeemGiftCard.
+
+PHASE 2 (pending): wire /loyalty/gift-cards/redeem to Giftbit POST /campaign (deduct points, create gift_cards doc, poll status). Giftbit testbed key already installed & valid. Default brand recommendation: visavirtualus.

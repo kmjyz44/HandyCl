@@ -43,6 +43,7 @@ export default function RootLayout() {
         <Stack.Screen name="executor" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="payout-setup" />
+        <Stack.Screen name="rewards" />
         <Stack.Screen name="payment-success" />
         <Stack.Screen name="payment-cancelled" />
         <Stack.Screen name="blog/[id]" />

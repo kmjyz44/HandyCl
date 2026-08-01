@@ -499,6 +499,16 @@ function ClientProfile() {
         </View>
 
 
+        {/* Rewards */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Rewards</Text>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/rewards' as any)} data-testid="myprofile-rewards-link">
+            <Ionicons name="gift-outline" size={22} color="#16a34a" />
+            <Text style={[styles.menuText, { color: '#15803d', fontWeight: '700' }]}>My rewards & invite friends</Text>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+        </View>
+
         {/* Company */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Company</Text>
@@ -1485,9 +1495,9 @@ function ProviderProfile() {
       <View style={pStyles.menuDivider} />
 
       {/* INVITE */}
-      <TouchableOpacity style={[pStyles.menuRow, { backgroundColor: '#f0fdf4' }]} onPress={() => Alert.alert('Invite friends', 'The referral feature will be available in the next version')}>
+      <TouchableOpacity style={[pStyles.menuRow, { backgroundColor: '#f0fdf4' }]} onPress={() => router.push('/rewards' as any)} data-testid="provider-rewards-row">
         <Ionicons name="gift-outline" size={22} color="#16a34a" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1, color: '#15803d' }]}>Invite friends, get a bonus</Text>
+        <Text style={[pStyles.menuRowText, { flex: 1, color: '#15803d' }]}>Rewards & invite friends</Text>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />

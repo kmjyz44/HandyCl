@@ -14,6 +14,7 @@ import { api } from '../../utils/api';
 import { showAlertWithButtons } from '../../utils/alert';
 import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
+import RewardsBanner from '../../components/RewardsBanner';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import { SiteFooter } from '../../components/SiteFooter';
 
@@ -1358,6 +1359,7 @@ export default function HomeScreen() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <PaymentReminderBanner />
           <EmailVerificationBanner />
+          <RewardsBanner />
           {focusedScan ? (
             <TouchableOpacity
               style={s.browseAllBtn}
