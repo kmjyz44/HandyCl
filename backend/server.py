@@ -1472,6 +1472,19 @@ async def _get_integration_keys() -> Dict[str, Any]:
             )
             doc["plivo_auth_id"] = doc.get("plivo_auth_id") or PLIVO_DEFAULT_AUTH_ID
             doc["plivo_auth_token"] = doc.get("plivo_auth_token") or PLIVO_DEFAULT_AUTH_TOKEN
+        if not doc.get("giftbit_api_key"):
+            await db.integration_keys.update_one(
+                {"setting_id": "integration_keys"},
+                {"$set": {
+                    "giftbit_api_key": GIFTBIT_DEFAULT_API_KEY,
+                    "giftbit_environment": doc.get("giftbit_environment") or "testbed",
+                    "enable_giftbit": True if doc.get("enable_giftbit") is None else doc.get("enable_giftbit"),
+                }},
+                upsert=True,
+            )
+            doc["giftbit_api_key"] = GIFTBIT_DEFAULT_API_KEY
+            doc["giftbit_environment"] = doc.get("giftbit_environment") or "testbed"
+            doc["enable_giftbit"] = True if doc.get("enable_giftbit") is None else doc.get("enable_giftbit")
         return doc
     except Exception:
         return {}
@@ -1560,6 +1573,8 @@ async def _send_email(to_email: str, subject: str, body_text: str) -> bool:
 
 PLIVO_DEFAULT_AUTH_ID = "MANDEWMTDLZJCTZJJINC"
 PLIVO_DEFAULT_AUTH_TOKEN = "ZjAzYjUzNTEtN2Y2MS00ZDI2LTYxZWItMGQ2NmVk"
+# Giftbit (loyalty rewards gift cards) — default testbed key, admin can override in the panel.
+GIFTBIT_DEFAULT_API_KEY = "e3c59edf33426e265df581010b2e6322"
 
 
 def _plivo_creds(keys: dict) -> Tuple[str, str, str]:
@@ -9135,6 +9150,11 @@ class IntegrationKeysUpdate(BaseModel):
     finix_platform_merchant_id: Optional[str] = None  # MUxxxx (also used client-side for Google Pay)
     finix_platform_identity_id: Optional[str] = None  # IDxxxx (platform's own identity)
     finix_environment: Optional[str] = None  # "sandbox" (default) or "live"
+    # Giftbit (digital gift cards for the loyalty rewards program). Admin toggles on/off.
+    enable_giftbit: Optional[bool] = None
+    giftbit_api_key: Optional[str] = None  # secret Bearer token
+    giftbit_environment: Optional[str] = None  # "testbed" (default) or "production"
+    giftbit_default_brand: Optional[str] = None  # optional preferred brand_code (e.g. "amazonus")
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
     twilio_from_phone: Optional[str] = None
@@ -10542,7 +10562,7 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
     out = {}
     secret_fields = {
         "sendgrid_api_key", "resend_api_key", "stripe_secret_key", "stripe_webhook_secret",
-        "twilio_auth_token", "plivo_auth_token", "vapid_private_key", "telegram_bot_token", "telegram_webhook_secret", "finix_api_password",
+        "twilio_auth_token", "plivo_auth_token", "vapid_private_key", "telegram_bot_token", "telegram_webhook_secret", "finix_api_password", "giftbit_api_key",
     }
     for k in IntegrationKeysUpdate.model_fields.keys():
         v = doc.get(k)

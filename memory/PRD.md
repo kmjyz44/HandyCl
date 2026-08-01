@@ -448,3 +448,11 @@ US-ЛОКАЛІЗАЦІЯ (фундамент, перевірка на Netlify):
 ## 2026-07-28 — FIX (P0): "Confirm payment" opened review WITHOUT paying (task-detail.tsx)
 - Root cause: button used onPress={submitPayment} → RN passes the event object as forceMethod (truthy) → bypassed the !method guard → legacy fallback opened the review modal with no real payment.
 - Fix: onPress={() => submitPayment()}; button DISABLED until a method is selected (label "Select a method"); onMethodTap only highlights (no auto-submit). Review opens only after a successful Finix charge. esbuild clean.
+
+## 2026-08-01 — Loyalty rewards switched Tremendous → Giftbit (admin config + default key)
+- User decision: use GIFTBIT (not Tremendous) for gift-card rewards. Provided testbed key.
+- BACKEND (server.py): IntegrationKeysUpdate gained enable_giftbit / giftbit_api_key (secret, masked) / giftbit_environment (testbed|production) / giftbit_default_brand. Added giftbit_api_key to the masked secret_fields. Added GIFTBIT_DEFAULT_API_KEY constant + seed in _get_integration_keys() (self-heals: sets key + environment=testbed + enable_giftbit=True once if missing → auto-populates prod on deploy). Synced to root server.py.
+- ADMIN UI (admin-integrations.tsx): new "Giftbit (loyalty rewards — gift cards)" section with enable toggle + environment + API key (secret) + default brand.
+- VERIFIED (pod): key seeded, GET /admin/integration-keys returns masked e3c5••••••••6322, enable_giftbit=true, env=testbed.
+- ⚠️ KEY INVALID: the provided key e3c59edf...6322 returns HTTP 401 ERROR_UNAUTHORIZED on BOTH https://api-testbed.giftbit.com/papi/v1 and https://api.giftbit.com/papi/v1 (/funds, /brands, /ping). Giftbit access tokens are long JWT-style strings, not 32-char hex → user must regenerate a real key (Dashboard → username → API Keys → Generate New Key). Phase 2 (redemption via POST /campaign) is BLOCKED until a valid key is entered.
+- Giftbit integration facts (from playbook): base URLs testbed/production above; Bearer auth; send = POST /papi/v1/campaign {contacts[], price_in_cents, brand_codes[], subject, message, id(idempotent)}; no webhooks → poll GET /gifts + GET /campaign/{id}. Store amounts in integer cents.

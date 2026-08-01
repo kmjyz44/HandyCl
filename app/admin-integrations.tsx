@@ -98,6 +98,16 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
+    title: 'Giftbit (loyalty rewards — gift cards)',
+    toggle: 'enable_giftbit',
+    toggleLabel: 'Enable Giftbit rewards',
+    keys: [
+      { id: 'giftbit_environment', label: 'Environment (testbed / production)', placeholder: 'testbed — default' },
+      { id: 'giftbit_api_key', label: 'API Key (Bearer token)', placeholder: 'paste your Giftbit API key', secret: true },
+      { id: 'giftbit_default_brand', label: 'Default brand code (optional)', placeholder: 'e.g. amazonus' },
+    ],
+  },
+  {
     title: 'Help Center / Support',
     keys: [
       { id: 'support_email', label: 'Contact email', placeholder: 'support@yourbrand.com' },
