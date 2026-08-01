@@ -487,3 +487,15 @@ BACKEND (server.py, synced to root):
 - Rewrote POST /loyalty/gift-cards/redeem: validates tier; requires enable_giftbit+key (else 503); ATOMIC deduct via find_one_and_update({balance_points:{$gte:pts}}) to prevent race/negative (else 400 with points-needed); creates gift_cards doc (pending) + redemption ledger; calls Giftbit; on failure REFUNDS points (+ reversal ledger, card=failed); on success card=delivered + stores giftbit_campaign_id (uuid) + notify_user (inapp/push/email).
 - VERIFIED on real Giftbit TESTBED: grant 3000pts → redeem $25 → HTTP200, real campaign uuid returned, balance 3000→500, gift_cards history shows $25 delivered w/ uuid. Guards: 0 pts → 400 "need 2500 more"; invalid value → 400.
 FRONTEND: rewards.tsx onRedeem now confirms (web) before spending, shows server message on success. No other change (Phase 1 UI already wired to api.redeemGiftCard).
+
+## 2026-08-01 — FIX: referral not linked + points not awarded (Client5→Client7 report)
+DIAGNOSIS (live data via admin API): Client7 (user_21cfff077e66) task_b8e04677d429 booking_85e3f61e5956 was FULLY PAID via zelle (exec_conf+admin_conf true) but loyalty_awarded=None → 0 points; referred_by=None → referral never linked. Loyalty endpoints ARE deployed on Railway (200).
+ROOT CAUSES:
+1. Referral link pointed to https://ono-fix.com/?ref=CODE (home), but only register.tsx read the ?ref param → lost on navigation home→register.
+2. _accrue_order_points read final_price from the BOOKING, but for manual/Zelle orders the price lives on the linked TASK → amount=0 → early return, no points, no flag.
+FIXES (pod, synced to root; needs Save to GitHub to deploy):
+- _accrue_order_points now falls back to the linked task's final_price/total_amount/price when the booking has none.
+- Referral links now point to /register?ref=CODE (3 spots). _layout.tsx captures ?ref= from URL into localStorage('ono_ref') on any page; register.tsx initial referralCode falls back to localStorage.
+- NEW admin endpoints: POST /admin/loyalty/backfill {client_email?} — awards points for already-paid orders missing loyalty_awarded (idempotent); POST /admin/loyalty/link-referral {referred_email, referrer_code} — retroactively links a client to referrer + recomputes progress from their paid orders + awards referrer bonus if >=$100.
+- VERIFIED on pod: backfill awarded points incl a task-only-priced booking (113 pts for $63.25+$50); link-referral B→A with $113 spent → active + referrer +500.
+POST-DEPLOY ACTION NEEDED (run on live with admin token): POST /admin/loyalty/link-referral {referred_email: client7@handyhub.com, referrer_code: ONO6AD637 (client5)} then POST /admin/loyalty/backfill (all) to credit Client7 (~63 pts) and any other already-paid orders.

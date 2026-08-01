@@ -10323,7 +10323,13 @@ async def _accrue_order_points(booking_id: str, client_amount: float):
         if not b or b.get("loyalty_awarded"):
             return
         client_id = b.get("client_id")
-        amount = round(float(client_amount or b.get("final_price") or 0), 2)
+        amount = round(float(client_amount or b.get("final_price") or b.get("total_amount") or 0), 2)
+        if amount <= 0:
+            # Price may live on the linked task rather than the booking — self-heal.
+            task = await db.tasks.find_one({"booking_id": booking_id}, {"_id": 0, "final_price": 1, "total_amount": 1, "price": 1, "client_id": 1})
+            if task:
+                amount = round(float(task.get("final_price") or task.get("total_amount") or task.get("price") or 0), 2)
+                client_id = client_id or task.get("client_id")
         if not client_id or amount <= 0:
             return
         pts = int(amount) * LOYALTY_POINTS_PER_DOLLAR
@@ -10375,7 +10381,7 @@ async def loyalty_balance(current_user: User = Depends(get_current_user)):
         "next_tier": await _loyalty_next_tier(points),
         "tiers": [{**t, "usd": round(t["points"] * LOYALTY_POINT_VALUE_USD, 2), "can_redeem": points >= t["points"]} for t in GIFT_CARD_TIERS],
         "referral_code": code,
-        "referral_link": f"https://ono-fix.com/?ref={code}",
+        "referral_link": f"https://ono-fix.com/register?ref={code}",
         "point_value_usd": LOYALTY_POINT_VALUE_USD,
     }
 
@@ -10389,7 +10395,7 @@ async def loyalty_transactions(current_user: User = Depends(get_current_user), l
 @api_router.post("/loyalty/referrals/generate")
 async def loyalty_generate_code(current_user: User = Depends(get_current_user)):
     code = await _ensure_referral_code(current_user.user_id)
-    return {"referral_code": code, "referral_link": f"https://ono-fix.com/?ref={code}"}
+    return {"referral_code": code, "referral_link": f"https://ono-fix.com/register?ref={code}"}
 
 
 @api_router.get("/loyalty/referrals/stats")
@@ -10403,7 +10409,7 @@ async def loyalty_referral_stats(current_user: User = Depends(get_current_user))
         "points_earned": len(active) * REFERRAL_BONUS_POINTS,
         "usd_earned": round(len(active) * REFERRAL_BONUS_POINTS * LOYALTY_POINT_VALUE_USD, 2),
         "referral_code": code,
-        "referral_link": f"https://ono-fix.com/?ref={code}",
+        "referral_link": f"https://ono-fix.com/register?ref={code}",
     }
 
 
@@ -10512,6 +10518,66 @@ async def loyalty_redeem_gift_card(payload: Dict[str, Any] = Body(...), current_
         pass
     return {"success": True, "card_id": card_id, "value": value, "recipient_email": email,
             "message": f"Your ${value} gift card was sent to {email}."}
+
+
+@api_router.post("/admin/loyalty/backfill")
+async def admin_loyalty_backfill(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
+    """Award loyalty points for orders that were already PAID but never accrued
+    (e.g. paid before the loyalty system launched). Idempotent — skips already-awarded orders.
+    Optional body: {"client_email": "..."} to limit to one client."""
+    q: Dict[str, Any] = {"$and": [
+        {"$or": [{"payment_status": "paid"}, {"status": "paid"}]},
+        {"$or": [{"loyalty_awarded": {"$exists": False}}, {"loyalty_awarded": {"$ne": True}}]},
+    ]}
+    email = (payload.get("client_email") or "").strip().lower()
+    if email:
+        u = await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}, {"_id": 0, "user_id": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="Client not found")
+        q["$and"].append({"client_id": u["user_id"]})
+    bookings = await db.bookings.find(q, {"_id": 0, "booking_id": 1}).to_list(5000)
+    processed = 0
+    for b in bookings:
+        before = await db.bookings.find_one({"booking_id": b["booking_id"]}, {"_id": 0, "loyalty_awarded": 1})
+        await _accrue_order_points(b["booking_id"], 0)
+        after = await db.bookings.find_one({"booking_id": b["booking_id"]}, {"_id": 0, "loyalty_awarded": 1})
+        if not (before or {}).get("loyalty_awarded") and (after or {}).get("loyalty_awarded"):
+            processed += 1
+    return {"scanned": len(bookings), "awarded": processed}
+
+
+@api_router.post("/admin/loyalty/link-referral")
+async def admin_link_referral(payload: Dict[str, Any] = Body(...), current_user: User = Depends(require_admin)):
+    """Retroactively link a client to their referrer (when the referral link was missed at signup).
+    Body: {"referred_email": "...", "referrer_code": "ONO..."}. Recomputes progress from the
+    referred user's already-paid orders and awards the referrer bonus if the $100 threshold is met."""
+    referred_email = (payload.get("referred_email") or "").strip().lower()
+    referrer_code = (payload.get("referrer_code") or "").strip().upper()
+    referred = await db.users.find_one({"email": {"$regex": f"^{re.escape(referred_email)}$", "$options": "i"}}, {"_id": 0, "user_id": 1})
+    referrer = await db.users.find_one({"referral_code": referrer_code}, {"_id": 0, "user_id": 1})
+    if not referred:
+        raise HTTPException(status_code=404, detail="Referred client not found")
+    if not referrer:
+        raise HTTPException(status_code=404, detail="Referrer code not found")
+    if referred["user_id"] == referrer["user_id"]:
+        raise HTTPException(status_code=400, detail="A user cannot refer themselves")
+    if await db.referrals.find_one({"referred_id": referred["user_id"]}):
+        raise HTTPException(status_code=400, detail="This client is already linked to a referrer")
+    # Sum the referred user's already-paid orders
+    paid = await db.bookings.find({"client_id": referred["user_id"], "$or": [{"payment_status": "paid"}, {"status": "paid"}]},
+                                  {"_id": 0, "loyalty_amount": 1, "final_price": 1}).to_list(5000)
+    spent = round(sum(float(x.get("loyalty_amount") or x.get("final_price") or 0) for x in paid), 2)
+    await db.users.update_one({"user_id": referred["user_id"]}, {"$set": {"referred_by": referrer["user_id"]}})
+    ref_id = f"ref_{uuid.uuid4().hex[:12]}"
+    await db.referrals.insert_one({
+        "referral_id": ref_id, "referrer_id": referrer["user_id"], "referred_id": referred["user_id"],
+        "total_spent": 0.0, "status": "pending", "bonus_awarded": False, "created_at": datetime.now(timezone.utc),
+    })
+    if spent > 0:
+        await _process_referral_progress(referred["user_id"], spent, direction=1)
+    ref = await db.referrals.find_one({"referral_id": ref_id}, {"_id": 0})
+    return {"linked": True, "referred_total_spent": spent, "status": ref.get("status"), "bonus_awarded": ref.get("bonus_awarded")}
+
 
 
 

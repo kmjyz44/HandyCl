@@ -23,9 +23,15 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [referralCode, setReferralCode] = useState(
-    typeof params?.ref === 'string' ? (params.ref as string).toUpperCase() : ''
-  );
+  const [referralCode, setReferralCode] = useState(() => {
+    if (typeof params?.ref === 'string' && params.ref) return (params.ref as string).toUpperCase();
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return (window.localStorage.getItem('ono_ref') || '').toUpperCase();
+      }
+    } catch {}
+    return '';
+  });
 
   const handleRegister = async () => {
     if (!email || !password || !name) {

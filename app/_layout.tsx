@@ -15,6 +15,17 @@ export default function RootLayout() {
     loadToken();
   }, [loadToken]);
 
+  // Capture a referral code from the URL (?ref=CODE) on any landing page and
+  // persist it, so it survives navigation to the registration screen.
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        const ref = new URLSearchParams(window.location.search).get('ref');
+        if (ref) window.localStorage.setItem('ono_ref', ref.toUpperCase());
+      }
+    } catch {}
+  }, []);
+
   // Register the browser for web push notifications once the user is logged in.
   // No-op on native platforms or browsers that don't support PushManager.
   useEffect(() => {
