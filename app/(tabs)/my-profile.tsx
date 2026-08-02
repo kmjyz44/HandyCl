@@ -1241,7 +1241,7 @@ function ProviderProfile() {
     );
     setProviderSkills(updated);
     try {
-      await saveProfile({ skills: updated.map(skillToPayload), hourly_rate: rate });
+      await saveProfile({ skills: updated.map(skillToPayload), hourly_rate: rate, minimum_hours: minimumHours });
       Alert.alert('Saved', 'Service details updated');
       setServiceDetailVisible(false);
     } catch (e: any) {
@@ -1786,6 +1786,25 @@ function ProviderProfile() {
                     data-testid="skill-rate-input"
                   />
                   <Text style={{ fontSize: 14, color: '#6b7280' }}>/hr</Text>
+                </View>
+
+                <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>MINIMUM CHARGE</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                  Clients pay for at least this many hours. Extra time is billed per minute. Shown on your profile before a client books. Applies to all your services.
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                  {[1, 1.5, 2].map((h) => (
+                    <TouchableOpacity
+                      key={h}
+                      style={[styles.minHrChip, minimumHours === h && styles.minHrChipActive]}
+                      onPress={() => setMinimumHours(h)}
+                      data-testid={`skill-min-hours-${h}`}
+                    >
+                      <Text style={[styles.minHrChipText, minimumHours === h && styles.minHrChipTextActive]}>
+                        {h} hr{h > 1 ? 's' : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
 
                 <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>
