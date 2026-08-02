@@ -508,3 +508,15 @@ POST-DEPLOY ACTION NEEDED (run on live with admin token): POST /admin/loyalty/li
 - Live task task_c87407847fcb: provider_hourly_rate=48.0 (correct), hourly_rate=None. task-detail.tsx "Close task" earnings preview used `task.hourly_rate || 25` → showed $25.
 - NOT a payout bug: completeTask sends only actual_hours + materials_cost; backend computes final price from stored provider_hourly_rate (48). Only the preview was wrong.
 - FIX (task-detail.tsx): hourlyRate = task.provider_hourly_rate || task.hourly_rate || 25 (line 637); "Hours worked × $rate" row now uses hourlyRate (was task.hourly_rate||0 → showed $0). esbuild clean.
+
+## 2026-08-02 — FIX: Zelle split showed $48 & 0% platform instead of actual invoice + admin commission
+DIAGNOSIS (live task_d0968420631b, TV mounting, completed_pending_payment): final_price=110.4, provider_payout=96.0, platform_fee=14.4 (correct completion values), BUT booking snapshot stale (executor_take=48, platform_take=0, total_price=48). Also category "TV mounting" has NO commission_rate → 0% (vs "Electrical" 15%).
+ROOT CAUSES:
+1. get_manual_instructions read the booking-time snapshot (executor_take/platform_take/total_price = 1-hour estimate) instead of the completed task's authoritative provider_payout/platform_fee/final_price.
+2. compute_client_pricing defaulted commission_rate to 0 when a category had none — no fallback to the admin global rate (settings.admin_commission_percentage=15).
+FIXES (server.py, synced to root):
+- get_manual_instructions: if the linked task has final_price>0 AND provider_payout>0, use amount=final_price, executor_take=provider_payout, platform_take=platform_fee (skip the recompute-from-rate fallback).
+- finix_charge: same — prefer the completed task's provider_payout/platform_fee/final_price whenever present (was only used when booking split was 0).
+- compute_client_pricing: when a category has no commission_rate, fall back to settings.admin_commission_percentage (else 0).
+VERIFIED on pod: manual-instructions for a completed task → total 110.40, platform 14.40 (15%), pro 96.00 (was 48/0). pricing-preview?executor_rate=48 (no category) → 15%, platform 8.47.
+NOTE: split is computed live per request → after deploy, existing live completed tasks show the correct split immediately (no backfill).

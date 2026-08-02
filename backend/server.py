@@ -6609,16 +6609,15 @@ async def finix_charge(
     # Use the EXISTING computed split — do not recompute commission.
     platform_take = float(booking.get("platform_take") or 0)
     executor_take = float(booking.get("executor_take") or 0)
-    if platform_take <= 0 or executor_take <= 0:
-        # Hourly / at-completion bookings store the final split on the TASK
-        # (provider_payout = executor share, platform_fee = commission), computed
-        # when the pro completes the job. Fall back to those authoritative values.
-        tk = await db.tasks.find_one(
-            {"booking_id": booking_id},
-            {"_id": 0, "provider_payout": 1, "platform_fee": 1, "final_price": 1})
-        if tk:
-            executor_take = float(tk.get("provider_payout") or 0)
-            platform_take = float(tk.get("platform_fee") or 0)
+    # Hourly / at-completion bookings store the FINAL split on the TASK
+    # (provider_payout = executor share, platform_fee = commission, final_price = client total),
+    # computed when the pro completes the job. These are authoritative — prefer them.
+    tk = await db.tasks.find_one(
+        {"booking_id": booking_id},
+        {"_id": 0, "provider_payout": 1, "platform_fee": 1, "final_price": 1})
+    if tk and float(tk.get("final_price") or 0) > 0 and float(tk.get("provider_payout") or 0) > 0:
+        executor_take = float(tk.get("provider_payout") or 0)
+        platform_take = float(tk.get("platform_fee") or 0)
     if platform_take <= 0 or executor_take <= 0:
         raise HTTPException(status_code=400, detail="The split amount is not defined for this order")
     exec_cents = int(round(executor_take * 100))
@@ -8995,7 +8994,7 @@ async def compute_client_pricing(executor_rate: float, category_id: Optional[str
     except Exception:
         rate = 0.0
 
-    commission_rate = 0.0
+    commission_rate = None
     category_doc = None
     if category_id:
         category_doc = await db.categories.find_one(
@@ -9004,6 +9003,17 @@ async def compute_client_pricing(executor_rate: float, category_id: Optional[str
         )
         if category_doc and category_doc.get("commission_rate") is not None:
             commission_rate = float(category_doc["commission_rate"])
+
+    # No per-category rate configured → fall back to the admin's global commission.
+    if commission_rate is None:
+        try:
+            settings = await get_settings()
+            admin_rate = getattr(settings, "admin_commission_percentage", None)
+            if admin_rate is None and isinstance(settings, dict):
+                admin_rate = settings.get("admin_commission_percentage")
+            commission_rate = float(admin_rate or 0)
+        except Exception:
+            commission_rate = 0.0
 
     if commission_rate >= 100:
         commission_rate = 99.0  # cap to avoid div-by-zero
@@ -9324,11 +9334,27 @@ async def get_manual_instructions(
     executor_take = float(booking.get("executor_take") or 0)
     commission_rate_snapshot = booking.get("commission_rate_snapshot")
 
+    # If the linked task has been COMPLETED, its final_price / provider_payout /
+    # platform_fee reflect the ACTUAL work (actual hours + materials + commission).
+    # These are authoritative — use them instead of the booking-time estimate.
+    task_doc = await db.tasks.find_one(
+        {"booking_id": booking_id},
+        {"_id": 0, "final_price": 1, "provider_payout": 1, "platform_fee": 1, "commission_rate_snapshot": 1},
+    )
+    used_completion = False
+    if task_doc and float(task_doc.get("final_price") or 0) > 0 and float(task_doc.get("provider_payout") or 0) > 0:
+        amount = float(task_doc["final_price"])
+        executor_take = float(task_doc["provider_payout"])
+        platform_take = float(task_doc.get("platform_fee") or 0)
+        if task_doc.get("commission_rate_snapshot") is not None:
+            commission_rate_snapshot = task_doc.get("commission_rate_snapshot")
+        used_completion = True
+
     # Fallback: if the split is missing/zero on this booking (older bookings,
     # legacy data, or commission not applied at creation time), recompute it
     # NOW from the category's current commission rate. The executor's set price
     # is treated as authoritative; commission is added ON TOP of it.
-    if platform_take <= 0 or executor_take <= 0:
+    if not used_completion and (platform_take <= 0 or executor_take <= 0):
         # Determine executor's set price (in priority order)
         executor_rate = (
             float(booking.get("executor_rate") or 0)
