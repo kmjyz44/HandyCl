@@ -503,3 +503,8 @@ POST-DEPLOY ACTION NEEDED (run on live with admin token): POST /admin/loyalty/li
 ## 2026-08-01 — FIX: "Minimum charge" (1/1.5/2 hr) selector was unreachable
 - User couldn't find the minimum-hours toggle. ROOT CAUSE: the selector lived in the bioModalVisible modal in (tabs)/my-profile.tsx, but setBioModalVisible(true) is never called anywhere → modal orphaned after a profile-menu refactor. minimum_hours (executor_profiles) is profile-level and already shown to clients (executor/[id].tsx + booking).
 - FIX: added a "MINIMUM CHARGE" section (chips 1 / 1.5 / 2 hrs, note "applies to all your services") into the per-skill editor (serviceDetailVisible General tab, right under HOURLY RATE) — exactly where the user looked. saveSkillDetails now also passes minimum_hours to saveProfile. Value loads from profile on mount. esbuild clean. (Orphaned bioModalVisible left in place, harmless.)
+
+## 2026-08-01 — FIX: "Close task" showed $25/hr instead of provider's $48 (display only)
+- Live task task_c87407847fcb: provider_hourly_rate=48.0 (correct), hourly_rate=None. task-detail.tsx "Close task" earnings preview used `task.hourly_rate || 25` → showed $25.
+- NOT a payout bug: completeTask sends only actual_hours + materials_cost; backend computes final price from stored provider_hourly_rate (48). Only the preview was wrong.
+- FIX (task-detail.tsx): hourlyRate = task.provider_hourly_rate || task.hourly_rate || 25 (line 637); "Hours worked × $rate" row now uses hourlyRate (was task.hourly_rate||0 → showed $0). esbuild clean.

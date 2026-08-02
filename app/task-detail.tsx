@@ -634,7 +634,7 @@ export default function TaskDetail() {
   const showExecutorWaitingCard = isProvider && isMyTask && isPaymentPending && executorAlreadyConfirmed && !adminAlreadyConfirmed;
 
   const price = task.estimated_price || task.total_price;
-  const hourlyRate = task.hourly_rate || 25;
+  const hourlyRate = task.provider_hourly_rate || task.hourly_rate || 25;
   // Auto-calculate hours from started_at if not manually entered
   const autoHours = (() => {
     if (!task.started_at) return 0;
@@ -872,7 +872,7 @@ export default function TaskDetail() {
                 {!!task.actual_hours && (
                   <View style={s.priceRow}>
                     <Text style={s.priceLabel}>Hours worked</Text>
-                    <Text style={s.priceLabel}>{task.actual_hours} hr × ${task.hourly_rate || 0}/hr</Text>
+                    <Text style={s.priceLabel}>{task.actual_hours} hr × ${hourlyRate}/hr</Text>
                   </View>
                 )}
                 {!!task.labor_cost && (
