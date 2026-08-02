@@ -1181,6 +1181,7 @@ export default function HomeScreen() {
           <meta property="og:title" content="Ono-Fix — One Photo. One Solution." />
           <meta property="og:url" content="https://ono-fix.com/" />
         </Head>
+        <EmailVerificationBanner />
         {/* Header — focused scan header (installed PWA), landing hero for guests, greeting for clients */}
         {focusedScan ? (
           <View style={s.scanHeader}>
@@ -1358,7 +1359,6 @@ export default function HomeScreen() {
         {/* Category grid */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <PaymentReminderBanner />
-          <EmailVerificationBanner />
           <RewardsBanner />
           {focusedScan ? (
             <TouchableOpacity
