@@ -520,3 +520,7 @@ FIXES (server.py, synced to root):
 - compute_client_pricing: when a category has no commission_rate, fall back to settings.admin_commission_percentage (else 0).
 VERIFIED on pod: manual-instructions for a completed task → total 110.40, platform 14.40 (15%), pro 96.00 (was 48/0). pricing-preview?executor_rate=48 (no category) → 15%, platform 8.47.
 NOTE: split is computed live per request → after deploy, existing live completed tasks show the correct split immediately (no backfill).
+
+## 2026-08-02 — FIX: "Pay for task" modal double-charged commission + showed "0 hr × $25"
+- task-detail.tsx "Pay for task" modal computed clientTotal = totalBase * 1.15 where totalBase = final_price. But final_price ALREADY includes commission (provider_payout + platform_fee) → double 15% ($110.40 shown as $126.96). Also hours line used task.hourly_rate (→ $25 default) and showed "0 hr × $25 = $0" when actual_hours=0.
+- FIX: clientTotal = final_price when present (no extra ×1.15); ×1.15 estimate kept only for the no-final_price fallback. Hours line now uses rate = provider_hourly_rate || hourly_rate || hourlyRate, only shown when actual_hours>0, else falls back to "Labor = $provider_payout". Now consistent with the task-body Total due (final_price) and the Zelle/Finix split. esbuild clean.

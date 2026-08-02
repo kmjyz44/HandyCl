@@ -1263,15 +1263,17 @@ export default function TaskDetail() {
             <ScrollView style={s.modalBody}>
               {/* Summary */}
               {(() => {
-                // Calculate total for client: labor + materials + 15% platform fee (already included)
+                // final_price is the authoritative client total (labor + materials + commission),
+                // computed when the pro completes the job. Do NOT add commission again.
                 const fp = task.final_price;
                 const ah = task.actual_hours;
-                const hr = task.hourly_rate || hourlyRate;
+                const rate = task.provider_hourly_rate || task.hourly_rate || hourlyRate;
                 const mc = task.materials_cost || 0;
-                const laborBase = fp ? fp : (ah && hr ? Math.round(ah * hr * 100) / 100 : (price || 0));
+                const payout = task.provider_payout;  // executor labor share (before commission)
+                const laborBase = fp ? fp : (ah && rate ? Math.round(ah * rate * 100) / 100 : (price || 0));
                 const totalBase = fp || (laborBase + mc);
-                // Client pays total including 15% platform fee
-                const clientTotal = Math.round(totalBase * 1.15 * 100) / 100;
+                // If we already have the final price it includes commission; otherwise add the 15% estimate.
+                const clientTotal = fp ? Math.round(fp * 100) / 100 : Math.round(totalBase * 1.15 * 100) / 100;
                 return (
                   <>
                     <View style={s.paymentSummary}>
@@ -1279,12 +1281,17 @@ export default function TaskDetail() {
                         <Text style={s.payLabel}>Pro</Text>
                         <Text style={s.payVal}>{task.provider?.name || 'Pro'}</Text>
                       </View>
-                      {ah != null && (
+                      {ah != null && ah > 0 ? (
                         <View style={s.payRow}>
                           <Text style={s.payLabel}>Hours worked</Text>
-                          <Text style={[s.payVal, { color: '#2563eb' }]}>{ah} hr × ${hr}/hr = ${Math.round(ah * hr)}</Text>
+                          <Text style={[s.payVal, { color: '#2563eb' }]}>{ah} hr × ${rate}/hr = ${Math.round(ah * rate)}</Text>
                         </View>
-                      )}
+                      ) : (payout ? (
+                        <View style={s.payRow}>
+                          <Text style={s.payLabel}>Labor</Text>
+                          <Text style={[s.payVal, { color: '#2563eb' }]}>${payout}</Text>
+                        </View>
+                      ) : null)}
                       {mc > 0 && (
                         <View style={s.payRow}>
                           <Text style={s.payLabel}>Materials</Text>
