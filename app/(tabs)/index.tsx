@@ -232,7 +232,6 @@ function ProviderDashboard() {
       </View>
 
       <PaymentReminderBanner />
-      <EmailVerificationBanner />
 
       {/* Stats row — clickable tiles */}
       <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12 }}>
@@ -1181,7 +1180,6 @@ export default function HomeScreen() {
           <meta property="og:title" content="Ono-Fix — One Photo. One Solution." />
           <meta property="og:url" content="https://ono-fix.com/" />
         </Head>
-        <EmailVerificationBanner />
         {/* Header — focused scan header (installed PWA), landing hero for guests, greeting for clients */}
         {focusedScan ? (
           <View style={s.scanHeader}>
@@ -1359,7 +1357,6 @@ export default function HomeScreen() {
         {/* Category grid */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <PaymentReminderBanner />
-          <RewardsBanner />
           {focusedScan ? (
             <TouchableOpacity
               style={s.browseAllBtn}
@@ -1435,6 +1432,7 @@ export default function HomeScreen() {
           {/* Popular tasks */}
           {searchQuery.trim() === '' ? (
           <>
+          <RewardsBanner />
           <Text style={[s.sectionTitle, { marginTop: 24 }]}>Popular tasks</Text>
           {[
             { skill: 'IKEA furniture assembly', cat: SKILL_CATEGORIES[0], emoji: '🪑' },

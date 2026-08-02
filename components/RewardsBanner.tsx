@@ -51,12 +51,12 @@ export default function RewardsBanner() {
 
 const s = StyleSheet.create({
   card: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#0f172a', borderRadius: 16, padding: 14, marginBottom: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#0f172a', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, marginTop: 4, marginBottom: 6,
   },
-  iconWrap: { width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(251,191,36,0.15)', alignItems: 'center', justifyContent: 'center' },
-  title: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  sub: { color: '#cbd5e1', fontSize: 12, fontWeight: '600', marginTop: 2 },
-  track: { height: 6, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden', marginTop: 8 },
-  fill: { height: 6, borderRadius: 4, backgroundColor: '#22c55e' },
+  iconWrap: { width: 32, height: 32, borderRadius: 9, backgroundColor: 'rgba(251,191,36,0.15)', alignItems: 'center', justifyContent: 'center' },
+  title: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  sub: { color: '#cbd5e1', fontSize: 11, fontWeight: '600', marginTop: 1 },
+  track: { height: 4, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden', marginTop: 6 },
+  fill: { height: 4, borderRadius: 3, backgroundColor: '#22c55e' },
 });
