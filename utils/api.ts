@@ -1019,4 +1019,23 @@ export const api = {
     const res = await client.post('/loyalty/gift-cards/redeem', { value });
     return res.data;
   },
+  getEmailRecipients: async () => {
+    const res = await client.get('/admin/email-recipients');
+    return res.data;
+  },
+  adminSendEmail: async (data: {
+    subject: string;
+    body: string;
+    recipient_type: 'custom' | 'users' | 'group';
+    custom_emails?: string;
+    user_ids?: string[];
+    group?: 'all' | 'clients' | 'providers';
+  }) => {
+    const res = await client.post('/admin/send-email', data);
+    return res.data;
+  },
+  getEmailCampaigns: async () => {
+    const res = await client.get('/admin/email-campaigns');
+    return res.data;
+  },
 };

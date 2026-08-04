@@ -1572,6 +1572,49 @@ async def _send_email(to_email: str, subject: str, body_text: str) -> bool:
     return False
 
 
+async def _send_email_now(to_email: str, subject: str, body_text: str) -> bool:
+    """Admin broadcast email sender. Same provider selection as _send_email but
+    IGNORES the enable_email_notifications toggle (an explicit admin campaign
+    must always attempt delivery)."""
+    keys = await _get_integration_keys()
+    provider = (keys.get("email_provider") or "resend").lower()
+    order = ["resend", "sendgrid"] if provider != "sendgrid" else ["sendgrid", "resend"]
+    for p in order:
+        if p == "resend" and keys.get("resend_api_key"):
+            if await _send_email_resend(to_email, subject, body_text):
+                return True
+        elif p == "sendgrid" and keys.get("sendgrid_api_key") and keys.get("sendgrid_from_email"):
+            if await _send_email_sendgrid(to_email, subject, body_text):
+                return True
+    return False
+
+
+async def _run_email_campaign(campaign_id: str, emails: List[str], subject: str, body_text: str):
+    """Background worker: send a campaign to a list of emails, updating counters."""
+    sent = 0
+    failed = 0
+    for e in emails:
+        try:
+            ok = await _send_email_now(e, subject, body_text)
+        except Exception as ex:
+            logger.warning("Campaign %s send error to %s: %s", campaign_id, e, ex)
+            ok = False
+        if ok:
+            sent += 1
+        else:
+            failed += 1
+        if (sent + failed) % 10 == 0:
+            await db.email_campaigns.update_one(
+                {"campaign_id": campaign_id}, {"$set": {"sent": sent, "failed": failed}}
+            )
+    await db.email_campaigns.update_one(
+        {"campaign_id": campaign_id},
+        {"$set": {"sent": sent, "failed": failed, "status": "completed",
+                  "completed_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    logger.info("Campaign %s completed: %s sent, %s failed", campaign_id, sent, failed)
+
+
 PLIVO_DEFAULT_AUTH_ID = "MANDEWMTDLZJCTZJJINC"
 PLIVO_DEFAULT_AUTH_TOKEN = "ZjAzYjUzNTEtN2Y2MS00ZDI2LTYxZWItMGQ2NmVk"
 # Giftbit (loyalty rewards gift cards) — default testbed key, admin can override in the panel.
@@ -5373,6 +5416,86 @@ async def get_all_users(role: Optional[UserRole] = None, current_user: User = De
 
     users = await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(1000)
     return users
+
+@api_router.get("/admin/email-recipients")
+async def admin_email_recipients(current_user: User = Depends(require_admin)):
+    """Lightweight user list for the admin email composer recipient picker."""
+    docs = await db.users.find(
+        {}, {"_id": 0, "user_id": 1, "name": 1, "email": 1, "role": 1}
+    ).to_list(5000)
+    clients = sum(1 for d in docs if d.get("role") == "client")
+    providers = sum(1 for d in docs if d.get("role") == "provider")
+    return {
+        "users": [d for d in docs if d.get("email")],
+        "counts": {"all": len(docs), "clients": clients, "providers": providers},
+    }
+
+@api_router.post("/admin/send-email")
+async def admin_send_email(payload: Dict[str, Any] = Body(...), current_user: User = Depends(require_admin)):
+    """Admin broadcast: send an email to a custom address, specific users, or a
+    group (all / clients / providers). Sends in the background and records a
+    campaign row that can be polled via GET /admin/email-campaigns."""
+    subject = (payload.get("subject") or "").strip()
+    body = (payload.get("body") or "").strip()
+    recipient_type = (payload.get("recipient_type") or "").strip()
+    if not subject or not body:
+        raise HTTPException(status_code=422, detail="Subject and message are required")
+
+    emails: List[str] = []
+    if recipient_type == "custom":
+        raw = payload.get("custom_emails") or payload.get("custom_email") or []
+        if isinstance(raw, str):
+            raw = re.split(r"[,\n;\s]+", raw)
+        for e in raw:
+            e = (e or "").strip().lower()
+            if e and "@" in e and "." in e.split("@")[-1]:
+                emails.append(e)
+    elif recipient_type == "users":
+        ids = payload.get("user_ids") or []
+        if ids:
+            docs = await db.users.find({"user_id": {"$in": ids}}, {"_id": 0, "email": 1}).to_list(5000)
+            emails = [d["email"] for d in docs if d.get("email")]
+    elif recipient_type == "group":
+        group = (payload.get("group") or "all").strip()
+        q: Dict[str, Any] = {}
+        if group == "clients":
+            q = {"role": "client"}
+        elif group == "providers":
+            q = {"role": "provider"}
+        docs = await db.users.find(q, {"_id": 0, "email": 1}).to_list(20000)
+        emails = [d["email"] for d in docs if d.get("email")]
+    else:
+        raise HTTPException(status_code=422, detail="Invalid recipient_type")
+
+    # de-duplicate, keep order
+    emails = list(dict.fromkeys([e.lower() for e in emails if e]))
+    if not emails:
+        raise HTTPException(status_code=422, detail="No valid recipients found")
+
+    campaign_id = f"camp_{uuid.uuid4().hex[:12]}"
+    campaign = {
+        "campaign_id": campaign_id,
+        "subject": subject,
+        "body_preview": body[:200],
+        "recipient_type": recipient_type,
+        "group": payload.get("group") if recipient_type == "group" else None,
+        "recipients_count": len(emails),
+        "sent": 0,
+        "failed": 0,
+        "status": "sending",
+        "created_by": current_user.user_id,
+        "created_by_email": current_user.email,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.email_campaigns.insert_one({**campaign})
+    asyncio.create_task(_run_email_campaign(campaign_id, emails, subject, body))
+    return {"ok": True, "campaign_id": campaign_id, "recipients_count": len(emails)}
+
+@api_router.get("/admin/email-campaigns")
+async def admin_email_campaigns(current_user: User = Depends(require_admin)):
+    """Recent broadcast history (newest first)."""
+    docs = await db.email_campaigns.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return docs
 
 @api_router.put("/admin/users/{user_id}")
 async def update_user_role(user_id: str, role: UserRole, current_user: User = Depends(require_admin)):
