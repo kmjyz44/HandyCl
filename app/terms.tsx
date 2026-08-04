@@ -56,7 +56,7 @@ export default function TermsOfUse() {
 
         <Text style={styles.h2}>6. SMS Communications</Text>
         <Text style={styles.p}>
-          By providing your phone number and checking the consent box during registration, you agree to receive SMS messages from OnoFix for account verification and service-related notifications. Message frequency varies. Message and data rates may apply. Reply STOP to opt out. Reply HELP for assistance. OnoFix does not send marketing SMS without separate consent.
+          By providing your phone number and checking the consent box, you agree to receive SMS messages from Ono-Fix regarding phone verification, booking confirmations, appointment reminders, technician updates, and other service-related notifications. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out. Reply HELP for help. Ono-Fix does not send marketing SMS without separate consent. SMS messages are delivered through our SMS provider (Infobip) acting solely as our processor.
         </Text>
 
         <Text style={styles.h2}>7. Fees & Payments</Text>

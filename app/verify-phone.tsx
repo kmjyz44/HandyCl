@@ -5,9 +5,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
 
-const CONSENT_VERSION = '2026-06-v2';
+const CONSENT_VERSION = '2026-06-v3';
 const CONSENT_TEXT =
-  'I agree to receive SMS verification codes from Ono-Fix to verify my phone number. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out. Reply HELP for help.';
+  'I agree to receive SMS messages from Ono-Fix regarding phone verification, booking confirmations, appointment reminders, technician updates, and other service-related notifications. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out. Reply HELP for help.';
 
 export default function VerifyPhone() {
   const router = useRouter();
@@ -127,7 +127,7 @@ export default function VerifyPhone() {
                 />
               </TouchableOpacity>
               <Text style={s.consentText} onPress={() => setSmsConsent(v => !v)}>
-                I agree to receive SMS verification codes from Ono-Fix to verify my phone number. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out. Reply HELP for help.
+                I agree to receive SMS messages from Ono-Fix regarding phone verification, booking confirmations, appointment reminders, technician updates, and other service-related notifications. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out. Reply HELP for help.
               </Text>
             </View>
 
