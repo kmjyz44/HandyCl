@@ -1617,6 +1617,10 @@ async def _run_email_campaign(campaign_id: str, emails: List[str], subject: str,
 
 PLIVO_DEFAULT_AUTH_ID = "MANDEWMTDLZJCTZJJINC"
 PLIVO_DEFAULT_AUTH_TOKEN = "ZjAzYjUzNTEtN2Y2MS00ZDI2LTYxZWItMGQ2NmVk"
+# Infobip SMS (default provider) — admin can override in the panel.
+INFOBIP_DEFAULT_BASE_URL = "https://9j8ygd.api.infobip.com"
+INFOBIP_DEFAULT_API_KEY = "6e4bce80bb57e8a78540ab17be898f4b-e274089d-cb2f-4964-a2f5-c1fadc597ee0"
+INFOBIP_DEFAULT_SENDER = "18335925136"
 # Giftbit (loyalty rewards gift cards) — default testbed key, admin can override in the panel.
 GIFTBIT_DEFAULT_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJTSEEyNTYifQ==.OHlPSzdyMnVLUzVrSjc4MHhmL0V1RG5KTXRVNElLbW5jZHNXVFBsZUhiTWowckQ5MEdQWFh4OWRydjRVa2tseXk5a1dlc1pXSHJZUEpoVFlNNzd3V3BzVTVDTmpIRDRCMXhoRmdiaHZmUzJsRVJVYThKSmE1clFoREY0Qkd0L0o=.A1Nl6QDow5iYxdKku+PcBn9ydaBUO8J4lQ+kqsna/BQ="
 
@@ -1630,21 +1634,74 @@ def _plivo_creds(keys: dict) -> Tuple[str, str, str]:
     return auth_id, auth_token, src
 
 
-async def _send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
-    """Send an SMS via Plivo. Returns (success, error_message).
-    error_message is a human-readable reason when success is False, else None."""
-    if not to_phone:
-        return False, "Phone number not provided"
-    keys = await _get_integration_keys()
-    if not keys.get("enable_sms_notifications", True):
-        return False, "SMS notifications are disabled in admin settings"
+def _infobip_cfg(keys: dict) -> Tuple[str, str, str]:
+    """Resolve Infobip base URL / API key / sender, falling back to platform defaults."""
+    base = (keys.get("infobip_base_url") or INFOBIP_DEFAULT_BASE_URL or "").strip().rstrip("/")
+    if base and not base.startswith("http"):
+        base = "https://" + base
+    api_key = (keys.get("infobip_api_key") or INFOBIP_DEFAULT_API_KEY or "").strip()
+    sender = (keys.get("infobip_sender") or INFOBIP_DEFAULT_SENDER or "").strip()
+    return base, api_key, sender
+
+
+async def _send_sms_infobip(to_phone: str, body: str, keys: dict) -> Tuple[bool, Optional[str]]:
+    """Send an SMS via Infobip (POST {base}/sms/3/messages). Returns (success, error)."""
+    base, api_key, sender = _infobip_cfg(keys)
+    if not base or not api_key:
+        return False, "Infobip is not configured (set Base URL and API key in admin)"
+    if not sender:
+        return False, "Infobip sender is not configured"
+    # Infobip expects international format; strip a leading '+'
+    dst = to_phone.strip().lstrip("+")
+    snd = sender.lstrip("+")
+    payload = {"messages": [{
+        "sender": snd,
+        "destinations": [{"to": dst}],
+        "content": {"text": body[:1500]},
+    }]}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as http:
+            r = await http.post(
+                f"{base}/sms/3/messages",
+                headers={"Authorization": f"App {api_key}", "Accept": "application/json",
+                         "Content-Type": "application/json"},
+                json=payload,
+            )
+        if not (200 <= r.status_code < 300):
+            logger.warning("Infobip SMS failed %s: %s", r.status_code, r.text[:400])
+            err = f"Infobip error {r.status_code}"
+            try:
+                d = r.json()
+                msg = (((d.get("requestError") or {}).get("serviceException") or {}).get("text")
+                       or d.get("message"))
+                if msg:
+                    err = f"Infobip: {msg}"
+            except Exception:
+                pass
+            return False, err
+        try:
+            d = r.json()
+            st = ((d.get("messages") or [{}])[0].get("status") or {})
+            group = st.get("groupName", "")
+            if group in ("UNDELIVERABLE", "REJECTED", "EXPIRED"):
+                return False, f"Infobip rejected the destination ({st.get('name') or group})"
+        except Exception:
+            pass
+        logger.info("Infobip SMS sent to %s", to_phone)
+        return True, None
+    except Exception as e:
+        logger.warning("Infobip SMS error: %s", e)
+        return False, f"Infobip connection error: {e}"
+
+
+async def _send_sms_plivo(to_phone: str, body: str, keys: dict) -> Tuple[bool, Optional[str]]:
+    """Send an SMS via Plivo. Returns (success, error_message)."""
     auth_id, auth_token, src = _plivo_creds(keys)
     if not auth_id or not auth_token:
         logger.info("Plivo not configured — skipping SMS to %s", to_phone)
         return False, "Plivo is not configured (set Auth ID and Auth Token in admin)"
     if not src:
         return False, "Plivo sender number is not configured (set a registered 10DLC/Toll-Free number in admin)"
-    # Plivo requires E.164 format (e.g. +14155551234)
     if not to_phone.strip().startswith("+"):
         return False, "Number must be in E.164 format, e.g. +14155551234"
     try:
@@ -1654,7 +1711,6 @@ async def _send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
                 json={"src": src, "dst": to_phone.strip(), "text": body[:1500]},
                 headers={"Content-Type": "application/json"},
             )
-        # Plivo returns 202 Accepted when the message is queued
         if r.status_code != 202:
             logger.warning("Plivo SMS failed %s: %s", r.status_code, r.text[:400])
             err_msg = f"Plivo error {r.status_code}"
@@ -1671,6 +1727,73 @@ async def _send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
     except Exception as e:
         logger.warning("Plivo SMS error: %s", e)
         return False, f"Plivo connection error: {e}"
+
+
+async def _send_sms_dispatch(to_phone: str, body: str, keys: dict) -> Tuple[bool, Optional[str]]:
+    """Send via the admin-selected provider (Infobip default), with fallback to the other."""
+    provider = (keys.get("sms_provider") or "infobip").lower()
+    order = ["infobip", "plivo"] if provider != "plivo" else ["plivo", "infobip"]
+    last_err = None
+    for p in order:
+        if p == "infobip":
+            base, api_key, sender = _infobip_cfg(keys)
+            if base and api_key and sender:
+                ok, err = await _send_sms_infobip(to_phone, body, keys)
+                if ok:
+                    return True, None
+                last_err = err
+        elif p == "plivo":
+            auth_id, auth_token, src = _plivo_creds(keys)
+            if auth_id and auth_token and src:
+                ok, err = await _send_sms_plivo(to_phone, body, keys)
+                if ok:
+                    return True, None
+                last_err = err
+    return False, last_err or "No SMS provider is configured"
+
+
+async def _send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
+    """Unified SMS sender. Provider selectable in admin (sms_provider, Infobip default).
+    Returns (success, error_message)."""
+    if not to_phone:
+        return False, "Phone number not provided"
+    keys = await _get_integration_keys()
+    if not keys.get("enable_sms_notifications", True):
+        return False, "SMS notifications are disabled in admin settings"
+    return await _send_sms_dispatch(to_phone, body, keys)
+
+
+async def _send_sms_now(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
+    """Admin broadcast SMS sender — ignores the enable_sms_notifications toggle."""
+    if not to_phone:
+        return False, "Phone number not provided"
+    keys = await _get_integration_keys()
+    return await _send_sms_dispatch(to_phone, body, keys)
+
+
+async def _run_sms_campaign(campaign_id: str, phones: List[str], body: str):
+    """Background worker: send an SMS campaign, updating counters."""
+    sent = 0
+    failed = 0
+    for ph in phones:
+        try:
+            ok, _ = await _send_sms_now(ph, body)
+        except Exception as ex:
+            logger.warning("SMS campaign %s error to %s: %s", campaign_id, ph, ex)
+            ok = False
+        if ok:
+            sent += 1
+        else:
+            failed += 1
+        if (sent + failed) % 10 == 0:
+            await db.sms_campaigns.update_one({"campaign_id": campaign_id},
+                                              {"$set": {"sent": sent, "failed": failed}})
+    await db.sms_campaigns.update_one(
+        {"campaign_id": campaign_id},
+        {"$set": {"sent": sent, "failed": failed, "status": "completed",
+                  "completed_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    logger.info("SMS campaign %s completed: %s sent, %s failed", campaign_id, sent, failed)
 
 
 
@@ -5767,6 +5890,87 @@ async def admin_email_campaigns(current_user: User = Depends(require_admin)):
     docs = await db.email_campaigns.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return docs
 
+@api_router.get("/admin/sms-recipients")
+async def admin_sms_recipients(current_user: User = Depends(require_admin)):
+    """Lightweight user list (with phone numbers) for the SMS composer picker."""
+    docs = await db.users.find(
+        {"phone": {"$nin": [None, ""]}},
+        {"_id": 0, "user_id": 1, "name": 1, "phone": 1, "role": 1, "phone_verified": 1},
+    ).to_list(20000)
+    clients = sum(1 for d in docs if d.get("role") == "client")
+    providers = sum(1 for d in docs if d.get("role") == "provider")
+    return {
+        "users": docs,
+        "counts": {"all": len(docs), "clients": clients, "providers": providers},
+    }
+
+
+@api_router.post("/admin/send-sms")
+async def admin_send_sms(payload: Dict[str, Any] = Body(...), current_user: User = Depends(require_admin)):
+    """Admin SMS broadcast: send to custom numbers, specific users, or a group
+    (all / clients / providers). Sends in the background; records an sms_campaigns row."""
+    body = (payload.get("body") or "").strip()
+    recipient_type = (payload.get("recipient_type") or "").strip()
+    if not body:
+        raise HTTPException(status_code=422, detail="Message text is required")
+
+    phones: List[str] = []
+    if recipient_type == "custom":
+        raw = payload.get("custom_phones") or payload.get("custom_numbers") or []
+        if isinstance(raw, str):
+            raw = re.split(r"[,\n;]+", raw)
+        for ph in raw:
+            ph = (ph or "").strip()
+            digits = re.sub(r"[^\d]", "", ph)
+            if len(digits) >= 8:
+                phones.append(ph if ph.startswith("+") else digits)
+    elif recipient_type == "users":
+        ids = payload.get("user_ids") or []
+        if ids:
+            docs = await db.users.find({"user_id": {"$in": ids}}, {"_id": 0, "phone": 1}).to_list(20000)
+            phones = [d["phone"] for d in docs if d.get("phone")]
+    elif recipient_type == "group":
+        group = (payload.get("group") or "all").strip()
+        q: Dict[str, Any] = {"phone": {"$nin": [None, ""]}}
+        if group == "clients":
+            q["role"] = "client"
+        elif group == "providers":
+            q["role"] = "provider"
+        docs = await db.users.find(q, {"_id": 0, "phone": 1}).to_list(20000)
+        phones = [d["phone"] for d in docs if d.get("phone")]
+    else:
+        raise HTTPException(status_code=422, detail="Invalid recipient_type")
+
+    phones = list(dict.fromkeys([p for p in phones if p]))
+    if not phones:
+        raise HTTPException(status_code=422, detail="No valid recipients found")
+
+    campaign_id = f"smsc_{uuid.uuid4().hex[:12]}"
+    campaign = {
+        "campaign_id": campaign_id,
+        "body_preview": body[:200],
+        "recipient_type": recipient_type,
+        "group": payload.get("group") if recipient_type == "group" else None,
+        "recipients_count": len(phones),
+        "sent": 0,
+        "failed": 0,
+        "status": "sending",
+        "created_by": current_user.user_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.sms_campaigns.insert_one({**campaign})
+    asyncio.create_task(_run_sms_campaign(campaign_id, phones, body))
+    return {"ok": True, "campaign_id": campaign_id, "recipients_count": len(phones)}
+
+
+@api_router.get("/admin/sms-campaigns")
+async def admin_sms_campaigns(current_user: User = Depends(require_admin)):
+    """Recent SMS broadcast history (newest first)."""
+    docs = await db.sms_campaigns.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return docs
+
+
+
 @api_router.put("/admin/users/{user_id}")
 async def update_user_role(user_id: str, role: UserRole, current_user: User = Depends(require_admin)):
     result = await db.users.update_one(
@@ -9584,6 +9788,11 @@ class IntegrationKeysUpdate(BaseModel):
     plivo_auth_id: Optional[str] = None
     plivo_auth_token: Optional[str] = None
     plivo_src: Optional[str] = None
+    # Infobip SMS (default provider). Requires the account-specific base URL.
+    sms_provider: Optional[str] = None  # "infobip" (default) or "plivo"
+    infobip_base_url: Optional[str] = None  # e.g. https://xxxxx.api.infobip.com
+    infobip_api_key: Optional[str] = None   # secret; used as "Authorization: App <key>"
+    infobip_sender: Optional[str] = None     # numeric/alphanumeric sender
     vapid_public_key: Optional[str] = None
     vapid_private_key: Optional[str] = None
     vapid_subject_email: Optional[str] = None
@@ -11403,7 +11612,7 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
     out = {}
     secret_fields = {
         "sendgrid_api_key", "resend_api_key", "stripe_secret_key", "stripe_webhook_secret",
-        "twilio_auth_token", "plivo_auth_token", "vapid_private_key", "telegram_bot_token", "telegram_webhook_secret", "finix_api_password", "giftbit_api_key",
+        "twilio_auth_token", "plivo_auth_token", "vapid_private_key", "telegram_bot_token", "telegram_webhook_secret", "finix_api_password", "giftbit_api_key", "infobip_api_key",
     }
     for k in IntegrationKeysUpdate.model_fields.keys():
         v = doc.get(k)
@@ -11419,6 +11628,16 @@ async def get_integration_keys(current_user: User = Depends(require_admin)):
         out["support_email"] = "Nexus.ss.llc@gmail.com"
     if not out.get("email_provider"):
         out["email_provider"] = "resend"
+    # Infobip SMS defaults (so the panel is pre-filled and works out of the box)
+    if not out.get("sms_provider"):
+        out["sms_provider"] = "infobip"
+    if not out.get("infobip_base_url"):
+        out["infobip_base_url"] = INFOBIP_DEFAULT_BASE_URL
+    if not out.get("infobip_sender"):
+        out["infobip_sender"] = INFOBIP_DEFAULT_SENDER
+    if not doc.get("infobip_api_key"):
+        out["infobip_api_key"] = _mask(INFOBIP_DEFAULT_API_KEY)
+        out["infobip_api_key_set"] = True
     return out
 
 

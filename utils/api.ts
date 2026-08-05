@@ -1050,4 +1050,22 @@ export const api = {
     const res = await client.post(`/admin/providers/${userId}/ranking-adjust`, data);
     return res.data;
   },
+  getSmsRecipients: async () => {
+    const res = await client.get('/admin/sms-recipients');
+    return res.data;
+  },
+  adminSendSms: async (data: {
+    body: string;
+    recipient_type: 'custom' | 'users' | 'group';
+    custom_phones?: string;
+    user_ids?: string[];
+    group?: 'all' | 'clients' | 'providers';
+  }) => {
+    const res = await client.post('/admin/send-sms', data);
+    return res.data;
+  },
+  getSmsCampaigns: async () => {
+    const res = await client.get('/admin/sms-campaigns');
+    return res.data;
+  },
 };

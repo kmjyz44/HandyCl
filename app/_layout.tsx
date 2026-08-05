@@ -72,6 +72,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin-sms-consents" />
         <Stack.Screen name="admin-waitlist" />
         <Stack.Screen name="admin-email" />
+        <Stack.Screen name="admin-sms" />
         <Stack.Screen name="my-ranking" />
         <Stack.Screen name="terms" />
         <Stack.Screen name="privacy" />

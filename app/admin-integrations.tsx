@@ -115,10 +115,19 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
-    title: 'Plivo (SMS)',
+    title: 'Infobip (SMS — default)',
     toggle: 'enable_sms_notifications',
     toggleLabel: 'Enable SMS notifications',
     testSms: true,
+    keys: [
+      { id: 'sms_provider', label: 'SMS provider (infobip / plivo)', placeholder: 'infobip — default; plivo — fallback' },
+      { id: 'infobip_base_url', label: 'Base URL (account-specific)', placeholder: 'https://xxxxx.api.infobip.com' },
+      { id: 'infobip_api_key', label: 'API Key', placeholder: 'xxxxxxxx-xxxx-...', secret: true },
+      { id: 'infobip_sender', label: 'Sender (number or name)', placeholder: '18335925136' },
+    ],
+  },
+  {
+    title: 'Plivo (SMS — fallback)',
     keys: [
       { id: 'plivo_auth_id', label: 'Auth ID', placeholder: 'MAXXXXXXXXXXXXXXXXXX' },
       { id: 'plivo_auth_token', label: 'Auth Token', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', secret: true },
