@@ -101,6 +101,15 @@ export default function TermsOfUse() {
         <Text style={styles.p}>
           For example, an electrician with 100 worked hours ranks above one with 80 hours in the Electrical category. Scores may be negative. <Text style={styles.bold}>New Providers are featured at the top of the list for their first three (3) days</Text> after registration — even before they have any hours or reviews — so they have a fair chance to earn their first ratings. Ratings and rankings are informational, are updated automatically, may change at any time, and do not guarantee any Provider a booking.
         </Text>
+        <Text style={styles.p}>
+          <Text style={styles.bold}>Provider referral bonus.</Text> A Provider may invite another Provider to Ono-Fix using their personal referral code or referral link. When the invited Provider completes their <Text style={styles.bold}>first paid job</Text> (i.e., a Client pays for it), <Text style={styles.bold}>both the referring Provider and the invited Provider each receive a one-time bonus of +5 ranking hours</Text>. This bonus is <Text style={styles.bold}>global — it is added to the Provider's score in every service category</Text>. The bonus is awarded only once per invited Provider and may be reversed if the qualifying job is refunded or cancelled.
+        </Text>
+        <Text style={styles.p}>
+          <Text style={styles.bold}>Bonus and adjustment hours.</Text> Ranking hours may include bonus hours (e.g., referral rewards) and manual adjustments applied by Ono-Fix at its discretion (for example, to correct errors, recognize verified off-platform experience, or as part of promotions). Bonus and adjustment hours are shown separately to the Provider and count toward the Provider's ranking score but do not represent hours actually worked. Ono-Fix may add or remove ranking hours at any time.
+        </Text>
+        <Text style={styles.p}>
+          Each Provider can view their worked hours, bonus hours, average review rating, and current position for every active category on their <Text style={styles.bold}>"My ranking"</Text> screen, including how many hours are needed to move up in the list.
+        </Text>
 
         <Text style={styles.h2}>11. Independent Contractor Status</Text>
         <Text style={styles.p}>

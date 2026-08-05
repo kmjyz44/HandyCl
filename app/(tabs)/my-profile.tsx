@@ -1456,6 +1456,16 @@ function ProviderProfile() {
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => router.push('/my-ranking' as any)} data-testid="myprofile-ranking-link">
+        <Ionicons name="stats-chart-outline" size={22} color="#7c3aed" style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>My ranking</Text>
+          <Text style={pStyles.menuRowSub}>Hours, position per category & referral bonus</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
       <TouchableOpacity style={pStyles.menuRow} onPress={() => setPhotosModalVisible(true)}>
         <Ionicons name="images-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>

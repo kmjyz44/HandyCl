@@ -4431,16 +4431,19 @@ _NEW_PROVIDER_BOOST_DAYS = 3
 
 
 async def _compute_category_ranking(category: str, provider_ids: List[str]):
-    """Return (hours_map, adj_map) for the given category, keyed by provider_id.
+    """Return (hours_map, adj_map, bonus_map) for the given category, keyed by provider_id.
 
     hours_map  = sum of actual_hours from completed/paid bookings in this category.
     adj_map    = review adjustment: 5★+5, 4★+3, 3★+1, 2★-1, 1★-2 hours; plus an
                  extra -5 when a 1-2★ review also has written text (negative review).
-    ranking score = hours + adj. Score may go negative (per product decision)."""
+    bonus_map  = manual/admin + referral bonus hours (ranking_adjustments), incl.
+                 category-specific rows AND global rows (category == "*").
+    ranking score = hours + adj + bonus. Score may go negative (per product decision)."""
     hours_map: Dict[str, float] = {}
     adj_map: Dict[str, float] = {}
+    bonus_map: Dict[str, float] = {}
     if not category or not provider_ids:
-        return hours_map, adj_map
+        return hours_map, adj_map, bonus_map
     # 1. Worked hours per provider in this category
     try:
         hours_rows = await db.bookings.aggregate([
@@ -4482,7 +4485,18 @@ async def _compute_category_ranking(category: str, provider_ids: List[str]):
             adj_map[r["_id"]] = round(float(r.get("adj") or 0), 2)
     except Exception as e:
         logger.warning("ranking review aggregation failed: %s", e)
-    return hours_map, adj_map
+    # 3. Manual/admin + referral bonus hours (category-specific OR global "*")
+    try:
+        bonus_rows = await db.ranking_adjustments.aggregate([
+            {"$match": {"provider_id": {"$in": provider_ids},
+                        "$or": [{"category": category}, {"category": "*"}]}},
+            {"$group": {"_id": "$provider_id", "h": {"$sum": {"$ifNull": ["$hours", 0]}}}},
+        ]).to_list(5000)
+        for r in bonus_rows:
+            bonus_map[r["_id"]] = round(float(r.get("h") or 0), 2)
+    except Exception as e:
+        logger.warning("ranking bonus aggregation failed: %s", e)
+    return hours_map, adj_map, bonus_map
 
 
 def _is_new_provider_boosted(created_at) -> bool:
@@ -4499,6 +4513,260 @@ def _is_new_provider_boosted(created_at) -> bool:
         return (datetime.now(timezone.utc) - dt).days < _NEW_PROVIDER_BOOST_DAYS
     except Exception:
         return False
+
+
+def _skill_category(skill_value: Any) -> Optional[str]:
+    """Resolve a single skill (string or dict) to its category id."""
+    if isinstance(skill_value, dict):
+        cid = (skill_value.get("category_id") or "").lower().strip()
+        if cid:
+            return cid
+        name = (skill_value.get("name") or skill_value.get("label") or "").lower().strip()
+    else:
+        name = str(skill_value or "").lower().strip()
+    return SKILL_TO_CATEGORIES.get(name)
+
+
+async def _category_ratings(category: str, provider_ids: List[str]) -> Dict[str, tuple]:
+    """Per-category average rating + review count, keyed by provider_id."""
+    out: Dict[str, tuple] = {}
+    if not category or not provider_ids:
+        return out
+    try:
+        rows = await db.reviews.aggregate([
+            {"$match": {"provider_id": {"$in": provider_ids}}},
+            {"$lookup": {"from": "bookings", "localField": "booking_id",
+                         "foreignField": "booking_id", "as": "bk"}},
+            {"$addFields": {"cat": {"$arrayElemAt": ["$bk.category", 0]}}},
+            {"$match": {"cat": category}},
+            {"$group": {"_id": "$provider_id", "avg": {"$avg": "$rating"}, "cnt": {"$sum": 1}}},
+        ]).to_list(5000)
+        for r in rows:
+            out[r["_id"]] = (round(float(r.get("avg") or 0), 2), int(r.get("cnt") or 0))
+    except Exception as e:
+        logger.warning("category ratings aggregation failed: %s", e)
+    return out
+
+
+async def _get_category_provider_ids(category: str) -> List[Dict[str, Any]]:
+    """All active, visible providers who offer at least one skill in this category.
+    Returns lightweight user rows: {user_id, name, created_at}."""
+    if not category:
+        return []
+    profiles = await db.executor_profiles.find({}, {"_id": 0, "user_id": 1, "skills": 1}).to_list(20000)
+    pids = [p["user_id"] for p in profiles
+            if any(_skill_matches_category(s, category) for s in (p.get("skills") or []))]
+    if not pids:
+        return []
+    users = await db.users.find(
+        {"user_id": {"$in": pids}, "role": "provider", "is_blocked": False,
+         "hidden_from_clients": {"$ne": True}},
+        {"_id": 0, "user_id": 1, "name": 1, "created_at": 1},
+    ).to_list(20000)
+    return users
+
+
+async def _category_ranking_rows(category: str) -> List[Dict[str, Any]]:
+    """Full ranking for a category (all active providers), sorted by score desc.
+    Score = worked hours + review adjustment + bonus hours."""
+    users = await _get_category_provider_ids(category)
+    pids = [u["user_id"] for u in users]
+    if not pids:
+        return []
+    hours_map, adj_map, bonus_map = await _compute_category_ranking(category, pids)
+    ratings = await _category_ratings(category, pids)
+    rows = []
+    for u in users:
+        uid = u["user_id"]
+        wh = hours_map.get(uid, 0.0)
+        radj = adj_map.get(uid, 0.0)
+        bon = bonus_map.get(uid, 0.0)
+        avg, cnt = ratings.get(uid, (0.0, 0))
+        rows.append({
+            "provider_id": uid,
+            "name": u.get("name"),
+            "worked_hours": round(wh, 2),
+            "review_adjustment": round(radj, 2),
+            "bonus_hours": round(bon, 2),
+            "score": round(wh + radj + bon, 2),
+            "average_rating": avg,
+            "reviews_count": cnt,
+        })
+    rows.sort(key=lambda r: -r["score"])
+    for i, r in enumerate(rows):
+        r["position"] = i + 1
+    return rows
+
+
+async def _add_ranking_adjustment(provider_id: str, category: Optional[str], hours: float,
+                                   source: str, reason: str, created_by: Optional[str]):
+    """Record a ranking-hours adjustment (category id or '*' for global/all categories)."""
+    doc = {
+        "adj_id": f"radj_{uuid.uuid4().hex[:12]}",
+        "provider_id": provider_id,
+        "category": (category or "*"),
+        "hours": round(float(hours), 2),
+        "source": source,            # admin | referral_bonus
+        "reason": reason,
+        "created_by": created_by,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.ranking_adjustments.insert_one(doc)
+    return doc
+
+
+PROVIDER_REFERRAL_BONUS_HOURS = 5.0  # +5h to BOTH providers, global (all categories)
+
+
+@api_router.get("/provider/ranking")
+async def get_provider_ranking(current_user: User = Depends(get_current_user)):
+    """Provider's own ranking dashboard: for each active category — worked hours,
+    bonus hours, review rating, position in the client-facing list, and how many
+    hours are needed to climb to 1st / 2nd place."""
+    if current_user.role != UserRole.PROVIDER:
+        raise HTTPException(status_code=403, detail="Providers only")
+    uid = current_user.user_id
+    profile = await db.executor_profiles.find_one({"user_id": uid}, {"_id": 0, "skills": 1})
+    skills = (profile or {}).get("skills") or []
+    cats: List[str] = []
+    for s in skills:
+        c = _skill_category(s)
+        if c and c not in cats:
+            cats.append(c)
+    cat_docs = {c["category_id"]: c for c in await db.categories.find({}, {"_id": 0}).to_list(500)}
+
+    out_cats = []
+    total_bonus = 0.0
+    for c in cats:
+        rows = await _category_ranking_rows(c)
+        me = next((r for r in rows if r["provider_id"] == uid), None)
+        if not me:
+            continue
+        pos = me["position"]
+        leader_score = rows[0]["score"] if rows else me["score"]
+        hours_to_first = round(max(0.0, leader_score - me["score"]) + (0.01 if pos > 1 else 0.0), 2) if pos > 1 else 0.0
+        hours_to_second = 0.0
+        if pos > 2 and len(rows) > 1:
+            hours_to_second = round(max(0.0, rows[1]["score"] - me["score"]) + 0.01, 2)
+        total_bonus += me["bonus_hours"]
+        out_cats.append({
+            "category_id": c,
+            "category_name": (cat_docs.get(c) or {}).get("name") or c,
+            "worked_hours": me["worked_hours"],
+            "bonus_hours": me["bonus_hours"],
+            "review_adjustment": me["review_adjustment"],
+            "total_score": me["score"],
+            "average_rating": me["average_rating"],
+            "reviews_count": me["reviews_count"],
+            "position": pos,
+            "total_providers": len(rows),
+            "leader_score": leader_score,
+            "hours_to_first": hours_to_first,
+            "hours_to_second": hours_to_second,
+        })
+
+    code = await _ensure_referral_code(uid)
+    return {
+        "categories": out_cats,
+        "total_bonus_hours": round(total_bonus, 2),
+        "referral_bonus_hours": PROVIDER_REFERRAL_BONUS_HOURS,
+        "referral_code": code,
+        "referral_link": f"https://ono-fix.com/?ref={code}",
+    }
+
+
+@api_router.get("/admin/providers/{user_id}/ranking")
+async def admin_get_provider_ranking(user_id: str, current_user: User = Depends(require_admin)):
+    """Admin view of a provider's active categories with current worked/bonus hours,
+    so the admin can add or subtract ranking hours per category (or globally)."""
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "user_id": 1, "name": 1, "role": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0, "skills": 1})
+    skills = (profile or {}).get("skills") or []
+    cats: List[str] = []
+    for s in skills:
+        c = _skill_category(s)
+        if c and c not in cats:
+            cats.append(c)
+    cat_docs = {c["category_id"]: c for c in await db.categories.find({}, {"_id": 0}).to_list(500)}
+
+    out_cats = []
+    for c in cats:
+        hours_map, adj_map, bonus_map = await _compute_category_ranking(c, [user_id])
+        wh = hours_map.get(user_id, 0.0)
+        radj = adj_map.get(user_id, 0.0)
+        bon = bonus_map.get(user_id, 0.0)
+        out_cats.append({
+            "category_id": c,
+            "category_name": (cat_docs.get(c) or {}).get("name") or c,
+            "worked_hours": round(wh, 2),
+            "review_adjustment": round(radj, 2),
+            "bonus_hours": round(bon, 2),
+            "total_score": round(wh + radj + bon, 2),
+        })
+
+    global_bonus = 0.0
+    try:
+        g = await db.ranking_adjustments.aggregate([
+            {"$match": {"provider_id": user_id, "category": "*"}},
+            {"$group": {"_id": None, "h": {"$sum": {"$ifNull": ["$hours", 0]}}}},
+        ]).to_list(1)
+        if g:
+            global_bonus = round(float(g[0].get("h") or 0), 2)
+    except Exception:
+        pass
+
+    history = await db.ranking_adjustments.find(
+        {"provider_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+
+    return {
+        "user_id": user_id,
+        "name": user.get("name"),
+        "categories": out_cats,
+        "global_bonus_hours": global_bonus,
+        "history": history,
+    }
+
+
+@api_router.post("/admin/providers/{user_id}/ranking-adjust")
+async def admin_adjust_provider_ranking(
+    user_id: str,
+    payload: Dict[str, Any] = Body(...),
+    current_user: User = Depends(require_admin),
+):
+    """Add or subtract ranking hours for a provider in a specific category
+    (category_id) or globally (category == '*' / 'all')."""
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "user_id": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        hours = float(payload.get("hours"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="hours must be a number")
+    if hours == 0:
+        raise HTTPException(status_code=422, detail="hours cannot be zero")
+    category = (payload.get("category") or "*").strip()
+    if category.lower() in ("all", "global", ""):
+        category = "*"
+    reason = (payload.get("reason") or "").strip() or "Admin adjustment"
+
+    await _add_ranking_adjustment(user_id, category, hours, "admin", reason, current_user.user_id)
+
+    scope = "all categories" if category == "*" else category
+    try:
+        await notify_user(
+            user_id, "ranking_adjusted",
+            "Your ranking hours were updated",
+            f"An admin {'added' if hours > 0 else 'removed'} {abs(hours):g} ranking hour(s) "
+            f"({scope}). Reason: {reason}",
+            channels=["inapp", "push"],
+        )
+    except Exception:
+        pass
+    return {"ok": True, "provider_id": user_id, "category": category, "hours": hours}
+
 
 
 
@@ -4736,12 +5004,14 @@ async def get_executors_by_service(
     # (registered < 3 days) are boosted to the top so they can earn a rating.
     if category and filtered:
         pids = [e.get("user_id") for e in filtered if e.get("user_id")]
-        hours_map, adj_map = await _compute_category_ranking(category, pids)
+        hours_map, adj_map, bonus_map = await _compute_category_ranking(category, pids)
         for e in filtered:
             uid = e.get("user_id")
             ch = hours_map.get(uid, 0.0)
+            bon = bonus_map.get(uid, 0.0)
             e["category_hours"] = ch
-            e["ranking_score"] = round(ch + adj_map.get(uid, 0.0), 2)
+            e["category_bonus_hours"] = bon
+            e["ranking_score"] = round(ch + adj_map.get(uid, 0.0) + bon, 2)
             e["is_new_boost"] = _is_new_provider_boosted(e.get("created_at"))
 
     # ── Sort ──────────────────────────────────────────────────────────
@@ -10488,8 +10758,61 @@ async def _accrue_order_points(booking_id: str, client_amount: float):
         if pts > 0:
             await _award_points(client_id, pts, "order", booking_id, f"Earned {pts} points for a ${amount:.0f} order")
         await _process_referral_progress(client_id, amount, direction=1)
+        # Provider-to-provider referral: +5 ranking hours to both when the
+        # referred provider completes their FIRST paid task.
+        await _process_provider_referral_bonus(b)
     except Exception as ex:
         logger.warning("loyalty accrual failed for %s: %s", booking_id, ex)
+
+
+async def _process_provider_referral_bonus(booking: Dict[str, Any]):
+    """When a referred PROVIDER's first task is paid, award +5 global ranking
+    hours to BOTH the referrer-provider and the referred provider (once)."""
+    try:
+        provider_id = booking.get("provider_id")
+        if not provider_id:
+            return
+        ref = await db.referrals.find_one({"referred_id": provider_id}, {"_id": 0})
+        if not ref or ref.get("provider_bonus_awarded"):
+            return
+        referrer_id = ref.get("referrer_id")
+        if not referrer_id or referrer_id == provider_id:
+            return
+        referred = await db.users.find_one({"user_id": provider_id}, {"_id": 0, "role": 1, "name": 1})
+        referrer = await db.users.find_one({"user_id": referrer_id}, {"_id": 0, "role": 1, "name": 1})
+        if not referred or referred.get("role") != "provider":
+            return
+        if not referrer or referrer.get("role") != "provider":
+            return
+        # mark first so concurrent payments can't double-award
+        res = await db.referrals.update_one(
+            {"referral_id": ref["referral_id"], "provider_bonus_awarded": {"$ne": True}},
+            {"$set": {"provider_bonus_awarded": True,
+                      "provider_bonus_at": datetime.now(timezone.utc),
+                      "provider_bonus_hours": PROVIDER_REFERRAL_BONUS_HOURS}},
+        )
+        if res.modified_count == 0:
+            return
+        await _add_ranking_adjustment(
+            provider_id, "*", PROVIDER_REFERRAL_BONUS_HOURS, "referral_bonus",
+            "Bonus for completing your first paid task (you joined via a referral)", None)
+        await _add_ranking_adjustment(
+            referrer_id, "*", PROVIDER_REFERRAL_BONUS_HOURS, "referral_bonus",
+            "Bonus — a provider you referred completed their first paid task", None)
+        for pid, msg in [
+            (provider_id, f"You earned +{PROVIDER_REFERRAL_BONUS_HOURS:g} ranking hours for your first paid task 🎉"),
+            (referrer_id, f"A provider you referred completed their first paid task — you earned +{PROVIDER_REFERRAL_BONUS_HOURS:g} ranking hours 🎉"),
+        ]:
+            try:
+                await notify_user(pid, "referral_bonus", "Ranking bonus earned 🎉", msg,
+                                  related_id=ref["referral_id"], related_type="referral",
+                                  channels=["inapp", "push", "email"])
+            except Exception:
+                pass
+        logger.info("Provider referral bonus: +%s to %s and %s",
+                    PROVIDER_REFERRAL_BONUS_HOURS, provider_id, referrer_id)
+    except Exception as ex:
+        logger.warning("provider referral bonus failed: %s", ex)
 
 
 async def _reverse_order_points(booking_id: str):

@@ -39,6 +39,50 @@ export default function Users() {
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [roleTarget, setRoleTarget] = useState<any>(null);
 
+  // ── Ranking hours (admin add/subtract per category) ──
+  const [rankModalVisible, setRankModalVisible] = useState(false);
+  const [rankTarget, setRankTarget] = useState<any>(null);
+  const [rankData, setRankData] = useState<any>(null);
+  const [rankLoading, setRankLoading] = useState(false);
+  const [rankCategory, setRankCategory] = useState<string>('*');
+  const [rankHours, setRankHours] = useState('');
+  const [rankReason, setRankReason] = useState('');
+
+  const openRankModal = async (user: any) => {
+    setRankTarget(user);
+    setRankData(null);
+    setRankCategory('*');
+    setRankHours('');
+    setRankReason('');
+    setRankModalVisible(true);
+    setRankLoading(true);
+    try {
+      setRankData(await api.adminGetProviderRanking(user.user_id));
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Failed to load ranking');
+    } finally {
+      setRankLoading(false);
+    }
+  };
+
+  const submitRankAdjust = async (sign: 1 | -1) => {
+    const h = parseFloat(rankHours);
+    if (!h || h <= 0) { showAlert('Enter hours', 'Enter a positive number of hours.'); return; }
+    try {
+      await api.adminAdjustProviderRanking(rankTarget.user_id, {
+        hours: sign * h,
+        category: rankCategory,
+        reason: rankReason.trim() || undefined,
+      });
+      showAlert('Done', `${sign > 0 ? 'Added' : 'Removed'} ${h}h (${rankCategory === '*' ? 'all categories' : rankCategory}).`);
+      setRankHours('');
+      setRankReason('');
+      setRankData(await api.adminGetProviderRanking(rankTarget.user_id));
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Failed to adjust');
+    }
+  };
+
   const openRoleModal = (user: any) => {
     setRoleTarget(user);
     setRoleModalVisible(true);
@@ -258,6 +302,17 @@ export default function Users() {
                     </TouchableOpacity>
                   )}
 
+                  {user.role === 'provider' && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, { borderColor: '#7c3aed' }]}
+                      onPress={() => openRankModal(user)}
+                      data-testid={`ranking-btn-${user.user_id}`}
+                    >
+                      <Ionicons name="stats-chart" size={16} color="#7c3aed" />
+                      <Text style={[styles.actionText, { color: '#7c3aed' }]}>Ranking</Text>
+                    </TouchableOpacity>
+                  )}
+
                   {user.is_blocked ? (
                     <TouchableOpacity
                       style={[styles.actionButton, styles.unblockButton]}
@@ -337,6 +392,115 @@ export default function Users() {
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Ranking Hours Modal (admin add/subtract per category) */}
+      <Modal visible={rankModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ranking hours</Text>
+              <TouchableOpacity onPress={() => setRankModalVisible(false)} data-testid="rank-close-btn">
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalBody}>
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 12 }}>
+                {rankTarget?.name} — add or subtract ranking hours. Bonus hours boost the pro's
+                position in the client-facing list.
+              </Text>
+
+              {rankLoading ? (
+                <ActivityIndicator size="large" color="#2563eb" style={{ marginVertical: 20 }} />
+              ) : (
+                <>
+                  <Text style={styles.label}>Apply to</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                    <TouchableOpacity
+                      style={[styles.catChip, rankCategory === '*' && styles.catChipOn]}
+                      onPress={() => setRankCategory('*')}
+                      data-testid="rank-cat-all"
+                    >
+                      <Text style={[styles.catChipText, rankCategory === '*' && styles.catChipTextOn]}>All categories</Text>
+                    </TouchableOpacity>
+                    {(rankData?.categories || []).map((c: any) => (
+                      <TouchableOpacity
+                        key={c.category_id}
+                        style={[styles.catChip, rankCategory === c.category_id && styles.catChipOn]}
+                        onPress={() => setRankCategory(c.category_id)}
+                        data-testid={`rank-cat-${c.category_id}`}
+                      >
+                        <Text style={[styles.catChipText, rankCategory === c.category_id && styles.catChipTextOn]}>{c.category_name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  {/* Current standing */}
+                  <View style={styles.rankStandingBox}>
+                    {rankData?.global_bonus_hours ? (
+                      <Text style={styles.rankGlobal}>Global bonus (all categories): <Text style={{ fontWeight: '800', color: '#7c3aed' }}>+{rankData.global_bonus_hours}h</Text></Text>
+                    ) : null}
+                    {(rankData?.categories || []).length === 0 ? (
+                      <Text style={{ color: '#9ca3af', fontSize: 13 }}>This pro has no active skill categories yet.</Text>
+                    ) : (rankData?.categories || []).map((c: any) => (
+                      <View key={c.category_id} style={styles.rankRow}>
+                        <Text style={styles.rankRowName}>{c.category_name}</Text>
+                        <Text style={styles.rankRowVal}>{c.worked_hours}h + bonus {c.bonus_hours}h · score {c.total_score}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <Text style={styles.label}>Hours</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={rankHours}
+                    onChangeText={setRankHours}
+                    placeholder="e.g. 5"
+                    keyboardType="decimal-pad"
+                    data-testid="rank-hours-input"
+                  />
+                  <Text style={styles.label}>Reason (optional)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={rankReason}
+                    onChangeText={setRankReason}
+                    placeholder="e.g. Manual correction"
+                    data-testid="rank-reason-input"
+                  />
+
+                  <View style={styles.buttonRow}>
+                    <TouchableOpacity
+                      style={[styles.modalButton, { backgroundColor: '#10b981' }]}
+                      onPress={() => submitRankAdjust(1)}
+                      data-testid="rank-add-btn"
+                    >
+                      <Text style={styles.modalButtonText}>+ Add hours</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalButton, { backgroundColor: '#ef4444' }]}
+                      onPress={() => submitRankAdjust(-1)}
+                      data-testid="rank-subtract-btn"
+                    >
+                      <Text style={styles.modalButtonText}>− Subtract</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {(rankData?.history || []).length > 0 && (
+                    <>
+                      <Text style={[styles.label, { marginTop: 16 }]}>History</Text>
+                      {(rankData.history || []).slice(0, 15).map((h: any) => (
+                        <View key={h.adj_id} style={styles.histRow}>
+                          <Text style={[styles.histHours, { color: h.hours >= 0 ? '#10b981' : '#ef4444' }]}>{h.hours >= 0 ? '+' : ''}{h.hours}h</Text>
+                          <Text style={styles.histMeta}>{h.category === '*' ? 'all' : h.category} · {h.source}{h.reason ? ` · ${h.reason}` : ''}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -640,4 +804,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  catChip: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7 },
+  catChipOn: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  catChipText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  catChipTextOn: { color: '#fff' },
+  rankStandingBox: { backgroundColor: '#f9fafb', borderRadius: 10, padding: 12, marginTop: 12, marginBottom: 4 },
+  rankGlobal: { fontSize: 13, color: '#374151', marginBottom: 8 },
+  rankRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  rankRowName: { fontSize: 13, fontWeight: '700', color: '#111827' },
+  rankRowVal: { fontSize: 12, color: '#6b7280' },
+  histRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  histHours: { fontSize: 13, fontWeight: '800', width: 52 },
+  histMeta: { fontSize: 12, color: '#6b7280', flex: 1 },
 });

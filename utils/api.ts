@@ -1038,4 +1038,16 @@ export const api = {
     const res = await client.get('/admin/email-campaigns');
     return res.data;
   },
+  getProviderRanking: async () => {
+    const res = await client.get('/provider/ranking');
+    return res.data;
+  },
+  adminGetProviderRanking: async (userId: string) => {
+    const res = await client.get(`/admin/providers/${userId}/ranking`);
+    return res.data;
+  },
+  adminAdjustProviderRanking: async (userId: string, data: { hours: number; category?: string; reason?: string }) => {
+    const res = await client.post(`/admin/providers/${userId}/ranking-adjust`, data);
+    return res.data;
+  },
 };

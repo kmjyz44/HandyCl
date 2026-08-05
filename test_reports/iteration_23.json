@@ -1,0 +1,25 @@
+{
+  "summary": "Backend-only verification of provider ranking-hours & provider-to-provider referral bonus. Wrote /app/backend/tests/test_provider_ranking.py (pytest, 10 tests). All 10 passed against the preview backend URL. Verified: access control (client/admin -> 403 on /provider/ranking; non-admin -> 403 on adjust; unknown user -> 404; hours=0 -> 422), GET /provider/ranking shape (categories[], referral_code, referral_link, referral_bonus_hours=5.0, cleaning row with all required fields), admin global +10 & category +5 -> cleaning bonus_hours net +15 and total_score +15, subtraction (-3) works, admin GET returns history newest-first with our new rows, /api/executors/by-service?category=cleaning still 200 and now includes category_bonus_hours and ranking_score. Multi-provider ordering: seeded 2 extra providers with cleaning skill and +50/+30 bonus and confirmed leader_score>=50 and hours_to_first math (leader-me + 0.01). Provider-to-provider referral: seeded referrals+paid booking directly and invoked server._accrue_order_points; BOTH provider and referrer got +5 ranking_adjustments (category '*', source referral_bonus) and referrals.provider_bonus_awarded=true. Re-invocation was idempotent (no extra rows). Final cleanup step removed all TEST_-created users/profiles/bookings/referrals and ALL ranking_adjustments for the impacted providers (including the real seeded provider@handyhub.com), leaving the preview DB clean.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_provider_ranking.py",
+    "/app/test_reports/pytest/ranking_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 14k+ lines — should be split into routers/modules; ranking logic (~4400-4770) is a clean candidate to extract into ranking_router.py.",
+    "hours_to_first uses a +0.01 tie-breaker literal — fine for now but consider a named constant or returning an integer-hours 'ceil(leader - me)' so UI copy ('X hours to first') doesn't render as 3.01.",
+    "_process_provider_referral_bonus swallows all exceptions with a warning log — a failed _add_ranking_adjustment after the referral flag flip would leave provider_bonus_awarded=true with no adjustment; consider a transaction or a compensating unflag on failure.",
+    "test_provider_ranking assumes seed provider@handyhub.com has 'cleaning' skill (matches problem statement) — fine, but if the seed changes this test needs updating.",
+    "Deprecation warnings emitted during import (FastAPI on_event, Pydantic .dict(), Query regex=) — safe today but should be migrated."
+  ],
+  "updated_files": ["/app/backend/tests/test_provider_ranking.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "Used seeded admin/provider/client accounts from /app/memory/test_credentials.md. Provider user_id user_dc5e0dd73212 confirmed to have 'cleaning' skill.",
+  "seed_data_creation": "Temporary: 2 extra providers for ordering test (TEST_Ranker_A/B) and 2 more (TEST_Referrer/Referred) + 1 referral + 1 paid booking for the referral bonus test. All deleted in the final test_zzz_cleanup step. Also deleted all ranking_adjustments rows for the seeded provider@handyhub.com created during the test run to avoid polluting future runs.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file /app/backend/tests/test_provider_ranking.py can be re-run standalone: `python -m pytest backend/tests/test_provider_ranking.py -v`. It self-cleans. Uses REACT_APP_BACKEND_URL and direct Mongo access for seeding via /app/backend/.env. Uses `import server` to call _accrue_order_points directly for the referral bonus flow because we cannot drive a real Finix charge in the preview.",
+  "rca of the issue": "No issues found — all requested behaviours verified."
+}
