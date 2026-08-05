@@ -1461,6 +1461,50 @@ function ProviderProfile() {
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
+      <TouchableOpacity
+        style={pStyles.menuRow}
+        disabled={(user as any)?.email_verified}
+        onPress={() => router.push({ pathname: '/verify-email', params: { email: user?.email } } as any)}
+        data-testid="provider-verify-email-row"
+      >
+        <Ionicons name="mail-outline" size={22} color={(user as any)?.email_verified ? '#059669' : '#374151'} style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Email</Text>
+          <Text style={pStyles.menuRowSub}>{user?.email || ''}</Text>
+        </View>
+        {(user as any)?.email_verified ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Ionicons name="checkmark-circle" size={18} color="#059669" />
+            <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>Verified</Text>
+          </View>
+        ) : (
+          <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '600' }}>Verify</Text>
+        )}
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      <TouchableOpacity
+        style={pStyles.menuRow}
+        disabled={(user as any)?.phone_verified}
+        onPress={() => router.push({ pathname: '/verify-phone', params: { phone: user?.phone || profile?.phone || '' } } as any)}
+        data-testid="provider-verify-phone-row"
+      >
+        <Ionicons name="call-outline" size={22} color={(user as any)?.phone_verified ? '#059669' : '#374151'} style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Phone</Text>
+          <Text style={pStyles.menuRowSub}>{user?.phone || profile?.phone || 'Add your phone number'}</Text>
+        </View>
+        {(user as any)?.phone_verified ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Ionicons name="checkmark-circle" size={18} color="#059669" />
+            <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>Verified</Text>
+          </View>
+        ) : (
+          <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '600' }}>Verify</Text>
+        )}
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
       <TouchableOpacity style={pStyles.menuRow} onPress={() => setServiceDetailVisible(true)}>
         <Ionicons name="briefcase-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <Text style={[pStyles.menuRowText, { flex: 1 }]}>Pro profile</Text>

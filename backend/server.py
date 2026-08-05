@@ -1644,16 +1644,20 @@ def _infobip_cfg(keys: dict) -> Tuple[str, str, str]:
     return base, api_key, sender
 
 
-async def _send_sms_infobip(to_phone: str, body: str, keys: dict) -> Tuple[bool, Optional[str]]:
-    """Send an SMS via Infobip (POST {base}/sms/3/messages). Returns (success, error)."""
+async def _send_sms_infobip(to_phone: str, body: str, keys: dict, verify_delivery: bool = False) -> Tuple[bool, Optional[str]]:
+    """Send an SMS via Infobip (POST {base}/sms/3/messages). Returns (success, error).
+    When verify_delivery=True, polls the delivery report once so rejections
+    (e.g. unverified toll-free sender) surface immediately instead of silently."""
     base, api_key, sender = _infobip_cfg(keys)
     if not base or not api_key:
         return False, "Infobip is not configured (set Base URL and API key in admin)"
     if not sender:
         return False, "Infobip sender is not configured"
-    # Infobip expects international format; strip a leading '+'
-    dst = to_phone.strip().lstrip("+")
-    snd = sender.lstrip("+")
+    # Infobip expects digits only in international format (strip +, spaces, dashes, parentheses)
+    dst = re.sub(r"[^\d]", "", to_phone or "")
+    snd = re.sub(r"[^\d]", "", sender or "") or sender.strip()
+    if len(dst) < 8:
+        return False, "Invalid destination number (use international format, e.g. +13317713444)"
     payload = {"messages": [{
         "sender": snd,
         "destinations": [{"to": dst}],
@@ -1679,19 +1683,51 @@ async def _send_sms_infobip(to_phone: str, body: str, keys: dict) -> Tuple[bool,
             except Exception:
                 pass
             return False, err
+        message_id = None
         try:
             d = r.json()
-            st = ((d.get("messages") or [{}])[0].get("status") or {})
+            m0 = (d.get("messages") or [{}])[0]
+            message_id = m0.get("messageId")
+            st = m0.get("status") or {}
             group = st.get("groupName", "")
             if group in ("UNDELIVERABLE", "REJECTED", "EXPIRED"):
-                return False, f"Infobip rejected the destination ({st.get('name') or group})"
+                return False, _infobip_status_msg(st)
         except Exception:
             pass
-        logger.info("Infobip SMS sent to %s", to_phone)
+        # Poll the delivery report once so permanent rejections surface right away.
+        if verify_delivery and message_id and base and api_key:
+            await asyncio.sleep(2.5)
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as http:
+                    rr = await http.get(
+                        f"{base}/sms/1/reports",
+                        params={"messageId": message_id},
+                        headers={"Authorization": f"App {api_key}", "Accept": "application/json"},
+                    )
+                if 200 <= rr.status_code < 300:
+                    res = (rr.json().get("results") or [])
+                    if res:
+                        rst = res[0].get("status") or {}
+                        if rst.get("groupName") in ("UNDELIVERABLE", "REJECTED", "EXPIRED"):
+                            return False, _infobip_status_msg(rst, res[0].get("error"))
+            except Exception as e:
+                logger.info("Infobip delivery report check skipped: %s", e)
+        logger.info("Infobip SMS sent to %s (id=%s)", to_phone, message_id)
         return True, None
     except Exception as e:
         logger.warning("Infobip SMS error: %s", e)
         return False, f"Infobip connection error: {e}"
+
+
+def _infobip_status_msg(status: dict, error: Optional[dict] = None) -> str:
+    """Build a human-readable reason from an Infobip status/error object."""
+    name = (status or {}).get("name") or (status or {}).get("groupName") or "rejected"
+    desc = (status or {}).get("description") or ""
+    if error and error.get("description"):
+        return f"Infobip rejected the SMS: {error['description']} ({error.get('name') or name})"
+    if "SOURCE" in name.upper() or "NOT_VERIFIED" in name.upper():
+        return "Infobip rejected the SMS: the sender number is not verified/approved yet (Toll-free verification required)."
+    return f"Infobip rejected the SMS: {desc or name}"
 
 
 async def _send_sms_plivo(to_phone: str, body: str, keys: dict) -> Tuple[bool, Optional[str]]:
@@ -1729,7 +1765,7 @@ async def _send_sms_plivo(to_phone: str, body: str, keys: dict) -> Tuple[bool, O
         return False, f"Plivo connection error: {e}"
 
 
-async def _send_sms_dispatch(to_phone: str, body: str, keys: dict) -> Tuple[bool, Optional[str]]:
+async def _send_sms_dispatch(to_phone: str, body: str, keys: dict, verify_delivery: bool = False) -> Tuple[bool, Optional[str]]:
     """Send via the admin-selected provider (Infobip default), with fallback to the other."""
     provider = (keys.get("sms_provider") or "infobip").lower()
     order = ["infobip", "plivo"] if provider != "plivo" else ["plivo", "infobip"]
@@ -1738,7 +1774,7 @@ async def _send_sms_dispatch(to_phone: str, body: str, keys: dict) -> Tuple[bool
         if p == "infobip":
             base, api_key, sender = _infobip_cfg(keys)
             if base and api_key and sender:
-                ok, err = await _send_sms_infobip(to_phone, body, keys)
+                ok, err = await _send_sms_infobip(to_phone, body, keys, verify_delivery=verify_delivery)
                 if ok:
                     return True, None
                 last_err = err
@@ -1752,7 +1788,7 @@ async def _send_sms_dispatch(to_phone: str, body: str, keys: dict) -> Tuple[bool
     return False, last_err or "No SMS provider is configured"
 
 
-async def _send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
+async def _send_sms(to_phone: str, body: str, verify_delivery: bool = False) -> Tuple[bool, Optional[str]]:
     """Unified SMS sender. Provider selectable in admin (sms_provider, Infobip default).
     Returns (success, error_message)."""
     if not to_phone:
@@ -1760,7 +1796,7 @@ async def _send_sms(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
     keys = await _get_integration_keys()
     if not keys.get("enable_sms_notifications", True):
         return False, "SMS notifications are disabled in admin settings"
-    return await _send_sms_dispatch(to_phone, body, keys)
+    return await _send_sms_dispatch(to_phone, body, keys, verify_delivery=verify_delivery)
 
 
 async def _send_sms_now(to_phone: str, body: str) -> Tuple[bool, Optional[str]]:
@@ -2376,7 +2412,7 @@ async def send_phone_code(request: Request, payload: Dict[str, Any] = Body(defau
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
         "created_at": datetime.now(timezone.utc), "attempts": 0,
     })
-    sent, sms_error = await _send_sms(phone, f"Ono-Fix: your verification code is {code}. It expires in 10 minutes.")
+    sent, sms_error = await _send_sms(phone, f"Ono-Fix: your verification code is {code}. It expires in 10 minutes.", verify_delivery=True)
     resp: Dict[str, Any] = {"ok": True, "sent": sent}
     if not sent and sms_error:
         resp["error"] = sms_error
