@@ -1376,6 +1376,18 @@ function ProviderProfile() {
         </TouchableOpacity>
       </View>
 
+      <View style={pStyles.statSection}>
+        <Text style={pStyles.statSectionTitle}>Ranking</Text>
+        <TouchableOpacity style={pStyles.statRow} onPress={() => router.push('/my-ranking' as any)} data-testid="stats-my-ranking-link">
+          <View style={{ flex: 1 }}>
+            <Text style={pStyles.statLabel}>My ranking</Text>
+            <Text style={pStyles.statSubLabel}>Worked & bonus hours, your position and rating per category</Text>
+          </View>
+          <Ionicons name="stats-chart" size={20} color="#7c3aed" style={{ marginRight: 8 }} />
+          <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+        </TouchableOpacity>
+      </View>
+
     </ScrollView>
   );
 
@@ -1456,16 +1468,6 @@ function ProviderProfile() {
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => router.push('/my-ranking' as any)} data-testid="myprofile-ranking-link">
-        <Ionicons name="stats-chart-outline" size={22} color="#7c3aed" style={pStyles.menuRowIcon} />
-        <View style={{ flex: 1 }}>
-          <Text style={pStyles.menuRowText}>My ranking</Text>
-          <Text style={pStyles.menuRowSub}>Hours, position per category & referral bonus</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
-      </TouchableOpacity>
-      <View style={pStyles.menuDivider} />
-
       <TouchableOpacity style={pStyles.menuRow} onPress={() => setPhotosModalVisible(true)}>
         <Ionicons name="images-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <View style={{ flex: 1 }}>
@@ -1507,7 +1509,10 @@ function ProviderProfile() {
       {/* INVITE */}
       <TouchableOpacity style={[pStyles.menuRow, { backgroundColor: '#f0fdf4' }]} onPress={() => router.push('/rewards' as any)} data-testid="provider-rewards-row">
         <Ionicons name="gift-outline" size={22} color="#16a34a" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1, color: '#15803d' }]}>Rewards & invite friends</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[pStyles.menuRowText, { color: '#15803d' }]}>Rewards & invite friends</Text>
+          <Text style={[pStyles.menuRowSub, { color: '#15803d' }]}>Invite a pro → you both get +5 ranking hours. Invite a client → earn points & gift cards.</Text>
+        </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />

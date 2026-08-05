@@ -170,6 +170,10 @@ export default function Rewards() {
             Share your code. When a friend signs up and completes $100 in orders, you earn{' '}
             <Text style={{ fontWeight: '800', color: '#2563eb' }}>500 points ($5)</Text>.
           </Text>
+          <View style={s.refBonusNote}>
+            <Text style={s.refBonusLine}>🎁 <Text style={{ fontWeight: '700' }}>Invite a client</Text> — earn points you can redeem for gift cards.</Text>
+            <Text style={s.refBonusLine}>⏱️ <Text style={{ fontWeight: '700' }}>Invite a pro</Text> — when they finish their first paid task, you BOTH get <Text style={{ fontWeight: '700', color: '#7c3aed' }}>+5 ranking hours</Text> in every category.</Text>
+          </View>
           <View style={s.codeBox}>
             <Text style={s.codeText} data-testid="rewards-referral-code">{balance?.referral_code}</Text>
             <TouchableOpacity onPress={onCopy} style={s.codeCopy} data-testid="rewards-copy-btn">
@@ -257,6 +261,8 @@ const s = StyleSheet.create({
 
   refCard: { backgroundColor: '#fff', borderRadius: 16, padding: 18, marginTop: 12, borderWidth: 1, borderColor: '#eef0f3' },
   refText: { fontSize: 14, color: '#374151', lineHeight: 20 },
+  refBonusNote: { backgroundColor: '#f9fafb', borderRadius: 10, padding: 12, marginTop: 12, gap: 8 },
+  refBonusLine: { fontSize: 13, color: '#374151', lineHeight: 19 },
   codeBox: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe',

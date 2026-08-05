@@ -83,7 +83,7 @@ export default function TermsOfUse() {
           You agree not to: (a) violate any law or regulation; (b) impersonate another person; (c) post false, misleading, or fraudulent content; (d) harass, abuse, or threaten other users; (e) circumvent the Platform's fee or communication systems; (f) use the Platform for any illegal purpose; (g) attempt to gain unauthorized access to the Platform.
         </Text>
 
-        <Text style={styles.h2}>10. Reviews, Ratings & Provider Ranking</Text>
+        <Text style={styles.h2}>10. Reviews, Ratings, Provider Ranking & Rewards</Text>
         <Text style={styles.p}>
           You may post reviews and content; you grant Ono-Fix a worldwide, royalty-free, perpetual license to use, display, and distribute such content on the Platform. Reviews must be truthful and based on actual experience.
         </Text>
@@ -109,6 +109,15 @@ export default function TermsOfUse() {
         </Text>
         <Text style={styles.p}>
           Each Provider can view their worked hours, bonus hours, average review rating, and current position for every active category on their <Text style={styles.bold}>"My ranking"</Text> screen, including how many hours are needed to move up in the list.
+        </Text>
+        <Text style={styles.p}>
+          <Text style={styles.bold}>Loyalty points (Clients).</Text> Clients earn loyalty points on paid orders (currently 1 point per $1 spent). Accumulated points can be redeemed for digital gift cards through the in-app Rewards screen (gift-card tiers such as $25, $50, $100, $200 and $500). Points have no cash value, cannot be transferred or exchanged for cash, and may be adjusted or reversed if the underlying order is refunded or cancelled.
+        </Text>
+        <Text style={styles.p}>
+          <Text style={styles.bold}>Client referral reward.</Text> A user may invite a new Client using their referral code or link. When the invited Client signs up and completes at least <Text style={styles.bold}>$100 in paid orders</Text>, the referrer receives a one-time bonus of <Text style={styles.bold}>500 points (≈ $5)</Text>, redeemable as a gift card. This bonus is awarded once per invited Client and may be reversed if the invited Client's qualifying spend later drops below the threshold.
+        </Text>
+        <Text style={styles.p}>
+          <Text style={styles.bold}>Summary of referral rewards.</Text> Inviting a <Text style={styles.bold}>Provider</Text> earns both parties <Text style={styles.bold}>+5 ranking hours</Text> (see above) once the invited Provider's first job is paid. Inviting a <Text style={styles.bold}>Client</Text> earns the referrer <Text style={styles.bold}>loyalty points and gift-card rewards</Text>. Ono-Fix may modify, suspend, or discontinue any rewards or referral program, and may adjust point values, gift-card tiers, and bonus amounts, at any time.
         </Text>
 
         <Text style={styles.h2}>11. Independent Contractor Status</Text>

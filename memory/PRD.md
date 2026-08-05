@@ -541,3 +541,11 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - RULES: terms.tsx section 10 extended with "Provider referral bonus" (+5 global, once, reversible) and "Bonus and adjustment hours" clauses.
 - VERIFIED: testing_agent iteration_23 — 10/10 backend tests PASS (access control, ranking shape, global+category adjust math (cleaning bonus +15), subtraction, admin history newest-first, executors/by-service regression now includes category_bonus_hours+ranking_score, multi-provider ordering + hours_to_first math, referral bonus to BOTH + idempotency). Frontend esbuild-clean (pod serves CRA placeholder; visual verification pending on Netlify).
 - ⚠️ Needs "Save to GitHub": backend → Railway, frontend → Netlify. Referral link uses existing ?ref= capture (_layout.tsx) + registration referral_code (already working).
+
+## 2026-08-05 (cont.) — Ranking UX polish: moved "My ranking" to Stats tab + rewards copy + rules
+- Moved the provider "My ranking" entry from the Profile tab menu to the BOTTOM of the STATS tab (my-profile.tsx renderPerformance → new "Ranking" section row, data-testid stats-my-ranking-link). Removed the old row from renderService.
+- "Rewards & invite friends" row (provider profile) now has a subtitle explaining both bonus types: invite a pro → +5 ranking hours (both); invite a client → points & gift cards.
+- Rewards screen (app/rewards.tsx): added a two-line bonus note in the referral card — client referral = points→gift cards; provider referral = +5 ranking hours in every category after their first paid task. (new styles refBonusNote/refBonusLine)
+- Terms (app/terms.tsx): renamed section 10 → "Reviews, Ratings, Provider Ranking & Rewards"; added clauses for Loyalty points (Clients, 1pt/$1, gift-card tiers), Client referral reward (500 pts at $100 spend), and a summary contrasting provider (hours) vs client (points+gift cards) referrals. No section renumbering.
+- esbuild-clean (my-profile, rewards, terms). Frontend-only; visual verification on Netlify after Save to GitHub.
+- KNOWN (not requested this round): provider Stats "Earnings" still renders the ₴ (UAH) symbol in my-profile.tsx (~line 1324) — should be $ per US adaptation. Flagged for a future fix.
