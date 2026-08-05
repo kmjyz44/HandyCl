@@ -1321,7 +1321,7 @@ function ProviderProfile() {
         <TouchableOpacity style={pStyles.statRow}>
           <View style={{ flex: 1 }}>
             <Text style={pStyles.statLabel}>This month</Text>
-            <Text style={pStyles.statValueGreen}>{stats.monthEarnings > 0 ? `₴${stats.monthEarnings.toFixed(2)}` : '₴0.00'}</Text>
+            <Text style={pStyles.statValueGreen}>{stats.monthEarnings > 0 ? `$${stats.monthEarnings.toFixed(2)}` : '$0.00'}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </TouchableOpacity>
