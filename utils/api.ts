@@ -1068,4 +1068,16 @@ export const api = {
     const res = await client.get('/admin/sms-campaigns');
     return res.data;
   },
+  adminListRedemptions: async (status?: string) => {
+    const res = await client.get('/admin/loyalty/redemptions', { params: status ? { status } : {} });
+    return res.data;
+  },
+  adminFulfillRedemption: async (cardId: string, data: { code: string; brand?: string; note?: string }) => {
+    const res = await client.post(`/admin/loyalty/redemptions/${cardId}/fulfill`, data);
+    return res.data;
+  },
+  adminRejectRedemption: async (cardId: string, reason?: string) => {
+    const res = await client.post(`/admin/loyalty/redemptions/${cardId}/reject`, { reason });
+    return res.data;
+  },
 };

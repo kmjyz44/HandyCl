@@ -564,3 +564,18 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - CODE IMPROVEMENTS: `_send_sms_infobip` now strips ALL non-digits from destination/sender (spaces/dashes broke formatting) and supports verify_delivery=True → polls GET {base}/sms/1/reports once (~2.5s) after send so permanent rejections surface immediately. `_send_sms`/`_send_sms_dispatch` thread verify_delivery. send-phone-code (OTP) now calls with verify_delivery=True → the verify-phone screen shows the real reason (e.g. "Toll-free number is not verified") instead of a silent success. Added `_infobip_status_msg` helper.
 - VERIFIED: direct _send_sms('+1 331 771 3444', verify_delivery=True) → sent=False, error="Infobip rejected the SMS: Toll-free number is not verified (EC_TF_NUMBER_NOT_VERIFIED)". Backend synced; my-profile esbuild-clean.
 - ⚠️ Save to GitHub → Railway/Netlify.
+
+## 2026-08-12 — Manual gift-card redemption flow (Giftbit ON/OFF) + $50 minimum + admin alerts
+- USER REQUEST: toggle to turn OFF Giftbit and switch to MANUAL flow: client accumulates ≥$50 → Redeem → request goes to admin → admin buys card → enters code in admin → Ono-Fix auto-sends email+SMS to client. Minimum $50. Admin alerted (email/Telegram) about redemption requests.
+- TOGGLE: reuse existing `enable_giftbit` (admin-integrations "Giftbit" section, label updated: "Auto-issue via Giftbit (OFF = manual: admin enters code in Rewards requests)"). ON → auto Giftbit issue (unchanged). OFF → manual flow.
+- MINIMUM $50: removed the $25 tier from GIFT_CARD_TIERS (now 50/100/200/500). Added MIN_REDEEM_USD=50. Invalid value → 400 "Minimum redemption is $50".
+- BACKEND (server.py):
+  - `POST /loyalty/gift-cards/redeem`: deducts points atomically; if giftbit enabled → auto; else MANUAL → gift_card status "requested" (fulfillment "manual"), alerts admins via `_notify_admins` (email+Telegram), notifies client "request received", returns {manual:true, status:"requested"}.
+  - `GET /admin/loyalty/redemptions?status=` → list with client name/email/phone + counts.
+  - `POST /admin/loyalty/redemptions/{card_id}/fulfill` {code, brand?, note?} → status "delivered", stores code, sends code to client via email (`_send_email_now`) + SMS (`_send_sms_now`). Double-fulfill → 400.
+  - `POST /admin/loyalty/redemptions/{card_id}/reject` {reason?} → refunds points, status "rejected", notifies client.
+  - NEW helpers `_notify_admins_email` (emails all admins/moderators + support_email) and `_notify_admins` (email + Telegram).
+- FRONTEND: NEW app/admin-redemptions.tsx ("Rewards requests": tabs requested/delivered/all, cards with client info, "Enter code & send" modal [code/brand/note], "Reject & refund"). Route in _layout.tsx; "Rewards" nav button (gift) in services.tsx admin panel. api.ts: adminListRedemptions/adminFulfillRedemption/adminRejectRedemption. rewards.tsx onRedeem shows "Request received" title when res.manual.
+- VERIFIED (curl preview): disable giftbit → redeem $50 → status "requested"; $25 → 400 (min); admin list shows request; fulfill code → email_sent=true sms_sent=true, code stored, status delivered; double-fulfill → 400; reject → refunded 5000 pts (balance restored to 5000). Giftbit re-enabled on preview after test. Frontend esbuild-clean.
+- NOTE: SMS to client depends on Infobip toll-free verification (still pending) — email will always work; SMS once the sender is verified.
+- ⚠️ Save to GitHub → Railway/Netlify.

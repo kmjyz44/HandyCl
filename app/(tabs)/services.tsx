@@ -335,6 +335,7 @@ export default function Services() {
             { icon: 'people', color: '#ec4899', label: 'Waitlist', route: '/admin-waitlist', tid: 'open-admin-waitlist-btn' },
             { icon: 'mail', color: '#2563eb', label: 'Email', route: '/admin-email', tid: 'open-admin-email-btn' },
             { icon: 'chatbubbles', color: '#0891b2', label: 'SMS', route: '/admin-sms', tid: 'open-admin-sms-btn' },
+            { icon: 'gift', color: '#16a34a', label: 'Rewards', route: '/admin-redemptions', tid: 'open-admin-redemptions-btn' },
           ].map((b) => (
             <TouchableOpacity key={b.route} style={styles.navItem} onPress={() => router.push(b.route as any)} data-testid={b.tid}>
               <View style={[styles.navIcon, { backgroundColor: b.color }]}>

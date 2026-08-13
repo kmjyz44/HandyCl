@@ -100,7 +100,7 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
   {
     title: 'Giftbit (loyalty rewards — gift cards)',
     toggle: 'enable_giftbit',
-    toggleLabel: 'Enable Giftbit rewards',
+    toggleLabel: 'Auto-issue via Giftbit (OFF = manual: admin enters code in Rewards requests)',
     keys: [
       { id: 'giftbit_environment', label: 'Environment (testbed / production)', placeholder: 'testbed — default' },
       { id: 'giftbit_api_key', label: 'API Key (Bearer token)', placeholder: 'paste your Giftbit API key', secret: true },

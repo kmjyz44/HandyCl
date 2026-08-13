@@ -1429,6 +1429,32 @@ async def _notify_admins_telegram(message: str):
         logger.warning("Admin Telegram notify failed: %s", e)
 
 
+async def _notify_admins_email(subject: str, body: str):
+    """Email all admins/moderators (and support_email) — used for operational alerts."""
+    try:
+        keys = await _get_integration_keys()
+        emails = set()
+        se = (keys.get("support_email") or "").strip().lower()
+        if se:
+            emails.add(se)
+        admins = await db.users.find(
+            {"role": {"$in": ["admin", "moderator"]}}, {"_id": 0, "email": 1}
+        ).to_list(100)
+        for a in admins:
+            if a.get("email"):
+                emails.add(a["email"].strip().lower())
+        for e in emails:
+            await _send_email_now(e, subject, body)
+    except Exception as ex:
+        logger.warning("Admin email notify failed: %s", ex)
+
+
+async def _notify_admins(subject: str, message: str):
+    """Alert admins via BOTH email and Telegram (fire-and-forget)."""
+    await _notify_admins_email(subject, message)
+    await _notify_admins_telegram(f"<b>{subject}</b>\n{message}")
+
+
 async def create_notification(
     user_id: str,
     notification_type: str,
@@ -10905,12 +10931,12 @@ LOYALTY_POINT_VALUE_USD = 0.01
 REFERRAL_ACTIVATION_THRESHOLD = 100.0   # friend must complete >= $100 of paid orders
 REFERRAL_BONUS_POINTS = 500             # referrer gets 500 pts ($5) per activated friend
 GIFT_CARD_TIERS = [
-    {"value": 25, "points": 2500},
     {"value": 50, "points": 5000},
     {"value": 100, "points": 10000},
     {"value": 200, "points": 20000},
     {"value": 500, "points": 50000},
 ]
+MIN_REDEEM_USD = 50  # minimum accumulated value a client can redeem
 
 
 def _gen_referral_code() -> str:
@@ -11176,15 +11202,18 @@ async def _giftbit_send_gift(keys: Dict[str, Any], email: str, name: str, value_
 
 @api_router.post("/loyalty/gift-cards/redeem")
 async def loyalty_redeem_gift_card(payload: Dict[str, Any] = Body(...), current_user: User = Depends(get_current_user)):
-    """Redeem points for a gift card, sent to the client's email via Giftbit."""
+    """Redeem points for a gift card. When Giftbit is ENABLED the card is issued
+    automatically via the Giftbit API. When Giftbit is DISABLED the request is
+    queued for MANUAL fulfillment: admins are alerted (email + Telegram), an admin
+    later enters the purchased gift-card code in the panel, and Ono-Fix then emails
+    + texts the code to the client."""
     value = int(payload.get("value") or 0)
     tier = next((t for t in GIFT_CARD_TIERS if t["value"] == value), None)
     if not tier:
-        raise HTTPException(status_code=400, detail="Invalid gift-card value")
+        raise HTTPException(status_code=400, detail=f"Invalid gift-card value. Minimum redemption is ${MIN_REDEEM_USD}.")
 
     keys = await _get_integration_keys()
-    if not keys.get("enable_giftbit") or not keys.get("giftbit_api_key"):
-        raise HTTPException(status_code=503, detail="Gift-card rewards are temporarily unavailable. Your points are safe.")
+    giftbit_auto = bool(keys.get("enable_giftbit") and keys.get("giftbit_api_key"))
 
     pts = int(tier["points"])
     # Atomically deduct points only if the balance is sufficient (prevents races / negative balance)
@@ -11198,10 +11227,14 @@ async def loyalty_redeem_gift_card(payload: Dict[str, Any] = Body(...), current_
 
     card_id = f"gc_{uuid.uuid4().hex[:14]}"
     email = current_user.email
+    phone = deducted.get("phone") or getattr(current_user, "phone", None)
+    name = getattr(current_user, "name", "") or deducted.get("name") or ""
     now = datetime.now(timezone.utc)
     await db.gift_cards.insert_one({
         "card_id": card_id, "user_id": current_user.user_id, "value": value,
-        "points_cost": pts, "recipient_email": email, "status": "pending",
+        "points_cost": pts, "recipient_email": email, "recipient_phone": phone,
+        "recipient_name": name,
+        "status": "pending", "fulfillment": "auto" if giftbit_auto else "manual",
         "giftbit_campaign_id": None, "created_at": now,
     })
     await db.points_transactions.insert_one({
@@ -11210,8 +11243,28 @@ async def loyalty_redeem_gift_card(payload: Dict[str, Any] = Body(...), current_
         "description": f"Redeemed {pts} points for a ${value} gift card", "created_at": now,
     })
 
+    # ── MANUAL fulfillment path (Giftbit disabled) ──
+    if not giftbit_auto:
+        await db.gift_cards.update_one({"card_id": card_id}, {"$set": {"status": "requested"}})
+        alert = (f"New gift-card redemption request\n"
+                 f"Client: {name or 'N/A'} ({email})\n"
+                 f"Amount: ${value} ({pts} points)\n"
+                 f"Request ID: {card_id}\n"
+                 f"Buy the card and enter its code in Admin → Rewards requests.")
+        asyncio.create_task(_notify_admins("💳 Gift-card redemption request", alert))
+        try:
+            await notify_user(current_user.user_id, "gift_card_requested", "Redemption request received 🎁",
+                              f"We received your ${value} gift-card request. We'll email and text your code shortly.",
+                              related_id=card_id, related_type="gift_card", channels=["inapp", "push", "email"])
+        except Exception:
+            pass
+        return {"success": True, "card_id": card_id, "value": value, "status": "requested",
+                "manual": True, "recipient_email": email,
+                "message": f"Your ${value} redemption request was received. We'll send your gift-card code to {email} shortly."}
+
+    # ── AUTO fulfillment path (Giftbit) ──
     try:
-        campaign = await _giftbit_send_gift(keys, email, getattr(current_user, "name", "") or "", value, card_id)
+        campaign = await _giftbit_send_gift(keys, email, name, value, card_id)
     except HTTPException:
         # Refund points on provider failure
         await db.users.update_one({"user_id": current_user.user_id}, {"$inc": {"balance_points": pts}})
@@ -11235,6 +11288,101 @@ async def loyalty_redeem_gift_card(payload: Dict[str, Any] = Body(...), current_
         pass
     return {"success": True, "card_id": card_id, "value": value, "recipient_email": email,
             "message": f"Your ${value} gift card was sent to {email}."}
+
+
+@api_router.get("/admin/loyalty/redemptions")
+async def admin_list_redemptions(status: Optional[str] = None, current_user: User = Depends(require_admin)):
+    """List gift-card redemption requests (manual fulfillment). Optional ?status=requested."""
+    q: Dict[str, Any] = {}
+    if status:
+        q["status"] = status
+    cards = await db.gift_cards.find(q, {"_id": 0}).sort("created_at", -1).to_list(300)
+    # attach light user info
+    uids = list({c.get("user_id") for c in cards if c.get("user_id")})
+    users = {u["user_id"]: u for u in await db.users.find(
+        {"user_id": {"$in": uids}}, {"_id": 0, "user_id": 1, "name": 1, "email": 1, "phone": 1}).to_list(500)}
+    for c in cards:
+        u = users.get(c.get("user_id")) or {}
+        c["client_name"] = c.get("recipient_name") or u.get("name")
+        c["client_email"] = c.get("recipient_email") or u.get("email")
+        c["client_phone"] = c.get("recipient_phone") or u.get("phone")
+    counts = {
+        "requested": sum(1 for c in cards if c.get("status") == "requested"),
+        "delivered": sum(1 for c in cards if c.get("status") == "delivered"),
+    }
+    return {"redemptions": cards, "counts": counts}
+
+
+@api_router.post("/admin/loyalty/redemptions/{card_id}/fulfill")
+async def admin_fulfill_redemption(card_id: str, payload: Dict[str, Any] = Body(...), current_user: User = Depends(require_admin)):
+    """Admin enters the purchased gift-card code; Ono-Fix emails + texts it to the client."""
+    code = (payload.get("code") or "").strip()
+    if not code:
+        raise HTTPException(status_code=422, detail="Gift-card code is required")
+    brand = (payload.get("brand") or "").strip()
+    note = (payload.get("note") or "").strip()
+    card = await db.gift_cards.find_one({"card_id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(status_code=404, detail="Redemption not found")
+    if card.get("status") == "delivered":
+        raise HTTPException(status_code=400, detail="This redemption is already fulfilled")
+
+    now = datetime.now(timezone.utc)
+    await db.gift_cards.update_one({"card_id": card_id}, {"$set": {
+        "status": "delivered", "code": code, "brand": brand or None, "admin_note": note or None,
+        "fulfilled_by": current_user.user_id, "delivered_at": now,
+    }})
+
+    value = card.get("value")
+    email = card.get("recipient_email")
+    phone = card.get("recipient_phone")
+    brand_txt = f" ({brand})" if brand else ""
+    msg_body = (f"Your ${value} Ono-Fix gift card{brand_txt} is here!\n"
+                f"Gift card code: {code}\n"
+                + (f"Note: {note}\n" if note else "")
+                + "Thank you for using Ono-Fix.")
+
+    email_sent = False
+    if email:
+        email_sent = await _send_email_now(email, f"Your ${value} Ono-Fix gift card 🎁", msg_body)
+    sms_sent = False
+    if phone:
+        sms_ok, _ = await _send_sms_now(phone, f"Ono-Fix: your ${value} gift card code is {code}. Enjoy!")
+        sms_sent = bool(sms_ok)
+    try:
+        await notify_user(card["user_id"], "gift_card_delivered", "Your gift card is here 🎁",
+                          f"Your ${value} gift-card code: {code}",
+                          related_id=card_id, related_type="gift_card", channels=["inapp", "push"])
+    except Exception:
+        pass
+    return {"ok": True, "card_id": card_id, "email_sent": email_sent, "sms_sent": sms_sent}
+
+
+@api_router.post("/admin/loyalty/redemptions/{card_id}/reject")
+async def admin_reject_redemption(card_id: str, payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
+    """Reject a redemption request and REFUND the client's points."""
+    card = await db.gift_cards.find_one({"card_id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(status_code=404, detail="Redemption not found")
+    if card.get("status") in ("delivered", "rejected"):
+        raise HTTPException(status_code=400, detail=f"Cannot reject a {card.get('status')} redemption")
+    reason = (payload.get("reason") or "").strip() or "Request could not be fulfilled"
+    pts = int(card.get("points_cost") or 0)
+    now = datetime.now(timezone.utc)
+    await db.users.update_one({"user_id": card["user_id"]}, {"$inc": {"balance_points": pts}})
+    await db.gift_cards.update_one({"card_id": card_id}, {"$set": {"status": "rejected", "reject_reason": reason, "rejected_at": now}})
+    await db.points_transactions.insert_one({
+        "txn_id": f"pts_{uuid.uuid4().hex[:12]}", "user_id": card["user_id"],
+        "amount": pts, "source": "reversal", "reference_id": card_id,
+        "description": f"Refund — redemption rejected: {reason}", "created_at": now,
+    })
+    try:
+        await notify_user(card["user_id"], "gift_card_rejected", "Redemption refunded",
+                          f"Your ${card.get('value')} redemption was refunded ({pts} points returned). {reason}",
+                          related_id=card_id, related_type="gift_card", channels=["inapp", "push", "email"])
+    except Exception:
+        pass
+    return {"ok": True, "refunded_points": pts}
 
 
 @api_router.post("/admin/loyalty/backfill")

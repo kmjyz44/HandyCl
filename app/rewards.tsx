@@ -74,7 +74,8 @@ export default function Rewards() {
     setRedeeming(value);
     try {
       const res = await api.redeemGiftCard(value);
-      showAlert('Gift card sent 🎁', res?.message || `Your $${value} gift card is on its way!`);
+      const title = res?.manual ? 'Request received 🎁' : 'Gift card sent 🎁';
+      showAlert(title, res?.message || `Your $${value} gift card is on its way!`);
       load();
     } catch (e: any) {
       showAlert('Rewards', e?.response?.data?.detail || 'Could not redeem right now');
