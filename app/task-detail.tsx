@@ -118,6 +118,7 @@ export default function TaskDetail() {
   const [materials, setMaterials] = useState('');
   const [closingMsg, setClosingMsg] = useState('Thank you for your trust! If you liked the work, please leave a review.');
   const [ongoingJob, setOngoingJob] = useState(false);
+  const [notCompleted, setNotCompleted] = useState(false);
 
   // Payment modal
   const [showPayment, setShowPayment] = useState(false);
@@ -322,16 +323,19 @@ export default function TaskDetail() {
         actual_hours: hours ? parseFloat(hours) : undefined,
         materials_cost: materials ? parseFloat(materials) : undefined,
         provider_notes: closingMsg || undefined,
+        create_followup: notCompleted || undefined,
       });
       const hrs = res?.actual_hours ?? hours ?? '—';
+      const followMsg = res?.followup_created ? '\n\nA follow-up task was added to Accepted tasks.' : '';
       setShowInvoice(false);
+      setNotCompleted(false);
       if (Platform.OS === 'web') {
-        window.alert(`✅ Task completed!\nHours worked: ${hrs} hr\nThe client will be notified to pay.`);
+        window.alert(`✅ Task completed!\nHours worked: ${hrs} hr\nThe client will be notified to pay.${followMsg}`);
         router.replace('/(tabs)/bookings');
       } else {
         Alert.alert(
           'Task completed!',
-          `Hours worked: ${hrs} hr\nThe client will be notified to pay.`,
+          `Hours worked: ${hrs} hr\nThe client will be notified to pay.${followMsg}`,
           [{ text: 'OK', onPress: () => router.replace('/(tabs)/bookings') }]
         );
       }
@@ -1226,6 +1230,24 @@ export default function TaskDetail() {
                 <Text style={s.toggleLabel}>Recurring job</Text>
                 <Switch value={ongoingJob} onValueChange={setOngoingJob} trackColor={{ true: '#22c55e' }} />
               </View>
+
+              {/* Task not completed → clone as a fresh Accepted follow-up */}
+              <TouchableOpacity
+                style={s.followupRow}
+                onPress={() => setNotCompleted(v => !v)}
+                activeOpacity={0.7}
+                data-testid="task-not-completed-checkbox"
+              >
+                <Ionicons
+                  name={notCompleted ? 'checkbox' : 'square-outline'}
+                  size={22}
+                  color={notCompleted ? '#f97316' : '#9ca3af'}
+                />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={s.followupLabel}>Task not completed</Text>
+                  <Text style={s.followupHint}>Charge for the work done now and create a follow-up "Accepted" task to finish later.</Text>
+                </View>
+              </TouchableOpacity>
             </ScrollView>
 
             <View style={s.modalFooter}>
@@ -1857,6 +1879,9 @@ const s = StyleSheet.create({
 
   toggleRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
   toggleLabel: { fontSize: 15, color: '#374151' },
+  followupRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6', marginTop: 4 },
+  followupLabel: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  followupHint: { fontSize: 12, color: '#6b7280', marginTop: 3, lineHeight: 17 },
 
   // ── Payment ──
   paymentSummary: { backgroundColor: '#f9fafb', borderRadius: 12, padding: 16, marginBottom: 16 },

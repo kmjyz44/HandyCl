@@ -396,6 +396,7 @@ class TaskComplete(BaseModel):
     end_time: Optional[str] = None
     provider_comments: Optional[str] = None
     provider_notes: Optional[str] = None   # alias for provider_comments
+    create_followup: Optional[bool] = False  # "task not completed" — clone as a new Accepted task
 
 class Message(BaseModel):
     message_id: str
@@ -3639,6 +3640,63 @@ async def start_task(task_id: str, current_user: User = Depends(get_current_user
 
     return {"message": "Task started", "status": TaskStatus.STARTED, "task_id": real_task_id}
 
+
+# Fields that must NOT carry over when cloning a task into a fresh "Accepted" follow-up.
+_FOLLOWUP_STRIP_FIELDS = {
+    "_id", "task_id", "booking_id", "status", "created_at", "updated_at",
+    "accepted_at", "on_the_way_at", "started_at", "completed_at",
+    "actual_hours", "billable_hours", "minimum_hours",
+    "final_price", "labor_cost", "platform_fee", "provider_payout",
+    "materials_cost", "expenses", "provider_notes", "provider_comments",
+    "payment_status", "paid_at", "paid_amount", "delivered_at",
+    "loyalty_awarded", "review_id", "rating", "dispute_id",
+}
+
+
+async def _clone_task_as_followup(task: Dict[str, Any], provider_id: str, now: datetime) -> Dict[str, Any]:
+    """Create a fresh follow-up task+booking in ASSIGNED ("Accepted") status, keeping the
+    same client, provider, category, address and rate. Purely additive — does not touch the
+    original task. Returns {new_task_id, new_booking_id}."""
+    new_booking_id = f"booking_{uuid.uuid4().hex[:16]}"
+    new_task_id = f"task_{uuid.uuid4().hex[:16]}"
+
+    def _fresh(base: Dict[str, Any]) -> Dict[str, Any]:
+        d = {k: v for k, v in base.items() if k not in _FOLLOWUP_STRIP_FIELDS}
+        title = d.get("title") or "Task"
+        if not str(title).startswith("(Follow-up)"):
+            d["title"] = f"(Follow-up) {title}"
+        d["provider_id"] = provider_id
+        d["status"] = None  # set by caller per collection
+        d["accepted_at"] = now
+        d["created_at"] = now
+        d["updated_at"] = now
+        d["payment_status"] = "pending"
+        d["followup_of_booking"] = task.get("booking_id")
+        d["followup_of_task"] = task.get("task_id")
+        d["is_followup"] = True
+        return d
+
+    # Clone the booking (client-facing source of truth) — prefer the original booking doc.
+    orig_booking = None
+    if task.get("booking_id"):
+        orig_booking = await db.bookings.find_one({"booking_id": task["booking_id"]})
+    booking_base = orig_booking or task
+    booking_clone = _fresh(dict(booking_base))
+    booking_clone["booking_id"] = new_booking_id
+    booking_clone["status"] = BookingStatus.ASSIGNED
+    await db.bookings.insert_one(booking_clone)
+
+    # Clone the task (provider status-flow mirror).
+    task_clone = _fresh(dict(task))
+    task_clone["task_id"] = new_task_id
+    task_clone["booking_id"] = new_booking_id
+    task_clone["status"] = TaskStatus.ASSIGNED
+    await db.tasks.insert_one(task_clone)
+
+    return {"new_task_id": new_task_id, "new_booking_id": new_booking_id}
+
+
+
 @api_router.post("/tasks/{task_id}/complete")
 async def complete_task(
     task_id: str,
@@ -3747,7 +3805,33 @@ async def complete_task(
             related_type="booking",
         )
 
-    return {"message": "Task completed", "status": TaskStatus.COMPLETED_PENDING_PAYMENT, "actual_hours": actual_hours}
+    # "Task not completed" — clone this task as a fresh Accepted follow-up for both parties.
+    followup = None
+    if completion.create_followup:
+        try:
+            followup = await _clone_task_as_followup(task, current_user.user_id, now)
+            title = task.get("title") or "the task"
+            if client_id:
+                await notify_user(
+                    client_id, "task_assigned", "Follow-up visit scheduled",
+                    f"The pro created a follow-up task to finish \"{title}\". It's in your Accepted tasks.",
+                    related_id=followup["new_booking_id"], related_type="booking",
+                    channels=["inapp", "push"],
+                )
+            await notify_user(
+                current_user.user_id, "task_assigned", "Follow-up task created",
+                f"A follow-up task for \"{title}\" was added to your Accepted tasks.",
+                related_id=followup["new_task_id"], related_type="task",
+                channels=["inapp"],
+            )
+        except Exception as ex:
+            logger.warning("Follow-up clone failed for %s: %s", real_task_id, ex)
+
+    resp = {"message": "Task completed", "status": TaskStatus.COMPLETED_PENDING_PAYMENT, "actual_hours": actual_hours}
+    if followup:
+        resp["followup_task_id"] = followup["new_task_id"]
+        resp["followup_created"] = True
+    return resp
 
 @api_router.post("/tasks/{task_id}/decline")
 async def decline_task(
