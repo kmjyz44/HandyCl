@@ -119,6 +119,8 @@ export default function TaskDetail() {
   const [closingMsg, setClosingMsg] = useState('Thank you for your trust! If you liked the work, please leave a review.');
   const [ongoingJob, setOngoingJob] = useState(false);
   const [notCompleted, setNotCompleted] = useState(false);
+  const [followupDate, setFollowupDate] = useState('');
+  const [followupTime, setFollowupTime] = useState('');
 
   // Payment modal
   const [showPayment, setShowPayment] = useState(false);
@@ -324,6 +326,8 @@ export default function TaskDetail() {
         materials_cost: materials ? parseFloat(materials) : undefined,
         provider_notes: closingMsg || undefined,
         create_followup: notCompleted || undefined,
+        followup_date: notCompleted && followupDate ? followupDate : undefined,
+        followup_time: notCompleted && followupTime ? followupTime : undefined,
       });
       const hrs = res?.actual_hours ?? hours ?? '—';
       const followMsg = res?.followup_created ? '\n\nA follow-up task was added to Accepted tasks.' : '';
@@ -1248,6 +1252,36 @@ export default function TaskDetail() {
                   <Text style={s.followupHint}>Charge for the work done now and create a follow-up "Accepted" task to finish later.</Text>
                 </View>
               </TouchableOpacity>
+
+              {notCompleted && (
+                <View style={s.followupSchedule} data-testid="followup-schedule">
+                  <Text style={s.followupScheduleTitle}>Schedule the follow-up visit (optional)</Text>
+                  <View style={s.followupInputsRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.followupInputLabel}>Date</Text>
+                      <TextInput
+                        style={s.followupInput}
+                        value={followupDate}
+                        onChangeText={setFollowupDate}
+                        placeholder="MM/DD/YYYY"
+                        placeholderTextColor="#9ca3af"
+                        data-testid="followup-date-input"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.followupInputLabel}>Time</Text>
+                      <TextInput
+                        style={s.followupInput}
+                        value={followupTime}
+                        onChangeText={setFollowupTime}
+                        placeholder="10:00 AM"
+                        placeholderTextColor="#9ca3af"
+                        data-testid="followup-time-input"
+                      />
+                    </View>
+                  </View>
+                </View>
+              )}
             </ScrollView>
 
             <View style={s.modalFooter}>
@@ -1882,6 +1916,11 @@ const s = StyleSheet.create({
   followupRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6', marginTop: 4 },
   followupLabel: { fontSize: 15, fontWeight: '700', color: '#111827' },
   followupHint: { fontSize: 12, color: '#6b7280', marginTop: 3, lineHeight: 17 },
+  followupSchedule: { backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, marginTop: 4, marginBottom: 4 },
+  followupScheduleTitle: { fontSize: 13, fontWeight: '700', color: '#c2410c', marginBottom: 8 },
+  followupInputsRow: { flexDirection: 'row', gap: 10 },
+  followupInputLabel: { fontSize: 11, color: '#9a3412', marginBottom: 4 },
+  followupInput: { borderWidth: 1, borderColor: '#fed7aa', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9, fontSize: 14, color: '#111827', backgroundColor: '#fff' },
 
   // ── Payment ──
   paymentSummary: { backgroundColor: '#f9fafb', borderRadius: 12, padding: 16, marginBottom: 16 },

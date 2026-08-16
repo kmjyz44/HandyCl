@@ -397,6 +397,8 @@ class TaskComplete(BaseModel):
     provider_comments: Optional[str] = None
     provider_notes: Optional[str] = None   # alias for provider_comments
     create_followup: Optional[bool] = False  # "task not completed" — clone as a new Accepted task
+    followup_date: Optional[str] = None      # optional scheduled date for the follow-up visit
+    followup_time: Optional[str] = None      # optional scheduled time for the follow-up visit
 
 class Message(BaseModel):
     message_id: str
@@ -3653,10 +3655,13 @@ _FOLLOWUP_STRIP_FIELDS = {
 }
 
 
-async def _clone_task_as_followup(task: Dict[str, Any], provider_id: str, now: datetime) -> Dict[str, Any]:
+async def _clone_task_as_followup(task: Dict[str, Any], provider_id: str, now: datetime,
+                                  followup_date: Optional[str] = None,
+                                  followup_time: Optional[str] = None) -> Dict[str, Any]:
     """Create a fresh follow-up task+booking in ASSIGNED ("Accepted") status, keeping the
     same client, provider, category, address and rate. Purely additive — does not touch the
-    original task. Returns {new_task_id, new_booking_id}."""
+    original task. Optionally sets the scheduled date/time for the follow-up visit.
+    Returns {new_task_id, new_booking_id}."""
     new_booking_id = f"booking_{uuid.uuid4().hex[:16]}"
     new_task_id = f"task_{uuid.uuid4().hex[:16]}"
 
@@ -3684,6 +3689,12 @@ async def _clone_task_as_followup(task: Dict[str, Any], provider_id: str, now: d
     booking_clone = _fresh(dict(booking_base))
     booking_clone["booking_id"] = new_booking_id
     booking_clone["status"] = BookingStatus.ASSIGNED
+    if followup_date is not None:
+        booking_clone["date"] = followup_date
+        booking_clone["scheduled_date"] = followup_date
+    if followup_time is not None:
+        booking_clone["time"] = followup_time
+        booking_clone["scheduled_time"] = followup_time
     await db.bookings.insert_one(booking_clone)
 
     # Clone the task (provider status-flow mirror).
@@ -3691,6 +3702,10 @@ async def _clone_task_as_followup(task: Dict[str, Any], provider_id: str, now: d
     task_clone["task_id"] = new_task_id
     task_clone["booking_id"] = new_booking_id
     task_clone["status"] = TaskStatus.ASSIGNED
+    if followup_date is not None:
+        task_clone["scheduled_date"] = followup_date
+    if followup_time is not None:
+        task_clone["scheduled_time"] = followup_time
     await db.tasks.insert_one(task_clone)
 
     return {"new_task_id": new_task_id, "new_booking_id": new_booking_id}
@@ -3809,7 +3824,9 @@ async def complete_task(
     followup = None
     if completion.create_followup:
         try:
-            followup = await _clone_task_as_followup(task, current_user.user_id, now)
+            followup = await _clone_task_as_followup(
+                task, current_user.user_id, now,
+                followup_date=completion.followup_date, followup_time=completion.followup_time)
             title = task.get("title") or "the task"
             if client_id:
                 await notify_user(

@@ -199,6 +199,12 @@ export default function AvailableTasks() {
 
         {/* Title */}
         <Text style={styles.taskTitle}>{task.title || 'Untitled'}</Text>
+        {(task as any).is_followup && (
+          <View style={styles.followupBadge} data-testid="followup-badge">
+            <Ionicons name="repeat" size={11} color="#c2410c" />
+            <Text style={styles.followupBadgeText}>Follow-up visit</Text>
+          </View>
+        )}
 
         {/* Description */}
         {!!task.description && (
@@ -653,6 +659,8 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 4,
   },
+  followupBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 3, backgroundColor: '#ffedd5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, marginBottom: 6 },
+  followupBadgeText: { fontSize: 11, fontWeight: '700', color: '#c2410c' },
   taskDesc: {
     fontSize: 13,
     color: '#6b7280',

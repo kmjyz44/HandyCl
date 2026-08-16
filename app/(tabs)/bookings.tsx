@@ -188,8 +188,16 @@ export default function Bookings() {
         <View style={[styles.statusStrip, { backgroundColor: statusColor }]} />
         <View style={styles.cardInner}>
           <View style={styles.bookingHeader}>
-            <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
-              <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+              <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
+                <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+              </View>
+              {booking.is_followup && (
+                <View style={styles.followupBadge} data-testid="followup-badge">
+                  <Ionicons name="repeat" size={11} color="#c2410c" />
+                  <Text style={styles.followupBadgeText}>Follow-up</Text>
+                </View>
+              )}
             </View>
             <Text style={styles.bookingId}>#{bookingIdStr.slice(-6)}</Text>
           </View>
@@ -502,6 +510,8 @@ const styles = StyleSheet.create({
   },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   statusText: { fontSize: 12, fontWeight: '700' },
+  followupBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#ffedd5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  followupBadgeText: { fontSize: 11, fontWeight: '700', color: '#c2410c' },
   bookingId: { fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' },
   bookingTitle: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 8 },
   bookingInfo: { gap: 5 },
