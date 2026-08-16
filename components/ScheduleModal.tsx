@@ -36,11 +36,12 @@ function addHoursTo(hhmm: string, hours: number): string {
   return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}`;
 }
 
-export function ScheduleModal({ visible, task, onClose, onSaved }: {
+export function ScheduleModal({ visible, task, onClose, onSaved, onPick }: {
   visible: boolean;
   task: any;
   onClose: () => void;
   onSaved?: () => void;
+  onPick?: (dateISO: string, startTime12h: string, start24h: string) => void;
 }) {
   const [date, setDate] = useState('');
   const [start, setStart] = useState('09:00');
@@ -49,21 +50,27 @@ export function ScheduleModal({ visible, task, onClose, onSaved }: {
   const confirmed = !!task?.schedule_confirmed;
 
   useEffect(() => {
-    if (!visible || !task) return;
-    const d = task.confirmed_date || task.scheduled_date || task.date || nextDates(1)[0].value;
-    const st = task.confirmed_start_time || task.scheduled_time || task.time || '09:00';
+    if (!visible) return;
+    const d = task?.confirmed_date || task?.scheduled_date || task?.date || nextDates(1)[0].value;
+    const st = task?.confirmed_start_time || task?.scheduled_time || task?.time || '09:00';
     setDate(String(d).slice(0, 10));
     setStart(SCHED_TIMES.includes(st) ? st : '09:00');
-    setDuration(task.duration_hours ? Number(task.duration_hours) : 2);
+    setDuration(task?.duration_hours ? Number(task.duration_hours) : 2);
   }, [visible, task]);
 
   const save = async () => {
-    const tid = task?.task_id || task?.booking_id;
-    if (!tid) { Alert.alert('Error', 'Task not found.'); return; }
     if (!date || !start || duration <= 0) {
       Alert.alert('Missing info', 'Pick a date, start time and duration.');
       return;
     }
+    // "Pick" mode — just return the selection to the caller (no API save).
+    if (onPick) {
+      onPick(date, to12h(start), start);
+      onClose();
+      return;
+    }
+    const tid = task?.task_id || task?.booking_id;
+    if (!tid) { Alert.alert('Error', 'Task not found.'); return; }
     setLoading(true);
     try {
       await api.scheduleTask(tid, { date, start_time: start, duration_hours: duration });

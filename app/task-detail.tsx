@@ -121,6 +121,7 @@ export default function TaskDetail() {
   const [notCompleted, setNotCompleted] = useState(false);
   const [followupDate, setFollowupDate] = useState('');
   const [followupTime, setFollowupTime] = useState('');
+  const [showFollowupSchedule, setShowFollowupSchedule] = useState(false);
 
   // Payment modal
   const [showPayment, setShowPayment] = useState(false);
@@ -1256,30 +1257,22 @@ export default function TaskDetail() {
               {notCompleted && (
                 <View style={s.followupSchedule} data-testid="followup-schedule">
                   <Text style={s.followupScheduleTitle}>Schedule the follow-up visit (optional)</Text>
-                  <View style={s.followupInputsRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.followupInputLabel}>Date</Text>
-                      <TextInput
-                        style={s.followupInput}
-                        value={followupDate}
-                        onChangeText={setFollowupDate}
-                        placeholder="MM/DD/YYYY"
-                        placeholderTextColor="#9ca3af"
-                        data-testid="followup-date-input"
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.followupInputLabel}>Time</Text>
-                      <TextInput
-                        style={s.followupInput}
-                        value={followupTime}
-                        onChangeText={setFollowupTime}
-                        placeholder="10:00 AM"
-                        placeholderTextColor="#9ca3af"
-                        data-testid="followup-time-input"
-                      />
-                    </View>
-                  </View>
+                  <TouchableOpacity
+                    style={s.setApptBtn}
+                    onPress={() => setShowFollowupSchedule(true)}
+                    data-testid="followup-set-appointment-btn"
+                  >
+                    <Ionicons name="calendar" size={18} color="#c2410c" />
+                    <Text style={s.setApptBtnText}>
+                      {followupDate ? `${followupDate}${followupTime ? ` · ${followupTime}` : ''}` : 'Set appointment time'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color="#c2410c" />
+                  </TouchableOpacity>
+                  {!!followupDate && (
+                    <TouchableOpacity onPress={() => { setFollowupDate(''); setFollowupTime(''); }} data-testid="followup-clear-appointment-btn">
+                      <Text style={s.followupClearText}>Clear appointment</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </ScrollView>
@@ -1773,6 +1766,12 @@ export default function TaskDetail() {
         onClose={() => setShowSchedule(false)}
         onSaved={loadTask}
       />
+      <ScheduleModal
+        visible={showFollowupSchedule}
+        task={null}
+        onClose={() => setShowFollowupSchedule(false)}
+        onPick={(dateISO, time12h) => { setFollowupDate(dateISO); setFollowupTime(time12h); }}
+      />
     </View>
   );
 }
@@ -1918,6 +1917,9 @@ const s = StyleSheet.create({
   followupHint: { fontSize: 12, color: '#6b7280', marginTop: 3, lineHeight: 17 },
   followupSchedule: { backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, marginTop: 4, marginBottom: 4 },
   followupScheduleTitle: { fontSize: 13, fontWeight: '700', color: '#c2410c', marginBottom: 8 },
+  setApptBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#fed7aa', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12 },
+  setApptBtnText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#c2410c' },
+  followupClearText: { fontSize: 12, color: '#ef4444', fontWeight: '600', marginTop: 8, textAlign: 'center' },
   followupInputsRow: { flexDirection: 'row', gap: 10 },
   followupInputLabel: { fontSize: 11, color: '#9a3412', marginBottom: 4 },
   followupInput: { borderWidth: 1, borderColor: '#fed7aa', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9, fontSize: 14, color: '#111827', backgroundColor: '#fff' },

@@ -593,3 +593,9 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - FOLLOW-UP SCHEDULING: TaskComplete gained followup_date/followup_time (optional). `_clone_task_as_followup(..., followup_date, followup_time)` sets scheduled_date/scheduled_time on the clone task and date/time+scheduled_* on the clone booking when provided. task-detail.tsx invoice modal: when "Task not completed" is checked, an orange "Schedule the follow-up visit (optional)" panel with Date (MM/DD/YYYY) + Time (10:00 AM) TextInputs appears (data-testid followup-date-input / followup-time-input); submitInvoice passes them.
 - VERIFIED (real endpoint + DB): complete with create_followup + followup_date 08/25/2026 + followup_time 2:00 PM → clone task status=assigned, is_followup=true, scheduled_date/time set; clone booking date+time+scheduled_* set. esbuild-clean (bookings, tasks, task-detail). Test data cleaned up.
 - ⚠️ Save to GitHub → Railway/Netlify.
+
+## 2026-08-16 (cont.) — Follow-up scheduling via "Set appointment time" picker (replaces text inputs)
+- Replaced the manual Date/Time TextInputs in the Finish-work follow-up panel with a "Set appointment time" button that opens the existing ScheduleModal date/time picker.
+- ScheduleModal (components/ScheduleModal.tsx) gained an optional `onPick(dateISO, startTime12h, start24h)` prop: in "pick" mode it returns the selection to the caller (no API save, no task required). Existing save-to-API behavior unchanged when onPick is absent.
+- task-detail.tsx: new state showFollowupSchedule; button shows chosen "<date> · <time>" or "Set appointment time"; a second <ScheduleModal onPick> sets followupDate (ISO) + followupTime (12h); "Clear appointment" resets. Values still passed to /tasks/{id}/complete as followup_date/followup_time (backend stores strings as-is).
+- esbuild-clean (ScheduleModal, task-detail). Frontend-only. ⚠️ Save to GitHub → Netlify.
