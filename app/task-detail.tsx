@@ -126,6 +126,7 @@ export default function TaskDetail() {
   // Payment modal
   const [showPayment, setShowPayment] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState('');
+  const [completionConfirmed, setCompletionConfirmed] = useState(false);
   const [enabledMethods, setEnabledMethods] = useState<any[]>([]);
   const [showManualSplit, setShowManualSplit] = useState(false);
   const [manualInstructions, setManualInstructions] = useState<any>(null);
@@ -361,6 +362,7 @@ export default function TaskDetail() {
   const submitPayment = async (forceMethod?: string) => {
     const method = forceMethod || selectedMethod;
     if (!method) { showAlert('Select a payment method', ''); return; }
+    if (!completionConfirmed) { showAlert('Confirm completion', 'Please confirm the work is completed and check the box before paying.'); return; }
     const bookingId = task?.booking_id || taskId;
 
     if (method === 'stripe') {
@@ -1132,7 +1134,7 @@ export default function TaskDetail() {
         {showPayBtn && (
           <TouchableOpacity
             style={[s.actionBtn, { backgroundColor: '#10b981', flex: 1 }]}
-            onPress={() => setShowPayment(true)}
+            onPress={() => { setCompletionConfirmed(false); setShowPayment(true); }}
             data-testid="pay-task-btn"
           >
             <Ionicons name="card" size={22} color="#fff" />
@@ -1373,6 +1375,32 @@ export default function TaskDetail() {
                   )}
                 </TouchableOpacity>
               ))}
+
+              {/* Customer Completion Confirmation */}
+              <View style={s.confirmBox}>
+                <Text style={s.confirmTitle}>Customer Completion Confirmation</Text>
+                <Text style={s.confirmBody}>
+                  I confirm that I have reviewed the completed work and that the agreed Scope of Work has been fully completed to my satisfaction. I confirm that I have no outstanding complaints or payment disputes regarding the completed work at this time. I have paid the final amount due under this Job Agreement.
+                </Text>
+                <Text style={s.confirmBody}>
+                  By confirming completion, I acknowledge that this Job Agreement has been completed and fully performed by the Service Provider, except for any rights or claims that cannot legally be waived.
+                </Text>
+                <TouchableOpacity
+                  style={s.confirmCheckRow}
+                  onPress={() => setCompletionConfirmed(v => !v)}
+                  activeOpacity={0.7}
+                  data-testid="completion-confirm-checkbox"
+                >
+                  <Ionicons
+                    name={completionConfirmed ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={completionConfirmed ? '#10b981' : '#9ca3af'}
+                  />
+                  <Text style={s.confirmCheckLabel}>
+                    I CONFIRM THAT THE WORK IS COMPLETED AND I HAVE NO OUTSTANDING COMPLAINTS OR PAYMENT DISPUTES
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
 
             <View style={s.modalFooter}>
@@ -1380,13 +1408,13 @@ export default function TaskDetail() {
                 <Text style={s.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[s.modalBtn, s.submitBtn, { backgroundColor: '#10b981' }, (actionLoading || !selectedMethod) && s.btnDisabled]}
+                style={[s.modalBtn, s.submitBtn, { backgroundColor: '#10b981' }, (actionLoading || !selectedMethod || !completionConfirmed) && s.btnDisabled]}
                 onPress={() => submitPayment()}
-                disabled={actionLoading || !selectedMethod}
+                disabled={actionLoading || !selectedMethod || !completionConfirmed}
               >
                 {actionLoading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.submitBtnText}>{selectedMethod ? 'Confirm payment' : 'Select a method'}</Text>
+                  : <Text style={s.submitBtnText}>{!completionConfirmed ? 'Confirm completion first' : (selectedMethod ? 'Confirm payment' : 'Select a method')}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -1935,6 +1963,11 @@ const s = StyleSheet.create({
 
   splitCard:  { backgroundColor: '#eff6ff', borderRadius: 12, padding: 16, marginBottom: 8 },
   splitTitle: { fontSize: 14, fontWeight: '700', color: '#1e40af', marginBottom: 10 },
+  confirmBox: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 12, padding: 14, marginTop: 18 },
+  confirmTitle: { fontSize: 14, fontWeight: '800', color: '#065f46', marginBottom: 8 },
+  confirmBody: { fontSize: 12, color: '#374151', lineHeight: 18, marginBottom: 8 },
+  confirmCheckRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#bbf7d0' },
+  confirmCheckLabel: { flex: 1, fontSize: 12, fontWeight: '700', color: '#065f46', lineHeight: 17 },
   splitRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
   splitLabel: { flex: 1, fontSize: 13, color: '#374151' },
   splitVal:   { fontSize: 14, fontWeight: '600', color: '#374151' },

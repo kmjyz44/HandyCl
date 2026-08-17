@@ -619,3 +619,8 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - FRONTEND: api.ts adminDownloadTermsPdf(userId) (responseType blob). users.tsx: "Terms PDF" action button (document-text icon) on every user card → downloadTermsPdf() fetches blob with auth header and triggers browser download (web). Added Platform import.
 - VERIFIED (curl): HTTP 200, content_type application/pdf, 2264 bytes, valid %PDF...%%EOF. esbuild-clean; backend synced.
 - ⚠️ Save to GitHub → Railway/Netlify.
+
+## 2026-06 (cont.) — Customer Completion Confirmation checkbox on client payment modal
+- task-detail.tsx payment modal: added a "Customer Completion Confirmation" box (legal text: reviewed & satisfied, no outstanding complaints/disputes, paid final amount, acknowledges Job Agreement fully performed except non-waivable rights) with a required checkbox labeled "I CONFIRM THAT THE WORK IS COMPLETED AND I HAVE NO OUTSTANDING COMPLAINTS OR PAYMENT DISPUTES" (data-testid completion-confirm-checkbox).
+- The "Confirm payment"/"Select a method" button is DISABLED until both a method is selected AND the box is checked (shows "Confirm completion first"). submitPayment() also guards on completionConfirmed. Checkbox resets each time the pay modal opens. Covers all methods (Zelle/Venmo split opens only via this button).
+- Frontend-only; esbuild-clean. ⚠️ Save to GitHub → Netlify.
