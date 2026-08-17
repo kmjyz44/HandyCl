@@ -630,3 +630,7 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - FRONTEND: api.ts confirmCompletion(id). task-detail.tsx submitPayment() calls api.confirmCompletion(bookingId) (non-blocking) right after the completionConfirmed guard, so evidence is captured whenever the client proceeds to pay (all methods).
 - VERIFIED (curl+DB): confirm-completion → 200 + confirmation_id; completion_confirmations row has version/ip=198.51.100.42/ua/timestamp/text(489 chars); booking flagged completion_confirmed=true+ip+version. Test data cleaned up. esbuild-clean; backend synced.
 - ⚠️ Save to GitHub → Railway/Netlify.
+
+## 2026-06 (cont.) — Finish-work modal: Zelle/Venmo verification notice replaces default message
+- task-detail.tsx Finish-work (close task) modal: default "Message to client" no longer pre-filled with "Thank you for your trust..." (now empty, placeholder "Optional message to the client..."). Added an amber info notice (payNotice) below the message field: "For payments made by Zelle or Venmo, the Service Provider should verify receipt of the final payment before leaving the job site whenever reasonably possible. The job will not be marked 'Paid' solely because the Customer or Service Provider indicates that payment was sent."
+- Frontend-only; esbuild-clean. ⚠️ Save to GitHub → Netlify.

@@ -116,7 +116,7 @@ export default function TaskDetail() {
   const [showInvoice, setShowInvoice] = useState(false);
   const [hours, setHours] = useState('');
   const [materials, setMaterials] = useState('');
-  const [closingMsg, setClosingMsg] = useState('Thank you for your trust! If you liked the work, please leave a review.');
+  const [closingMsg, setClosingMsg] = useState('');
   const [ongoingJob, setOngoingJob] = useState(false);
   const [notCompleted, setNotCompleted] = useState(false);
   const [followupDate, setFollowupDate] = useState('');
@@ -1231,8 +1231,16 @@ export default function TaskDetail() {
                 value={closingMsg}
                 onChangeText={setClosingMsg}
                 multiline
-                placeholder="Message after closing the task..."
+                placeholder="Optional message to the client..."
               />
+
+              {/* Zelle/Venmo payment verification notice */}
+              <View style={s.payNotice}>
+                <Ionicons name="information-circle" size={18} color="#b45309" style={{ marginTop: 1 }} />
+                <Text style={s.payNoticeText}>
+                  For payments made by Zelle or Venmo, the Service Provider should verify receipt of the final payment before leaving the job site whenever reasonably possible. The job will not be marked "Paid" solely because the Customer or Service Provider indicates that payment was sent.
+                </Text>
+              </View>
 
               {/* Ongoing job toggle */}
               <View style={s.toggleRow}>
@@ -1943,6 +1951,8 @@ const s = StyleSheet.create({
   toggleRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
   toggleLabel: { fontSize: 15, color: '#374151' },
   followupRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6', marginTop: 4 },
+  payNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 10, padding: 12, marginTop: 6, marginBottom: 4 },
+  payNoticeText: { flex: 1, fontSize: 12, color: '#92400e', lineHeight: 18 },
   followupLabel: { fontSize: 15, fontWeight: '700', color: '#111827' },
   followupHint: { fontSize: 12, color: '#6b7280', marginTop: 3, lineHeight: 17 },
   followupSchedule: { backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, marginTop: 4, marginBottom: 4 },
