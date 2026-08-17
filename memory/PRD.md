@@ -599,3 +599,9 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - ScheduleModal (components/ScheduleModal.tsx) gained an optional `onPick(dateISO, startTime12h, start24h)` prop: in "pick" mode it returns the selection to the caller (no API save, no task required). Existing save-to-API behavior unchanged when onPick is absent.
 - task-detail.tsx: new state showFollowupSchedule; button shows chosen "<date> · <time>" or "Set appointment time"; a second <ScheduleModal onPick> sets followupDate (ISO) + followupTime (12h); "Clear appointment" resets. Values still passed to /tasks/{id}/complete as followup_date/followup_time (backend stores strings as-is).
 - esbuild-clean (ScheduleModal, task-detail). Frontend-only. ⚠️ Save to GitHub → Netlify.
+
+## 2026-06 — Terms of Use rewritten as a service agreement (contract-style)
+- Fully replaced app/terms.tsx with the user-provided contract-style "Ono-Fix Terms of Use" (operated by Nexus Security Solutions LLC), rendered data-driven from a SECTIONS array (65 sections + preamble + signature/footer). Sections cover platform role, accounts, jobs/Work Orders, hourly billing, materials, Change Orders, Zelle/Venmo payment statuses, Illinois Home Repair & Remodeling Act, 3-day cancellation rights, consumer rights, disputes, warranties, AI disclaimer, liability limits, indemnification, electronic acceptance/records, governing law (Illinois), etc.
+- Added concise section "48A. Loyalty, Rewards & Provider Ranking" to preserve previously-required loyalty/referral/ranking rules within the Terms.
+- Styles: docTitle, numbered h2, paragraphs, bulleted lists (bulletRow/dot/text), footer block with company address + contact. Effective/Last Updated = June 1, 2026.
+- Frontend-only; esbuild-clean. ⚠️ Save to GitHub → Netlify. Placeholders like hourly-rate examples generalized; {{tokens}} in the acceptance section described narratively (the live e-sign capture happens at signup, not on this static page).
