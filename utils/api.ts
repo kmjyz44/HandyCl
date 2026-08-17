@@ -718,6 +718,10 @@ export const api = {
     const res = await client.post(`/tasks/${id}/complete`, data);
     return res.data;
   },
+  confirmCompletion: async (id: string) => {
+    const res = await client.post(`/tasks/${id}/confirm-completion`, {});
+    return res.data;
+  },
   payTask: async (id: string, data: { payment_method: string }) => {
     const res = await client.post(`/tasks/${id}/pay`, data);
     return res.data;

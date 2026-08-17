@@ -364,6 +364,8 @@ export default function TaskDetail() {
     if (!method) { showAlert('Select a payment method', ''); return; }
     if (!completionConfirmed) { showAlert('Confirm completion', 'Please confirm the work is completed and check the box before paying.'); return; }
     const bookingId = task?.booking_id || taskId;
+    // Record the completion confirmation as legal evidence (time/IP/version) before paying.
+    try { await api.confirmCompletion(bookingId); } catch (e) { /* non-blocking */ }
 
     if (method === 'stripe') {
       setActionLoading(true);

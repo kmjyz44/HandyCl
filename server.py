@@ -2140,6 +2140,15 @@ def _ci_email(email: str) -> Dict[str, Any]:
 
 TERMS_VERSION = "2026-06-01"  # bump when Terms of Use change materially
 
+COMPLETION_CONFIRMATION_VERSION = "2026-06-01"  # bump when the confirmation text changes
+COMPLETION_CONFIRMATION_TEXT = (
+    "I confirm that I have reviewed the completed work and that the agreed Scope of Work has been fully "
+    "completed to my satisfaction. I confirm that I have no outstanding complaints or payment disputes "
+    "regarding the completed work at this time. I have paid the final amount due under this Job Agreement. "
+    "By confirming completion, I acknowledge that this Job Agreement has been completed and fully performed "
+    "by the Service Provider, except for any rights or claims that cannot legally be waived."
+)
+
 
 def _client_ip(request: Optional[Request]) -> Optional[str]:
     """Best-effort client IP (respects x-forwarded-for behind the ingress/proxy)."""
@@ -2184,6 +2193,49 @@ async def accept_terms(request: Request = None, current_user: User = Depends(get
     }})
     await _record_terms_acceptance(current_user.user_id, current_user.email, str(current_user.role), request, "reaccept")
     return {"ok": True, "version": TERMS_VERSION, "accepted_at": now.isoformat()}
+
+
+@api_router.post("/tasks/{task_id}/confirm-completion")
+async def confirm_completion(task_id: str, request: Request = None, current_user: User = Depends(get_current_user)):
+    """Client confirms the work is completed (no complaints/disputes). Stores an IMMUTABLE
+    evidence record (version/text/date/time/IP/UA) in completion_confirmations, mirroring
+    Terms acceptance, and flags the booking/task."""
+    booking = await db.bookings.find_one({"booking_id": task_id}, {"_id": 0}) \
+        or await db.bookings.find_one({"task_id": task_id}, {"_id": 0}) \
+        or await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Task not found")
+    client_id = booking.get("client_id") or booking.get("user_id")
+    if client_id and client_id != current_user.user_id and current_user.role not in [UserRole.ADMIN, UserRole.MODERATOR]:
+        raise HTTPException(status_code=403, detail="Only the client can confirm completion")
+
+    now = datetime.now(timezone.utc)
+    bid = booking.get("booking_id")
+    tid = booking.get("task_id")
+    record = {
+        "confirmation_id": f"cc_{uuid.uuid4().hex[:16]}",
+        "booking_id": bid,
+        "task_id": tid,
+        "client_id": current_user.user_id,
+        "client_email": current_user.email,
+        "confirmation_version": COMPLETION_CONFIRMATION_VERSION,
+        "confirmation_text": COMPLETION_CONFIRMATION_TEXT,
+        "confirmed_at": now,
+        "ip": _client_ip(request),
+        "user_agent": (request.headers.get("user-agent") if request else None),
+    }
+    await db.completion_confirmations.insert_one(dict(record))
+    flag = {
+        "completion_confirmed": True,
+        "completion_confirmed_at": now,
+        "completion_confirmed_ip": _client_ip(request),
+        "completion_confirmation_version": COMPLETION_CONFIRMATION_VERSION,
+    }
+    if bid:
+        await db.bookings.update_one({"booking_id": bid}, {"$set": flag})
+    if tid:
+        await db.tasks.update_one({"task_id": tid}, {"$set": flag})
+    return {"ok": True, "confirmation_id": record["confirmation_id"], "confirmed_at": now.isoformat()}
 
 
 @api_router.get("/admin/users/{user_id}/terms-pdf")
