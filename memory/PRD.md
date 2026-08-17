@@ -613,3 +613,9 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - Rewards/referral/ranking rules preserved in Terms section 48A (per user request). Terms footer shows "Terms Version: 2026-06-01".
 - VERIFIED (curl + DB): GET version→2026-06-01; register with X-Forwarded-For/User-Agent → user has version+ip, audit row source=registration ip=203.0.113.7 ua captured; /terms/accept → 2nd audit row source=reaccept ip=203.0.113.9. Test user cleaned up. esbuild-clean; backend synced.
 - ⚠️ Save to GitHub → Railway/Netlify. When Terms change later, bump TERMS_VERSION and (optionally) prompt existing users to POST /terms/accept.
+
+## 2026-06 (cont.) — Export Terms acceptance record as PDF (admin)
+- BACKEND: GET /admin/users/{user_id}/terms-pdf (require_admin) → generates a PDF via reportlab (already in requirements) containing the user (name/email/role/id), current recorded acceptance (Terms version, accepted_at, IP, User-Agent), and the full acceptance audit trail from terms_acceptances (each row: timestamp, version, source, IP, UA). Returns StreamingResponse application/pdf with Content-Disposition attachment.
+- FRONTEND: api.ts adminDownloadTermsPdf(userId) (responseType blob). users.tsx: "Terms PDF" action button (document-text icon) on every user card → downloadTermsPdf() fetches blob with auth header and triggers browser download (web). Added Platform import.
+- VERIFIED (curl): HTTP 200, content_type application/pdf, 2264 bytes, valid %PDF...%%EOF. esbuild-clean; backend synced.
+- ⚠️ Save to GitHub → Railway/Netlify.

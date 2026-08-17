@@ -2186,6 +2186,84 @@ async def accept_terms(request: Request = None, current_user: User = Depends(get
     return {"ok": True, "version": TERMS_VERSION, "accepted_at": now.isoformat()}
 
 
+@api_router.get("/admin/users/{user_id}/terms-pdf")
+async def admin_terms_acceptance_pdf(user_id: str, current_user: User = Depends(require_admin)):
+    """Admin: download a user's Terms-of-Use acceptance record (version/date/time/IP) as a PDF."""
+    import io
+    from reportlab.pdfgen import canvas as _canvas
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.units import inch
+
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    rows = await db.terms_acceptances.find({"user_id": user_id}, {"_id": 0}).sort("accepted_at", 1).to_list(200)
+
+    def _fmt(dt):
+        if not dt:
+            return "—"
+        try:
+            return dt.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(dt, "strftime") else str(dt)
+        except Exception:
+            return str(dt)
+
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=letter)
+    W, H = letter
+    y = H - inch
+
+    def line(text, size=10, bold=False, dy=16, color=(0.1, 0.1, 0.1), indent=0):
+        nonlocal y
+        if y < inch:
+            c.showPage(); y = H - inch
+        c.setFillColorRGB(*color)
+        c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+        c.drawString(inch + indent, y, str(text)[:110])
+        y -= dy
+
+    c.setFillColorRGB(0.03, 0.15, 0.35)
+    c.rect(0, H - 0.7 * inch, W, 0.7 * inch, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(inch, H - 0.47 * inch, "Ono-Fix — Terms of Use Acceptance Record")
+    y = H - inch - 6
+
+    line("Operated by Nexus Security Solutions LLC", 9, color=(0.4, 0.4, 0.4))
+    line(f"Generated: {_fmt(datetime.now(timezone.utc))}  •  By admin: {current_user.email}", 9, color=(0.4, 0.4, 0.4), dy=22)
+
+    line("User", 12, bold=True)
+    line(f"Name: {user.get('name') or '—'}")
+    line(f"Email: {user.get('email') or '—'}")
+    line(f"Role: {user.get('role') or '—'}")
+    line(f"User ID: {user_id}", dy=22)
+
+    line("Current recorded acceptance", 12, bold=True)
+    line(f"Terms version: {user.get('accepted_terms_version') or '—'}")
+    line(f"Accepted at: {_fmt(user.get('accepted_terms_at'))}")
+    line(f"IP address: {user.get('accepted_terms_ip') or '—'}")
+    ua = user.get('accepted_terms_user_agent') or '—'
+    line(f"Device / User-Agent: {ua}", dy=24)
+
+    line(f"Acceptance audit trail ({len(rows)} record{'s' if len(rows) != 1 else ''})", 12, bold=True)
+    if not rows:
+        line("No audit records found.", 10, color=(0.5, 0.5, 0.5))
+    for i, r in enumerate(rows, 1):
+        line(f"{i}. {_fmt(r.get('accepted_at'))}", 10, bold=True, dy=14)
+        line(f"version {r.get('terms_version') or '—'}  •  source: {r.get('source') or '—'}  •  IP: {r.get('ip') or '—'}", 9, color=(0.3, 0.3, 0.3), indent=14, dy=13)
+        line(f"UA: {(r.get('user_agent') or '—')}", 8, color=(0.5, 0.5, 0.5), indent=14, dy=16)
+
+    y -= 6
+    line("This record is generated from Ono-Fix system logs and reflects the electronic acceptance", 8, color=(0.45, 0.45, 0.45), dy=11)
+    line("of the Ono-Fix Terms of Use by the identified user, including timestamp and IP address.", 8, color=(0.45, 0.45, 0.45), dy=11)
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    fname = f"terms-acceptance-{user_id}.pdf"
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
 @api_router.post("/auth/register")
 async def register(user_data: UserRegister, request: Request = None):
     # Require accepted_terms

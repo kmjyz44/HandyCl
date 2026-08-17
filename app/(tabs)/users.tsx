@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Modal,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../utils/api';
@@ -47,6 +48,26 @@ export default function Users() {
   const [rankCategory, setRankCategory] = useState<string>('*');
   const [rankHours, setRankHours] = useState('');
   const [rankReason, setRankReason] = useState('');
+
+  const downloadTermsPdf = async (user: any) => {
+    try {
+      const blob = await api.adminDownloadTermsPdf(user.user_id);
+      if (Platform.OS === 'web') {
+        const url = URL.createObjectURL(blob as any);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `terms-acceptance-${user.name || user.user_id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } else {
+        showAlert('Not supported', 'Download the acceptance PDF from the web admin.');
+      }
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Failed to generate PDF');
+    }
+  };
 
   const openRankModal = async (user: any) => {
     setRankTarget(user);
@@ -312,6 +333,15 @@ export default function Users() {
                       <Text style={[styles.actionText, { color: '#7c3aed' }]}>Ranking</Text>
                     </TouchableOpacity>
                   )}
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, { borderColor: '#0891b2' }]}
+                    onPress={() => downloadTermsPdf(user)}
+                    data-testid={`terms-pdf-btn-${user.user_id}`}
+                  >
+                    <Ionicons name="document-text-outline" size={16} color="#0891b2" />
+                    <Text style={[styles.actionText, { color: '#0891b2' }]}>Terms PDF</Text>
+                  </TouchableOpacity>
 
                   {user.is_blocked ? (
                     <TouchableOpacity

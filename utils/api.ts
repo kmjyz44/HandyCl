@@ -1080,4 +1080,8 @@ export const api = {
     const res = await client.post(`/admin/loyalty/redemptions/${cardId}/reject`, { reason });
     return res.data;
   },
+  adminDownloadTermsPdf: async (userId: string) => {
+    const res = await client.get(`/admin/users/${userId}/terms-pdf`, { responseType: 'blob' });
+    return res.data;
+  },
 };
