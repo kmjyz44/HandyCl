@@ -360,6 +360,7 @@ export default function TermsOfUse() {
           <Text style={styles.footerText}>9701 Dee Rd, Niles, IL 60714</Text>
           <Text style={styles.footerText}>Contact: <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text></Text>
           <Text style={styles.footerText}>Effective Date: {EFFECTIVE_DATE} · Last Updated: {EFFECTIVE_DATE}</Text>
+          <Text style={styles.footerText}>Terms Version: 2026-06-01</Text>
         </View>
 
         <View style={{ height: 40 }} />

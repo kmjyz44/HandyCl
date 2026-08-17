@@ -2138,8 +2138,56 @@ def _ci_email(email: str) -> Dict[str, Any]:
     """Case-insensitive exact-match query for an email (handles legacy mixed-case data)."""
     return {"email": {"$regex": f"^{re.escape((email or '').strip())}$", "$options": "i"}}
 
+TERMS_VERSION = "2026-06-01"  # bump when Terms of Use change materially
+
+
+def _client_ip(request: Optional[Request]) -> Optional[str]:
+    """Best-effort client IP (respects x-forwarded-for behind the ingress/proxy)."""
+    if not request:
+        return None
+    fwd = request.headers.get("x-forwarded-for") or ""
+    return (fwd.split(",")[0].strip() if fwd else None) or (request.client.host if request.client else None)
+
+
+async def _record_terms_acceptance(user_id: str, email: str, role: str, request: Optional[Request], source: str):
+    """Immutable audit row proving a user accepted a specific Terms version (date/time/IP/UA)."""
+    try:
+        await db.terms_acceptances.insert_one({
+            "acceptance_id": f"tos_{uuid.uuid4().hex[:16]}",
+            "user_id": user_id,
+            "email": email,
+            "role": role,
+            "terms_version": TERMS_VERSION,
+            "accepted_at": datetime.now(timezone.utc),
+            "ip": _client_ip(request),
+            "user_agent": (request.headers.get("user-agent") if request else None),
+            "source": source,  # registration | reaccept | google
+        })
+    except Exception as ex:
+        logger.warning("terms acceptance record failed for %s: %s", user_id, ex)
+
+
+@api_router.get("/terms/version")
+async def get_terms_version():
+    """Public: current Terms of Use version + effective date (for the app to display/compare)."""
+    return {"version": TERMS_VERSION, "effective_date": "June 1, 2026"}
+
+
+@api_router.post("/terms/accept")
+async def accept_terms(request: Request = None, current_user: User = Depends(get_current_user)):
+    """Logged-in user (re-)accepts the current Terms version — records a fresh audit row."""
+    now = datetime.now(timezone.utc)
+    await db.users.update_one({"user_id": current_user.user_id}, {"$set": {
+        "accepted_terms_at": now,
+        "accepted_terms_version": TERMS_VERSION,
+        "accepted_terms_ip": _client_ip(request),
+    }})
+    await _record_terms_acceptance(current_user.user_id, current_user.email, str(current_user.role), request, "reaccept")
+    return {"ok": True, "version": TERMS_VERSION, "accepted_at": now.isoformat()}
+
+
 @api_router.post("/auth/register")
-async def register(user_data: UserRegister):
+async def register(user_data: UserRegister, request: Request = None):
     # Require accepted_terms
     if not user_data.accepted_terms:
         raise HTTPException(status_code=400, detail="You must accept the Terms of Use and Privacy Policy to register")
@@ -2164,10 +2212,13 @@ async def register(user_data: UserRegister):
     user_dict = user.dict()
     user_dict["plain_password"] = user_data.password
     user_dict["accepted_terms_at"] = datetime.now(timezone.utc)
-    user_dict["accepted_terms_version"] = "2026-02-15"
+    user_dict["accepted_terms_version"] = TERMS_VERSION
+    user_dict["accepted_terms_ip"] = _client_ip(request)
+    user_dict["accepted_terms_user_agent"] = (request.headers.get("user-agent") if request else None)
     user_dict["email_verified"] = False
 
     await db.users.insert_one(user_dict)
+    await _record_terms_acceptance(user_id, reg_email, str(user_data.role), request, "registration")
 
     # Loyalty: link this new user to their referrer (if a valid referral code was used)
     ref_code = (user_data.referral_code or "").strip().upper()
@@ -2477,7 +2528,7 @@ async def verify_phone(payload: Dict[str, Any] = Body(...), current_user: User =
 
 
 @api_router.post("/auth/session")
-async def create_session_from_oauth(session_id: str = Header(..., alias="X-Session-ID")):
+async def create_session_from_oauth(session_id: str = Header(..., alias="X-Session-ID"), request: Request = None):
     """Exchange OAuth session_id for user session.
     REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     """
@@ -2521,9 +2572,12 @@ async def create_session_from_oauth(session_id: str = Header(..., alias="X-Sessi
         )
         user_dict = user.dict()
         user_dict["accepted_terms_at"] = datetime.now(timezone.utc)
-        user_dict["accepted_terms_version"] = "2026-02-15"
+        user_dict["accepted_terms_version"] = TERMS_VERSION
         user_dict["accepted_terms_via"] = "google_oauth"
+        user_dict["accepted_terms_ip"] = _client_ip(request)
+        user_dict["accepted_terms_user_agent"] = (request.headers.get("user-agent") if request else None)
         await db.users.insert_one(user_dict)
+        await _record_terms_acceptance(user.user_id, oauth_data["email"], str(user.role), request, "google")
         is_new_user = True
 
     # Create session

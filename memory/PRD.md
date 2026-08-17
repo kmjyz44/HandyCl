@@ -605,3 +605,11 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - Added concise section "48A. Loyalty, Rewards & Provider Ranking" to preserve previously-required loyalty/referral/ranking rules within the Terms.
 - Styles: docTitle, numbered h2, paragraphs, bulleted lists (bulletRow/dot/text), footer block with company address + contact. Effective/Last Updated = June 1, 2026.
 - Frontend-only; esbuild-clean. ⚠️ Save to GitHub → Netlify. Placeholders like hourly-rate examples generalized; {{tokens}} in the acceptance section described narratively (the live e-sign capture happens at signup, not on this static page).
+
+## 2026-06 (cont.) — Terms versioning + acceptance audit (date/time/IP) for legal evidence
+- BACKEND: added TERMS_VERSION="2026-06-01" constant; helpers `_client_ip(request)` (honors x-forwarded-for) and `_record_terms_acceptance(...)` writing an IMMUTABLE audit row to new collection `terms_acceptances` {acceptance_id, user_id, email, role, terms_version, accepted_at, ip, user_agent, source}.
+- Registration (`/auth/register`, now takes request: Request) and Google onboarding (`create_session_from_oauth`, now takes request) both: store accepted_terms_version=TERMS_VERSION + accepted_terms_ip + accepted_terms_user_agent on the user, AND write a terms_acceptances audit row (source registration|google).
+- NEW endpoints: GET `/terms/version` (public → {version, effective_date}); POST `/terms/accept` (logged-in re-accept → updates user + writes audit row source=reaccept). Enables re-prompting users when Terms change and proving acceptance in court.
+- Rewards/referral/ranking rules preserved in Terms section 48A (per user request). Terms footer shows "Terms Version: 2026-06-01".
+- VERIFIED (curl + DB): GET version→2026-06-01; register with X-Forwarded-For/User-Agent → user has version+ip, audit row source=registration ip=203.0.113.7 ua captured; /terms/accept → 2nd audit row source=reaccept ip=203.0.113.9. Test user cleaned up. esbuild-clean; backend synced.
+- ⚠️ Save to GitHub → Railway/Netlify. When Terms change later, bump TERMS_VERSION and (optionally) prompt existing users to POST /terms/accept.
