@@ -60,6 +60,7 @@ function webAlert(title: string, msg: string) {
 interface Slot {
   slot_id: string;
   day_of_week: number; // 0=Mon … 6=Sun
+  specific_date?: string | null; // ISO date → one-off (not recurring)
   start_time: string;
   end_time: string;
   is_active: boolean;
@@ -132,6 +133,7 @@ export default function Availability() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
   const [formDay, setFormDay] = useState(todayDow);
+  const [formOneTime, setFormOneTime] = useState(false);
   const [formStart, setFormStart] = useState('');
   const [formEnd, setFormEnd] = useState('');
   const [saving, setSaving] = useState(false);
@@ -192,6 +194,7 @@ export default function Availability() {
   const openAdd = (day?: number) => {
     setEditingSlot(null);
     setFormDay(day ?? selectedDay);
+    setFormOneTime(false);
     setFormStart('');
     setFormEnd('');
     setModalVisible(true);
@@ -200,6 +203,7 @@ export default function Availability() {
   const openEdit = (slot: Slot) => {
     setEditingSlot(slot);
     setFormDay(slot.day_of_week);
+    setFormOneTime(!!slot.specific_date);
     setFormStart(slot.start_time);
     setFormEnd(slot.end_time);
     setModalVisible(true);
@@ -208,7 +212,12 @@ export default function Availability() {
   const hasOverlap = (day: number, start: string, end: string, excludeId?: string) => {
     const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     return slots.some(s => {
-      if (s.day_of_week !== day) return false;
+      // one-time slots overlap only within the same date; weekly within same weekday
+      if (formOneTime) {
+        if ((s.specific_date || '').slice(0, 10) !== selectedDateStr) return false;
+      } else {
+        if (s.specific_date || s.day_of_week !== day) return false;
+      }
       if (excludeId && s.slot_id === excludeId) return false;
       return toMin(start) < toMin(s.end_time) && toMin(end) > toMin(s.start_time);
     });
@@ -218,12 +227,16 @@ export default function Availability() {
     if (!formStart || !formEnd) { webAlert('Error', 'Specify start and end times'); return; }
     if (formStart >= formEnd) { webAlert('Error', 'End time must be later than start time'); return; }
     if (hasOverlap(formDay, formStart, formEnd, editingSlot?.slot_id)) {
-      webAlert('Time overlap', `${DAYS_FULL[formDay]} already has a slot overlapping ${to12h(formStart)}–${to12h(formEnd)}.`);
+      webAlert('Time overlap', formOneTime
+        ? `${selectedDateStr} already has a slot overlapping ${to12h(formStart)}–${to12h(formEnd)}.`
+        : `${DAYS_FULL[formDay]} already has a slot overlapping ${to12h(formStart)}–${to12h(formEnd)}.`);
       return;
     }
     setSaving(true);
     try {
-      const data = { day_of_week: formDay, start_time: formStart, end_time: formEnd, is_active: true };
+      const data: any = formOneTime
+        ? { day_of_week: selectedDay, specific_date: selectedDateStr, start_time: formStart, end_time: formEnd, is_active: true }
+        : { day_of_week: formDay, specific_date: null, start_time: formStart, end_time: formEnd, is_active: true };
       if (editingSlot) await api.updateAvailabilitySlot(editingSlot.slot_id, data);
       else await api.createAvailabilitySlot(data);
       setModalVisible(false);
@@ -261,7 +274,10 @@ export default function Availability() {
   });
   const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-  const daySlots = slots.filter(s => s.day_of_week === selectedDay).sort((a, b) => a.start_time.localeCompare(b.start_time));
+  const selectedDateStr2 = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+  const daySlots = slots.filter(s =>
+    s.specific_date ? s.specific_date.slice(0, 10) === selectedDateStr2 : s.day_of_week === selectedDay
+  ).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   const fmtDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const selectedDateStr = fmtDate(selectedDate);
@@ -296,7 +312,7 @@ export default function Availability() {
       >
         {dayList.map((d, idx) => {
           const dow = (d.getDay() + 6) % 7;
-          const hasSl = slots.some(sl => sl.day_of_week === dow);
+          const hasSl = slots.some(sl => sl.specific_date ? sl.specific_date.slice(0, 10) === fmtDate(d) : sl.day_of_week === dow);
           const hasBooked = bookedTasks.some(t => String(t.confirmed_date).slice(0, 10) === fmtDate(d));
           const isToday = sameDay(d, today);
           const isSel = sameDay(d, selectedDate);
@@ -353,7 +369,7 @@ export default function Availability() {
             return (
               <View key={slot.slot_id} style={[s.slotBlock, { top, height, opacity: slot.is_active ? 1 : 0.45 }]}>
                 <View style={s.slotInner}>
-                  <Text style={s.slotTitle}>Available</Text>
+                  <Text style={s.slotTitle}>Available{slot.specific_date ? ' · One-time' : ''}</Text>
                   <Text style={s.slotTime}>{to12h(slot.start_time)} – {to12h(slot.end_time)}</Text>
                 </View>
                 <View style={s.slotActions}>
@@ -423,15 +439,45 @@ export default function Availability() {
               </TouchableOpacity>
             </View>
 
-            {/* Day selector */}
-            <Text style={m.sectionLabel}>DAY</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={m.dayScroll}>
-              {DAYS_SHORT.map((d, i) => (
-                <TouchableOpacity key={i} style={[m.dayChip, formDay === i && m.dayChipActive]} onPress={() => setFormDay(i)}>
-                  <Text style={[m.dayChipText, formDay === i && m.dayChipTextActive]}>{d}</Text>
+            {/* Repeat type toggle */}
+            <Text style={m.sectionLabel}>REPEAT</Text>
+            <View style={m.dayScroll}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={[m.dayChip, !formOneTime && m.dayChipActive, { paddingHorizontal: 14 }]}
+                  onPress={() => setFormOneTime(false)}
+                  data-testid="repeat-weekly-btn"
+                >
+                  <Text style={[m.dayChipText, !formOneTime && m.dayChipTextActive]}>Repeats weekly</Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+                <TouchableOpacity
+                  style={[m.dayChip, formOneTime && m.dayChipActive, { paddingHorizontal: 14 }]}
+                  onPress={() => setFormOneTime(true)}
+                  data-testid="repeat-onetime-btn"
+                >
+                  <Text style={[m.dayChipText, formOneTime && m.dayChipTextActive]}>This date only</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Day selector (weekly) OR the specific date (one-time) */}
+            {formOneTime ? (
+              <View style={m.oneTimeDate}>
+                <Ionicons name="calendar" size={16} color={ACCENT} />
+                <Text style={m.oneTimeDateText}>{DAYS_FULL[selectedDay]}, {selectedDateStr2}</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={m.sectionLabel}>DAY</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={m.dayScroll}>
+                  {DAYS_SHORT.map((d, i) => (
+                    <TouchableOpacity key={i} style={[m.dayChip, formDay === i && m.dayChipActive]} onPress={() => setFormDay(i)}>
+                      <Text style={[m.dayChipText, formDay === i && m.dayChipTextActive]}>{d}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
 
             {/* Time pickers */}
             <Text style={m.sectionLabel}>TIME</Text>
@@ -445,7 +491,7 @@ export default function Availability() {
             {formStart && formEnd && (
               <View style={m.summary}>
                 <Ionicons name="time-outline" size={18} color={ACCENT} />
-                <Text style={m.summaryText}>{DAYS_FULL[formDay]}: {to12h(formStart)} – {to12h(formEnd)}</Text>
+                <Text style={m.summaryText}>{formOneTime ? selectedDateStr2 : DAYS_FULL[formDay]}: {to12h(formStart)} – {to12h(formEnd)}</Text>
               </View>
             )}
 
@@ -599,6 +645,8 @@ const m = StyleSheet.create({
 
   dayScroll: { paddingLeft: 20, marginBottom: 20 },
   dayChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, backgroundColor: '#f3f4f6', marginRight: 8, borderWidth: 1.5, borderColor: '#e5e7eb' },
+  oneTimeDate: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#eff6ff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 4 },
+  oneTimeDateText: { fontSize: 14, fontWeight: '700', color: '#1e40af' },
   dayChipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
   dayChipText: { fontSize: 15, fontWeight: '700', color: '#374151' },
   dayChipTextActive: { color: '#fff' },

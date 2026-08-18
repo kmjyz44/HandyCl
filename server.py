@@ -715,6 +715,7 @@ class AvailabilitySlot(BaseModel):
     slot_id: str
     user_id: str  # executor user_id
     day_of_week: int  # 0=Monday, 6=Sunday
+    specific_date: Optional[str] = None  # ISO date "YYYY-MM-DD" → one-off (not recurring)
     start_time: str  # HH:MM format
     end_time: str  # HH:MM format
     location: Optional[str] = None
@@ -724,12 +725,14 @@ class AvailabilitySlot(BaseModel):
 
 class AvailabilitySlotCreate(BaseModel):
     day_of_week: int
+    specific_date: Optional[str] = None
     start_time: str
     end_time: str
     location: Optional[str] = None
 
 class AvailabilitySlotUpdate(BaseModel):
     day_of_week: Optional[int] = None
+    specific_date: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     location: Optional[str] = None
@@ -5405,12 +5408,18 @@ async def get_executors_by_service(
             except Exception:
                 dow = None
             if dow is not None:
+                req_date = str(date)[:10]
                 slots = executor.get("availability_slots") or []
                 if slots:
                     def _slot_ok(sl):
                         if sl.get("is_active") is False:
                             return False
-                        if sl.get("day_of_week") != dow:
+                        sd = sl.get("specific_date")
+                        if sd:
+                            # one-off slot matches only its exact date
+                            if str(sd)[:10] != req_date:
+                                return False
+                        elif sl.get("day_of_week") != dow:
                             return False
                         if time:
                             st = sl.get("start_time") or "00:00"

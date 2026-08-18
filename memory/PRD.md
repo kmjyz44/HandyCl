@@ -634,3 +634,10 @@ NOTE: split is computed live per request → after deploy, existing live complet
 ## 2026-06 (cont.) — Finish-work modal: Zelle/Venmo verification notice replaces default message
 - task-detail.tsx Finish-work (close task) modal: default "Message to client" no longer pre-filled with "Thank you for your trust..." (now empty, placeholder "Optional message to the client..."). Added an amber info notice (payNotice) below the message field: "For payments made by Zelle or Venmo, the Service Provider should verify receipt of the final payment before leaving the job site whenever reasonably possible. The job will not be marked 'Paid' solely because the Customer or Service Provider indicates that payment was sent."
 - Frontend-only; esbuild-clean. ⚠️ Save to GitHub → Netlify.
+
+## 2026-06 (cont.) — Availability: one-off (specific date) vs weekly recurring (fix "every Friday" bug)
+- ROOT CAUSE: availability was stored only by day_of_week (weekly recurring), so marking Fri 08/21 applied to ALL Fridays. User chose option (b): keep weekly + add per-date option. Existing weekly slots preserved.
+- BACKEND: AvailabilitySlot/Create/Update gained optional specific_date ("YYYY-MM-DD"). Client-facing availability match (_slot_ok in executors listing) updated: a slot matches a requested date if (specific_date == that date) OR (no specific_date AND day_of_week == dow). One-off slots no longer bleed onto other same-weekday dates. create/update pass specific_date through via .dict().
+- FRONTEND (app/(tabs)/availability.tsx): Slot type + specific_date; add-slot modal now has a REPEAT toggle "Repeats weekly" / "This date only" (data-testid repeat-weekly-btn / repeat-onetime-btn). One-time uses the currently selected calendar date (shown as a chip); weekly keeps the day picker. daySlots filter + calendar-strip highlight + overlap check + save all handle specific_date; slot rows show "One-time" label; summary shows date vs weekday.
+- VERIFIED (curl): create one-time slot specific_date=2026-08-21 (dow 4) → stored & listed with specific_date; delete 200. esbuild-clean; backend synced.
+- ⚠️ Save to GitHub → Railway/Netlify.
