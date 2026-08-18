@@ -5554,6 +5554,55 @@ async def create_availability_slot(slot_data: AvailabilitySlotCreate, current_us
     await db.availability_slots.insert_one(slot.dict())
     return slot.dict()
 
+@api_router.post("/availability/copy-week")
+async def copy_availability_week(payload: Dict[str, Any] = Body(...), current_user: User = Depends(get_current_user)):
+    """Copy all one-off (specific_date) slots from the week containing `from_date`
+    to the following week (+7 days). Skips duplicates. Weekly-recurring slots are
+    unaffected (they already repeat)."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers can copy availability")
+    from_date = (payload.get("from_date") or "")[:10]
+    try:
+        d = datetime.strptime(from_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="from_date must be YYYY-MM-DD")
+    week_start = d - timedelta(days=d.weekday())  # Monday
+    week_end = week_start + timedelta(days=6)
+
+    slots = await db.availability_slots.find(
+        {"user_id": current_user.user_id, "specific_date": {"$ne": None}}, {"_id": 0}
+    ).to_list(1000)
+    copied = 0
+    skipped = 0
+    for s in slots:
+        try:
+            sd = datetime.strptime(str(s.get("specific_date"))[:10], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            continue
+        if not (week_start <= sd <= week_end):
+            continue
+        new_date = (sd + timedelta(days=7)).isoformat()
+        exists = await db.availability_slots.find_one({
+            "user_id": current_user.user_id, "specific_date": new_date,
+            "start_time": s.get("start_time"), "end_time": s.get("end_time"),
+        })
+        if exists:
+            skipped += 1
+            continue
+        clone = AvailabilitySlot(
+            slot_id=f"slot_{uuid.uuid4().hex[:12]}",
+            user_id=current_user.user_id,
+            day_of_week=(sd + timedelta(days=7)).weekday(),
+            specific_date=new_date,
+            start_time=s.get("start_time"),
+            end_time=s.get("end_time"),
+            location=s.get("location"),
+        )
+        await db.availability_slots.insert_one(clone.dict())
+        copied += 1
+    return {"ok": True, "copied": copied, "skipped": skipped}
+
+
 @api_router.get("/availability/{user_id}")
 async def get_executor_availability(user_id: str):
     """Get executor's availability calendar"""

@@ -796,6 +796,11 @@ export const api = {
     return res.data;
   },
 
+  copyAvailabilityWeek: async (fromDate: string) => {
+    const res = await client.post('/availability/copy-week', { from_date: fromDate });
+    return res.data;
+  },
+
   updateAvailabilitySlot: async (id: string, data: any) => {
     const res = await client.put(`/availability/${id}`, data);
     return res.data;

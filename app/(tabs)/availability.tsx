@@ -191,6 +191,17 @@ export default function Availability() {
     return () => window.removeEventListener('message', handler);
   }, []);
 
+  const copyWeek = async () => {
+    if (!webConfirm("Copy this week's one-time slots to next week?")) return;
+    try {
+      const r = await api.copyAvailabilityWeek(selectedDateStr);
+      webAlert('Copied', `${r.copied} slot(s) copied to next week${r.skipped ? `, ${r.skipped} already existed` : ''}.`);
+      load();
+    } catch (e: any) {
+      webAlert('Error', e?.response?.data?.detail || 'Could not copy week');
+    }
+  };
+
   const openAdd = (day?: number) => {
     setEditingSlot(null);
     setFormDay(day ?? selectedDay);
@@ -345,6 +356,14 @@ export default function Availability() {
         <TouchableOpacity style={s.addDayBtn} onPress={() => openAdd(selectedDay)}>
           <Ionicons name="add" size={16} color={ACCENT} />
           <Text style={s.addDayBtnText}>Add</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.addDayBtn, { marginLeft: 8, borderColor: '#0891b2' }]}
+          onPress={copyWeek}
+          data-testid="copy-week-btn"
+        >
+          <Ionicons name="copy-outline" size={15} color="#0891b2" />
+          <Text style={[s.addDayBtnText, { color: '#0891b2' }]}>Copy week →</Text>
         </TouchableOpacity>
       </View>
 
