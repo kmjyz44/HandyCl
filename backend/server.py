@@ -195,6 +195,14 @@ class User(BaseModel):
     saved_addresses: Optional[List[dict]] = []
     email_verified: bool = False
     phone_verified: bool = False
+    # Stripe Identity (KYC) — provider identity verification
+    identity_verified: bool = False
+    identity_status: str = "unverified"  # unverified, processing, requires_input, verified
+    identity_verified_at: Optional[datetime] = None
+    identity_verified_name: Optional[str] = None  # name read from the verified government ID
+    identity_verified_method: Optional[str] = None  # stripe | admin_manual
+    identity_last_error: Optional[dict] = None
+    stripe_verification_session_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserRegister(BaseModel):
@@ -2619,6 +2627,14 @@ async def admin_provider_agreement_pdf(user_id: str, current_user: User = Depend
     ua = user.get('accepted_provider_agreement_user_agent') or '—'
     line(f"Device / User-Agent: {ua}", dy=24)
 
+    line("Identity verification (Stripe Identity)", 12, bold=True)
+    _idv = bool(user.get("identity_verified"))
+    line(f"Status: {'VERIFIED' if _idv else (user.get('identity_status') or 'unverified')}",
+         bold=True, color=((0.05, 0.5, 0.2) if _idv else (0.6, 0.2, 0.2)))
+    line(f"Verified name (from government ID): {user.get('identity_verified_name') or '—'}")
+    line(f"Verified at: {_fmt(user.get('identity_verified_at'))}")
+    line(f"Method: {user.get('identity_verified_method') or '—'}", dy=24)
+
     line(f"Acceptance audit trail ({len(rows)} record{'s' if len(rows) != 1 else ''})", 12, bold=True)
     if not rows:
         line("No audit records found.", 10, color=(0.5, 0.5, 0.5))
@@ -3860,6 +3876,11 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
     """Executor accepts the task — works for both tasks collection and bookings collection"""
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can accept tasks")
+
+    # Mandatory Stripe Identity verification before a provider can accept work
+    _pv = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "identity_verified": 1})
+    if not (_pv or {}).get("identity_verified"):
+        raise HTTPException(status_code=403, detail="Please complete identity verification (Stripe Identity) before accepting jobs.")
 
     # Try tasks collection first
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
@@ -5792,6 +5813,9 @@ async def get_executors_by_service(
             continue
         # Verified only
         if settings.executor_verified_only and not profile.get("is_verified", False):
+            continue
+        # Mandatory Stripe Identity — never show clients a provider whose identity is unverified
+        if not executor.get("identity_verified", False):
             continue
         # Hide new taskers (0 tasks)
         if not settings.executor_show_new and tasks_done == 0:
@@ -8120,6 +8144,137 @@ async def finix_webhook(request: Request):
 
 
 
+# ── Stripe Identity (provider KYC / identity verification) ───────────────────
+def _identity_return_url(request: Request) -> str:
+    origin = _normalize_frontend_origin(request)
+    return f"{origin.rstrip('/')}/identity-complete"
+
+
+async def _apply_identity_verified(user_id: str, session_obj):
+    """Mark a user's identity as verified from a Stripe verified session (webhook or poll)."""
+    name = None
+    try:
+        vo = session_obj.get("verified_outputs") if isinstance(session_obj, dict) else getattr(session_obj, "verified_outputs", None)
+        if vo:
+            first = (vo.get("first_name") if isinstance(vo, dict) else getattr(vo, "first_name", None)) or ""
+            last = (vo.get("last_name") if isinstance(vo, dict) else getattr(vo, "last_name", None)) or ""
+            name = (str(first) + " " + str(last)).strip() or None
+    except Exception:
+        name = None
+    await db.users.update_one({"user_id": user_id}, {"$set": {
+        "identity_verified": True,
+        "identity_status": "verified",
+        "identity_verified_at": datetime.now(timezone.utc),
+        "identity_verified_name": name,
+        "identity_verified_method": "stripe",
+        "identity_last_error": None,
+    }})
+
+
+@api_router.post("/identity/start")
+async def identity_start(request: Request, current_user: User = Depends(get_current_user)):
+    """Create (or resume) a Stripe Identity VerificationSession and return the hosted URL."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers verify their identity")
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    if user and user.get("identity_verified"):
+        return {"already_verified": True, "status": "verified"}
+    if not await _stripe_init():
+        raise HTTPException(status_code=500, detail="Stripe is not configured")
+    import stripe as _stripe
+
+    existing_id = (user or {}).get("stripe_verification_session_id")
+    cur_status = (user or {}).get("identity_status")
+    if existing_id and cur_status in ("processing", "requires_input", "unverified"):
+        try:
+            s = await asyncio.to_thread(_stripe.identity.VerificationSession.retrieve, existing_id)
+            if s.status in ("requires_input", "processing") and getattr(s, "url", None):
+                return {"url": s.url, "session_id": s.id, "status": s.status}
+        except Exception:
+            pass
+
+    try:
+        session = await asyncio.to_thread(
+            _stripe.identity.VerificationSession.create,
+            type="document",
+            return_url=_identity_return_url(request),
+            options={"document": {"require_matching_selfie": True}},
+            metadata={"provider_id": current_user.user_id, "purpose": "provider_onboarding"},
+        )
+    except Exception as e:
+        logger.error("Stripe Identity session create failed: %s", e)
+        raise HTTPException(status_code=502, detail=f"Could not start verification: {e}")
+
+    await db.users.update_one({"user_id": current_user.user_id}, {"$set": {
+        "identity_status": session.status or "processing",
+        "stripe_verification_session_id": session.id,
+    }})
+    return {"url": session.url, "session_id": session.id, "status": session.status}
+
+
+@api_router.get("/identity/status")
+async def identity_status_endpoint(current_user: User = Depends(get_current_user)):
+    """Return the current user's identity verification status (refreshes from Stripe if pending)."""
+    user = await db.users.find_one(
+        {"user_id": current_user.user_id},
+        {"_id": 0, "user_id": 1, "identity_verified": 1, "identity_status": 1, "identity_verified_at": 1,
+         "identity_verified_name": 1, "identity_last_error": 1, "stripe_verification_session_id": 1},
+    )
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    status = user.get("identity_status") or ("verified" if user.get("identity_verified") else "unverified")
+    if not user.get("identity_verified") and user.get("stripe_verification_session_id") and status in ("processing", "requires_input", "unverified"):
+        if await _stripe_init():
+            import stripe as _stripe
+            try:
+                s = await asyncio.to_thread(_stripe.identity.VerificationSession.retrieve, user["stripe_verification_session_id"])
+                if s.status == "verified":
+                    await _apply_identity_verified(current_user.user_id, s)
+                    status = "verified"
+                    user["identity_verified"] = True
+                else:
+                    status = s.status or status
+            except Exception:
+                pass
+    return {
+        "identity_verified": bool(user.get("identity_verified")),
+        "status": status,
+        "verified_at": user.get("identity_verified_at"),
+        "verified_name": user.get("identity_verified_name"),
+        "last_error": user.get("identity_last_error"),
+    }
+
+
+@api_router.post("/admin/users/{user_id}/verify-identity")
+async def admin_verify_identity(user_id: str, current_user: User = Depends(require_admin)):
+    """Admin manual override — mark a provider's identity as verified without Stripe."""
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "name": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    await db.users.update_one({"user_id": user_id}, {"$set": {
+        "identity_verified": True,
+        "identity_status": "verified",
+        "identity_verified_at": datetime.now(timezone.utc),
+        "identity_verified_name": user.get("name"),
+        "identity_verified_method": "admin_manual",
+        "identity_last_error": None,
+    }})
+    return {"ok": True, "identity_verified": True, "method": "admin_manual"}
+
+
+@api_router.post("/admin/users/{user_id}/unverify-identity")
+async def admin_unverify_identity(user_id: str, current_user: User = Depends(require_admin)):
+    """Admin — revoke a provider's identity verification (e.g. suspected fraud)."""
+    res = await db.users.update_one({"user_id": user_id}, {"$set": {
+        "identity_verified": False,
+        "identity_status": "unverified",
+        "identity_verified_method": None,
+    }})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "identity_verified": False}
+
+
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
     """Handle Stripe webhook events (best-effort signature check if secret configured)."""
@@ -8170,6 +8325,24 @@ async def stripe_webhook(request: Request):
                     "Thank you! Your payment was successful. Funds were automatically transferred to the pro.",
                     related_id=txn["booking_id"],
                     related_type="booking",
+                )
+
+    elif et and str(et).startswith("identity.verification_session."):
+        provider_id = (data.get("metadata") or {}).get("provider_id")
+        if provider_id:
+            if et == "identity.verification_session.verified":
+                await _apply_identity_verified(provider_id, data)
+            elif et == "identity.verification_session.processing":
+                await db.users.update_one(
+                    {"user_id": provider_id, "identity_verified": {"$ne": True}},
+                    {"$set": {"identity_status": "processing"}},
+                )
+            elif et == "identity.verification_session.requires_input":
+                err = data.get("last_error") or {}
+                await db.users.update_one(
+                    {"user_id": provider_id, "identity_verified": {"$ne": True}},
+                    {"$set": {"identity_status": "requires_input",
+                              "identity_last_error": {"code": err.get("code"), "reason": err.get("reason")}}},
                 )
 
     return {"received": True}

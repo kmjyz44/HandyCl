@@ -1097,4 +1097,20 @@ export const api = {
     const res = await client.get(`/admin/users/${userId}/provider-agreement-pdf`, { responseType: 'blob' });
     return res.data;
   },
+  identityStart: async () => {
+    const res = await client.post('/identity/start');
+    return res.data;
+  },
+  identityStatus: async () => {
+    const res = await client.get('/identity/status');
+    return res.data;
+  },
+  adminVerifyIdentity: async (userId: string) => {
+    const res = await client.post(`/admin/users/${userId}/verify-identity`);
+    return res.data;
+  },
+  adminUnverifyIdentity: async (userId: string) => {
+    const res = await client.post(`/admin/users/${userId}/unverify-identity`);
+    return res.data;
+  },
 };

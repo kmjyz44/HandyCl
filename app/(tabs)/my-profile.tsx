@@ -20,6 +20,7 @@ import { api } from '../../utils/api';
 import { useAuthStore } from '../../store/authStore';
 import { showAlertWithButtons } from '../../utils/alert';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
+import IdentityVerificationBanner from '../../components/IdentityVerificationBanner';
 import { NotificationSettingsModal } from '../../components/NotificationSettingsModal';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 
@@ -1663,6 +1664,7 @@ function ProviderProfile() {
       </View>
 
       {/* Tabs */}
+      <IdentityVerificationBanner />
       <View style={pStyles.tabBar}>
         {(['performance', 'skills', 'service'] as const).map(tab => (
           <TouchableOpacity key={tab} style={[pStyles.tab, activeTab === tab && pStyles.tabActive]} onPress={() => setActiveTab(tab)}>

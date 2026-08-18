@@ -89,6 +89,39 @@ export default function Users() {
     }
   };
 
+  const handleVerifyIdentity = async (user: any) => {
+    showConfirm(
+      'Verify identity',
+      `Manually mark ${user.name || user.email} as identity-verified? Use this only for providers you have verified by other means.`,
+      async () => {
+        try {
+          await api.adminVerifyIdentity(user.user_id);
+          showAlert('Done', 'Provider marked as identity-verified.');
+          loadUsers();
+        } catch (e: any) {
+          showAlert('Error', e?.response?.data?.detail || 'Failed to verify');
+        }
+      }
+    );
+  };
+
+  const handleUnverifyIdentity = async (user: any) => {
+    showConfirm(
+      'Revoke identity verification',
+      `Revoke identity verification for ${user.name || user.email}? They will be hidden from clients and unable to accept jobs until re-verified.`,
+      async () => {
+        try {
+          await api.adminUnverifyIdentity(user.user_id);
+          showAlert('Done', 'Identity verification revoked.');
+          loadUsers();
+        } catch (e: any) {
+          showAlert('Error', e?.response?.data?.detail || 'Failed to revoke');
+        }
+      }
+    );
+  };
+
+
   const openRankModal = async (user: any) => {
     setRankTarget(user);
     setRankData(null);
@@ -372,6 +405,28 @@ export default function Users() {
                       <Ionicons name="ribbon-outline" size={16} color="#0d9488" />
                       <Text style={[styles.actionText, { color: '#0d9488' }]}>Agreement PDF</Text>
                     </TouchableOpacity>
+                  )}
+
+                  {user.role === 'provider' && (
+                    user.identity_verified ? (
+                      <TouchableOpacity
+                        style={[styles.actionButton, { borderColor: '#f59e0b' }]}
+                        onPress={() => handleUnverifyIdentity(user)}
+                        data-testid={`unverify-identity-btn-${user.user_id}`}
+                      >
+                        <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                        <Text style={[styles.actionText, { color: '#f59e0b' }]}>Revoke ID</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.actionButton, { borderColor: '#7c3aed' }]}
+                        onPress={() => handleVerifyIdentity(user)}
+                        data-testid={`verify-identity-btn-${user.user_id}`}
+                      >
+                        <Ionicons name="shield-outline" size={16} color="#7c3aed" />
+                        <Text style={[styles.actionText, { color: '#7c3aed' }]}>Verify ID</Text>
+                      </TouchableOpacity>
+                    )
                   )}
 
                   {user.is_blocked ? (
