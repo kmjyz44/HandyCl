@@ -36,7 +36,8 @@ const SECTIONS: { title: string; toggle?: string; toggleLabel?: string; keys: Ke
     ],
   },
   {
-    title: 'Stripe (Payments)',
+    title: 'Stripe (Payments & Identity)',
+    note: 'The same Secret Key powers both card payments and Stripe Identity (provider ID verification). There is no separate Identity key — just paste your real Stripe Secret Key here. In your Stripe Dashboard, enable Identity and add the events identity.verification_session.verified / processing / requires_input to the same webhook endpoint.',
     toggle: 'enable_stripe_payments',
     toggleLabel: 'Accept payments via Stripe',
     keys: [
@@ -256,6 +257,7 @@ export default function AdminIntegrations() {
         {SECTIONS.map((sec) => (
           <View key={sec.title} style={s.card}>
             <Text style={s.sectionTitle}>{sec.title}</Text>
+            {(sec as any).note ? <Text style={s.sectionNote}>{(sec as any).note}</Text> : null}
             {sec.toggle ? (
               <View style={s.toggleRow}>
                 <Text style={s.toggleLabel}>{sec.toggleLabel}</Text>
@@ -384,6 +386,7 @@ const s = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 },
+  sectionNote: { fontSize: 12.5, color: '#6b7280', lineHeight: 18, marginTop: -6, marginBottom: 12, backgroundColor: '#f9fafb', borderRadius: 8, padding: 10 },
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f3f4f6', padding: 12, borderRadius: 8, marginBottom: 14 },
   toggleLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#374151', marginRight: 12 },
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
