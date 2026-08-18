@@ -76,6 +76,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin-redemptions" />
         <Stack.Screen name="my-ranking" />
         <Stack.Screen name="terms" />
+        <Stack.Screen name="provider-agreement" />
         <Stack.Screen name="privacy" />
         <Stack.Screen name="support-chat" />
         <Stack.Screen name="admin-support-requests" />

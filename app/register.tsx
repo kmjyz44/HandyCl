@@ -23,6 +23,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedProviderAgreement, setAcceptedProviderAgreement] = useState(false);
   const [referralCode, setReferralCode] = useState(() => {
     if (typeof params?.ref === 'string' && params.ref) return (params.ref as string).toUpperCase();
     try {
@@ -46,10 +47,14 @@ export default function Register() {
       setErrorMsg('Please agree to the Terms of Use and Privacy Policy');
       return;
     }
+    if (role === 'provider' && !acceptedProviderAgreement) {
+      setErrorMsg('Please review and agree to the Service Provider Agreement');
+      return;
+    }
     setErrorMsg('');
     setLoading(true);
     try {
-      const response = await api.register({ email, password, name, phone, role, accepted_terms: true, referral_code: referralCode || undefined } as any);
+      const response = await api.register({ email, password, name, phone, role, accepted_terms: true, accepted_provider_agreement: role === 'provider' ? acceptedProviderAgreement : undefined, referral_code: referralCode || undefined } as any);
       await setToken(response.session_token);
       setUser(response.user);
       // Email verification is NOT required — send the user straight into the app.
@@ -148,6 +153,25 @@ export default function Register() {
             </Text>
           </TouchableOpacity>
 
+          {role === 'provider' && (
+            <TouchableOpacity
+              style={[termsStyles.row, termsStyles.providerRow]}
+              onPress={() => setAcceptedProviderAgreement(v => !v)}
+              data-testid="accept-provider-agreement-checkbox"
+            >
+              <View style={[termsStyles.box, acceptedProviderAgreement && termsStyles.boxActive]}>
+                {acceptedProviderAgreement && <Ionicons name="checkmark" size={16} color="#fff" />}
+              </View>
+              <Text style={termsStyles.text}>
+                I have read and agree to the{' '}
+                <Text style={termsStyles.link} onPress={() => router.push('/provider-agreement' as any)} data-testid="provider-agreement-link">
+                  Service Provider Agreement
+                </Text>
+                . I understand that I am an independent contractor (not an employee of Ono-Fix) and that I am responsible for my own licenses, permits, insurance, taxes, safety, and workmanship.
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleRegister} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create Account</Text>}
           </TouchableOpacity>
@@ -170,6 +194,14 @@ export default function Register() {
                 showAlert(
                   'One more step',
                   'Please check "I agree to the Terms of Use and Privacy Policy" above before continuing with Google.'
+                );
+                return;
+              }
+              if (role === 'provider' && !acceptedProviderAgreement) {
+                setErrorMsg('Please agree to the Service Provider Agreement first');
+                showAlert(
+                  'One more step',
+                  'As a service provider, please review and agree to the Service Provider Agreement above before continuing with Google.'
                 );
                 return;
               }
@@ -224,6 +256,7 @@ const styles = StyleSheet.create({
 
 const termsStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 12, paddingHorizontal: 4, marginBottom: 8 },
+  providerRow: { backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 12 },
   box: {
     width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#9ca3af',
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginTop: 1,

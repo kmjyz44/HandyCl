@@ -9,6 +9,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any, Union, Tuple
 import uuid
+import hashlib
 from datetime import datetime, timezone, timedelta
 import bcrypt
 from enum import Enum
@@ -203,6 +204,7 @@ class UserRegister(BaseModel):
     role: UserRole
     phone: Optional[str] = None
     accepted_terms: Optional[bool] = False
+    accepted_provider_agreement: Optional[bool] = False
     referral_code: Optional[str] = None
 
 class UserLogin(BaseModel):
@@ -2152,6 +2154,196 @@ COMPLETION_CONFIRMATION_TEXT = (
     "by the Service Provider, except for any rights or claims that cannot legally be waived."
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Ono-Fix Service Provider Agreement (accepted separately by providers at signup)
+# ─────────────────────────────────────────────────────────────────────────────
+PROVIDER_AGREEMENT_VERSION = "1.0"
+PROVIDER_AGREEMENT_EFFECTIVE_DATE = "June 1, 2026"
+PROVIDER_AGREEMENT_TITLE = "Ono-Fix Service Provider Agreement"
+
+# Authoritative canonical text stored by Ono-Fix (Section 36). The provider-facing
+# app renders a matching version. This constant is hashed for the acceptance record.
+PROVIDER_AGREEMENT_FULL_TEXT = (
+    "ONO-FIX SERVICE PROVIDER AGREEMENT (Version 1.0, effective June 1, 2026)\n"
+    "This Service Provider Agreement is entered into between Nexus Security Solutions LLC, "
+    "doing business as Ono-Fix ('Ono-Fix' or 'Platform'), and the Service Provider identified by "
+    "the account under which this Agreement is electronically accepted. This Agreement is not an "
+    "employment agreement.\n"
+    "1. PURPOSE. Ono-Fix operates a technology marketplace that connects customers seeking home and "
+    "property services with independent service providers. The Service Provider wishes to use the "
+    "Platform to receive, review, accept, and perform service opportunities.\n"
+    "2. INDEPENDENT SERVICE PROVIDER. To the extent permitted by law, the Service Provider operates an "
+    "independently established business and provides services as an independent contractor, not as an "
+    "employee, agent, partner, joint venturer, franchisee, or legal representative of Ono-Fix. The "
+    "Service Provider may not bind Ono-Fix, incur obligations for Ono-Fix, or make warranties on its "
+    "behalf. Actual worker classification is determined under applicable law.\n"
+    "3. INDEPENDENT BUSINESS. The Service Provider operates an independent business, may serve other "
+    "customers and platforms, may accept or decline opportunities, supplies its own tools, bears its own "
+    "business expenses and taxes, and maintains its own registrations, licenses, permits, certifications, "
+    "and insurance. No minimum number of jobs or schedule is required.\n"
+    "4. NO GUARANTEE OF WORK. Ono-Fix does not guarantee any number of jobs, customers, revenue, hours, "
+    "or earnings. Opportunities offered may vary based on customer preferences, location, availability, "
+    "category, requirements, profile, policies, safety, licensing, and performance.\n"
+    "5. ACCEPTANCE OF JOBS. The Service Provider is free to accept or decline requests. Once a Job is "
+    "accepted, the Service Provider must perform it per the Job Service Agreement, approved Change Orders, "
+    "Platform policies, and applicable law, and may not abandon it without reasonable cause.\n"
+    "6. CUSTOMER (JOB) AGREEMENT. Each accepted Job is documented through an electronic Job Service "
+    "Agreement between customer and Service Provider (address, scope, rates, minimums, materials, fees, "
+    "payment authorization, estimated duration, Change Orders, final charges), incorporated into this "
+    "Agreement for that Job.\n"
+    "7. RATES. The Service Provider sets its labor rates and charges displayed through the Platform and "
+    "must accurately disclose hourly rates, minimum charges, travel/service fees, material charges, and "
+    "any fixed prices. The Service Provider may not charge a customer an amount different from the amount "
+    "authorized through Ono-Fix.\n"
+    "8. HOURLY SERVICES. For hourly services, the Service Provider must accurately record actual time and "
+    "must not inflate hours, bill for time not worked, double-bill, bill unauthorized work, or submit "
+    "false invoices. Estimated duration is not guaranteed.\n"
+    "9. ADDITIONAL WORK. When additional work is needed, the Service Provider will, when practicable, "
+    "document it, explain necessity, provide the rate/price, submit a Change Order, and obtain customer "
+    "authorization before performing additional billable work. Emergency work follows the Job Agreement "
+    "and applicable law.\n"
+    "10. PAYMENT PROCESSING. All payments must be processed through payment methods and processors "
+    "designated by Ono-Fix. The Service Provider authorizes Ono-Fix and its processor to receive, "
+    "authorize, capture, refund, and reconcile payments, deduct disclosed Platform and processing fees, "
+    "and remit payouts.\n"
+    "11. PLATFORM FEES. For each Job, the Service Provider agrees to pay the Platform fee disclosed before "
+    "or at acceptance. Platform Fee: a commission calculated as a percentage of the Job total (currently "
+    "15%), disclosed before or at the time each Job is accepted. Ono-Fix may change fees prospectively on "
+    "reasonable notice, subject to law.\n"
+    "12. PROVIDER PAYOUTS. After collection of customer funds, applicable fees, processing charges, "
+    "refunds, reserves, chargebacks, and authorized adjustments may be deducted before payout. Ono-Fix "
+    "does not guarantee collection of every invoice unless it expressly agrees in a separate written "
+    "payment-protection program, and may delay a payout to investigate fraud, disputes, chargebacks, or "
+    "reversals.\n"
+    "13. CUSTOMER NON-PAYMENT. Where legally permitted, Ono-Fix may retry payment, request another method, "
+    "pursue collection, restrict the customer, and respond to chargebacks. The Service Provider will "
+    "reasonably cooperate and provide documentation (photos, invoices, time records, communications, "
+    "receipts, Change Orders, proof of completion).\n"
+    "14. NO OFF-PLATFORM PAYMENTS. The Service Provider shall not circumvent Ono-Fix by accepting direct "
+    "payment (cash, Venmo, Zelle, Cash App, checks, transfers, crypto, external links) for a Job "
+    "originally introduced or booked through Ono-Fix, except conduct that cannot lawfully be restricted.\n"
+    "15. CUSTOMER NON-CIRCUMVENTION. If an Ono-Fix-introduced customer requests future services directly, "
+    "the Service Provider shall direct them to book through Ono-Fix during the restricted period of "
+    "12 months, enforced only to the extent permitted by law.\n"
+    "16. CUSTOMER INFORMATION. Customer information is confidential and may be used only to perform, "
+    "document, and communicate about an accepted Job and to comply with law. The Service Provider shall "
+    "not sell, misuse, or disclose it, or retain customer payment information.\n"
+    "17. PROFESSIONAL PERFORMANCE. Services must be performed professionally, competently, safely, with "
+    "reasonable care, per the agreed scope and applicable law. The Service Provider is responsible for its "
+    "workmanship and for damage caused by its negligence or willful misconduct.\n"
+    "18. LICENSES AND PERMITS. The Service Provider maintains all required licenses, permits, "
+    "registrations, and certifications, will not perform work requiring a license it lacks, obtains "
+    "required permits unless assigned otherwise, and promptly notifies Ono-Fix of any lapse.\n"
+    "19. INSURANCE. The Service Provider maintains insurance required by law and appropriate to the "
+    "services; Ono-Fix may require evidence before allowing certain work; failure may result in "
+    "suspension.\n"
+    "20. SAFETY. The Service Provider complies with safety laws and reasonable Platform safety "
+    "requirements and will not knowingly perform illegal, unsafe, or unqualified work.\n"
+    "21. PROPERTY DAMAGE. The Service Provider protects customer property, promptly reports material "
+    "damage, and remains responsible for legally attributable damage caused by its negligence or willful "
+    "misconduct.\n"
+    "22. JOB DOCUMENTATION. The Service Provider may be required to document Jobs (photos, videos, "
+    "timestamps, check-in/out) used for billing, quality, disputes, chargebacks, insurance, support, "
+    "compliance, and fraud prevention, while respecting customer privacy.\n"
+    "23. COMPLETION. Upon completion the Service Provider accurately records time and materials, "
+    "identifies approved additional work, uploads documentation, submits the final invoice, and marks the "
+    "Job complete only when contracted work is finished (or partial completion is documented).\n"
+    "24. WARRANTIES. Any warranty the Service Provider offers must be accurately disclosed. Unless stated "
+    "in writing, Ono-Fix does not provide a workmanship warranty for independent providers. Consumer "
+    "rights that cannot be excluded are not limited.\n"
+    "25. CUSTOMER COMPLAINTS. The Service Provider cooperates with complaint investigations and may be "
+    "asked for evidence. Ono-Fix may temporarily restrict an account when reasonably necessary to protect "
+    "customers, providers, the Platform, payments, or the public.\n"
+    "26. PLATFORM INVESTIGATIONS. Ono-Fix may investigate suspected fraud, false billing, abuse, "
+    "misconduct, off-platform payments, account sharing, misrepresentation, licensing/safety violations, "
+    "record manipulation, and rewards abuse, with the Service Provider's reasonable cooperation.\n"
+    "27. SUSPENSION. Ono-Fix may temporarily suspend access when reasonably necessary to investigate or "
+    "prevent fraud, safety concerns, serious complaints, payment disputes, chargebacks, licensing or "
+    "insurance issues, breach, unlawful conduct, or off-platform activity, with notice where practicable.\n"
+    "28. TERMINATION. Either party may terminate on written notice, subject to surviving obligations. "
+    "Ono-Fix may terminate immediately where permitted for fraud, falsified records, customer abuse, "
+    "payment circumvention, serious unsafe work, loss of a required license, material breach, data "
+    "misuse, or unlawful conduct. Accrued payment obligations survive.\n"
+    "29. INDEMNIFICATION. To the maximum extent permitted by law, the Service Provider will defend, "
+    "indemnify, and hold harmless Nexus Security Solutions LLC, Ono-Fix, and their owners, officers, "
+    "employees, agents, and affiliates from third-party claims arising out of the Service Provider's "
+    "negligence, willful misconduct, breach, legal violations, failure to maintain licenses or insurance, "
+    "bodily injury or property damage it causes, unauthorized use of customer information, its own "
+    "personnel, and its performance of services, except to the extent prohibited by law.\n"
+    "30. ONO-FIX'S ROLE / DIVISION OF RESPONSIBILITY. Ono-Fix is a marketplace and technology and payment "
+    "facilitation platform. Ono-Fix is responsible for the Platform, its own payment infrastructure, its "
+    "own actions, and its own employees or contractors where applicable. The Service Provider is "
+    "independently responsible for the performance of services, including its workmanship, licenses, "
+    "permits, insurance, damage it causes, its own workers, taxes, safety, and the accuracy of its "
+    "invoices. Except where expressly agreed in writing, Ono-Fix does not perform the physical services, "
+    "supervise the means or methods, employ the Service Provider, or guarantee workmanship, results, job "
+    "volume, customer satisfaction, or collection of every payment. Nothing excludes liability that "
+    "cannot legally be excluded.\n"
+    "31. LIMITATION OF LIABILITY. To the maximum extent permitted by law, Ono-Fix is not liable for "
+    "indirect, incidental, special, consequential, exemplary, or punitive damages arising from the "
+    "Service Provider's independent performance of services. To the maximum extent permitted by law, "
+    "Ono-Fix's aggregate liability under this Agreement shall not exceed the Platform fees actually paid "
+    "by the Service Provider to Ono-Fix during the six (6) months preceding the event giving rise to the "
+    "claim. Limitations apply only to the extent permitted by law.\n"
+    "32. NO EMPLOYMENT BENEFITS. The Service Provider is not entitled to salary, overtime, employee "
+    "benefits, paid vacation, unemployment benefits, workers' compensation from Ono-Fix except as "
+    "required by law, retirement benefits, or health insurance through Ono-Fix. Rights that cannot "
+    "lawfully be waived are not waived.\n"
+    "33. TAXES. The Service Provider is responsible for all applicable federal, state, and local taxes on "
+    "amounts paid to it; Ono-Fix may issue required tax forms; the Service Provider maintains tax "
+    "records.\n"
+    "34. RECORDS AND AUDIT. The Service Provider maintains accurate Job records and provides reasonable "
+    "documentation to resolve disputes, respond to chargebacks, meet processor requirements, investigate "
+    "fraud, verify licensing, and comply with law.\n"
+    "35. ELECTRONIC COMMUNICATIONS. The Service Provider agrees to receive electronically: job requests, "
+    "agreements, invoices, payment notifications, policy updates, compliance, suspension, and termination "
+    "notices, which may constitute written notice where permitted by law.\n"
+    "36. ELECTRONIC SIGNATURE. Electronic acceptance constitutes an electronic signature to the extent "
+    "permitted by law. Ono-Fix may retain provider name, account ID, date/time, IP address, device info "
+    "where lawfully collected, Agreement version, acceptance, document hash, and related metadata. The "
+    "electronic version stored by Ono-Fix is the authoritative version for Platform records.\n"
+    "37. CONFIDENTIALITY. The Service Provider keeps confidential non-public Ono-Fix information "
+    "(pricing, strategies, customer information, technology, processes, communications, financials); this "
+    "survives termination as permitted by law.\n"
+    "38. INTELLECTUAL PROPERTY. The Ono-Fix name, logo, software, Platform, designs, trademarks, and "
+    "technology remain Ono-Fix's or its licensors' property. The Service Provider receives only a "
+    "limited, revocable right to use the Platform for authorized purposes and may not copy, reverse "
+    "engineer, or commercially exploit it except as permitted.\n"
+    "39. PROVIDER REPRESENTATIONS. The Service Provider represents that all information provided is "
+    "accurate and truthful (identity, business, licensing, insurance), it has authority to enter this "
+    "Agreement, will comply with law, and will not submit false billing.\n"
+    "40. PLATFORM POLICIES. The Service Provider complies with reasonable published Platform policies "
+    "(safety, payments, communications, privacy, prohibited conduct, quality, fraud prevention, account "
+    "security). Material changes are provided with appropriate notice where required.\n"
+    "41. DISPUTE RESOLUTION. The parties will attempt in good faith to resolve disputes through written "
+    "notice and direct communication before litigation.\n"
+    "42. GOVERNING LAW. This Agreement is governed by the law applicable to the relationship and "
+    "transaction, without regard to conflict-of-law principles and subject to mandatory applicable law. "
+    "Nothing waives mandatory statutory rights.\n"
+    "43. SEVERABILITY. If any provision is invalid or unenforceable, the remainder remains effective, and "
+    "an invalid provision is modified to the minimum extent necessary where permitted.\n"
+    "44. NO WAIVER. Failure to enforce a provision immediately is not a waiver of later enforcement.\n"
+    "45. ASSIGNMENT. The Service Provider may not assign this Agreement without Ono-Fix's written consent "
+    "except as required by law; Ono-Fix may assign to an affiliate, successor, or acquirer.\n"
+    "46. ENTIRE AGREEMENT. This Agreement, the Platform Terms, provider policies, and accepted Job "
+    "Agreements constitute the agreement between the parties on this subject; Job-specific terms control "
+    "for the specific Job.\n"
+    "47. SURVIVAL. Payment obligations, confidentiality, customer information, intellectual property, "
+    "indemnification, dispute resolution, limitation of liability, records, and provisions that by their "
+    "nature should survive, survive termination.\n"
+    "48. ACKNOWLEDGMENT. Before accepting Jobs, the Service Provider has had the opportunity to review "
+    "this Agreement, ask questions, obtain independent legal advice, and provide accurate business, "
+    "licensing, and insurance information, and is responsible for determining whether operating as an "
+    "independent contractor is appropriate.\n"
+    "49. ELECTRONIC ACCEPTANCE. By checking the acceptance boxes and creating a provider account, the "
+    "Service Provider: (a) has read, understands, and agrees to this Agreement; (b) understands it is "
+    "responsible for complying with all applicable licensing, insurance, tax, safety, and legal "
+    "requirements; and (c) understands it is not an employee of Ono-Fix unless applicable law determines "
+    "otherwise. Ono-Fix records the acceptance with date/time, IP address, Agreement version, and "
+    "document hash.\n"
+)
+PROVIDER_AGREEMENT_HASH = hashlib.sha256(PROVIDER_AGREEMENT_FULL_TEXT.encode("utf-8")).hexdigest()
+
 
 def _client_ip(request: Optional[Request]) -> Optional[str]:
     """Best-effort client IP (respects x-forwarded-for behind the ingress/proxy)."""
@@ -2196,6 +2388,53 @@ async def accept_terms(request: Request = None, current_user: User = Depends(get
     }})
     await _record_terms_acceptance(current_user.user_id, current_user.email, str(current_user.role), request, "reaccept")
     return {"ok": True, "version": TERMS_VERSION, "accepted_at": now.isoformat()}
+
+
+async def _record_provider_agreement_acceptance(user_id: str, email: str, request: Optional[Request], source: str):
+    """Immutable audit row proving a provider accepted a specific Service Provider Agreement
+    version (date/time/IP/UA/document hash)."""
+    try:
+        await db.provider_agreement_acceptances.insert_one({
+            "acceptance_id": f"spa_{uuid.uuid4().hex[:16]}",
+            "user_id": user_id,
+            "email": email,
+            "agreement_version": PROVIDER_AGREEMENT_VERSION,
+            "document_hash": PROVIDER_AGREEMENT_HASH,
+            "accepted_at": datetime.now(timezone.utc),
+            "ip": _client_ip(request),
+            "user_agent": (request.headers.get("user-agent") if request else None),
+            "source": source,  # registration | reaccept
+        })
+    except Exception as ex:
+        logger.warning("provider agreement acceptance record failed for %s: %s", user_id, ex)
+
+
+@api_router.get("/provider-agreement/version")
+async def get_provider_agreement_version():
+    """Public: current Service Provider Agreement version, effective date, and document hash."""
+    return {
+        "version": PROVIDER_AGREEMENT_VERSION,
+        "effective_date": PROVIDER_AGREEMENT_EFFECTIVE_DATE,
+        "title": PROVIDER_AGREEMENT_TITLE,
+        "document_hash": PROVIDER_AGREEMENT_HASH,
+    }
+
+
+@api_router.post("/provider-agreement/accept")
+async def accept_provider_agreement(request: Request = None, current_user: User = Depends(get_current_user)):
+    """Logged-in provider (re-)accepts the current Service Provider Agreement version."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Only providers accept the Service Provider Agreement")
+    now = datetime.now(timezone.utc)
+    await db.users.update_one({"user_id": current_user.user_id}, {"$set": {
+        "accepted_provider_agreement_at": now,
+        "accepted_provider_agreement_version": PROVIDER_AGREEMENT_VERSION,
+        "accepted_provider_agreement_hash": PROVIDER_AGREEMENT_HASH,
+        "accepted_provider_agreement_ip": _client_ip(request),
+        "accepted_provider_agreement_user_agent": (request.headers.get("user-agent") if request else None),
+    }})
+    await _record_provider_agreement_acceptance(current_user.user_id, current_user.email, request, "reaccept")
+    return {"ok": True, "version": PROVIDER_AGREEMENT_VERSION, "accepted_at": now.isoformat()}
 
 
 @api_router.post("/tasks/{task_id}/confirm-completion")
@@ -2319,11 +2558,96 @@ async def admin_terms_acceptance_pdf(user_id: str, current_user: User = Depends(
                              headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
+@api_router.get("/admin/users/{user_id}/provider-agreement-pdf")
+async def admin_provider_agreement_pdf(user_id: str, current_user: User = Depends(require_admin)):
+    """Admin: download a provider's Service Provider Agreement acceptance record
+    (version/date/time/IP/UA/document hash) as a PDF."""
+    import io
+    from reportlab.pdfgen import canvas as _canvas
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.units import inch
+
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    rows = await db.provider_agreement_acceptances.find({"user_id": user_id}, {"_id": 0}).sort("accepted_at", 1).to_list(200)
+
+    def _fmt(dt):
+        if not dt:
+            return "—"
+        try:
+            return dt.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(dt, "strftime") else str(dt)
+        except Exception:
+            return str(dt)
+
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=letter)
+    W, H = letter
+    y = H - inch
+
+    def line(text, size=10, bold=False, dy=16, color=(0.1, 0.1, 0.1), indent=0):
+        nonlocal y
+        if y < inch:
+            c.showPage(); y = H - inch
+        c.setFillColorRGB(*color)
+        c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+        c.drawString(inch + indent, y, str(text)[:110])
+        y -= dy
+
+    c.setFillColorRGB(0.03, 0.15, 0.35)
+    c.rect(0, H - 0.7 * inch, W, 0.7 * inch, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 15)
+    c.drawString(inch, H - 0.47 * inch, "Ono-Fix — Service Provider Agreement Acceptance")
+    y = H - inch - 6
+
+    line("Operated by Nexus Security Solutions LLC", 9, color=(0.4, 0.4, 0.4))
+    line(f"Generated: {_fmt(datetime.now(timezone.utc))}  •  By admin: {current_user.email}", 9, color=(0.4, 0.4, 0.4), dy=22)
+
+    line("Service Provider", 12, bold=True)
+    line(f"Name: {user.get('name') or '—'}")
+    line(f"Email: {user.get('email') or '—'}")
+    line(f"Role: {user.get('role') or '—'}")
+    line(f"User ID: {user_id}", dy=22)
+
+    line("Current recorded acceptance", 12, bold=True)
+    line(f"Agreement: {PROVIDER_AGREEMENT_TITLE}")
+    line(f"Agreement version: {user.get('accepted_provider_agreement_version') or '—'}")
+    line(f"Accepted at: {_fmt(user.get('accepted_provider_agreement_at'))}")
+    line(f"IP address: {user.get('accepted_provider_agreement_ip') or '—'}")
+    line(f"Document hash (SHA-256): {(user.get('accepted_provider_agreement_hash') or '—')[:64]}", 8, color=(0.3, 0.3, 0.3))
+    ua = user.get('accepted_provider_agreement_user_agent') or '—'
+    line(f"Device / User-Agent: {ua}", dy=24)
+
+    line(f"Acceptance audit trail ({len(rows)} record{'s' if len(rows) != 1 else ''})", 12, bold=True)
+    if not rows:
+        line("No audit records found.", 10, color=(0.5, 0.5, 0.5))
+    for i, r in enumerate(rows, 1):
+        line(f"{i}. {_fmt(r.get('accepted_at'))}", 10, bold=True, dy=14)
+        line(f"version {r.get('agreement_version') or '—'}  •  source: {r.get('source') or '—'}  •  IP: {r.get('ip') or '—'}", 9, color=(0.3, 0.3, 0.3), indent=14, dy=13)
+        line(f"hash: {(r.get('document_hash') or '—')[:48]}", 8, color=(0.5, 0.5, 0.5), indent=14, dy=13)
+        line(f"UA: {(r.get('user_agent') or '—')}", 8, color=(0.5, 0.5, 0.5), indent=14, dy=16)
+
+    y -= 6
+    line("This record reflects the electronic acceptance of the Ono-Fix Service Provider Agreement", 8, color=(0.45, 0.45, 0.45), dy=11)
+    line("by the identified provider, including timestamp, IP address, version, and document hash.", 8, color=(0.45, 0.45, 0.45), dy=11)
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    fname = f"provider-agreement-{user_id}.pdf"
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
 @api_router.post("/auth/register")
 async def register(user_data: UserRegister, request: Request = None):
     # Require accepted_terms
     if not user_data.accepted_terms:
         raise HTTPException(status_code=400, detail="You must accept the Terms of Use and Privacy Policy to register")
+    # Providers must additionally accept the Service Provider Agreement
+    if user_data.role == UserRole.PROVIDER and not user_data.accepted_provider_agreement:
+        raise HTTPException(status_code=400, detail="You must accept the Service Provider Agreement to register as a provider")
     # Normalize email (store lowercased for consistency)
     reg_email = (user_data.email or "").strip().lower()
     # Check if user exists (case-insensitive)
@@ -2352,6 +2676,17 @@ async def register(user_data: UserRegister, request: Request = None):
 
     await db.users.insert_one(user_dict)
     await _record_terms_acceptance(user_id, reg_email, str(user_data.role), request, "registration")
+    # Provider Agreement acceptance (providers only)
+    if user_data.role == UserRole.PROVIDER and user_data.accepted_provider_agreement:
+        now_spa = datetime.now(timezone.utc)
+        await db.users.update_one({"user_id": user_id}, {"$set": {
+            "accepted_provider_agreement_at": now_spa,
+            "accepted_provider_agreement_version": PROVIDER_AGREEMENT_VERSION,
+            "accepted_provider_agreement_hash": PROVIDER_AGREEMENT_HASH,
+            "accepted_provider_agreement_ip": _client_ip(request),
+            "accepted_provider_agreement_user_agent": (request.headers.get("user-agent") if request else None),
+        }})
+        await _record_provider_agreement_acceptance(user_id, reg_email, request, "registration")
 
     # Loyalty: link this new user to their referrer (if a valid referral code was used)
     ref_code = (user_data.referral_code or "").strip().upper()

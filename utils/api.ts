@@ -1093,4 +1093,8 @@ export const api = {
     const res = await client.get(`/admin/users/${userId}/terms-pdf`, { responseType: 'blob' });
     return res.data;
   },
+  adminDownloadProviderAgreementPdf: async (userId: string) => {
+    const res = await client.get(`/admin/users/${userId}/provider-agreement-pdf`, { responseType: 'blob' });
+    return res.data;
+  },
 };
