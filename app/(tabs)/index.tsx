@@ -15,6 +15,7 @@ import { showAlertWithButtons } from '../../utils/alert';
 import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
 import RewardsBanner from '../../components/RewardsBanner';
+import ProviderOnboardingCard from '../../components/ProviderOnboardingCard';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import { SiteFooter } from '../../components/SiteFooter';
 
@@ -232,6 +233,8 @@ function ProviderDashboard() {
       </View>
 
       <PaymentReminderBanner />
+
+      <ProviderOnboardingCard />
 
       {/* Stats row — clickable tiles */}
       <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12 }}>

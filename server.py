@@ -8279,6 +8279,32 @@ async def admin_unverify_identity(user_id: str, current_user: User = Depends(req
     return {"ok": True, "identity_verified": False}
 
 
+@api_router.get("/provider/onboarding-status")
+async def provider_onboarding_status(current_user: User = Depends(get_current_user)):
+    """Checklist state for the provider onboarding guide. Each step is auto-detected from data."""
+    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Providers only")
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0}) or {}
+    profile = await db.executor_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0}) or {}
+    slots = await db.availability_slots.count_documents({"user_id": current_user.user_id})
+
+    has_zone = bool(
+        (profile.get("service_zones") or profile.get("service_cities"))
+        or (profile.get("latitude") is not None and profile.get("longitude") is not None)
+        or profile.get("service_radius_km")
+    )
+    steps = [
+        {"key": "profile_photo", "done": bool(user.get("picture") or profile.get("photo") or profile.get("avatar"))},
+        {"key": "work_zone", "done": has_zone},
+        {"key": "skills", "done": len(profile.get("skills") or []) > 0},
+        {"key": "availability", "done": slots > 0},
+        {"key": "identity", "done": bool(user.get("identity_verified"))},
+        {"key": "notifications", "done": bool(user.get("telegram_chat_id"))},
+    ]
+    completed = sum(1 for s in steps if s["done"])
+    return {"steps": steps, "completed": completed, "total": len(steps), "complete": completed == len(steps)}
+
+
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
     """Handle Stripe webhook events (best-effort signature check if secret configured)."""

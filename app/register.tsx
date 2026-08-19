@@ -59,7 +59,11 @@ export default function Register() {
       setUser(response.user);
       // Email verification is NOT required — send the user straight into the app.
       // A reminder banner appears on the home screen and in the profile until verified.
-      router.replace('/(tabs)' as any);
+      if (role === 'provider') {
+        router.replace('/provider-onboarding' as any);
+      } else {
+        router.replace('/(tabs)' as any);
+      }
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
       let msg = (typeof detail === 'string' && detail) || error.message || 'Registration error';

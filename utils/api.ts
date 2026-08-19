@@ -346,6 +346,11 @@ export const api = {
     return res.data; // { executor, slots }
   },
 
+  getOnboardingStatus: async () => {
+    const res = await client.get('/provider/onboarding-status');
+    return res.data;
+  },
+
   getExecutorPricing: async (id: string) => {
     try {
       const res = await client.get(`/executors/${id}/pricing`);

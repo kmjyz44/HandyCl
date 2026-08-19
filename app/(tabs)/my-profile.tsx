@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../../utils/api';
 import { useAuthStore } from '../../store/authStore';
 import { showAlertWithButtons } from '../../utils/alert';
@@ -911,6 +911,12 @@ function ProviderProfile() {
 
   // Active tab
   const [activeTab, setActiveTab] = useState<'performance' | 'skills' | 'service'>('performance');
+  const tabParam = useLocalSearchParams()?.tab as string | undefined;
+  useEffect(() => {
+    if (tabParam === 'skills' || tabParam === 'service' || tabParam === 'performance') {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
 
   // Provider skills
