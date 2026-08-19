@@ -8299,7 +8299,7 @@ async def provider_onboarding_status(current_user: User = Depends(get_current_us
         {"key": "skills", "done": len(profile.get("skills") or []) > 0},
         {"key": "availability", "done": slots > 0},
         {"key": "identity", "done": bool(user.get("identity_verified"))},
-        {"key": "notifications", "done": bool(user.get("telegram_chat_id"))},
+        {"key": "notifications", "done": bool(user.get("telegram_chat_id") or user.get("notification_prefs"))},
     ]
     completed = sum(1 for s in steps if s["done"])
     return {"steps": steps, "completed": completed, "total": len(steps), "complete": completed == len(steps)}

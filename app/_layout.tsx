@@ -80,6 +80,7 @@ export default function RootLayout() {
         <Stack.Screen name="identity" />
         <Stack.Screen name="identity-complete" />
         <Stack.Screen name="provider-onboarding" />
+        <Stack.Screen name="notification-settings" />
         <Stack.Screen name="privacy" />
         <Stack.Screen name="support-chat" />
         <Stack.Screen name="admin-support-requests" />

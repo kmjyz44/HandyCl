@@ -679,3 +679,11 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - FRONTEND: utils/onboardingSteps.ts (shared step defs: title/desc/icon/route/color; skills routes to /(tabs)/my-profile?tab=skills). app/provider-onboarding.tsx (full welcome screen with progress + 6 step cards + "Go to dashboard"; testid provider-onboarding-screen, onboarding-step-{key}, onboarding-go-dashboard). components/ProviderOnboardingCard.tsx (compact home card: progress% + "Next: <step>" CTA, taps to full guide, hides when complete; testid provider-onboarding-card). Rendered in ProviderDashboard (index.tsx) after PaymentReminderBanner. register.tsx: providers now router.replace('/provider-onboarding') after signup (clients still → /(tabs)). Route added in _layout.tsx. api.getOnboardingStatus added. my-profile.tsx reads ?tab= param to open the Skills tab (useLocalSearchParams).
 - useFocusEffect imported from '@react-navigation/native' (refreshes status on focus). esbuild-clean; visual verification pending Netlify deploy (no local node_modules; preview = CRA stub).
 - server.py synced.
+
+## 2026-06 — Notification Settings screen (onboarding step 6 target)
+- Onboarding "Turn on notifications" now opens a real settings screen (was wrongly pointing to /notifications = the inbox list).
+- NEW app/notification-settings.tsx (testid notification-settings-screen): Email toggle (account email), Telegram (Connect via deep link / Disconnect + toggle when connected; poll via Refresh + focus), SMS toggle (+ "coming soon" note). Toggles persist immediately.
+- Backend already had it: GET/PUT /users/notification-prefs (channels email/sms/push/telegram, opt-out model), POST /telegram/link/start ({deep_link,code,bot_username}), GET /telegram/link/status (returns {connected, chat_id}), POST /telegram/unlink. api.ts methods already existed.
+- Route added in _layout.tsx; onboardingSteps.ts notifications route → /notification-settings. Onboarding "notifications" done-detection now: telegram_chat_id present OR notification_prefs set (so configuring any channel ticks the step). Verified via curl: prefs GET/PUT work, step→done after prefs set (5/6).
+- FIX: status field is `connected` (not `linked`) — frontend reads connected ?? linked.
+- server.py synced. esbuild-clean; visible after Save to GitHub.

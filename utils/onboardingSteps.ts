@@ -62,10 +62,10 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
   {
     key: 'notifications',
     title: 'Turn on notifications',
-    desc: 'Connect Telegram to get instant alerts for new jobs and messages.',
+    desc: 'Set up Email, Telegram and SMS alerts so you never miss a new job or message.',
     icon: 'notifications-outline',
-    route: '/notifications',
+    route: '/notification-settings',
     color: '#db2777',
-    note: 'SMS notifications are coming soon.',
+    note: 'SMS delivery is being finalised — you can enable it now and it activates automatically.',
   },
 ];
