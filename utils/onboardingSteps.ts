@@ -24,7 +24,7 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     title: 'Complete your profile',
     desc: 'Add your name, a short bio and a clear profile photo so clients recognise and trust you.',
     icon: 'person-circle-outline',
-    route: '/(tabs)/my-profile',
+    route: '/(tabs)/my-profile?tab=service',
     color: '#2563eb',
   },
   {
