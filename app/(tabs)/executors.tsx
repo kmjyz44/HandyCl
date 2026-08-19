@@ -32,6 +32,7 @@ interface Executor {
   availability?: any[];
   average_rating: number;
   total_reviews: number;
+  identity_verified?: boolean;
   pricing?: {
     hourly_rate: number;
     original_rate: number;
@@ -282,7 +283,15 @@ export default function Executors() {
                   )}
                 </TouchableOpacity>
                 <View style={styles.executorInfo}>
-                  <Text style={styles.executorName}>{executor.name}</Text>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.executorName}>{executor.name}</Text>
+                    {executor.identity_verified && (
+                      <View style={styles.verifiedBadge} data-testid={`verified-badge-${executor.user_id}`}>
+                        <Ionicons name="shield-checkmark" size={12} color="#059669" />
+                        <Text style={styles.verifiedBadgeText}>ID Verified</Text>
+                      </View>
+                    )}
+                  </View>
                   <View style={styles.ratingContainer}>
                     {renderStars(executor.average_rating || 0)}
                     <Text style={styles.ratingText}>
@@ -386,6 +395,9 @@ const styles = StyleSheet.create({
   avatarPlaceholder: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
   executorInfo: { flex: 1 },
   executorName: { fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 4 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0', borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 },
+  verifiedBadgeText: { fontSize: 11, color: '#059669', fontWeight: '700' },
   ratingContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   ratingText: { fontSize: 12, color: '#6b7280', marginLeft: 6 },
   experience: { fontSize: 12, color: '#6b7280' },

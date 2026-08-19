@@ -668,3 +668,7 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - Admin Users action buttons now wrap (flexWrap) — fixed overlap when 7 buttons crowded one row.
 - admin-integrations Stripe section renamed "Stripe (Payments & Identity)" with a note (same key powers Identity; add identity webhook events in Stripe Dashboard).
 - server.py synced to /app/server.py.
+
+## 2026-06 — Client-facing "ID Verified" badge
+- Providers who passed identity verification now show a green "ID Verified" badge to clients: (1) Pros list app/(tabs)/executors.tsx next to the name (data-testid=verified-badge-{user_id}); (2) provider detail app/executor/[id].tsx next to the name (data-testid=verified-badge-detail).
+- Data: /executors/available already returns identity_verified per executor (exclusion-only projection); /profile/executor/{id} returns it under .user. Verified via curl: verified provider → identity_verified:true, others → None (badge hidden). No backend change needed. esbuild-clean; visible after Save to GitHub.

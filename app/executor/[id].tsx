@@ -36,6 +36,7 @@ interface ExecutorProfile {
     email: string;
     phone?: string;
     picture?: string;
+    identity_verified?: boolean;
   };
   average_rating: number;
   total_reviews: number;
@@ -179,7 +180,15 @@ export default function ExecutorProfile() {
               </View>
             )}
             <View style={styles.profileInfo}>
-              <Text style={styles.name}>{profile.user?.name}</Text>
+              <View style={styles.nameRowDetail}>
+                <Text style={styles.name}>{profile.user?.name}</Text>
+                {profile.user?.identity_verified && (
+                  <View style={styles.verifiedBadgeDetail} data-testid="verified-badge-detail">
+                    <Ionicons name="shield-checkmark" size={13} color="#059669" />
+                    <Text style={styles.verifiedBadgeDetailText}>ID Verified</Text>
+                  </View>
+                )}
+              </View>
               <View style={styles.ratingContainer}>
                 {renderStars(profile.average_rating, 20)}
                 <Text style={styles.ratingText}>
@@ -554,6 +563,9 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 8,
   },
+  nameRowDetail: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  verifiedBadgeDetail: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 10, marginBottom: 8 },
+  verifiedBadgeDetailText: { fontSize: 12, color: '#059669', fontWeight: '700' },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
