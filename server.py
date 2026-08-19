@@ -837,6 +837,7 @@ class Settings(BaseModel):
     executor_max_price: float = 0.0
     executor_verified_only: bool = False
     executor_show_new: bool = True
+    require_identity_verification: bool = False  # hide unverified providers + block accepting jobs
 
     # ===== PHOTO STORAGE SETTINGS =====
     photo_storage_path: str = "./task_photos"   # Local disk path for saved photos
@@ -935,6 +936,7 @@ class SettingsUpdate(BaseModel):
     executor_max_price: Optional[float] = None
     executor_verified_only: Optional[bool] = None
     executor_show_new: Optional[bool] = None
+    require_identity_verification: Optional[bool] = None
     # Photo storage controls
     photo_storage_path: Optional[str] = None
     photo_auto_cleanup_enabled: Optional[bool] = None
@@ -3877,10 +3879,12 @@ async def accept_task(task_id: str, current_user: User = Depends(get_current_use
     if current_user.role != UserRole.PROVIDER:
         raise HTTPException(status_code=403, detail="Only providers can accept tasks")
 
-    # Mandatory Stripe Identity verification before a provider can accept work
-    _pv = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "identity_verified": 1})
-    if not (_pv or {}).get("identity_verified"):
-        raise HTTPException(status_code=403, detail="Please complete identity verification (Stripe Identity) before accepting jobs.")
+    # Mandatory Stripe Identity verification before a provider can accept work (when enabled)
+    _s = await get_settings()
+    if getattr(_s, "require_identity_verification", False):
+        _pv = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "identity_verified": 1})
+        if not (_pv or {}).get("identity_verified"):
+            raise HTTPException(status_code=403, detail="Please complete identity verification (Stripe Identity) before accepting jobs.")
 
     # Try tasks collection first
     task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
@@ -5815,7 +5819,7 @@ async def get_executors_by_service(
         if settings.executor_verified_only and not profile.get("is_verified", False):
             continue
         # Mandatory Stripe Identity — never show clients a provider whose identity is unverified
-        if not executor.get("identity_verified", False):
+        if settings.require_identity_verification and not executor.get("identity_verified", False):
             continue
         # Hide new taskers (0 tasks)
         if not settings.executor_show_new and tasks_done == 0:

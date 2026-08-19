@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../utils/api';
@@ -48,6 +49,34 @@ export default function Users() {
   const [rankCategory, setRankCategory] = useState<string>('*');
   const [rankHours, setRankHours] = useState('');
   const [rankReason, setRankReason] = useState('');
+
+  // ── Provider detail (coverage / skills / prices / availability) ──
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [detailUser, setDetailUser] = useState<any>(null);
+  const [detailProfile, setDetailProfile] = useState<any>(null);
+  const [detailSlots, setDetailSlots] = useState<any[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const openUserDetail = async (user: any) => {
+    if (user.role !== 'provider') return;
+    setDetailUser(user);
+    setDetailProfile(null);
+    setDetailSlots([]);
+    setDetailVisible(true);
+    setDetailLoading(true);
+    try {
+      const [profile, avail] = await Promise.all([
+        api.getExecutorProfile(user.user_id).catch(() => null),
+        api.adminGetAvailability(user.user_id).catch(() => ({ slots: [] })),
+      ]);
+      setDetailProfile(profile);
+      setDetailSlots((avail?.slots || avail?.availability || []) as any[]);
+    } catch {
+      // leave empty
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const downloadTermsPdf = async (user: any) => {
     try {
@@ -232,8 +261,34 @@ export default function Users() {
     }
   };
 
+  const [requireIdentity, setRequireIdentity] = useState(false);
+  const [savingRequireIdentity, setSavingRequireIdentity] = useState(false);
+
+  const loadSettings = async () => {
+    try {
+      const s = await api.getSettings();
+      setRequireIdentity(!!s?.require_identity_verification);
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleRequireIdentity = async (v: boolean) => {
+    setSavingRequireIdentity(true);
+    setRequireIdentity(v);
+    try {
+      await api.updateAdminSettings({ require_identity_verification: v });
+    } catch (e: any) {
+      setRequireIdentity(!v);
+      showAlert('Error', e?.response?.data?.detail || 'Could not update setting');
+    } finally {
+      setSavingRequireIdentity(false);
+    }
+  };
+
   useEffect(() => {
     loadUsers();
+    loadSettings();
   }, []);
 
   const onRefresh = () => {
@@ -313,6 +368,22 @@ export default function Users() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>User Management</Text>
         <Text style={styles.headerSubtitle}>Manage clients and providers</Text>
+        <View style={styles.idGateRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.idGateTitle}>Require identity verification</Text>
+            <Text style={styles.idGateSub}>
+              {requireIdentity
+                ? 'ON — unverified providers are hidden from clients and can’t accept jobs.'
+                : 'OFF — all providers are visible. Turn on once your providers are ID-verified.'}
+            </Text>
+          </View>
+          <Switch
+            value={requireIdentity}
+            onValueChange={toggleRequireIdentity}
+            disabled={savingRequireIdentity}
+            data-testid="toggle-require-identity"
+          />
+        </View>
       </View>
 
       <ScrollView
@@ -322,10 +393,22 @@ export default function Users() {
         {users.map((user) => (
           <View key={user.user_id} style={styles.userCard}>
             <View style={styles.userHeader}>
-              <View style={styles.userInfo}>
+              <TouchableOpacity
+                style={styles.userInfo}
+                activeOpacity={user.role === 'provider' ? 0.6 : 1}
+                onPress={() => openUserDetail(user)}
+                disabled={user.role !== 'provider'}
+                data-testid={`user-card-${user.user_id}`}
+              >
                 <Text style={styles.userName}>{user.name}</Text>
                 <Text style={styles.userEmail}>{user.email}</Text>
-              </View>
+                {user.role === 'provider' && (
+                  <View style={styles.detailsHint}>
+                    <Ionicons name="eye-outline" size={13} color="#2563eb" />
+                    <Text style={styles.detailsHintText}>Tap to view coverage, skills, prices & availability</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
               <View
                 style={[styles.roleBadge, { backgroundColor: roleMeta(user.role).color + '22' }]}
               >
@@ -691,6 +774,113 @@ export default function Users() {
           </View>
         </View>
       </Modal>
+
+      {/* Provider detail: coverage, skills, prices, availability */}
+      <Modal visible={detailVisible} animationType="slide" transparent onRequestClose={() => setDetailVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailSheet}>
+            <View style={styles.detailHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.detailName}>{detailUser?.name}</Text>
+                <Text style={styles.detailEmail}>{detailUser?.email}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setDetailVisible(false)} data-testid="detail-close">
+                <Ionicons name="close" size={26} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            {detailLoading ? (
+              <ActivityIndicator style={{ marginVertical: 30 }} size="large" color="#2563eb" />
+            ) : !detailProfile ? (
+              <View style={{ padding: 24 }}>
+                <Text style={styles.detailEmptyBig}>No provider profile yet</Text>
+                <Text style={styles.detailMuted}>This provider hasn’t completed their profile (skills, coverage or rates).</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ paddingBottom: 24 }} data-testid="provider-detail-body">
+                {/* Coverage */}
+                <View style={styles.detailSection}>
+                  <View style={styles.detailSectionHead}>
+                    <Ionicons name="location-outline" size={18} color="#10b981" />
+                    <Text style={styles.detailSectionTitle}>Service area</Text>
+                  </View>
+                  {detailProfile.service_radius_km != null && (
+                    <Text style={styles.detailLine}>Radius: {Math.round(detailProfile.service_radius_km * 0.621371)} mi ({detailProfile.service_radius_km} km)</Text>
+                  )}
+                  {(detailProfile.service_cities?.length > 0) && (
+                    <Text style={styles.detailLine}>Cities: {detailProfile.service_cities.join(', ')}</Text>
+                  )}
+                  {(detailProfile.service_zones?.length > 0) && (
+                    <Text style={styles.detailLine}>Zones: {detailProfile.service_zones.join(', ')}</Text>
+                  )}
+                  {(detailProfile.service_zip_codes?.length > 0) && (
+                    <Text style={styles.detailLine}>ZIPs: {detailProfile.service_zip_codes.join(', ')}</Text>
+                  )}
+                  {(!detailProfile.service_radius_km && !(detailProfile.service_cities?.length) && !(detailProfile.service_zones?.length)) && (
+                    <Text style={styles.detailMuted}>No coverage area set.</Text>
+                  )}
+                </View>
+
+                {/* Pricing */}
+                <View style={styles.detailSection}>
+                  <View style={styles.detailSectionHead}>
+                    <Ionicons name="pricetag-outline" size={18} color="#2563eb" />
+                    <Text style={styles.detailSectionTitle}>Pricing</Text>
+                  </View>
+                  <Text style={styles.detailLine}>Base rate: {detailProfile.hourly_rate != null ? `$${detailProfile.hourly_rate}/hr` : '—'}</Text>
+                  <Text style={styles.detailLine}>Minimum: {detailProfile.minimum_hours != null ? `${detailProfile.minimum_hours} hr` : '—'}</Text>
+                </View>
+
+                {/* Skills */}
+                <View style={styles.detailSection}>
+                  <View style={styles.detailSectionHead}>
+                    <Ionicons name="construct-outline" size={18} color="#7c3aed" />
+                    <Text style={styles.detailSectionTitle}>Skills ({detailProfile.skills?.length || 0})</Text>
+                  </View>
+                  {(detailProfile.skills?.length > 0) ? (
+                    <View style={styles.chipsWrap}>
+                      {detailProfile.skills.map((sk: any, i: number) => (
+                        <View key={i} style={styles.skillChip}>
+                          <Text style={styles.skillChipText}>
+                            {(sk.name || sk.label || sk.id || 'skill').toString().replace(/_/g, ' ')}
+                            {sk.rate ? ` · $${sk.rate}/hr` : ''}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.detailMuted}>No skills added.</Text>
+                  )}
+                </View>
+
+                {/* Availability */}
+                <View style={styles.detailSection}>
+                  <View style={styles.detailSectionHead}>
+                    <Ionicons name="calendar-outline" size={18} color="#f59e0b" />
+                    <Text style={styles.detailSectionTitle}>Availability ({detailSlots.filter(s => s.is_active !== false).length})</Text>
+                  </View>
+                  {detailSlots.filter(s => s.is_active !== false).length > 0 ? (
+                    detailSlots.filter(s => s.is_active !== false).map((sl: any, i: number) => {
+                      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                      const label = sl.specific_date
+                        ? `${sl.specific_date} · one-time`
+                        : `${days[sl.day_of_week] ?? '?'} · weekly`;
+                      return (
+                        <View key={i} style={styles.slotRow}>
+                          <Text style={styles.slotDay}>{label}</Text>
+                          <Text style={styles.slotTime}>{sl.start_time}–{sl.end_time}</Text>
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.detailMuted}>No availability set.</Text>
+                  )}
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -700,6 +890,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f9fafb',
   },
+  idGateRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16,
+    backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e5e7eb',
+    borderRadius: 12, padding: 12,
+  },
+  idGateTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  idGateSub: { fontSize: 11.5, color: '#6b7280', marginTop: 2, lineHeight: 15 },
+  detailsHint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  detailsHintText: { fontSize: 11, color: '#2563eb', fontWeight: '600' },
+  detailSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 18, paddingTop: 16, paddingBottom: 24,
+  },
+  detailHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
+  detailName: { fontSize: 20, fontWeight: '800', color: '#111827' },
+  detailEmail: { fontSize: 13, color: '#6b7280', marginTop: 2 },
+  detailEmptyBig: { fontSize: 16, fontWeight: '700', color: '#374151', marginBottom: 6 },
+  detailSection: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  detailSectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  detailSectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  detailLine: { fontSize: 14, color: '#374151', marginBottom: 4 },
+  detailMuted: { fontSize: 13, color: '#9ca3af', fontStyle: 'italic' },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  skillChip: { backgroundColor: '#f3e8ff', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
+  skillChipText: { fontSize: 13, color: '#7c3aed', fontWeight: '600', textTransform: 'capitalize' },
+  slotRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f9fafb' },
+  slotDay: { fontSize: 14, color: '#111827', fontWeight: '600' },
+  slotTime: { fontSize: 14, color: '#6b7280' },
   centered: {
     flex: 1,
     justifyContent: 'center',

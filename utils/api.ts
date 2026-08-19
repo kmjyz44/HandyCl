@@ -341,6 +341,11 @@ export const api = {
     }
   },
 
+  adminGetAvailability: async (id: string) => {
+    const res = await client.get(`/admin/availability/${id}`);
+    return res.data; // { executor, slots }
+  },
+
   getExecutorPricing: async (id: string) => {
     try {
       const res = await client.get(`/executors/${id}/pricing`);
@@ -880,6 +885,11 @@ export const api = {
 
   updateSettings: async (data: any) => {
     const res = await client.put('/admin/settings', data);
+    return res.data;
+  },
+
+  updateAdminSettings: async (data: any) => {
+    const res = await client.put('/admin/settings/features', data);
     return res.data;
   },
 
