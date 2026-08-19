@@ -64,8 +64,9 @@ interface Review {
 }
 
 export default function ExecutorProfile() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, preview } = useLocalSearchParams<{ id: string; preview?: string }>();
   const router = useRouter();
+  const isPreview = preview === '1';
   const [profile, setProfile] = useState<ExecutorProfile | null>(null);
   const [availability, setAvailability] = useState<AvailabilitySlot[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -169,6 +170,12 @@ export default function ExecutorProfile() {
       </View>
 
       <ScrollView style={styles.content}>
+        {isPreview && (
+          <View style={styles.previewBanner} data-testid="preview-banner">
+            <Ionicons name="eye-outline" size={16} color="#1d4ed8" />
+            <Text style={styles.previewBannerText}>Preview — this is how clients see your profile</Text>
+          </View>
+        )}
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
@@ -461,10 +468,17 @@ export default function ExecutorProfile() {
 
       {/* Book Button */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.contactButton} onPress={bookExecutor} data-testid="book-executor-btn">
-          <Ionicons name="calendar-outline" size={20} color="#fff" />
-          <Text style={styles.contactButtonText}>Book this pro</Text>
-        </TouchableOpacity>
+        {isPreview ? (
+          <TouchableOpacity style={[styles.contactButton, { backgroundColor: '#111827' }]} onPress={() => router.back()} data-testid="preview-back-btn">
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+            <Text style={styles.contactButtonText}>Back to my profile</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.contactButton} onPress={bookExecutor} data-testid="book-executor-btn">
+            <Ionicons name="calendar-outline" size={20} color="#fff" />
+            <Text style={styles.contactButtonText}>Book this pro</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Image Modal */}
@@ -528,6 +542,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  previewBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe',
+    borderRadius: 12, padding: 12, margin: 16, marginBottom: 0,
+  },
+  previewBannerText: { flex: 1, fontSize: 13, color: '#1d4ed8', fontWeight: '600' },
   profileCard: {
     backgroundColor: '#fff',
     margin: 16,

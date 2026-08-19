@@ -1512,9 +1512,28 @@ function ProviderProfile() {
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
-      <TouchableOpacity style={pStyles.menuRow} onPress={() => setServiceDetailVisible(true)}>
+      <TouchableOpacity
+        style={pStyles.menuRow}
+        onPress={() => router.push(`/executor/${user?.user_id}?preview=1` as any)}
+        data-testid="myprofile-pro-preview"
+      >
         <Ionicons name="briefcase-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
-        <Text style={[pStyles.menuRowText, { flex: 1 }]}>Pro profile</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Pro profile</Text>
+          <Text style={pStyles.menuRowSub}>Preview how clients see your profile</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => setBioModalVisible(true)} data-testid="myprofile-about-me">
+        <Ionicons name="create-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>About me</Text>
+          <Text style={pStyles.menuRowSub} numberOfLines={1}>
+            {bio ? bio : 'Add a short bio — your experience, specialty and approach'}
+          </Text>
+        </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
