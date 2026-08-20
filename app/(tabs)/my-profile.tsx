@@ -1998,26 +1998,37 @@ function ProviderProfile() {
               { label: 'Address', value: accountAddress, setter: setAccountAddress, key: 'address', editable: true },
             ] as { label: string; value: string; setter: ((v: string) => void) | null; key: string; editable: boolean }[]).map((field) => (
               <View key={field.key}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 }}>
+                <TouchableOpacity
+                  activeOpacity={field.editable ? 0.6 : 1}
+                  onPress={() => { if (field.editable && !editingAccountDetails) setEditingAccountDetails(true); }}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 }}
+                  data-testid={`account-field-${field.key}`}
+                >
                   <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827', width: 140 }}>{field.label}</Text>
                   {editingAccountDetails && field.editable && field.setter ? (
                     <TextInput
                       style={{ flex: 1, fontSize: 15, color: '#374151', borderBottomWidth: 1, borderBottomColor: '#2563eb', paddingVertical: 2 }}
                       value={field.value}
                       onChangeText={field.setter}
-                      placeholder={field.label}
+                      placeholder={field.key === 'phone' ? '+1 555 123 4567' : field.label}
+                      keyboardType={field.key === 'phone' ? 'phone-pad' : 'default'}
+                      autoFocus={field.key !== 'name'}
+                      data-testid={`account-input-${field.key}`}
                     />
                   ) : (
-                    <Text style={{ flex: 1, fontSize: 15, color: '#374151', textAlign: 'right' }}>{field.value || '—'}</Text>
+                    <>
+                      <Text style={{ flex: 1, fontSize: 15, color: field.value ? '#374151' : '#9ca3af', textAlign: 'right' }}>{field.value || (field.editable ? 'Tap to add' : '—')}</Text>
+                      {field.editable && <Ionicons name="chevron-forward" size={16} color="#9ca3af" style={{ marginLeft: 8 }} />}
+                    </>
                   )}
-                </View>
+                </TouchableOpacity>
                 <View style={{ height: 1, backgroundColor: '#f3f4f6', marginHorizontal: 20 }} />
               </View>
             ))}
             {/* Info banner */}
             <View style={{ margin: 16, padding: 16, backgroundColor: '#fffbeb', borderRadius: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
               <Ionicons name="information-circle-outline" size={22} color="#d97706" />
-              <Text style={{ flex: 1, fontSize: 13, color: '#92400e' }}>Moved to a new city? Contact support to update your location.</Text>
+              <Text style={{ flex: 1, fontSize: 13, color: '#92400e' }}>Tap "Edit" (or any field) to update your phone and address. Your service work area is set separately under "Service area".</Text>
             </View>
             {editingAccountDetails && (
               <TouchableOpacity
