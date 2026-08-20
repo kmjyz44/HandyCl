@@ -55,22 +55,29 @@ export default function Users() {
   const [detailUser, setDetailUser] = useState<any>(null);
   const [detailProfile, setDetailProfile] = useState<any>(null);
   const [detailSlots, setDetailSlots] = useState<any[]>([]);
+  const [detailClient, setDetailClient] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const openUserDetail = async (user: any) => {
-    if (user.role !== 'provider') return;
+    if (user.role !== 'provider' && user.role !== 'client') return;
     setDetailUser(user);
     setDetailProfile(null);
     setDetailSlots([]);
+    setDetailClient(null);
     setDetailVisible(true);
     setDetailLoading(true);
     try {
-      const [profile, avail] = await Promise.all([
-        api.getExecutorProfile(user.user_id).catch(() => null),
-        api.adminGetAvailability(user.user_id).catch(() => ({ slots: [] })),
-      ]);
-      setDetailProfile(profile);
-      setDetailSlots((avail?.slots || avail?.availability || []) as any[]);
+      if (user.role === 'provider') {
+        const [profile, avail] = await Promise.all([
+          api.getExecutorProfile(user.user_id).catch(() => null),
+          api.adminGetAvailability(user.user_id).catch(() => ({ slots: [] })),
+        ]);
+        setDetailProfile(profile);
+        setDetailSlots((avail?.slots || avail?.availability || []) as any[]);
+      } else {
+        const detail = await api.adminGetClientDetail(user.user_id).catch(() => null);
+        setDetailClient(detail);
+      }
     } catch {
       // leave empty
     } finally {
@@ -395,9 +402,9 @@ export default function Users() {
             <View style={styles.userHeader}>
               <TouchableOpacity
                 style={styles.userInfo}
-                activeOpacity={user.role === 'provider' ? 0.6 : 1}
+                activeOpacity={(user.role === 'provider' || user.role === 'client') ? 0.6 : 1}
                 onPress={() => openUserDetail(user)}
-                disabled={user.role !== 'provider'}
+                disabled={user.role !== 'provider' && user.role !== 'client'}
                 data-testid={`user-card-${user.user_id}`}
               >
                 <Text style={styles.userName}>{user.name}</Text>
@@ -406,6 +413,12 @@ export default function Users() {
                   <View style={styles.detailsHint}>
                     <Ionicons name="eye-outline" size={13} color="#2563eb" />
                     <Text style={styles.detailsHintText}>Tap to view coverage, skills, prices & availability</Text>
+                  </View>
+                )}
+                {user.role === 'client' && (
+                  <View style={styles.detailsHint}>
+                    <Ionicons name="eye-outline" size={13} color="#2563eb" />
+                    <Text style={styles.detailsHintText}>Tap to view contact, location & requested services</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -791,6 +804,81 @@ export default function Users() {
 
             {detailLoading ? (
               <ActivityIndicator style={{ marginVertical: 30 }} size="large" color="#2563eb" />
+            ) : detailUser?.role === 'client' ? (
+              !detailClient ? (
+                <View style={{ padding: 24 }}>
+                  <Text style={styles.detailEmptyBig}>No details available</Text>
+                </View>
+              ) : (
+                <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ paddingBottom: 24 }} data-testid="client-detail-body">
+                  {/* Contact */}
+                  <View style={styles.detailSection}>
+                    <View style={styles.detailSectionHead}>
+                      <Ionicons name="call-outline" size={18} color="#2563eb" />
+                      <Text style={styles.detailSectionTitle}>Contact</Text>
+                    </View>
+                    <Text style={styles.detailLine}>Phone: {detailClient.user?.phone || '—'}</Text>
+                    <Text style={styles.detailLine}>Email: {detailClient.user?.email || '—'}</Text>
+                  </View>
+
+                  {/* Location */}
+                  <View style={styles.detailSection}>
+                    <View style={styles.detailSectionHead}>
+                      <Ionicons name="location-outline" size={18} color="#10b981" />
+                      <Text style={styles.detailSectionTitle}>Location</Text>
+                    </View>
+                    <Text style={styles.detailLine}>{detailClient.location || 'No address on file'}</Text>
+                    {(detailClient.user?.saved_addresses?.length > 0) && detailClient.user.saved_addresses.map((a: any, i: number) => (
+                      <Text key={i} style={styles.detailMuted}>
+                        {(a.label ? a.label + ': ' : '')}{a.address || a.formatted_address || ''}
+                      </Text>
+                    ))}
+                  </View>
+
+                  {/* Requested services */}
+                  <View style={styles.detailSection}>
+                    <View style={styles.detailSectionHead}>
+                      <Ionicons name="briefcase-outline" size={18} color="#7c3aed" />
+                      <Text style={styles.detailSectionTitle}>Requested services</Text>
+                    </View>
+                    <Text style={styles.detailLine}>
+                      {detailClient.stats?.total_tasks || 0} total · {detailClient.stats?.active_tasks || 0} active
+                    </Text>
+                    {(detailClient.stats?.categories?.length > 0) ? (
+                      <View style={styles.chipsWrap}>
+                        {detailClient.stats.categories.map((c: string, i: number) => (
+                          <View key={i} style={styles.skillChip}>
+                            <Text style={styles.skillChipText}>{c.replace(/_/g, ' ')}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.detailMuted}>No service category recorded yet.</Text>
+                    )}
+                  </View>
+
+                  {/* Recent requests */}
+                  <View style={styles.detailSection}>
+                    <View style={styles.detailSectionHead}>
+                      <Ionicons name="list-outline" size={18} color="#f59e0b" />
+                      <Text style={styles.detailSectionTitle}>Recent requests ({detailClient.tasks?.length || 0})</Text>
+                    </View>
+                    {(detailClient.tasks?.length > 0) ? detailClient.tasks.slice(0, 12).map((t: any, i: number) => (
+                      <View key={i} style={styles.taskRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.taskTitle} numberOfLines={1}>{t.title || 'Untitled request'}</Text>
+                          <Text style={styles.taskMeta} numberOfLines={1}>
+                            {(t.category ? t.category + ' · ' : '')}{t.address || 'no address'}{t.scheduled_date ? ' · ' + t.scheduled_date : ''}
+                          </Text>
+                        </View>
+                        <Text style={styles.taskStatus}>{(t.status || '').replace(/_/g, ' ')}</Text>
+                      </View>
+                    )) : (
+                      <Text style={styles.detailMuted}>No requests yet.</Text>
+                    )}
+                  </View>
+                </ScrollView>
+              )
             ) : !detailProfile ? (
               <View style={{ padding: 24 }}>
                 <Text style={styles.detailEmptyBig}>No provider profile yet</Text>
@@ -918,6 +1006,10 @@ const styles = StyleSheet.create({
   slotRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f9fafb' },
   slotDay: { fontSize: 14, color: '#111827', fontWeight: '600' },
   slotTime: { fontSize: 14, color: '#6b7280' },
+  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f9fafb' },
+  taskTitle: { fontSize: 14, color: '#111827', fontWeight: '600' },
+  taskMeta: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  taskStatus: { fontSize: 11, color: '#2563eb', fontWeight: '700', textTransform: 'capitalize' },
   centered: {
     flex: 1,
     justifyContent: 'center',

@@ -351,6 +351,11 @@ export const api = {
     return res.data;
   },
 
+  adminGetClientDetail: async (id: string) => {
+    const res = await client.get(`/admin/users/${id}/client-detail`);
+    return res.data;
+  },
+
   getExecutorPricing: async (id: string) => {
     try {
       const res = await client.get(`/executors/${id}/pricing`);

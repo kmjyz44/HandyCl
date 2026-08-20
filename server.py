@@ -8305,6 +8305,61 @@ async def provider_onboarding_status(current_user: User = Depends(get_current_us
     return {"steps": steps, "completed": completed, "total": len(steps), "complete": completed == len(steps)}
 
 
+@api_router.get("/admin/users/{user_id}/client-detail")
+async def admin_client_detail(user_id: str, current_user: User = Depends(require_admin)):
+    """Admin: full client view — contact, location/addresses and the services they request."""
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0}) or None
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    tasks = await db.tasks.find({"client_id": user_id}, {"_id": 0}).sort("created_at", -1).to_list(25)
+
+    def _iso(v):
+        try:
+            return v.isoformat() if hasattr(v, "isoformat") else v
+        except Exception:
+            return str(v)
+
+    task_out = [{
+        "task_id": t.get("task_id"),
+        "title": t.get("title"),
+        "category": t.get("category"),
+        "address": t.get("address"),
+        "status": t.get("status"),
+        "final_price": t.get("final_price"),
+        "scheduled_date": t.get("scheduled_date"),
+        "created_at": _iso(t.get("created_at")),
+    } for t in tasks]
+
+    categories = sorted({(t.get("category") or "").strip() for t in tasks if t.get("category")})
+    active = sum(1 for t in tasks if t.get("status") in ("open", "pending", "pending_acceptance", "accepted", "in_progress", "scheduled"))
+    # Best-effort location: profile address, else newest task address, else a saved address
+    location = user.get("address") or (task_out[0]["address"] if task_out else None)
+    if not location and (user.get("saved_addresses") or []):
+        location = (user["saved_addresses"][0] or {}).get("address")
+
+    return {
+        "user": {
+            "user_id": user.get("user_id"),
+            "name": user.get("name"),
+            "email": user.get("email"),
+            "phone": user.get("phone"),
+            "address": user.get("address"),
+            "latitude": user.get("latitude"),
+            "longitude": user.get("longitude"),
+            "saved_addresses": user.get("saved_addresses") or [],
+            "created_at": _iso(user.get("created_at")),
+            "is_blocked": user.get("is_blocked", False),
+        },
+        "location": location,
+        "tasks": task_out,
+        "stats": {
+            "total_tasks": len(task_out),
+            "active_tasks": active,
+            "categories": categories,
+        },
+    }
+
+
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
     """Handle Stripe webhook events (best-effort signature check if secret configured)."""

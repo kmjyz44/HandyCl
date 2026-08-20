@@ -687,3 +687,9 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - Route added in _layout.tsx; onboardingSteps.ts notifications route → /notification-settings. Onboarding "notifications" done-detection now: telegram_chat_id present OR notification_prefs set (so configuring any channel ticks the step). Verified via curl: prefs GET/PUT work, step→done after prefs set (5/6).
 - FIX: status field is `connected` (not `linked`) — frontend reads connected ?? linked.
 - server.py synced. esbuild-clean; visible after Save to GitHub.
+
+## 2026-06 — Admin client detail view
+- Tapping a CLIENT card in admin Users now opens a detail modal (like providers). Shows: Contact (phone, email), Location (profile address + saved addresses, falls back to latest task address), Requested services (unique task categories as chips + total/active counts), Recent requests (task title · category · address · date · status).
+- BACKEND: GET /admin/users/{id}/client-detail (require_admin) → {user{name,email,phone,address,lat,lng,saved_addresses,created_at,is_blocked}, location, tasks[], stats{total_tasks,active_tasks,categories[]}}. Reads db.tasks by client_id (newest 25). Verified via curl (name/phone/location/stats/tasks returned).
+- FRONTEND: users.tsx openUserDetail now branches provider vs client; client cards tappable (testid user-card-{id}) with hint "Tap to view contact, location & requested services"; client body testid client-detail-body. api.adminGetClientDetail added.
+- server.py synced. esbuild-clean; visible after Save to GitHub.
