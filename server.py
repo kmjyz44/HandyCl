@@ -838,6 +838,7 @@ class Settings(BaseModel):
     executor_verified_only: bool = False
     executor_show_new: bool = True
     require_identity_verification: bool = False  # hide unverified providers + block accepting jobs
+    soro_webhook_token: Optional[str] = None  # secret for Soro (trysoro.com) blog auto-publish webhook
 
     # ===== PHOTO STORAGE SETTINGS =====
     photo_storage_path: str = "./task_photos"   # Local disk path for saved photos
@@ -8358,6 +8359,109 @@ async def admin_client_detail(user_id: str, current_user: User = Depends(require
             "categories": categories,
         },
     }
+
+
+def _public_base_url(request: Request) -> str:
+    """Public origin of the backend, preferring proxy forwarded headers (Railway/ingress)."""
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if host:
+        return f"{proto}://{host}".rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+def _html_to_text(raw: str) -> str:
+    """Convert Soro's HTML article body into readable plain text (blog renders plain text)."""
+    import re as _re
+    import html as _html
+    if not raw:
+        return ""
+    s = str(raw)
+    s = _re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", "", s)
+    s = _re.sub(r"(?i)<\s*br\s*/?>", "\n", s)
+    s = _re.sub(r"(?i)</\s*(p|div|h[1-6]|li|ul|ol|section|article|table|tr)\s*>", "\n\n", s)
+    s = _re.sub(r"(?i)<\s*li[^>]*>", "• ", s)
+    s = _re.sub(r"(?s)<[^>]+>", "", s)  # strip remaining tags
+    s = _html.unescape(s)
+    s = _re.sub(r"[ \t]+", " ", s)
+    s = _re.sub(r"\n[ \t]+", "\n", s)
+    s = _re.sub(r"\n{3,}", "\n\n", s)
+    return s.strip()
+
+
+@api_router.post("/integrations/soro/publish")
+async def soro_publish(request: Request, x_soro_token: Optional[str] = Header(None)):
+    """Inbound webhook for Soro (trysoro.com). Soro POSTs a generated SEO article here on its
+    schedule; we publish it to the Ono-Fix blog. Auth via a shared secret token."""
+    settings = await get_settings()
+    token = getattr(settings, "soro_webhook_token", None)
+    if not token:
+        raise HTTPException(status_code=403, detail="Soro integration is not configured. Generate a token in Admin → Integrations.")
+    provided = x_soro_token or request.query_params.get("token") or request.headers.get("authorization", "").replace("Bearer ", "").strip()
+    if provided != token:
+        raise HTTPException(status_code=401, detail="Invalid Soro webhook token")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Expected a JSON object")
+
+    def pick(*keys):
+        for k in keys:
+            v = body.get(k)
+            if v:
+                return v
+        return None
+
+    title = pick("title", "headline", "name", "post_title") or "Untitled article"
+    content_html = pick("content", "content_html", "html", "body", "body_html", "article", "description", "markdown", "post_content") or ""
+    cover = pick("cover_image", "featured_image", "image", "image_url", "cover", "thumbnail", "hero_image")
+    tags = body.get("tags") or body.get("keywords") or body.get("labels") or []
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t.strip()]
+    category = pick("category", "topic", "niche")
+
+    images = []
+    if isinstance(cover, str) and cover.startswith("http"):
+        images.append(cover)
+
+    text = _html_to_text(content_html) if ("<" in str(content_html) and ">" in str(content_html)) else str(content_html)
+    post = BlogPost(
+        post_id=f"post_{uuid.uuid4().hex[:12]}",
+        author_id="system_soro",
+        author_role="admin",
+        author_name="Ono-Fix",
+        title=str(title)[:300],
+        description=(text or str(title))[:20000],
+        images=images,
+        tags=[str(t)[:40] for t in tags][:20] if isinstance(tags, list) else [],
+        category=(str(category)[:60] if category else None),
+        is_published=True,
+    )
+    await db.blog_posts.insert_one(post.dict())
+    logger.info("Soro published blog post %s: %s", post.post_id, post.title)
+    return {"ok": True, "post_id": post.post_id, "url": f"/blog/{post.post_id}"}
+
+
+@api_router.get("/admin/integrations/soro")
+async def admin_get_soro(request: Request, current_user: User = Depends(require_admin)):
+    """Admin: view the Soro webhook URL and current token status."""
+    settings = await get_settings()
+    token = getattr(settings, "soro_webhook_token", None)
+    return {
+        "configured": bool(token),
+        "token": token,
+        "webhook_url": f"{_public_base_url(request)}/api/integrations/soro/publish",
+    }
+
+
+@api_router.post("/admin/integrations/soro/token")
+async def admin_rotate_soro_token(request: Request, current_user: User = Depends(require_admin)):
+    """Admin: generate (or rotate) the Soro webhook secret token."""
+    new_token = f"soro_{uuid.uuid4().hex}{uuid.uuid4().hex[:8]}"
+    await db.settings.update_one({"setting_id": "app_settings"}, {"$set": {"soro_webhook_token": new_token}}, upsert=True)
+    return {"token": new_token, "webhook_url": f"{_public_base_url(request)}/api/integrations/soro/publish"}
 
 
 @api_router.post("/webhook/stripe")

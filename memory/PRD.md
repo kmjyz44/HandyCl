@@ -693,3 +693,11 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - BACKEND: GET /admin/users/{id}/client-detail (require_admin) → {user{name,email,phone,address,lat,lng,saved_addresses,created_at,is_blocked}, location, tasks[], stats{total_tasks,active_tasks,categories[]}}. Reads db.tasks by client_id (newest 25). Verified via curl (name/phone/location/stats/tasks returned).
 - FRONTEND: users.tsx openUserDetail now branches provider vs client; client cards tappable (testid user-card-{id}) with hint "Tap to view contact, location & requested services"; client body testid client-detail-body. api.adminGetClientDetail added.
 - server.py synced. esbuild-clean; visible after Save to GitHub.
+
+## 2026-06 — Soro (trysoro.com) blog auto-publish webhook
+- Soro writes SEO articles and auto-publishes them to the Ono-Fix blog via an inbound webhook. Soro supports custom/webhook integrations (no public REST API) — admin pastes our URL + token into Soro's dashboard.
+- BACKEND: Settings.soro_webhook_token. POST /integrations/soro/publish (PUBLIC, auth via X-Soro-Token header OR ?token= OR Bearer; 403 if unconfigured, 401 if wrong). Flexible payload mapping (title/headline; content/html/body/markdown/description; cover_image/featured_image/image; tags/keywords; category/topic). _html_to_text() strips HTML → readable text (blog renders plain <Text>). Creates BlogPost author_id=system_soro, author_name="Ono-Fix", is_published=true. Admin: GET /admin/integrations/soro (webhook_url + token + configured), POST /admin/integrations/soro/token (generate/rotate). _public_base_url() builds URL from x-forwarded-host/proto (correct public URL behind ingress/Railway).
+- FRONTEND: admin-integrations.tsx new "Soro — Blog auto-publish" card (copyable webhook URL + token, Generate/Regenerate button; testids soro-integration-card, soro-webhook-url, soro-token, soro-generate-token-btn). api.adminGetSoro / adminRotateSoroToken.
+- VERIFIED e2e (curl): generate token → publish (header + query) → post appears in GET /blog/posts as "Ono-Fix" with tags, HTML→text; wrong token 401; unconfigured 403. Test posts cleaned up.
+- FOLLOW-UP: blog detail renders description as plain text — for rich formatting (headings/links/images inline) a react-native-render-html/WebView renderer would be needed. Cover image stored in images[].
+- server.py synced.

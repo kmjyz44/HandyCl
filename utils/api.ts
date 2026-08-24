@@ -356,6 +356,15 @@ export const api = {
     return res.data;
   },
 
+  adminGetSoro: async () => {
+    const res = await client.get('/admin/integrations/soro');
+    return res.data;
+  },
+  adminRotateSoroToken: async () => {
+    const res = await client.post('/admin/integrations/soro/token');
+    return res.data;
+  },
+
   getExecutorPricing: async (id: string) => {
     try {
       const res = await client.get(`/executors/${id}/pricing`);

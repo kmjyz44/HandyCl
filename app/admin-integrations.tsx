@@ -167,8 +167,36 @@ export default function AdminIntegrations() {
   const [tgBusy, setTgBusy] = useState(false);
   const [tgStatus, setTgStatus] = useState<any>(null);
   const [tgConnected, setTgConnected] = useState(false);
+  const [soro, setSoro] = useState<any>(null);
+  const [soroBusy, setSoroBusy] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadSoro(); }, []);
+
+  const loadSoro = async () => {
+    try { setSoro(await api.adminGetSoro()); } catch { /* ignore */ }
+  };
+
+  const generateSoroToken = async () => {
+    setSoroBusy(true);
+    try {
+      const res = await api.adminRotateSoroToken();
+      setSoro((prev: any) => ({ ...(prev || {}), ...res, configured: true }));
+      showAlert('Token generated', 'Copy the Webhook URL and Token into your Soro dashboard (custom webhook integration).');
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Could not generate token');
+    } finally { setSoroBusy(false); }
+  };
+
+  const copyText = async (label: string, text: string) => {
+    try {
+      if (Platform.OS === 'web' && (navigator as any)?.clipboard) {
+        await (navigator as any).clipboard.writeText(text);
+        showAlert('Copied', `${label} copied to clipboard`);
+      } else {
+        showAlert(label, text);
+      }
+    } catch { showAlert(label, text); }
+  };
 
   const load = async () => {
     try {
@@ -368,6 +396,43 @@ export default function AdminIntegrations() {
             ) : null}
           </View>
         ))}
+
+        {/* ── Soro — Blog auto-publish (trysoro.com) ── */}
+        <View style={s.card} data-testid="soro-integration-card">
+          <Text style={s.sectionTitle}>Soro — Blog auto-publish</Text>
+          <Text style={s.sectionNote}>
+            Soro (trysoro.com) writes SEO articles and publishes them to your Ono-Fix blog automatically.
+            In Soro, add a "custom / webhook" integration and paste the URL and Token below. Include the token
+            as the header X-Soro-Token (or ?token=…). Soro posts on its own daily schedule.
+          </Text>
+
+          <Text style={s.label}>Webhook URL</Text>
+          <TouchableOpacity onPress={() => soro?.webhook_url && copyText('Webhook URL', soro.webhook_url)} activeOpacity={0.7}>
+            <Text style={[s.input, { color: '#374151' }]} selectable data-testid="soro-webhook-url">{soro?.webhook_url || '—'}</Text>
+          </TouchableOpacity>
+
+          <Text style={[s.label, { marginTop: 12 }]}>
+            Secret token {soro?.configured ? <Text style={{ color: '#16a34a', fontSize: 12 }}>  ✓ set</Text> : <Text style={{ color: '#b45309', fontSize: 12 }}>  not set</Text>}
+          </Text>
+          <TouchableOpacity onPress={() => soro?.token && copyText('Token', soro.token)} activeOpacity={0.7}>
+            <Text style={[s.input, { color: soro?.token ? '#374151' : '#9ca3af' }]} selectable data-testid="soro-token">
+              {soro?.token || 'Generate a token to enable Soro'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.testBtn, { backgroundColor: '#7c3aed' }, soroBusy && { opacity: 0.5 }]}
+            onPress={generateSoroToken}
+            disabled={soroBusy}
+            data-testid="soro-generate-token-btn"
+          >
+            {soroBusy ? <ActivityIndicator color="#fff" /> : <Text style={s.testBtnText}>{soro?.configured ? 'Regenerate token' : 'Generate token'}</Text>}
+          </TouchableOpacity>
+          {soro?.configured ? (
+            <Text style={[s.resultLine, { marginTop: 8 }]}>Tip: regenerating invalidates the old token — update it in Soro too.</Text>
+          ) : null}
+        </View>
+
         <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.5 }]} onPress={save} disabled={saving} data-testid="save-integrations-btn">
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>Save all changes</Text>}
         </TouchableOpacity>
