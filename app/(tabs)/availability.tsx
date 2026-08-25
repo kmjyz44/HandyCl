@@ -205,7 +205,7 @@ export default function Availability() {
   const openAdd = (day?: number) => {
     setEditingSlot(null);
     setFormDay(day ?? selectedDay);
-    setFormOneTime(false);
+    setFormOneTime(true);
     setFormStart('');
     setFormEnd('');
     setModalVisible(true);
@@ -214,7 +214,7 @@ export default function Availability() {
   const openEdit = (slot: Slot) => {
     setEditingSlot(slot);
     setFormDay(slot.day_of_week);
-    setFormOneTime(!!slot.specific_date);
+    setFormOneTime(true);
     setFormStart(slot.start_time);
     setFormEnd(slot.end_time);
     setModalVisible(true);
@@ -245,9 +245,7 @@ export default function Availability() {
     }
     setSaving(true);
     try {
-      const data: any = formOneTime
-        ? { day_of_week: selectedDay, specific_date: selectedDateStr, start_time: formStart, end_time: formEnd, is_active: true }
-        : { day_of_week: formDay, specific_date: null, start_time: formStart, end_time: formEnd, is_active: true };
+      const data: any = { day_of_week: selectedDay, specific_date: selectedDateStr, start_time: formStart, end_time: formEnd, is_active: true };
       if (editingSlot) await api.updateAvailabilitySlot(editingSlot.slot_id, data);
       else await api.createAvailabilitySlot(data);
       setModalVisible(false);
@@ -350,7 +348,7 @@ export default function Availability() {
         <View style={{ flex: 1 }}>
           <Text style={s.dayLabel}>{DAYS_FULL[selectedDay]}</Text>
           <Text style={s.dayLabelDate}>
-            {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · repeats weekly
+            {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · this date only
           </Text>
         </View>
         <TouchableOpacity style={s.addDayBtn} onPress={() => openAdd(selectedDay)}>
@@ -458,45 +456,13 @@ export default function Availability() {
               </TouchableOpacity>
             </View>
 
-            {/* Repeat type toggle */}
-            <Text style={m.sectionLabel}>REPEAT</Text>
-            <View style={m.dayScroll}>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={[m.dayChip, !formOneTime && m.dayChipActive, { paddingHorizontal: 14 }]}
-                  onPress={() => setFormOneTime(false)}
-                  data-testid="repeat-weekly-btn"
-                >
-                  <Text style={[m.dayChipText, !formOneTime && m.dayChipTextActive]}>Repeats weekly</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[m.dayChip, formOneTime && m.dayChipActive, { paddingHorizontal: 14 }]}
-                  onPress={() => setFormOneTime(true)}
-                  data-testid="repeat-onetime-btn"
-                >
-                  <Text style={[m.dayChipText, formOneTime && m.dayChipTextActive]}>This date only</Text>
-                </TouchableOpacity>
-              </View>
+            {/* Availability is set per specific date (no weekly repeat) */}
+            <Text style={m.sectionLabel}>DATE</Text>
+            <View style={m.oneTimeDate}>
+              <Ionicons name="calendar" size={16} color={ACCENT} />
+              <Text style={m.oneTimeDateText}>{DAYS_FULL[selectedDay]}, {selectedDateStr2}</Text>
             </View>
-
-            {/* Day selector (weekly) OR the specific date (one-time) */}
-            {formOneTime ? (
-              <View style={m.oneTimeDate}>
-                <Ionicons name="calendar" size={16} color={ACCENT} />
-                <Text style={m.oneTimeDateText}>{DAYS_FULL[selectedDay]}, {selectedDateStr2}</Text>
-              </View>
-            ) : (
-              <>
-                <Text style={m.sectionLabel}>DAY</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={m.dayScroll}>
-                  {DAYS_SHORT.map((d, i) => (
-                    <TouchableOpacity key={i} style={[m.dayChip, formDay === i && m.dayChipActive]} onPress={() => setFormDay(i)}>
-                      <Text style={[m.dayChipText, formDay === i && m.dayChipTextActive]}>{d}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </>
-            )}
+            <Text style={m.dateHint}>This time applies only to this date and will not repeat on other weeks.</Text>
 
             {/* Time pickers */}
             <Text style={m.sectionLabel}>TIME</Text>
@@ -666,6 +632,7 @@ const m = StyleSheet.create({
   dayChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, backgroundColor: '#f3f4f6', marginRight: 8, borderWidth: 1.5, borderColor: '#e5e7eb' },
   oneTimeDate: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#eff6ff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 4 },
   oneTimeDateText: { fontSize: 14, fontWeight: '700', color: '#1e40af' },
+  dateHint: { fontSize: 12, color: '#6b7280', marginTop: 6, marginBottom: 2, lineHeight: 17 },
   dayChipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
   dayChipText: { fontSize: 15, fontWeight: '700', color: '#374151' },
   dayChipTextActive: { color: '#fff' },
