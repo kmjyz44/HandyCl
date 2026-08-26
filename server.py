@@ -840,6 +840,8 @@ class Settings(BaseModel):
     require_identity_verification: bool = False  # hide unverified providers + block accepting jobs
     soro_webhook_token: Optional[str] = None  # secret for Soro (trysoro.com) blog auto-publish webhook
     soro_embed_url: Optional[str] = None  # Soro embed widget script src (app.trysoro.com/api/embed/...)
+    soro_rss_url: Optional[str] = None  # Soro RSS feed URL — backend fetches & server-renders SEO blog pages
+    soro_rss_last_sync: Optional[str] = None  # ISO timestamp of last successful RSS sync
 
     # ===== PHOTO STORAGE SETTINGS =====
     photo_storage_path: str = "./task_photos"   # Local disk path for saved photos
@@ -1135,6 +1137,10 @@ class BlogPost(BaseModel):
     comments_count: int = 0
     is_published: bool = True
     is_pinned: bool = False
+    slug: Optional[str] = None  # SEO url slug for server-rendered /blog/{slug} pages
+    content_html: Optional[str] = None  # sanitized full HTML body (Soro articles) for server rendering
+    cover_image: Optional[str] = None  # hero image URL for SEO/OG tags
+    source: Optional[str] = None  # "soro" for RSS-imported articles, None for user posts
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
 
@@ -8455,6 +8461,9 @@ async def admin_get_soro(request: Request, current_user: User = Depends(require_
         "token": token,
         "webhook_url": f"{_public_base_url(request)}/api/integrations/soro/publish",
         "embed_url": getattr(settings, "soro_embed_url", None),
+        "rss_url": getattr(settings, "soro_rss_url", None),
+        "rss_last_sync": getattr(settings, "soro_rss_last_sync", None),
+        "soro_posts_count": await db.blog_posts.count_documents({"source": "soro"}),
     }
 
 
@@ -8484,6 +8493,372 @@ async def admin_rotate_soro_token(request: Request, current_user: User = Depends
     new_token = f"soro_{uuid.uuid4().hex}{uuid.uuid4().hex[:8]}"
     await db.settings.update_one({"setting_id": "app_settings"}, {"$set": {"soro_webhook_token": new_token}}, upsert=True)
     return {"token": new_token, "webhook_url": f"{_public_base_url(request)}/api/integrations/soro/publish"}
+
+
+# ============================================================================
+# SORO RSS → SERVER-RENDERED SEO BLOG (ono-fix.com/blog/...)
+# The frontend is a Netlify SPA, so client-rendered blog pages aren't reliably
+# crawled by Google. Instead we fetch Soro's RSS feed, store the articles, and
+# serve real server-rendered HTML with full SEO meta tags. Netlify proxies
+# /blog and /blog/* to these backend routes.
+# ============================================================================
+
+def _slugify(text: str) -> str:
+    import re as _re
+    s = (text or "").strip().lower()
+    s = _re.sub(r"[^\w\s-]", "", s, flags=_re.UNICODE)
+    s = _re.sub(r"[\s_-]+", "-", s).strip("-")
+    return s[:80] or f"post-{uuid.uuid4().hex[:8]}"
+
+
+def _sanitize_article_html(raw: str) -> str:
+    """Keep readable formatting tags; strip scripts/styles/iframes and inline event handlers."""
+    import re as _re
+    if not raw:
+        return ""
+    s = str(raw)
+    s = _re.sub(r"(?is)<(script|style|iframe|noscript|form|object|embed)[^>]*>.*?</\1>", "", s)
+    s = _re.sub(r"(?is)<(script|style|iframe|noscript|form|object|embed)[^>]*/?>", "", s)
+    s = _re.sub(r'(?i)\son\w+\s*=\s*"[^"]*"', "", s)
+    s = _re.sub(r"(?i)\son\w+\s*=\s*'[^']*'", "", s)
+    s = _re.sub(r"(?i)javascript:", "", s)
+    return s.strip()
+
+
+def _extract_cover_image(entry, content_html: str) -> Optional[str]:
+    import re as _re
+    # media:content / media:thumbnail
+    try:
+        for key in ("media_content", "media_thumbnail"):
+            media = getattr(entry, key, None) or entry.get(key) if hasattr(entry, "get") else getattr(entry, key, None)
+            if media and isinstance(media, list) and media:
+                url = media[0].get("url")
+                if url:
+                    return url
+    except Exception:
+        pass
+    # enclosure links
+    try:
+        for lnk in entry.get("links", []) if hasattr(entry, "get") else getattr(entry, "links", []):
+            if lnk.get("rel") == "enclosure" and str(lnk.get("type", "")).startswith("image"):
+                return lnk.get("href")
+    except Exception:
+        pass
+    # first <img> in content
+    m = _re.search(r'(?i)<img[^>]+src="([^"]+)"', content_html or "")
+    if m:
+        return m.group(1)
+    return None
+
+
+async def _soro_sync_rss(rss_url: Optional[str] = None) -> Dict[str, Any]:
+    """Fetch Soro RSS and upsert articles into blog_posts. Returns a summary dict."""
+    import feedparser
+    if not rss_url:
+        settings = await get_settings()
+        rss_url = getattr(settings, "soro_rss_url", None)
+    if not rss_url:
+        return {"ok": False, "error": "No RSS URL configured", "imported": 0, "updated": 0}
+    try:
+        async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
+            resp = await client.get(rss_url, headers={"User-Agent": "Ono-Fix-Blog/1.0"})
+            resp.raise_for_status()
+            raw_xml = resp.text
+    except Exception as e:
+        logger.warning("Soro RSS fetch failed: %s", e)
+        return {"ok": False, "error": f"Fetch failed: {e}", "imported": 0, "updated": 0}
+
+    feed = feedparser.parse(raw_xml)
+    imported = 0
+    updated = 0
+    for entry in feed.entries:
+        title = (entry.get("title") or "").strip() or "Untitled"
+        link = (entry.get("link") or "").strip()
+        guid = (entry.get("id") or entry.get("guid") or link or title).strip()
+        # slug: prefer the last path segment of the article link so URLs match Soro's links
+        slug = None
+        if link:
+            seg = link.rstrip("/").split("/")[-1]
+            if seg and seg.lower() not in ("blog", "", "index"):
+                slug = _slugify(seg)
+        if not slug:
+            slug = _slugify(title)
+
+        content_html = ""
+        if entry.get("content"):
+            try:
+                content_html = entry["content"][0].get("value", "")
+            except Exception:
+                content_html = ""
+        if not content_html:
+            content_html = entry.get("summary") or entry.get("description") or ""
+        content_html = _sanitize_article_html(content_html)
+
+        excerpt = _html_to_text(content_html)[:20000]
+        cover = _extract_cover_image(entry, content_html)
+        tags = []
+        try:
+            tags = [t.get("term") for t in entry.get("tags", []) if t.get("term")][:20]
+        except Exception:
+            tags = []
+
+        created_at = datetime.now(timezone.utc)
+        try:
+            if entry.get("published_parsed"):
+                import calendar as _cal
+                created_at = datetime.fromtimestamp(_cal.timegm(entry["published_parsed"]), tz=timezone.utc)
+        except Exception:
+            pass
+
+        set_fields = {
+            "title": title[:300],
+            "slug": slug,
+            "content_html": content_html,
+            "description": excerpt or title,
+            "cover_image": cover,
+            "images": [cover] if cover else [],
+            "tags": tags,
+            "source": "soro",
+            "author_id": "system_soro",
+            "author_role": "admin",
+            "author_name": "Ono-Fix",
+            "is_published": True,
+            "updated_at": datetime.now(timezone.utc),
+            "external_link": link or None,
+        }
+        existing = await db.blog_posts.find_one({"guid": guid}, {"_id": 0, "post_id": 1})
+        if existing:
+            await db.blog_posts.update_one({"guid": guid}, {"$set": set_fields})
+            updated += 1
+        else:
+            await db.blog_posts.update_one(
+                {"guid": guid},
+                {"$set": set_fields, "$setOnInsert": {
+                    "post_id": f"soro_{uuid.uuid4().hex[:12]}",
+                    "guid": guid,
+                    "created_at": created_at,
+                    "likes_count": 0,
+                    "comments_count": 0,
+                    "is_pinned": False,
+                }},
+                upsert=True,
+            )
+            imported += 1
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.settings.update_one({"setting_id": "app_settings"}, {"$set": {"soro_rss_last_sync": now_iso}}, upsert=True)
+    logger.info("Soro RSS sync: %s imported, %s updated (feed items=%s)", imported, updated, len(feed.entries))
+    return {"ok": True, "imported": imported, "updated": updated, "total_items": len(feed.entries), "last_sync": now_iso}
+
+
+async def _soro_rss_loop():
+    """Periodic Soro RSS sync (every 3 hours) when an RSS URL is configured."""
+    await asyncio.sleep(20)  # let startup settle
+    while True:
+        try:
+            settings = await get_settings()
+            if getattr(settings, "soro_rss_url", None):
+                await _soro_sync_rss()
+        except Exception as e:
+            logger.warning("Soro RSS loop error: %s", e)
+        await asyncio.sleep(3 * 60 * 60)
+
+
+@api_router.put("/admin/integrations/soro/rss")
+async def admin_set_soro_rss(request: Request, current_user: User = Depends(require_admin)):
+    """Admin: save the Soro RSS feed URL."""
+    body = await request.json()
+    url = (body.get("rss_url") or "").strip()
+    await db.settings.update_one({"setting_id": "app_settings"}, {"$set": {"soro_rss_url": url or None}}, upsert=True)
+    return {"rss_url": url or None}
+
+
+@api_router.post("/admin/integrations/soro/sync-rss")
+async def admin_sync_soro_rss(request: Request, current_user: User = Depends(require_admin)):
+    """Admin: manually trigger a Soro RSS sync now."""
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    url = (body.get("rss_url") or "").strip() or None
+    if url:
+        await db.settings.update_one({"setting_id": "app_settings"}, {"$set": {"soro_rss_url": url}}, upsert=True)
+    result = await _soro_sync_rss(url)
+    return result
+
+
+def _render_blog_shell(title: str, description: str, canonical: str, body_html: str,
+                       og_image: Optional[str] = None, article: bool = False,
+                       published: Optional[str] = None) -> str:
+    import html as _html
+    t = _html.escape(title or "Ono-Fix Blog")
+    d = _html.escape((description or "").replace("\n", " ").strip()[:300])
+    og_img_tag = f'<meta property="og:image" content="{_html.escape(og_image)}"><meta name="twitter:image" content="{_html.escape(og_image)}">' if og_image else ""
+    ld = {
+        "@context": "https://schema.org",
+        "@type": "Article" if article else "Blog",
+        "headline": title,
+        "description": (description or "")[:300],
+        "url": canonical,
+        "publisher": {"@type": "Organization", "name": "Ono-Fix", "url": "https://ono-fix.com"},
+    }
+    if og_image:
+        ld["image"] = og_image
+    if published:
+        ld["datePublished"] = published
+    import json as _json
+    ld_json = _json.dumps(ld, ensure_ascii=False)
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{t} | Ono-Fix</title>
+<meta name="description" content="{d}">
+<link rel="canonical" href="{_html.escape(canonical)}">
+<meta property="og:type" content="{'article' if article else 'website'}">
+<meta property="og:title" content="{t}">
+<meta property="og:description" content="{d}">
+<meta property="og:url" content="{_html.escape(canonical)}">
+<meta property="og:site_name" content="Ono-Fix">
+{og_img_tag}
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{t}">
+<meta name="twitter:description" content="{d}">
+<script type="application/ld+json">{ld_json}</script>
+<style>
+  :root{{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--brand:#2563eb;--bg:#f8fafc}}
+  *{{box-sizing:border-box}}
+  body{{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.7}}
+  header.site{{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}}
+  header.site .wrap{{max-width:820px;margin:0 auto;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}}
+  .brand{{font-weight:800;font-size:20px;color:var(--ink);text-decoration:none;letter-spacing:-.02em}}
+  .brand span{{color:var(--brand)}}
+  .cta{{background:var(--brand);color:#fff;text-decoration:none;padding:9px 16px;border-radius:999px;font-weight:600;font-size:14px}}
+  main{{max-width:820px;margin:0 auto;padding:32px 20px 80px}}
+  h1{{font-size:34px;line-height:1.2;letter-spacing:-.03em;margin:0 0 12px}}
+  .meta{{color:var(--muted);font-size:14px;margin-bottom:24px}}
+  .cover{{width:100%;border-radius:16px;margin:8px 0 28px;display:block}}
+  article img{{max-width:100%;height:auto;border-radius:12px}}
+  article h2{{font-size:24px;margin-top:36px;letter-spacing:-.02em}}
+  article h3{{font-size:19px;margin-top:28px}}
+  article p{{margin:16px 0}}
+  article a{{color:var(--brand)}}
+  .card{{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;text-decoration:none;color:inherit;display:block;transition:transform .15s ease,box-shadow .15s ease}}
+  .card:hover{{transform:translateY(-3px);box-shadow:0 12px 30px rgba(15,23,42,.08)}}
+  .card .thumb{{width:100%;aspect-ratio:16/9;object-fit:cover;background:#e2e8f0;display:block}}
+  .card .body{{padding:18px 20px}}
+  .card h2{{font-size:19px;margin:0 0 8px;letter-spacing:-.01em}}
+  .card p{{margin:0;color:var(--muted);font-size:14px}}
+  .grid{{display:grid;grid-template-columns:1fr;gap:20px}}
+  @media(min-width:640px){{.grid{{grid-template-columns:1fr 1fr}}}}
+  .lead{{color:var(--muted);font-size:16px;margin:-8px 0 28px}}
+  footer.site{{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px;text-align:center;padding:24px}}
+  .empty{{text-align:center;color:var(--muted);padding:60px 20px}}
+</style>
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="brand" href="/">Ono<span>-Fix</span></a>
+  <a class="cta" href="/">Book a pro →</a>
+</div></header>
+<main>
+{body_html}
+</main>
+<footer class="site">© Ono-Fix — Find trusted local pros. <a href="/">ono-fix.com</a></footer>
+</body>
+</html>"""
+
+
+@api_router.get("/blog-render")
+async def blog_render_list():
+    """Server-rendered blog index for SEO. Proxied by Netlify at /blog."""
+    from fastapi.responses import HTMLResponse
+    import html as _html
+    posts = await db.blog_posts.find(
+        {"is_published": True}, {"_id": 0}
+    ).sort([("is_pinned", -1), ("created_at", -1)]).limit(60).to_list(60)
+
+    if posts:
+        cards = []
+        for p in posts:
+            slug = p.get("slug") or p.get("post_id")
+            href = f"/blog/{_html.escape(str(slug))}"
+            title = _html.escape(p.get("title") or "Untitled")
+            excerpt = _html.escape((p.get("description") or "").replace("\n", " ").strip()[:160])
+            cover = p.get("cover_image") or (p.get("images") or [None])[0]
+            thumb = f'<img class="thumb" src="{_html.escape(cover)}" alt="{title}" loading="lazy">' if cover else '<div class="thumb"></div>'
+            cards.append(
+                f'<a class="card" href="{href}">{thumb}<div class="body"><h2>{title}</h2><p>{excerpt}</p></div></a>'
+            )
+        body = f'<h1>The Ono-Fix Blog</h1><p class="lead">Home tips, guides and trusted advice from local pros.</p><div class="grid">{"".join(cards)}</div>'
+    else:
+        body = '<h1>The Ono-Fix Blog</h1><div class="empty">No articles yet — check back soon.</div>'
+
+    html_out = _render_blog_shell(
+        title="The Ono-Fix Blog",
+        description="Home tips, guides and trusted advice from local pros at Ono-Fix.",
+        canonical="https://ono-fix.com/blog",
+        body_html=body,
+    )
+    return HTMLResponse(content=html_out)
+
+
+@api_router.get("/blog-render/{slug}")
+async def blog_render_article(slug: str):
+    """Server-rendered single article for SEO. Proxied by Netlify at /blog/{slug}."""
+    from fastapi.responses import HTMLResponse
+    import html as _html
+    post = await db.blog_posts.find_one(
+        {"$or": [{"slug": slug}, {"post_id": slug}], "is_published": True}, {"_id": 0}
+    )
+    if not post:
+        body = '<div class="empty"><h1>Article not found</h1><p>This article may have been moved or removed.</p><p><a href="/blog">← Back to the blog</a></p></div>'
+        return HTMLResponse(
+            content=_render_blog_shell("Article not found", "", "https://ono-fix.com/blog", body),
+            status_code=404,
+        )
+
+    slug_final = post.get("slug") or post.get("post_id")
+    canonical = f"https://ono-fix.com/blog/{slug_final}"
+    title = post.get("title") or "Untitled"
+    cover = post.get("cover_image") or (post.get("images") or [None])[0]
+    published = None
+    try:
+        ca = post.get("created_at")
+        published = ca.isoformat() if hasattr(ca, "isoformat") else str(ca) if ca else None
+    except Exception:
+        published = None
+    date_label = ""
+    try:
+        ca = post.get("created_at")
+        if hasattr(ca, "strftime"):
+            date_label = ca.strftime("%B %-d, %Y")
+    except Exception:
+        date_label = ""
+
+    # Body: use sanitized Soro HTML if present, else convert plain description to paragraphs
+    if post.get("content_html"):
+        content = _sanitize_article_html(post["content_html"])
+    else:
+        paras = [p.strip() for p in (post.get("description") or "").split("\n") if p.strip()]
+        content = "".join(f"<p>{_html.escape(p)}</p>" for p in paras)
+
+    cover_tag = f'<img class="cover" src="{_html.escape(cover)}" alt="{_html.escape(title)}">' if cover else ""
+    meta_line = f'<div class="meta">By {_html.escape(post.get("author_name") or "Ono-Fix")}{" · " + date_label if date_label else ""}</div>'
+    body = f'<a href="/blog" style="color:#64748b;text-decoration:none;font-size:14px">← All articles</a><h1>{_html.escape(title)}</h1>{meta_line}{cover_tag}<article>{content}</article>'
+
+    html_out = _render_blog_shell(
+        title=title,
+        description=(post.get("description") or ""),
+        canonical=canonical,
+        body_html=body,
+        og_image=cover,
+        article=True,
+        published=published,
+    )
+    return HTMLResponse(content=html_out)
 
 
 @api_router.post("/webhook/stripe")
@@ -15657,6 +16032,19 @@ async def seo_sitemap():
     except Exception:
         pass
 
+    # Blog index + all published articles (server-rendered for SEO)
+    try:
+        urls.append((f"{base}/blog", "0.7", "daily"))
+        blog_posts = await db.blog_posts.find(
+            {"is_published": True}, {"_id": 0, "slug": 1, "post_id": 1}
+        ).sort("created_at", -1).limit(500).to_list(500)
+        for bp in blog_posts:
+            s = bp.get("slug") or bp.get("post_id")
+            if s:
+                urls.append((f"{base}/blog/{s}", "0.7", "weekly"))
+    except Exception:
+        pass
+
     items = "".join(
         f"<url><loc>{loc}</loc><lastmod>{today}</lastmod>"
         f"<changefreq>{cf}</changefreq><priority>{pr}</priority></url>"
@@ -15741,6 +16129,7 @@ async def startup_event():
     asyncio.create_task(_create_seed_accounts())
     asyncio.create_task(_seed_default_categories())
     asyncio.create_task(_telegram_poll_loop())
+    asyncio.create_task(_soro_rss_loop())
 
 
 async def _ensure_indexes():

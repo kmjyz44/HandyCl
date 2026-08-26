@@ -170,11 +170,39 @@ export default function AdminIntegrations() {
   const [soro, setSoro] = useState<any>(null);
   const [soroBusy, setSoroBusy] = useState(false);
   const [soroEmbed, setSoroEmbed] = useState('');
+  const [soroRss, setSoroRss] = useState('');
 
   useEffect(() => { load(); loadSoro(); }, []);
 
   const loadSoro = async () => {
-    try { const d = await api.adminGetSoro(); setSoro(d); setSoroEmbed(d?.embed_url || ''); } catch { /* ignore */ }
+    try { const d = await api.adminGetSoro(); setSoro(d); setSoroEmbed(d?.embed_url || ''); setSoroRss(d?.rss_url || ''); } catch { /* ignore */ }
+  };
+
+  const saveSoroRss = async () => {
+    setSoroBusy(true);
+    try {
+      const res = await api.adminSetSoroRss(soroRss.trim());
+      setSoro((prev: any) => ({ ...(prev || {}), rss_url: res.rss_url }));
+      setSoroRss(res.rss_url || '');
+      showAlert('Saved', res.rss_url ? 'RSS feed saved. Google-friendly pages will appear at /blog.' : 'RSS cleared.');
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Could not save RSS URL');
+    } finally { setSoroBusy(false); }
+  };
+
+  const syncSoroRss = async () => {
+    setSoroBusy(true);
+    try {
+      const res = await api.adminSyncSoroRss(soroRss.trim() || undefined);
+      await loadSoro();
+      if (res?.ok) {
+        showAlert('Sync complete', `Imported ${res.imported}, updated ${res.updated} (feed items: ${res.total_items}).`);
+      } else {
+        showAlert('Sync issue', res?.error || 'Could not sync feed.');
+      }
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Could not sync RSS feed');
+    } finally { setSoroBusy(false); }
   };
 
   const saveSoroEmbed = async () => {
@@ -414,9 +442,47 @@ export default function AdminIntegrations() {
         <View style={s.card} data-testid="soro-integration-card">
           <Text style={s.sectionTitle}>Soro — Blog auto-publish</Text>
           <Text style={s.sectionNote}>
-            Soro (trysoro.com) writes SEO articles and hosts your blog. On your Soro plan, copy the EMBED
-            snippet from Soro (Publish → Embed) and paste it below. Your blog then appears on-site at /soro-blog.
+            Soro (trysoro.com) writes SEO articles. The RSS method below is recommended — the backend
+            fetches your feed and serves Google-friendly pages at ono-fix.com/blog and /blog/&lt;article&gt;.
           </Text>
+
+          <Text style={[s.label, { color: '#111827', fontWeight: '700' }]}>Recommended: RSS feed → SEO blog</Text>
+          <Text style={s.label}>Soro RSS feed URL</Text>
+          <TextInput
+            style={s.input}
+            value={soroRss}
+            onChangeText={setSoroRss}
+            placeholder="https://app.trysoro.com/api/rss/xxxxxxxx"
+            autoCapitalize="none"
+            data-testid="soro-rss-input"
+          />
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              style={[s.testBtn, { backgroundColor: '#7c3aed', flex: 1 }, soroBusy && { opacity: 0.5 }]}
+              onPress={saveSoroRss}
+              disabled={soroBusy}
+              data-testid="soro-save-rss-btn"
+            >
+              {soroBusy ? <ActivityIndicator color="#fff" /> : <Text style={s.testBtnText}>Save RSS</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.testBtn, { backgroundColor: '#2563eb', flex: 1 }, soroBusy && { opacity: 0.5 }]}
+              onPress={syncSoroRss}
+              disabled={soroBusy}
+              data-testid="soro-sync-rss-btn"
+            >
+              {soroBusy ? <ActivityIndicator color="#fff" /> : <Text style={s.testBtnText}>Sync now</Text>}
+            </TouchableOpacity>
+          </View>
+          {soro?.rss_url ? (
+            <Text style={[s.resultLine, { marginTop: 8, color: '#16a34a' }]}>
+              ✓ RSS connected · {soro?.soro_posts_count ?? 0} articles imported{soro?.rss_last_sync ? ` · last sync ${new Date(soro.rss_last_sync).toLocaleString('en-US')}` : ''}
+            </Text>
+          ) : null}
+          <Text style={[s.resultLine, { marginTop: 6, color: '#6b7280' }]}>Auto-syncs every 3 hours. View live blog at /blog.</Text>
+
+          <View style={{ height: 16 }} />
+          <Text style={[s.label, { color: '#6b7280' }]}>Alternative: embed widget (client-side, not indexed by Google)</Text>
 
           <Text style={s.label}>Soro embed URL or {'<script>'} snippet</Text>
           <TextInput

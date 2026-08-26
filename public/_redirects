@@ -1,2 +1,5 @@
+/blog  https://backend-production-a461.up.railway.app/api/blog-render  200
+/blog/*  https://backend-production-a461.up.railway.app/api/blog-render/:splat  200
 /sitemap.xml  https://backend-production-a461.up.railway.app/api/seo/sitemap.xml  200
+/robots.txt  https://backend-production-a461.up.railway.app/api/seo/robots.txt  200
 /api/*  https://backend-production-a461.up.railway.app/api/:splat  200

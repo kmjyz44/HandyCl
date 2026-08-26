@@ -372,6 +372,14 @@ export const api = {
     const res = await client.put('/admin/integrations/soro/embed', { embed_url });
     return res.data;
   },
+  adminSetSoroRss: async (rss_url: string) => {
+    const res = await client.put('/admin/integrations/soro/rss', { rss_url });
+    return res.data;
+  },
+  adminSyncSoroRss: async (rss_url?: string) => {
+    const res = await client.post('/admin/integrations/soro/sync-rss', rss_url ? { rss_url } : {});
+    return res.data;
+  },
 
   getExecutorPricing: async (id: string) => {
     try {

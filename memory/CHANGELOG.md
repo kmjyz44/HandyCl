@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-06 — Feature: Soro AI RSS → server-rendered SEO blog (Google-indexable)
+- GOAL: Get Soro-written articles indexed by Google. The Netlify SPA can't be reliably crawled, so the FastAPI backend now fetches the Soro RSS feed and serves REAL server-rendered HTML pages.
+- BACKEND (`/app/backend/server.py`):
+  - `Settings`: added `soro_rss_url`, `soro_rss_last_sync`. `BlogPost`: added `slug`, `content_html`, `cover_image`, `source`.
+  - `_soro_sync_rss()` fetches RSS (httpx) + parses (feedparser), upserts into `blog_posts` keyed by `guid`; slug taken from the article link's last path segment (matches Soro links). `_sanitize_article_html()` strips scripts/styles/iframes/on* handlers.
+  - `_soro_rss_loop()` background task auto-syncs every 3h (startup task added).
+  - HTML routes: `GET /api/blog-render` (index) and `GET /api/blog-render/{slug}` (article) with full SEO meta (title/description/canonical/OG/Twitter + JSON-LD Article schema, datePublished). 404 page for missing articles.
+  - Admin: `PUT /api/admin/integrations/soro/rss`, `POST /api/admin/integrations/soro/sync-rss`; `GET /api/admin/integrations/soro` now returns rss_url, rss_last_sync, soro_posts_count.
+  - Sitemap `/api/seo/sitemap.xml` now includes `/blog` + every published article `/blog/{slug}`.
+- FRONTEND: admin-integrations.tsx — new "RSS feed → SEO blog" section (Save RSS / Sync now, status line); utils/api.ts `adminSetSoroRss`, `adminSyncSoroRss`.
+- NETLIFY (`/app/public/_redirects`): proxy `/blog` and `/blog/*` → backend `/api/blog-render*`; added `/robots.txt` proxy.
+- SEEDED user's RSS URL (`.../api/rss/20aa89d9-...`) into settings. Feed was EMPTY at build time (Soro not yet published) — pages auto-populate on next sync once Soro publishes.
+- TESTED via curl on preview: list HTML, article HTML (script sanitized, JSON-LD present), sitemap includes slug, admin sync returns ok, 404 works.
+- ⚠️ Requires Netlify redeploy ("Save to GitHub") for `/blog` proxy + frontend UI to go live in production.
+
+
 ## 2026-06 — Fix: empty "Pros" tab for clients without an address
 - ROOT CAUSE: `/executors/available` (Pros browse tab) filtered pros by service-area coverage. When a client had no saved lat/lng, it fell back to the platform's default service-area centre (e.g. Chicago) and hid every pro whose zone didn't cover that centre → empty list for new clients like client5.
 - FIX: removed the default-centre fallback. Now, when the client has no coordinates, all pros with a configured work zone are shown (coverage is still enforced at booking time). Coverage filtering only applies when the client actually has lat/lng. Bare city string no longer hides geo-configured pros.
