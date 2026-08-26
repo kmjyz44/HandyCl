@@ -696,7 +696,7 @@ export const api = {
     return res.data;
   },
   sendDirectMessage: async (toUserId: string, message: string) => {
-    const res = await client.post('/messages', { to_user_id: toUserId, message });
+    const res = await client.post('/messages', { to_user_id: toUserId, text: message });
     return res.data;
   },
   submitSupportRequest: async (data: { name: string; email: string; subject?: string; message: string; category?: string }) => {

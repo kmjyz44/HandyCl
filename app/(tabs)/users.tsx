@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -29,6 +30,7 @@ const roleMeta = (role: string) => ROLE_OPTIONS.find((r) => r.value === role) ||
 
 export default function Users() {
   const currentUserId = useAuthStore((s) => s.user?.user_id);
+  const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -491,6 +493,17 @@ export default function Users() {
                     <Ionicons name="document-text-outline" size={16} color="#0891b2" />
                     <Text style={[styles.actionText, { color: '#0891b2' }]}>Terms PDF</Text>
                   </TouchableOpacity>
+
+                  {(user.role === 'provider' || user.role === 'client') && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, { borderColor: '#2563eb' }]}
+                      onPress={() => router.push(`/admin-chat?user_id=${user.user_id}&name=${encodeURIComponent(user.name || 'User')}` as any)}
+                      data-testid={`message-user-btn-${user.user_id}`}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={16} color="#2563eb" />
+                      <Text style={[styles.actionText, { color: '#2563eb' }]}>Message</Text>
+                    </TouchableOpacity>
+                  )}
 
                   {user.role === 'provider' && (
                     <TouchableOpacity

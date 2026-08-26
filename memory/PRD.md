@@ -701,3 +701,11 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - VERIFIED e2e (curl): generate token → publish (header + query) → post appears in GET /blog/posts as "Ono-Fix" with tags, HTML→text; wrong token 401; unconfigured 403. Test posts cleaned up.
 - FOLLOW-UP: blog detail renders description as plain text — for rich formatting (headings/links/images inline) a react-native-render-html/WebView renderer would be needed. Cover image stored in images[].
 - server.py synced.
+
+## 2026-06 — Admin can message any user (direct chat)
+- Admin Users screen: every client/provider card has a "Message" button (testid message-user-btn-{id}) → opens app/admin-chat.tsx?user_id=&name=.
+- NEW app/admin-chat.tsx: 1:1 direct chat (loads GET /messages?with_user_id, sends via api.sendMessage {to_user_id,text}, polls every 8s, bubbles by from_user_id). Route added in _layout.tsx. users.tsx now imports useRouter.
+- Backend already supported it: POST /messages {to_user_id,text}, GET /messages?with_user_id. No backend change.
+- BUG FIXED (pre-existing): support-chat.tsx + api.sendDirectMessage used field `message` but backend Message uses `text` → support chat sent/rendered empty. Now uses `text` (client↔admin support chat works both ways).
+- The user receives admin messages in their existing Support chat thread.
+- VERIFIED e2e (curl): admin→client send stores exact text; client GET /messages?with_user_id=admin returns it. esbuild-clean. Visible after Save to GitHub.
