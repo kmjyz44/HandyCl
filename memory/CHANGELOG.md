@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06 — Blog: "Order a service" CTA at end of every article + prod Soro sync
+- Added a gradient CTA block ("Need this done for you? … Order a service →" linking to `/`) at the bottom of every server-rendered blog article (`blog_render_article` in server.py) to convert Google/readers into bookings.
+- Removed the confusing "View on the web" pill from the in-app Blog feed (`(tabs)/community.tsx`) — now ONE blog: the in-app "Blog" tab, with `/blog` served silently for Google/SEO only.
+- OPS: production Railway backend was redeployed with the new code; I set the Soro RSS URL + ran Sync via the prod admin API. Confirmed on ono-fix.com: /blog and /blog/{slug} live, Soro article "AI Home Services Start With One Simple Photo" shows in the shared blog feed (total=2).
+- FIX: restored curated backend/requirements.txt (a prior `pip freeze` had dropped the `--extra-index-url` line → Railway build failed on emergentintegrations). Now original 19 deps + feedparser==6.0.14.
+- ⚠️ CTA + removed pill require a Railway backend + Netlify redeploy to appear in production.
+
+
 ## 2026-06 — Blog UX: "Blog" label + web link; Soro RSS cache-bust fix
 - FIX: Soro RSS is served via Vercel with a 1h cache (`x-vercel-cache: HIT`) → backend was fetching a stale/empty feed. `_soro_sync_rss` now appends a `nocache` query param + no-cache headers, so sync always gets the latest feed. Verified: 1 article ("AI Home Services Start With One Simple Photo") imported, renders at /api/blog-render/{slug} with full HTML + SEO, listed in sitemap, and shows in the in-app Community feed (source=soro).
 - DECISION (user 1a + 2a): keep Soro articles inside the existing Community feed (same blog_posts collection) AND make the blog a visible, clearly-labeled menu item.

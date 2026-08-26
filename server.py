@@ -8753,6 +8753,11 @@ def _render_blog_shell(title: str, description: str, canonical: str, body_html: 
   article h3{{font-size:19px;margin-top:28px}}
   article p{{margin:16px 0}}
   article a{{color:var(--brand)}}
+  .cta-block{{margin:48px 0 0;background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:20px;padding:32px 28px;color:#fff;text-align:center}}
+  .cta-block h3{{margin:0 0 8px;font-size:23px;letter-spacing:-.02em}}
+  .cta-block p{{margin:0 0 20px;font-size:15px;color:#dbeafe;line-height:1.6}}
+  .cta-btn{{display:inline-block;background:#fff;color:var(--brand);text-decoration:none;padding:13px 26px;border-radius:999px;font-weight:700;font-size:15px;transition:transform .15s ease}}
+  .cta-btn:hover{{transform:translateY(-2px)}}
   .card{{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;text-decoration:none;color:inherit;display:block;transition:transform .15s ease,box-shadow .15s ease}}
   .card:hover{{transform:translateY(-3px);box-shadow:0 12px 30px rgba(15,23,42,.08)}}
   .card .thumb{{width:100%;aspect-ratio:16/9;object-fit:cover;background:#e2e8f0;display:block}}
@@ -8855,7 +8860,14 @@ async def blog_render_article(slug: str):
 
     cover_tag = f'<img class="cover" src="{_html.escape(cover)}" alt="{_html.escape(title)}">' if cover else ""
     meta_line = f'<div class="meta">By {_html.escape(post.get("author_name") or "Ono-Fix")}{" · " + date_label if date_label else ""}</div>'
-    body = f'<a href="/blog" style="color:#64748b;text-decoration:none;font-size:14px">← All articles</a><h1>{_html.escape(title)}</h1>{meta_line}{cover_tag}<article>{content}</article>'
+    cta_block = (
+        '<div class="cta-block">'
+        '<h3>Need this done for you?</h3>'
+        '<p>Snap a photo of the problem and our AI matches you with a trusted local pro in minutes.</p>'
+        '<a class="cta-btn" href="/">Order a service →</a>'
+        '</div>'
+    )
+    body = f'<a href="/blog" style="color:#64748b;text-decoration:none;font-size:14px">← All articles</a><h1>{_html.escape(title)}</h1>{meta_line}{cover_tag}<article>{content}</article>{cta_block}'
 
     html_out = _render_blog_shell(
         title=title,
