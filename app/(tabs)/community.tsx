@@ -8,7 +8,6 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
@@ -121,19 +120,6 @@ export default function BlogFeed() {
               <Text style={styles.introSub}>
                 Expert articles, plus tips, photos and reviews from our pros and clients.
               </Text>
-              {Platform.OS === 'web' && (
-                <TouchableOpacity
-                  style={styles.webLink}
-                  onPress={() => {
-                    try { window.open(`${window.location.origin}/blog`, '_blank'); } catch {}
-                  }}
-                  data-testid="blog-view-web-btn"
-                >
-                  <Ionicons name="globe-outline" size={15} color="#2563eb" />
-                  <Text style={styles.webLinkText}>View on the web</Text>
-                  <Ionicons name="open-outline" size={13} color="#2563eb" />
-                </TouchableOpacity>
-              )}
               {user && (
                 <TouchableOpacity
                   style={styles.createCta}
@@ -233,12 +219,6 @@ const styles = StyleSheet.create({
   intro: { padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   introTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
   introSub: { fontSize: 13, color: '#6b7280', marginTop: 4, lineHeight: 18 },
-  webLink: {
-    marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 12,
-    borderRadius: 999, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff',
-  },
-  webLinkText: { color: '#2563eb', fontSize: 13, fontWeight: '700' },
   createCta: {
     marginTop: 12, backgroundColor: '#2563eb', flexDirection: 'row',
     alignItems: 'center', justifyContent: 'center', gap: 8,
