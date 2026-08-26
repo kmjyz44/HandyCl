@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06 — Blog UX: "Blog" label + web link; Soro RSS cache-bust fix
+- FIX: Soro RSS is served via Vercel with a 1h cache (`x-vercel-cache: HIT`) → backend was fetching a stale/empty feed. `_soro_sync_rss` now appends a `nocache` query param + no-cache headers, so sync always gets the latest feed. Verified: 1 article ("AI Home Services Start With One Simple Photo") imported, renders at /api/blog-render/{slug} with full HTML + SEO, listed in sitemap, and shows in the in-app Community feed (source=soro).
+- DECISION (user 1a + 2a): keep Soro articles inside the existing Community feed (same blog_posts collection) AND make the blog a visible, clearly-labeled menu item.
+- FRONTEND: renamed the "Community" tab → "Blog" (`(tabs)/_layout.tsx`); community screen Stack title + intro → "Blog" with updated subtitle; added a web-only "View on the web ↗" pill in the feed header that opens the public SEO page `${origin}/blog` in a new tab (`(tabs)/community.tsx`).
+- ⚠️ Requires Netlify redeploy for label/link + /blog proxy to go live in production.
+
+
 ## 2026-06 — Feature: Soro AI RSS → server-rendered SEO blog (Google-indexable)
 - GOAL: Get Soro-written articles indexed by Google. The Netlify SPA can't be reliably crawled, so the FastAPI backend now fetches the Soro RSS feed and serves REAL server-rendered HTML pages.
 - BACKEND (`/app/backend/server.py`):

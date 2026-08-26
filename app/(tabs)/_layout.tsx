@@ -188,7 +188,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="community"
         options={{
-          title: 'Community',
+          title: 'Blog',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="newspaper-outline" size={size} color={color} />
           ),
