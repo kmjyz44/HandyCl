@@ -8560,8 +8560,16 @@ async def _soro_sync_rss(rss_url: Optional[str] = None) -> Dict[str, Any]:
     if not rss_url:
         return {"ok": False, "error": "No RSS URL configured", "imported": 0, "updated": 0}
     try:
+        # Soro serves the feed via Vercel with a 1h cache — bust it so we always get the latest.
+        import time as _time
+        sep = "&" if "?" in rss_url else "?"
+        fetch_url = f"{rss_url}{sep}nocache={int(_time.time())}"
         async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
-            resp = await client.get(rss_url, headers={"User-Agent": "Ono-Fix-Blog/1.0"})
+            resp = await client.get(fetch_url, headers={
+                "User-Agent": "Ono-Fix-Blog/1.0",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            })
             resp.raise_for_status()
             raw_xml = resp.text
     except Exception as e:
