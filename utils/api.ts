@@ -364,6 +364,14 @@ export const api = {
     const res = await client.post('/admin/integrations/soro/token');
     return res.data;
   },
+  getSoroEmbed: async () => {
+    const res = await client.get('/integrations/soro/embed');
+    return res.data;
+  },
+  adminSetSoroEmbed: async (embed_url: string) => {
+    const res = await client.put('/admin/integrations/soro/embed', { embed_url });
+    return res.data;
+  },
 
   getExecutorPricing: async (id: string) => {
     try {

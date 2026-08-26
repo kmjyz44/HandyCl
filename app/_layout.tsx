@@ -82,6 +82,7 @@ export default function RootLayout() {
         <Stack.Screen name="provider-onboarding" />
         <Stack.Screen name="notification-settings" />
         <Stack.Screen name="admin-chat" />
+        <Stack.Screen name="soro-blog" />
         <Stack.Screen name="privacy" />
         <Stack.Screen name="support-chat" />
         <Stack.Screen name="admin-support-requests" />

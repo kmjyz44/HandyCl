@@ -839,6 +839,7 @@ class Settings(BaseModel):
     executor_show_new: bool = True
     require_identity_verification: bool = False  # hide unverified providers + block accepting jobs
     soro_webhook_token: Optional[str] = None  # secret for Soro (trysoro.com) blog auto-publish webhook
+    soro_embed_url: Optional[str] = None  # Soro embed widget script src (app.trysoro.com/api/embed/...)
 
     # ===== PHOTO STORAGE SETTINGS =====
     photo_storage_path: str = "./task_photos"   # Local disk path for saved photos
@@ -8453,7 +8454,28 @@ async def admin_get_soro(request: Request, current_user: User = Depends(require_
         "configured": bool(token),
         "token": token,
         "webhook_url": f"{_public_base_url(request)}/api/integrations/soro/publish",
+        "embed_url": getattr(settings, "soro_embed_url", None),
     }
+
+
+@api_router.get("/integrations/soro/embed")
+async def get_soro_embed():
+    """Public: the Soro embed widget URL used by the on-site blog page."""
+    settings = await get_settings()
+    return {"embed_url": getattr(settings, "soro_embed_url", None)}
+
+
+@api_router.put("/admin/integrations/soro/embed")
+async def admin_set_soro_embed(request: Request, current_user: User = Depends(require_admin)):
+    """Admin: save the Soro embed URL (or paste the full <script> — we extract the src)."""
+    body = await request.json()
+    raw = (body.get("embed_url") or "").strip()
+    import re as _re
+    m = _re.search(r'src="([^"]+)"', raw)
+    if m:
+        raw = m.group(1)
+    await db.settings.update_one({"setting_id": "app_settings"}, {"$set": {"soro_embed_url": raw or None}}, upsert=True)
+    return {"embed_url": raw or None}
 
 
 @api_router.post("/admin/integrations/soro/token")

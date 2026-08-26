@@ -169,11 +169,24 @@ export default function AdminIntegrations() {
   const [tgConnected, setTgConnected] = useState(false);
   const [soro, setSoro] = useState<any>(null);
   const [soroBusy, setSoroBusy] = useState(false);
+  const [soroEmbed, setSoroEmbed] = useState('');
 
   useEffect(() => { load(); loadSoro(); }, []);
 
   const loadSoro = async () => {
-    try { setSoro(await api.adminGetSoro()); } catch { /* ignore */ }
+    try { const d = await api.adminGetSoro(); setSoro(d); setSoroEmbed(d?.embed_url || ''); } catch { /* ignore */ }
+  };
+
+  const saveSoroEmbed = async () => {
+    setSoroBusy(true);
+    try {
+      const res = await api.adminSetSoroEmbed(soroEmbed.trim());
+      setSoro((prev: any) => ({ ...(prev || {}), embed_url: res.embed_url }));
+      setSoroEmbed(res.embed_url || '');
+      showAlert('Saved', res.embed_url ? 'Blog embed saved. View it at /soro-blog.' : 'Embed cleared.');
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Could not save embed');
+    } finally { setSoroBusy(false); }
   };
 
   const generateSoroToken = async () => {
@@ -401,10 +414,31 @@ export default function AdminIntegrations() {
         <View style={s.card} data-testid="soro-integration-card">
           <Text style={s.sectionTitle}>Soro — Blog auto-publish</Text>
           <Text style={s.sectionNote}>
-            Soro (trysoro.com) writes SEO articles and publishes them to your Ono-Fix blog automatically.
-            In Soro, add a "custom / webhook" integration and paste the URL and Token below. Include the token
-            as the header X-Soro-Token (or ?token=…). Soro posts on its own daily schedule.
+            Soro (trysoro.com) writes SEO articles and hosts your blog. On your Soro plan, copy the EMBED
+            snippet from Soro (Publish → Embed) and paste it below. Your blog then appears on-site at /soro-blog.
           </Text>
+
+          <Text style={s.label}>Soro embed URL or {'<script>'} snippet</Text>
+          <TextInput
+            style={s.input}
+            value={soroEmbed}
+            onChangeText={setSoroEmbed}
+            placeholder="https://app.trysoro.com/api/embed/xxxxxxxx"
+            autoCapitalize="none"
+            data-testid="soro-embed-input"
+          />
+          <TouchableOpacity
+            style={[s.testBtn, { backgroundColor: '#7c3aed' }, soroBusy && { opacity: 0.5 }]}
+            onPress={saveSoroEmbed}
+            disabled={soroBusy}
+            data-testid="soro-save-embed-btn"
+          >
+            {soroBusy ? <ActivityIndicator color="#fff" /> : <Text style={s.testBtnText}>Save blog embed</Text>}
+          </TouchableOpacity>
+          {soro?.embed_url ? <Text style={[s.resultLine, { marginTop: 8, color: '#16a34a' }]}>✓ Blog connected — view at /soro-blog</Text> : null}
+
+          <View style={{ height: 14 }} />
+          <Text style={[s.label, { color: '#6b7280' }]}>Advanced: webhook auto-publish (only if your Soro plan supports custom webhooks)</Text>
 
           <Text style={s.label}>Webhook URL</Text>
           <TouchableOpacity onPress={() => soro?.webhook_url && copyText('Webhook URL', soro.webhook_url)} activeOpacity={0.7}>
