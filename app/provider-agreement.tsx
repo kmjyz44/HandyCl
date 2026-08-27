@@ -5,7 +5,8 @@ import { useRouter } from 'expo-router';
 import Head from 'expo-router/head';
 
 const EFFECTIVE_DATE = 'June 1, 2026';
-const VERSION = '1.0';
+const LAST_UPDATED = 'June 15, 2026';
+const VERSION = '1.1';
 
 type Para = string | { bullets: string[] };
 type Section = { title: string; body: Para[] };
@@ -190,11 +191,31 @@ const SECTIONS: Section[] = [
   { title: '47. Survival', body: [
     'The following provisions survive termination: payment obligations; confidentiality; customer information; intellectual property; indemnification; dispute resolution; limitation of liability; records; and provisions that by their nature should survive termination.',
   ]},
-  { title: '48. Acknowledgment', body: [
+  { title: '48. Chargeback Responsibility, Set-Off & Fund Retention', body: [
+    '48.1 Chargeback and Reversal Responsibility. The Service Provider accepts full financial responsibility for all payment chargebacks, credit card disputes, unauthorized transactions, or ACH reversals initiated by Clients relating to services offered or billed by the Service Provider through the Platform.',
+    '48.2 Right of Set-Off & Direct Recovery. If a Client initiates a chargeback, refund request, or payment reversal, or if Finix Payments, Inc. (or any successor payment processor) debits funds from Ono-Fix or Nexus Security Solutions LLC corresponding to the Service Provider\u2019s transaction, Ono-Fix reserves the immediate right to:',
+    { bullets: [
+      'deduct the full chargeback amount plus any applicable administrative dispute fees ($30.00+ per occurrence) from the Service Provider\u2019s pending or future payouts;',
+      'debit the Service Provider\u2019s designated bank account via ACH for any outstanding negative balance;',
+      'withhold payouts or impose a temporary hold (Rolling Reserve) on the Service Provider\u2019s account funds for up to 120 calendar days to cover potential chargebacks or dispute exposures.',
+    ]},
+    '48.3 Duty to Provide Dispute Documentation. The Service Provider agrees to maintain and promptly supply Ono-Fix with clear proof of service completion (including signed work completion receipts, before-and-after photographic evidence, timestamped location logs, and written client approvals) within 48 hours of a dispute notice.',
+  ]},
+  { title: '49. Independent Contractor Status & Non-Party Role (Addendum)', body: [
+    '49.1 The Service Provider acts solely as an independent contractor using its own tools, skills, and judgment. Ono-Fix is not an employer, joint venturer, partner, or agent of the Service Provider.',
+    '49.2 Ono-Fix is strictly not a party to any contract, agreement, or transaction entered into between a Client and the Service Provider, and assumes no responsibility, duty, or liability for the quality, safety, legality, timeliness, or adequacy of any services performed; any personal injury, property loss, or material damage caused directly or indirectly by the Service Provider; or any misrepresentation, breach of agreement, or failure to complete requested work by the Service Provider. Nothing in this Section excludes or limits any liability that cannot lawfully be excluded or limited under applicable law.',
+  ]},
+  { title: '50. Account Suspension & Termination (Addendum)', body: [
+    '50.1 Ono-Fix reserves the right, at its sole and absolute discretion, to suspend, limit, restrict, or permanently terminate the Service Provider\u2019s account and access privileges at any time, with or without prior notice or explanation, subject to any protections required by applicable law. Without limitation, immediate action may be taken where the Service Provider exhibits excessive chargeback rates, fraud risk, or payment disputes; engages in abusive, unprofessional, or harmful conduct toward Clients, other Service Providers, or Platform staff; or fails to supply required verification documentation (KYC/AML checks).',
+  ]},
+  { title: '51. 24-Hour Advance Charge Limit', body: [
+    '51.1 Prohibition of Advance Billing. The Service Provider is strictly prohibited from collecting payment or authorizing credit card charges more than twenty-four (24) hours prior to the actual physical commencement or delivery of the requested services, unless explicitly authorized in advance under a separate written agreement approved by Ono-Fix and its processing partners.',
+  ]},
+  { title: '52. Acknowledgment', body: [
     'The Service Provider acknowledges that before accepting Jobs through Ono-Fix, it has had the opportunity to review this Agreement, ask questions, obtain independent legal advice, and provide accurate business, licensing, and insurance information.',
     'The Service Provider understands that it is responsible for determining whether operating as an independent contractor is appropriate for its business and circumstances.',
   ]},
-  { title: '49. Electronic Acceptance', body: [
+  { title: '53. Electronic Acceptance', body: [
     'By checking the acceptance boxes and creating a provider account, the Service Provider confirms:',
     { bullets: ['I have read, understand, and agree to the Ono-Fix Service Provider Agreement.', 'I understand that I am responsible for complying with all applicable licensing, insurance, tax, safety, and legal requirements applicable to my business and services.', 'I understand that I am not an employee of Ono-Fix unless applicable law determines otherwise.'] },
     'Ono-Fix records the electronic acceptance with date and time, IP address, Agreement version, and document hash.',
@@ -219,7 +240,7 @@ export default function ProviderAgreement() {
       </View>
       <ScrollView contentContainerStyle={styles.content} data-testid="provider-agreement-screen">
         <Text style={styles.docTitle}>Ono-Fix Service Provider Agreement</Text>
-        <Text style={styles.meta}>Version {VERSION} · Effective Date: {EFFECTIVE_DATE}</Text>
+        <Text style={styles.meta}>Version {VERSION} · Effective Date: {EFFECTIVE_DATE} · Last Updated: {LAST_UPDATED}</Text>
 
         <Text style={styles.p}>
           This Service Provider Agreement ("Agreement") is entered into between <Text style={styles.bold}>Nexus Security Solutions LLC</Text>, doing business as Ono-Fix ("Ono-Fix" or "Platform"), and the Service Provider identified by the account under which this Agreement is electronically accepted (collectively, the "Parties").
@@ -253,7 +274,7 @@ export default function ProviderAgreement() {
           <Text style={styles.footerText}>Operated by Nexus Security Solutions LLC</Text>
           <Text style={styles.footerText}>9701 Dee Rd, Niles, IL 60714</Text>
           <Text style={styles.footerText}>Contact: <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text></Text>
-          <Text style={styles.footerText}>Agreement Version: {VERSION} · Effective Date: {EFFECTIVE_DATE}</Text>
+          <Text style={styles.footerText}>Agreement Version: {VERSION} · Effective Date: {EFFECTIVE_DATE} · Last Updated: {LAST_UPDATED}</Text>
         </View>
 
         <View style={{ height: 40 }} />
