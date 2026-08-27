@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import Head from 'expo-router/head';
 
 const EFFECTIVE_DATE = 'June 1, 2026';
+const LAST_UPDATED = 'June 15, 2026';
 
 type Para = string | { bullets: string[] };
 type Section = { title: string; body: Para[] };
@@ -305,6 +306,49 @@ const SECTIONS: Section[] = [
     'These Terms of Use establish the general rules for using Ono-Fix. They do not replace a Job Agreement / Work Order when a separate written agreement is required for a particular service or under applicable law.',
     'For Illinois home repair or remodeling transactions, Ono-Fix will provide additional job-specific documentation when required by Illinois law.',
   ]},
+  { title: '66. Independent Contractor Status & Limitation of Liability (Addendum)', body: [
+    '66.1 Third-Party Service Provider Relationship. Ono-Fix operates exclusively as a technology marketplace platform connecting independent contractors ("Service Providers") with users seeking handyman, maintenance, and technical services ("Clients"). Ono-Fix is not an employer, joint venturer, partner, or agent of any Service Provider. Service Providers act solely as independent contractors using their own tools, skills, and judgment.',
+    '66.2 Non-Party Status in Disputes. Ono-Fix is strictly not a party to any contract, agreement, or transaction entered into between a Client and a Service Provider. Ono-Fix assumes no responsibility, duty, or liability for:',
+    { bullets: [
+      'the quality, safety, legality, timeliness, or adequacy of any services performed by a Service Provider;',
+      'any personal injury, property loss, or material damage caused directly or indirectly by a Service Provider;',
+      'any misrepresentation, breach of agreement, or failure to complete requested work by a Service Provider.',
+    ]},
+    '66.3 Dispute Mediation Assistance. All disputes regarding service quality, incomplete work, property damage, or pricing must be resolved directly between the Client and the Service Provider. Ono-Fix may, at its sole discretion, offer automated or representative assistance to facilitate communication between the parties, but such assistance does not constitute an assumption of legal liability or obligation by Ono-Fix.',
+    'Nothing in this Section excludes or limits any liability that cannot lawfully be excluded or limited under applicable law.',
+  ]},
+  { title: '67. Chargeback Indemnification, Fund Retention & Set-Off Rights', body: [
+    '67.1 Chargeback and Reversal Responsibility. Each Service Provider accepts full financial responsibility for all payment chargebacks, credit card disputes, unauthorized transactions, or ACH reversals initiated by Clients relating to services offered or billed by such Service Provider through the Platform.',
+    '67.2 Right of Set-Off & Direct Recovery. If a Client initiates a chargeback, refund request, or payment reversal, or if Finix Payments, Inc. (or any successor payment processor) debits funds from Ono-Fix or Nexus Security Solutions LLC corresponding to a Service Provider\u2019s transaction, Ono-Fix reserves the immediate right to:',
+    { bullets: [
+      'deduct the full chargeback amount plus any applicable administrative dispute fees ($30.00+ per occurrence) from the Service Provider\u2019s pending or future payouts;',
+      'debit the Service Provider\u2019s designated bank account via ACH for any outstanding negative balance;',
+      'withhold payouts or impose a temporary hold (Rolling Reserve) on the Service Provider\u2019s account funds for up to 120 calendar days to cover potential chargebacks or dispute exposures.',
+    ]},
+    '67.3 Duty to Provide Dispute Documentation. Service Providers agree to maintain and promptly supply Ono-Fix with clear proof of service completion (including signed work completion receipts, before-and-after photographic evidence, timestamped location logs, and written client approvals) within 48 hours of a dispute notice.',
+  ]},
+  { title: '68. Account Suspension, Termination & Platform Modifications (Addendum)', body: [
+    '68.1 Right to Suspend or Terminate. Ono-Fix reserves the right, at its sole and absolute discretion, to suspend, limit, restrict, or permanently terminate the account and access privileges of any user (Client or Service Provider) at any time, for any reason or no reason, with or without prior notice or explanation, subject to any protections required by applicable law.',
+    '68.2 Immediate Termination Triggers. Without limiting the generality of Section 68.1, immediate termination without prior warning may occur if a user:',
+    { bullets: [
+      'violates these Terms of Service or applicable law;',
+      'exhibits excessive chargeback rates, fraud risk, or payment disputes;',
+      'engages in abusive, unprofessional, or harmful conduct toward Clients, Service Providers, or Platform staff;',
+      'fails to supply required verification documentation (KYC/AML checks).',
+    ]},
+  ]},
+  { title: '69. Payment Restrictions & 24-Hour Advance Charge Limit', body: [
+    '69.1 Prohibition of Advance Billing. Service Providers are strictly prohibited from collecting payment or authorizing credit card charges more than twenty-four (24) hours prior to the actual physical commencement or delivery of the requested services, unless explicitly authorized in advance under a separate written agreement approved by Ono-Fix and its processing partners.',
+  ]},
+  { title: '70. Summary of Protective Provisions', body: [
+    'The following summary is provided for convenience only and does not modify, expand, or limit the provisions above:',
+    { bullets: [
+      'Non-Party Clause (Section 66.2): establishes Ono-Fix purely as a technology mediator; addresses property-damage and workmanship claims.',
+      'Set-Off Rights (Section 67.2): allows direct deduction of chargebacks from payouts; addresses payment-processor sub-merchant liability.',
+      'Dispute Proof (Section 67.3): requires photo and signature documentation from field technicians to support chargeback responses.',
+      'Discretionary Termination (Section 68.1): allows removal of high-risk users to limit payment-processor reserve exposure.',
+    ]},
+  ]},
 ];
 
 export default function TermsOfUse() {
@@ -325,7 +369,7 @@ export default function TermsOfUse() {
       </View>
       <ScrollView contentContainerStyle={styles.content} data-testid="terms-screen">
         <Text style={styles.docTitle}>Ono-Fix Terms of Use</Text>
-        <Text style={styles.meta}>Effective Date: {EFFECTIVE_DATE} · Last Updated: {EFFECTIVE_DATE}</Text>
+        <Text style={styles.meta}>Effective Date: {EFFECTIVE_DATE} · Last Updated: {LAST_UPDATED}</Text>
 
         <Text style={styles.p}>
           These Terms of Use ("Terms") govern access to and use of the Ono-Fix platform, website, mobile applications, and related services (collectively, the "Platform"). Ono-Fix is operated by <Text style={styles.bold}>Nexus Security Solutions LLC</Text>, an Illinois limited liability company ("Ono-Fix," "we," "us," or "our").
@@ -359,8 +403,8 @@ export default function TermsOfUse() {
           <Text style={styles.footerText}>Operated by Nexus Security Solutions LLC</Text>
           <Text style={styles.footerText}>9701 Dee Rd, Niles, IL 60714</Text>
           <Text style={styles.footerText}>Contact: <Text style={styles.link}>Nexus.ss.llc@gmail.com</Text></Text>
-          <Text style={styles.footerText}>Effective Date: {EFFECTIVE_DATE} · Last Updated: {EFFECTIVE_DATE}</Text>
-          <Text style={styles.footerText}>Terms Version: 2026-06-01</Text>
+          <Text style={styles.footerText}>Effective Date: {EFFECTIVE_DATE} · Last Updated: {LAST_UPDATED}</Text>
+          <Text style={styles.footerText}>Terms Version: 2026-06-15</Text>
         </View>
 
         <View style={{ height: 40 }} />

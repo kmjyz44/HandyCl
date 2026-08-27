@@ -2161,7 +2161,7 @@ def _ci_email(email: str) -> Dict[str, Any]:
     """Case-insensitive exact-match query for an email (handles legacy mixed-case data)."""
     return {"email": {"$regex": f"^{re.escape((email or '').strip())}$", "$options": "i"}}
 
-TERMS_VERSION = "2026-06-01"  # bump when Terms of Use change materially
+TERMS_VERSION = "2026-06-15"  # bump when Terms of Use change materially
 
 COMPLETION_CONFIRMATION_VERSION = "2026-06-01"  # bump when the confirmation text changes
 COMPLETION_CONFIRMATION_TEXT = (
@@ -2392,7 +2392,7 @@ async def _record_terms_acceptance(user_id: str, email: str, role: str, request:
 @api_router.get("/terms/version")
 async def get_terms_version():
     """Public: current Terms of Use version + effective date (for the app to display/compare)."""
-    return {"version": TERMS_VERSION, "effective_date": "June 1, 2026"}
+    return {"version": TERMS_VERSION, "effective_date": "June 1, 2026", "last_updated": "June 15, 2026"}
 
 
 @api_router.post("/terms/accept")
