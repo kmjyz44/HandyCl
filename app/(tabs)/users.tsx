@@ -12,11 +12,31 @@ import {
   TextInput,
   Platform,
   Switch,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../utils/api';
 import { showConfirm, showAlert } from '../../utils/alert';
 import { useAuthStore } from '../../store/authStore';
+
+// Self-contained Leaflet map (OpenStreetMap, no API key) showing a provider's
+// coverage center + service radius. Rendered inside an iframe srcDoc on web.
+const buildProviderMapHtml = (lat: number, lng: number, radiusKm?: number | null) => {
+  const r = radiusKm && radiusKm > 0 ? Math.round(radiusKm * 1000) : 0;
+  return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>html,body,#map{height:100%;margin:0;padding:0}</style></head>
+<body><div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+var lat=${lat}, lng=${lng}, r=${r};
+var map=L.map('map',{zoomControl:true,attributionControl:false}).setView([lat,lng],11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+L.marker([lat,lng]).addTo(map);
+if(r>0){var c=L.circle([lat,lng],{radius:r,color:'#2563eb',fillColor:'#3b82f6',fillOpacity:0.15,weight:2}).addTo(map);map.fitBounds(c.getBounds(),{padding:[18,18]});}
+</script></body></html>`;
+};
+
 
 const ROLE_OPTIONS = [
   { value: 'client', label: 'Client', icon: 'person-outline', color: '#10b981' },
@@ -917,7 +937,42 @@ export default function Users() {
                   {(detailProfile.service_zip_codes?.length > 0) && (
                     <Text style={styles.detailLine}>ZIPs: {detailProfile.service_zip_codes.join(', ')}</Text>
                   )}
-                  {(!detailProfile.service_radius_km && !(detailProfile.service_cities?.length) && !(detailProfile.service_zones?.length)) && (
+                  {(detailProfile.user?.address || detailProfile.user?.city) && (
+                    <Text style={styles.detailLine}>Based in: {detailProfile.user?.address || detailProfile.user?.city}</Text>
+                  )}
+
+                  {/* Coverage map: center + radius */}
+                  {(detailProfile.latitude != null && detailProfile.longitude != null) ? (
+                    <View style={{ marginTop: 10 }}>
+                      {Platform.OS === 'web' ? (
+                        // @ts-ignore web iframe
+                        <iframe
+                          title="provider-coverage"
+                          srcDoc={buildProviderMapHtml(detailProfile.latitude, detailProfile.longitude, detailProfile.service_radius_km)}
+                          style={{ width: '100%', height: 200, border: '1px solid #e5e7eb', borderRadius: 12 } as any}
+                          data-testid="provider-coverage-map"
+                        />
+                      ) : (
+                        <View style={styles.mapFallback}>
+                          <Ionicons name="map-outline" size={26} color="#9ca3af" />
+                          <Text style={styles.detailMuted}>Open the web dashboard to view the coverage map.</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.mapLinkBtn}
+                        onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${detailProfile.latitude},${detailProfile.longitude}`)}
+                        data-testid="provider-map-google-link"
+                      >
+                        <Ionicons name="open-outline" size={15} color="#2563eb" />
+                        <Text style={styles.mapLinkText}>Open center on Google Maps</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.detailMuted}>Center: {Number(detailProfile.latitude).toFixed(4)}, {Number(detailProfile.longitude).toFixed(4)}</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.detailMuted}>No map location set — provider hasn’t pinned a work location yet.</Text>
+                  )}
+
+                  {(!detailProfile.service_radius_km && !(detailProfile.service_cities?.length) && !(detailProfile.service_zones?.length) && detailProfile.latitude == null) && (
                     <Text style={styles.detailMuted}>No coverage area set.</Text>
                   )}
                 </View>
@@ -1000,6 +1055,16 @@ const styles = StyleSheet.create({
   idGateSub: { fontSize: 11.5, color: '#6b7280', marginTop: 2, lineHeight: 15 },
   detailsHint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   detailsHintText: { fontSize: 11, color: '#2563eb', fontWeight: '600' },
+  mapFallback: {
+    height: 120, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb',
+    backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 12,
+  },
+  mapLinkBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+    marginTop: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999,
+    borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff',
+  },
+  mapLinkText: { color: '#2563eb', fontSize: 13, fontWeight: '700' },
   detailSheet: {
     backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingHorizontal: 18, paddingTop: 16, paddingBottom: 24,
