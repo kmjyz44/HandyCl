@@ -2885,6 +2885,7 @@ async def google_auth_redirect(request: Request):
     """Redirect to Emergent Google OAuth"""
     # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     redirect_url = f"{str(request.base_url)}auth-callback"
+    auth_url = f"https://auth.emergentagent.com/?redirect={redirect_url}"
 
     return {"auth_url": auth_url}
 
@@ -7249,11 +7250,15 @@ async def update_user_profile(
     if name:
         update_data["name"] = name
     if email:
-        # Check if email already exists
-        existing = await db.users.find_one({"email": email, "user_id": {"$ne": user_id}})
+        norm_email = str(email).strip().lower()
+        # Uniqueness check (case-insensitive), excluding this user
+        existing = await db.users.find_one({**_ci_email(norm_email), "user_id": {"$ne": user_id}})
         if existing:
             raise HTTPException(status_code=400, detail="Email already in use")
-        update_data["email"] = email
+        update_data["email"] = norm_email
+        # Corrected email must be re-verified by its owner
+        update_data["email_verified"] = False
+        update_data["email_verified_at"] = None
     if phone:
         update_data["phone"] = phone
     if role:
@@ -14539,7 +14544,7 @@ async def provider_create_invoice(
         user_id=booking["client_id"],
         notification_type="payment_received",
         title="New invoice",
-        message=f"Pro {provider.get('name', 'Pro')} created invoice #{invoice_number} for ${total:.2f}",
+        message=f"Pro {provider.get('name', 'Pro')} created invoice #{invoice_number} for ${total_for_client:.2f}",
         related_id=invoice_id,
         related_type="invoice"
     )

@@ -79,6 +79,35 @@ export default function Users() {
   const [detailSlots, setDetailSlots] = useState<any[]>([]);
   const [detailClient, setDetailClient] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailValue, setEmailValue] = useState('');
+  const [emailBusy, setEmailBusy] = useState(false);
+
+  const startEmailEdit = () => {
+    setEmailValue(detailUser?.email || '');
+    setEditingEmail(true);
+  };
+
+  const saveEmailEdit = async () => {
+    const next = (emailValue || '').trim().toLowerCase();
+    if (!next || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
+      showAlert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+    if (next === (detailUser?.email || '').toLowerCase()) { setEditingEmail(false); return; }
+    setEmailBusy(true);
+    try {
+      await api.adminUpdateUserEmail(detailUser.user_id, next);
+      setDetailUser((u: any) => ({ ...u, email: next }));
+      setUsers((arr) => arr.map((u) => u.user_id === detailUser.user_id ? { ...u, email: next } : u));
+      setEditingEmail(false);
+      showAlert('Email updated', 'The user’s email has been changed. They’ll need to verify the new address.');
+    } catch (e: any) {
+      showAlert('Could not update', e?.response?.data?.detail || 'Failed to update email.');
+    } finally {
+      setEmailBusy(false);
+    }
+  };
 
   const openUserDetail = async (user: any) => {
     if (user.role !== 'provider' && user.role !== 'client') return;
@@ -86,6 +115,7 @@ export default function Users() {
     setDetailProfile(null);
     setDetailSlots([]);
     setDetailClient(null);
+    setEditingEmail(false);
     setDetailVisible(true);
     setDetailLoading(true);
     try {
@@ -828,7 +858,32 @@ export default function Users() {
             <View style={styles.detailHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.detailName}>{detailUser?.name}</Text>
-                <Text style={styles.detailEmail}>{detailUser?.email}</Text>
+                {editingEmail ? (
+                  <View style={styles.emailEditRow}>
+                    <TextInput
+                      style={styles.emailInput}
+                      value={emailValue}
+                      onChangeText={setEmailValue}
+                      placeholder="user@email.com"
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      autoCorrect={false}
+                      editable={!emailBusy}
+                      data-testid="edit-email-input"
+                    />
+                    <TouchableOpacity style={styles.emailSaveBtn} onPress={saveEmailEdit} disabled={emailBusy} data-testid="edit-email-save">
+                      {emailBusy ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="checkmark" size={18} color="#fff" />}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.emailCancelBtn} onPress={() => setEditingEmail(false)} disabled={emailBusy} data-testid="edit-email-cancel">
+                      <Ionicons name="close" size={18} color="#6b7280" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.emailDisplayRow} onPress={startEmailEdit} data-testid="edit-email-open" activeOpacity={0.6}>
+                    <Text style={styles.detailEmail}>{detailUser?.email}</Text>
+                    <Ionicons name="pencil" size={13} color="#2563eb" />
+                  </TouchableOpacity>
+                )}
               </View>
               <TouchableOpacity onPress={() => setDetailVisible(false)} data-testid="detail-close">
                 <Ionicons name="close" size={26} color="#111827" />
@@ -1072,6 +1127,20 @@ const styles = StyleSheet.create({
   detailHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
   detailName: { fontSize: 20, fontWeight: '800', color: '#111827' },
   detailEmail: { fontSize: 13, color: '#6b7280', marginTop: 2 },
+  emailDisplayRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  emailEditRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  emailInput: {
+    flex: 1, borderWidth: 1, borderColor: '#2563eb', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6, fontSize: 13, color: '#111827', backgroundColor: '#fff',
+  },
+  emailSaveBtn: {
+    width: 32, height: 32, borderRadius: 8, backgroundColor: '#2563eb',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  emailCancelBtn: {
+    width: 32, height: 32, borderRadius: 8, backgroundColor: '#f3f4f6',
+    alignItems: 'center', justifyContent: 'center',
+  },
   detailEmptyBig: { fontSize: 16, fontWeight: '700', color: '#374151', marginBottom: 6 },
   detailSection: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
   detailSectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },

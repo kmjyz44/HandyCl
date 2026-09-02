@@ -356,6 +356,11 @@ export const api = {
     return res.data;
   },
 
+  adminUpdateUserEmail: async (id: string, email: string) => {
+    const res = await client.put(`/admin/users/${id}/profile`, null, { params: { email } });
+    return res.data;
+  },
+
   adminGetSoro: async () => {
     const res = await client.get('/admin/integrations/soro');
     return res.data;
