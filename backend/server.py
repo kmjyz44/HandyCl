@@ -11382,11 +11382,13 @@ async def list_payment_methods():
     stripe_secret_present = bool(keys.get("stripe_secret_key"))
 
     methods = []
-    # Stripe — show only when admin enabled it (enable_stripe_payments) AND secret is set.
+    # Stripe is intentionally HIDDEN from the client's payment options (per request).
+    # (Kept behind a disabled flag so it can be re-enabled later without rewrites.)
+    SHOW_STRIPE_TO_CLIENT = False
     stripe_enabled = keys.get("enable_stripe_payments")
     if stripe_enabled is None:
         stripe_enabled = keys.get("enable_stripe_method")  # backward compat
-    if stripe_secret_present and bool(stripe_enabled):
+    if SHOW_STRIPE_TO_CLIENT and stripe_secret_present and bool(stripe_enabled):
         methods.append({
             "id": "stripe",
             "label": "Card (Stripe)",

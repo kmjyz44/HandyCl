@@ -680,7 +680,7 @@ export default function TaskDetail() {
   // Only show methods returned by /api/payments/methods (admin-controlled).
   // Fallback to Stripe-only if the API call hasn't completed yet — never to
   // hard-coded Monobank/PrivatBank list (those were removed per admin request).
-  const payMethods = enabledMethods.length > 0
+  const payMethods = (enabledMethods.length > 0
     ? enabledMethods.map((m) => ({
         id: m.id,
         label: m.label + (m.configured === false ? '  (not configured)' : ''),
@@ -688,7 +688,8 @@ export default function TaskDetail() {
         color: ICON_BY_ID[m.id]?.color || '#6b7280',
         configured: m.configured !== false,
       }))
-    : [{ id: 'stripe', label: 'Card (Stripe — test)', icon: 'card', color: '#635bff', configured: true }];
+    : [{ id: 'cash', label: 'Cash', icon: 'cash', color: '#22c55e', configured: true }]
+  ).filter((m) => m.id !== 'stripe');  // Stripe hidden from client payment options
 
   return (
     <View style={s.container}>
