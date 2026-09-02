@@ -153,6 +153,29 @@ const getProviderAvailableDays = (slots?: any[]): number[] => {
   return Array.from(set).sort((a, b) => a - b);
 };
 
+// Availability for the next 7 calendar days. Uses specific-date slots first
+// (current model), with day_of_week as a fallback for any legacy recurring slots.
+const getNext7Availability = (slots?: any[]) => {
+  const activeDates = new Set<string>();
+  const activeDows = new Set<number>();
+  if (Array.isArray(slots)) {
+    for (const s of slots) {
+      if (!s || !s.is_active) continue;
+      if (s.specific_date) activeDates.add(String(s.specific_date));
+      else if (typeof s.day_of_week === 'number') activeDows.add((s.day_of_week + 1) % 7);
+    }
+  }
+  const wk = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const out: { iso: string; dow: string; num: number; available: boolean }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    out.push({ iso, dow: wk[d.getDay()], num: d.getDate(), available: activeDates.has(iso) || activeDows.has(d.getDay()) });
+  }
+  return out;
+};
+
 const US_STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'];
 
 
@@ -2467,6 +2490,22 @@ export default function HomeScreen() {
                       </Text>
                     </View>
                   ) : null}
+                  {!showingOtherDates ? (() => {
+                    const days7 = getNext7Availability(tasker.availability_slots);
+                    const anyAvail = days7.some(d => d.available);
+                    return anyAvail ? (
+                      <View style={s.availStrip} data-testid={`tasker-avail7-${idx}`}>
+                        {days7.map((d, i) => (
+                          <View key={i} style={[s.availDay, d.available ? s.availDayOn : s.availDayOff]}>
+                            <Text style={[s.availDow, d.available ? s.availDowOn : null]}>{d.dow}</Text>
+                            <Text style={[s.availNum, d.available ? s.availNumOn : null]}>{d.num}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={s.notAvailText} data-testid={`tasker-notavail-${idx}`}>Not available</Text>
+                    );
+                  })() : null}
                 </View>
                 <View style={s.taskerCardRight}>
                   <Text style={s.taskerRate}>${rate}</Text>
@@ -3010,6 +3049,15 @@ const s = StyleSheet.create({
   reviewCount: { fontSize: 12, color: '#6b7280' },
   taskerSkills: { fontSize: 12, color: '#6b7280' },
   taskerMinHint: { fontSize: 11, color: '#b45309', marginTop: 3, fontWeight: '600' },
+  availStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
+  availDay: { alignItems: 'center', paddingVertical: 3, paddingHorizontal: 5, borderRadius: 7, minWidth: 26 },
+  availDayOn: { backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac' },
+  availDayOff: { backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
+  availDow: { fontSize: 9, color: '#9ca3af', fontWeight: '700' },
+  availDowOn: { color: '#059669' },
+  availNum: { fontSize: 11, color: '#9ca3af', fontWeight: '800' },
+  availNumOn: { color: '#047857' },
+  notAvailText: { fontSize: 11, color: '#9ca3af', marginTop: 6, fontStyle: 'italic' },
   taskerCardRight: { alignItems: 'flex-end' },
   taskerRate: { fontSize: 18, fontWeight: '800', color: '#2563eb' },
   taskerRateLabel: { fontSize: 12, color: '#6b7280' },
