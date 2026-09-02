@@ -21,7 +21,7 @@ export default function PrivacyPolicy() {
         <Text style={styles.title}>Privacy Policy</Text>
       </View>
       <ScrollView contentContainerStyle={styles.content} data-testid="privacy-screen">
-        <Text style={styles.meta}>Effective Date: February 15, 2026 · Last Updated: February 15, 2026</Text>
+        <Text style={styles.meta}>Effective Date: February 15, 2026 · Last Updated: June 15, 2026</Text>
 
         <Text style={styles.p}>
           Nexus Security Solutions LLC, operator of Ono-Fix ("we", "us", "our"), respects your privacy. This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the Ono-Fix Platform.
@@ -92,7 +92,17 @@ export default function PrivacyPolicy() {
           We may update this Privacy Policy. Material changes will be notified via email and an in-app banner.
         </Text>
 
-        <Text style={styles.h2}>13. Contact</Text>
+        <Text style={styles.h2}>13. Daily Work Confirmations and Progress Payments</Text>
+        <Text style={styles.p}>
+          Where the Services are performed over multiple work periods, the Customer may be presented with a Daily Work Confirmation describing the Services performed during a particular work period and the corresponding amount due.{'\n\n'}
+          Each Daily Work Confirmation identifies the specific Services performed, the applicable date, the service provider or technician, and the amount due for that work period.{'\n\n'}
+          By electronically accepting a Daily Work Confirmation and authorizing payment, the Customer acknowledges that the Services identified in that Daily Work Confirmation were performed during the applicable work period and authorizes payment of the stated amount.{'\n\n'}
+          Each Daily Work Confirmation constitutes a record of the applicable Services performed and payment authorized for that work period and is incorporated into and governed by the Customer Agreement.{'\n\n'}
+          Acceptance of a Daily Work Confirmation applies only to the Services specifically described in that Daily Work Confirmation and does not constitute acceptance of Services that have not yet been performed.{'\n\n'}
+          The Customer will receive or have access to a copy of each Daily Work Confirmation and payment receipt.
+        </Text>
+
+        <Text style={styles.h2}>14. Contact</Text>
         <Text style={styles.p}>
           OnoFix is operated by{'\n\n'}
           <Text style={styles.bold}>Nexus Security Solutions LLC</Text>{'\n\n'}

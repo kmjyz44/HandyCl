@@ -349,6 +349,14 @@ const SECTIONS: Section[] = [
       'Discretionary Termination (Section 68.1): allows removal of high-risk users to limit payment-processor reserve exposure.',
     ]},
   ]},
+  { title: '71. Daily Work Confirmations and Progress Payments', body: [
+    'Where the Services are performed over multiple work periods, the Customer may be presented with a Daily Work Confirmation describing the Services performed during a particular work period and the corresponding amount due.',
+    'Each Daily Work Confirmation identifies the specific Services performed, the applicable date, the service provider or technician, and the amount due for that work period.',
+    'By electronically accepting a Daily Work Confirmation and authorizing payment, the Customer acknowledges that the Services identified in that Daily Work Confirmation were performed during the applicable work period and authorizes payment of the stated amount.',
+    'Each Daily Work Confirmation constitutes a record of the applicable Services performed and payment authorized for that work period and is incorporated into and governed by the Customer Agreement.',
+    'Acceptance of a Daily Work Confirmation applies only to the Services specifically described in that Daily Work Confirmation and does not constitute acceptance of Services that have not yet been performed.',
+    'The Customer will receive or have access to a copy of each Daily Work Confirmation and payment receipt.',
+  ]},
 ];
 
 export default function TermsOfUse() {
