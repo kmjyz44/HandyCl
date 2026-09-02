@@ -127,6 +127,7 @@ export default function TaskDetail() {
   const [showPayment, setShowPayment] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState('');
   const [completionConfirmed, setCompletionConfirmed] = useState(false);
+  const [showAgreement, setShowAgreement] = useState(false);
   const [enabledMethods, setEnabledMethods] = useState<any[]>([]);
   const [showManualSplit, setShowManualSplit] = useState(false);
   const [manualInstructions, setManualInstructions] = useState<any>(null);
@@ -669,6 +670,21 @@ export default function TaskDetail() {
   const taskPhotos = [...(task.photos || []), ...(task.problem_photos || [])];
   const stepIdx = STEP_ORDER.indexOf(status);
   const isUA = (task.country || user?.country || 'UA').toUpperCase().includes('UA');
+
+  // ── Settlement Agreement data (substituted where available) ──
+  const contractorName = task.provider?.name || 'the Contractor (Service Provider)';
+  const settlementAmount = (() => {
+    const fp = task.final_price;
+    const ah = task.actual_hours;
+    const rate = task.provider_hourly_rate || task.hourly_rate || hourlyRate;
+    const mc = task.materials_cost || 0;
+    const laborBase = fp ? fp : (ah && rate ? Math.round(ah * rate * 100) / 100 : (price || 0));
+    const totalBase = fp || (laborBase + mc);
+    return fp ? Math.round(fp * 100) / 100 : Math.round(totalBase * 1.15 * 100) / 100;
+  })();
+  const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const propertyAddress = task.address || 'the Property';
+  const governingState = task.state || 'the State in which the Property is located';
   const ICON_BY_ID: Record<string, { icon: any; color: string }> = {
     stripe: { icon: 'card', color: '#635bff' },
     paypal: { icon: 'logo-paypal', color: '#0070ba' },
@@ -1396,6 +1412,93 @@ export default function TaskDetail() {
                 <Text style={s.confirmBody}>
                   By confirming completion, I acknowledge that this Job Agreement has been completed and fully performed by the Service Provider, except for any rights or claims that cannot legally be waived.
                 </Text>
+
+                {/* ── Settlement Agreement, Release & Unconditional Waiver of Lien ── */}
+                <TouchableOpacity
+                  style={s.agreementLink}
+                  onPress={() => setShowAgreement(v => !v)}
+                  activeOpacity={0.7}
+                  data-testid="settlement-agreement-toggle"
+                >
+                  <Ionicons name="document-text-outline" size={16} color="#2563eb" />
+                  <Text style={s.agreementLinkText}>
+                    {showAgreement ? 'Hide' : 'View'} Settlement Agreement, Release & Unconditional Waiver of Lien
+                  </Text>
+                  <Ionicons name={showAgreement ? 'chevron-up' : 'chevron-down'} size={16} color="#2563eb" />
+                </TouchableOpacity>
+
+                {showAgreement && (
+                  <View style={s.agreementBox} data-testid="settlement-agreement-text">
+                    <Text style={s.agH}>SETTLEMENT AGREEMENT, RELEASE, AND UNCONDITIONAL WAIVER OF LIEN</Text>
+                    <Text style={s.agP}>
+                      This Agreement is made on {todayStr}, by and between {contractorName} (the “Contractor”) and {clientName} (the “Client/Owner”) (collectively, the “Parties”).
+                    </Text>
+
+                    <Text style={s.agSub}>RECITALS</Text>
+                    <Text style={s.agP}>
+                      WHEREAS, the Parties entered into a Job Agreement (the “Original Agreement”) for the performance of certain work and/or provision of materials at the property located at {propertyAddress} (the “Property”);
+                    </Text>
+                    <Text style={s.agP}>
+                      WHEREAS, Contractor has performed the work (or a portion thereof) under the Original Agreement, and Client desires to accept the performed work as full and final satisfaction of Contractor’s obligations; and the Parties desire to fully and finally resolve all matters arising from or related to the Original Agreement and the work performed thereunder.
+                    </Text>
+                    <Text style={s.agP}>NOW, THEREFORE, in consideration of the mutual promises herein, the Parties agree as follows:</Text>
+
+                    <Text style={s.agSub}>1. FINAL PAYMENT</Text>
+                    <Text style={s.agP}>
+                      Client agrees to pay Contractor the sum of ${settlementAmount.toFixed(2)} today, {todayStr} (the “Settlement Amount”), as full and final payment for all work performed by Contractor under the Original Agreement through the date hereof. Client acknowledges this payment constitutes payment in full for all labor, services, materials, and equipment provided to the Property.
+                    </Text>
+
+                    <Text style={s.agSub}>2. ACKNOWLEDGMENT OF SATISFACTION</Text>
+                    <Text style={s.agP}>
+                      Client acknowledges and agrees that: (a) Client has inspected the work performed; (b) Client accepts the work as satisfactory and in compliance with all applicable standards; (c) Client has no complaints, objections, or claims regarding the quality, scope, or completion of the work performed; and (d) Client is fully satisfied and waives any right to require Contractor to perform any additional work under the Original Agreement.
+                    </Text>
+
+                    <Text style={s.agSub}>3. RELEASE OF CLAIMS</Text>
+                    <Text style={s.agP}>
+                      Client, on behalf of itself and its heirs, successors, and assigns, hereby RELEASES, ACQUITS, AND FOREVER DISCHARGES Contractor and its officers, directors, employees, agents, affiliates, successors, and assigns from any and all claims, demands, damages, actions, causes of action, suits, debts, liabilities, obligations, costs, expenses, and attorneys’ fees of any kind whatsoever, whether known or unknown, suspected or unsuspected, arising out of or relating to the Original Agreement, the work performed, or the Property.
+                    </Text>
+                    <Text style={s.agP}>
+                      Client expressly waives any rights under California Civil Code Section 1542 (or any similar statute in any other jurisdiction), which provides: “A general release does not extend to claims that the creditor or releasing party does not know or suspect to exist in his or her favor at the time of executing the release and that, if known by him or her, would have materially affected his or her settlement with the debtor or released party.” Client acknowledges it may discover different or additional facts and agrees this Release shall remain effective notwithstanding.
+                    </Text>
+
+                    <Text style={s.agSub}>4. UNCONDITIONAL WAIVER AND RELEASE OF LIEN</Text>
+                    <Text style={s.agP}>
+                      Contractor, having received the Settlement Amount above, hereby UNCONDITIONALLY AND FINALLY WAIVES AND RELEASES any and all rights to claim, file, or enforce any mechanic’s lien, materialman’s lien, stop payment notice, payment bond claim, or any other lien or claim against the Property, the Client, or any improvements thereon, arising from or related to the Original Agreement or any work, labor, services, materials, or equipment provided through the date hereof. This Waiver and Release is FINAL AND UNCONDITIONAL and effective immediately upon execution.
+                    </Text>
+
+                    <Text style={s.agSub}>5. WAIVER OF REMAINING WORK</Text>
+                    <Text style={s.agP}>
+                      Contractor waives any right to perform, or to receive payment for, any work not performed as of the date hereof. Client waives any right to require Contractor to perform any remaining work under the Original Agreement.
+                    </Text>
+
+                    <Text style={s.agSub}>6. NO ADMISSION OF LIABILITY</Text>
+                    <Text style={s.agP}>
+                      This Agreement is a compromise and settlement of disputed claims. Neither this Agreement nor payment of the Settlement Amount shall be construed as an admission of liability or wrongdoing by either Party.
+                    </Text>
+
+                    <Text style={s.agSub}>7. GOVERNING LAW</Text>
+                    <Text style={s.agP}>This Agreement shall be governed by and construed in accordance with the laws of {governingState}.</Text>
+
+                    <Text style={s.agSub}>8. ENTIRE AGREEMENT</Text>
+                    <Text style={s.agP}>
+                      This Agreement constitutes the entire agreement between the Parties with respect to the subject matter hereof and supersedes all prior negotiations, representations, or agreements, written or oral.
+                    </Text>
+
+                    <Text style={s.agSub}>9. VOLUNTARY EXECUTION</Text>
+                    <Text style={s.agP}>
+                      The Parties acknowledge they have read and understand this Agreement, have had the opportunity to consult with legal counsel of their own choosing, and are executing this Agreement voluntarily.
+                    </Text>
+
+                    <Text style={s.agSub}>10. ELECTRONIC CONSENT (E-SIGN / UETA)</Text>
+                    <Text style={s.agP}>
+                      Under the Electronic Signatures in Global and National Commerce Act (E-SIGN Act) and the Uniform Electronic Transactions Act (UETA), the Parties agree that checking the box below and paying constitutes a legally binding electronic signature with the same force and effect as a handwritten signature. The Parties waive any defense based on the lack of a physical signature and consent to electronic records and the resulting audit trail (date/time, IP address, and account identity are recorded).
+                    </Text>
+                    <Text style={s.agParties}>
+                      Contractor: {contractorName}{'\n'}Client/Owner: {clientName}{'\n'}Date: {todayStr}
+                    </Text>
+                  </View>
+                )}
+
                 <TouchableOpacity
                   style={s.confirmCheckRow}
                   onPress={() => setCompletionConfirmed(v => !v)}
@@ -1408,7 +1511,7 @@ export default function TaskDetail() {
                     color={completionConfirmed ? '#10b981' : '#9ca3af'}
                   />
                   <Text style={s.confirmCheckLabel}>
-                    I CONFIRM THAT THE WORK IS COMPLETED AND I HAVE NO OUTSTANDING COMPLAINTS OR PAYMENT DISPUTES
+                    I CONFIRM THE WORK IS COMPLETED WITH NO OUTSTANDING COMPLAINTS OR PAYMENT DISPUTES, AND I HAVE READ AND AGREE TO THE SETTLEMENT AGREEMENT, RELEASE & UNCONDITIONAL WAIVER OF LIEN ABOVE.
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1979,6 +2082,13 @@ const s = StyleSheet.create({
   confirmBox: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 12, padding: 14, marginTop: 18 },
   confirmTitle: { fontSize: 14, fontWeight: '800', color: '#065f46', marginBottom: 8 },
   confirmBody: { fontSize: 12, color: '#374151', lineHeight: 18, marginBottom: 8 },
+  agreementLink: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, marginBottom: 4 },
+  agreementLinkText: { flex: 1, fontSize: 12, fontWeight: '700', color: '#2563eb' },
+  agreementBox: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 12, marginBottom: 10 },
+  agH: { fontSize: 12, fontWeight: '800', color: '#111827', marginBottom: 8, textAlign: 'center' },
+  agSub: { fontSize: 11, fontWeight: '800', color: '#111827', marginTop: 8, marginBottom: 3 },
+  agP: { fontSize: 11, color: '#4b5563', lineHeight: 16, marginBottom: 4 },
+  agParties: { fontSize: 11, color: '#111827', fontWeight: '700', lineHeight: 18, marginTop: 8 },
   confirmCheckRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#bbf7d0' },
   confirmCheckLabel: { flex: 1, fontSize: 12, fontWeight: '700', color: '#065f46', lineHeight: 17 },
   splitRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
