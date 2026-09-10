@@ -11,7 +11,7 @@ export default function NotificationSettings() {
   const router = useRouter();
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [prefs, setPrefs] = useState<Record<string, boolean>>({ email: true, sms: true, telegram: true });
+  const [prefs, setPrefs] = useState<Record<string, boolean>>({ email: false, sms: false, telegram: false });
   const [tgLinked, setTgLinked] = useState(false);
   const [tgBusy, setTgBusy] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);

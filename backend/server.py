@@ -2009,16 +2009,20 @@ async def get_notification_prefs(current_user: User = Depends(get_current_user))
 @api_router.put("/users/notification-prefs")
 async def update_notification_prefs(payload: Dict[str, Any] = Body(...), current_user: User = Depends(get_current_user)):
     """Update channel switches. Body: any subset of {email,sms,push,telegram: bool}."""
-    updates = {}
+    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "notification_prefs": 1})
+    current = (u or {}).get("notification_prefs")
+    if not isinstance(current, dict):
+        current = {}
+    changed = False
     for ch in _NOTIF_CHANNELS:
         if ch in payload:
-            updates[f"notification_prefs.{ch}"] = bool(payload[ch])
-    if not updates:
+            current[ch] = bool(payload[ch])
+            changed = True
+    if not changed:
         raise HTTPException(status_code=400, detail="No valid channels provided")
-    await db.users.update_one({"user_id": current_user.user_id}, {"$set": updates})
-    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "notification_prefs": 1})
-    prefs = (u or {}).get("notification_prefs") or {}
-    return {ch: (prefs.get(ch, True) is not False) for ch in _NOTIF_CHANNELS}
+    # Set the whole object (avoids MongoDB errors when notification_prefs was null).
+    await db.users.update_one({"user_id": current_user.user_id}, {"$set": {"notification_prefs": current}})
+    return {ch: (current.get(ch, True) is not False) for ch in _NOTIF_CHANNELS}
 
 
 
@@ -2731,6 +2735,12 @@ async def register(user_data: UserRegister, request: Request = None):
     user_dict["accepted_terms_ip"] = _client_ip(request)
     user_dict["accepted_terms_user_agent"] = (request.headers.get("user-agent") if request else None)
     user_dict["email_verified"] = False
+    # Notification defaults: new CLIENTS start with all channels OFF (opt-in).
+    # Providers keep job alerts ON (opt-out) so they don't miss new jobs.
+    if user_data.role == UserRole.CLIENT:
+        user_dict["notification_prefs"] = {ch: False for ch in _NOTIF_CHANNELS}
+    else:
+        user_dict["notification_prefs"] = {}
 
     await db.users.insert_one(user_dict)
     await _record_terms_acceptance(user_id, reg_email, str(user_data.role), request, "registration")
