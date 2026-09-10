@@ -174,6 +174,7 @@ export default function TaskChat() {
   }, [loadMessages]);
 
   const sendMessage = async () => {
+    if (task && ['declined', 'rejected', 'cancelled', 'canceled', 'cancelled_by_client', 'cancelled_by_tasker', 'paid'].includes(task.status) && user?.role !== 'admin') return;
     if (!text.trim() && !pendingImage) return;
     setSending(true);
     const msgText = text.trim();
@@ -266,6 +267,14 @@ export default function TaskChat() {
     );
   };
 
+  const CLOSED_STATUSES = ['declined', 'rejected', 'cancelled', 'canceled', 'cancelled_by_client', 'cancelled_by_tasker', 'paid'];
+  // Chat is read-only for the client and the provider once the task is declined/cancelled
+  // or completed & fully paid. Admin/support keeps access.
+  const chatClosed = !!task && CLOSED_STATUSES.includes(task.status) && user?.role !== 'admin';
+  const chatClosedReason = task?.status === 'paid'
+    ? 'This chat is now closed — the task is completed and fully paid.'
+    : 'This chat is now closed — the task was cancelled or declined.';
+
   return (
     <KeyboardAvoidingView
       style={s.container}
@@ -349,6 +358,12 @@ export default function TaskChat() {
       )}
 
       {/* Input */}
+      {chatClosed ? (
+        <View style={s.closedBar} data-testid="chat-closed-notice">
+          <Ionicons name="lock-closed" size={16} color="#6b7280" />
+          <Text style={s.closedText}>{chatClosedReason}</Text>
+        </View>
+      ) : (
       <View style={s.inputRow}>
         {/* Photo attach button */}
         <TouchableOpacity style={s.attachBtn} onPress={handlePickImage}>
@@ -377,6 +392,7 @@ export default function TaskChat() {
           }
         </TouchableOpacity>
       </View>
+      )}
 
       <ScheduleModal
         visible={showSchedule}
@@ -474,4 +490,10 @@ const s = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   sendBtnDisabled: { backgroundColor: '#93c5fd' },
+  closedBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, paddingHorizontal: 16, backgroundColor: '#f3f4f6',
+    borderTopWidth: 1, borderTopColor: '#e5e7eb',
+  },
+  closedText: { fontSize: 13, color: '#6b7280', fontWeight: '600', textAlign: 'center', flexShrink: 1 },
 });

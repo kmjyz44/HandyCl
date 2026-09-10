@@ -4712,6 +4712,13 @@ async def send_task_message(task_id: str, body: MessageCreate, current_user: Use
     if not (is_admin or is_client or is_provider):
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Chat is closed for the client and provider once the task is declined/cancelled
+    # or completed & fully paid. Admin/support can still message.
+    CLOSED_TASK_STATUSES = {"declined", "rejected", "cancelled", "canceled",
+                            "cancelled_by_client", "cancelled_by_tasker", "paid"}
+    if not is_admin and task.get("status") in CLOSED_TASK_STATUSES:
+        raise HTTPException(status_code=403, detail="This chat is closed for this task.")
+
     msg_id = f"msg_{uuid.uuid4().hex[:12]}"
     msg = {
         "message_id": msg_id,
