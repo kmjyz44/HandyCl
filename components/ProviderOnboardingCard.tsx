@@ -57,18 +57,6 @@ export default function ProviderOnboardingCard() {
       </View>
 
       <View style={s.track}><View style={[s.fill, { width: `${pct}%` }]} /></View>
-
-      {nextStep && (
-        <TouchableOpacity
-          style={s.cta}
-          onPress={() => router.push(nextStep.route as any)}
-          data-testid="onboarding-card-continue"
-        >
-          <Ionicons name={nextStep.icon as any} size={16} color="#fff" />
-          <Text style={s.ctaText}>Next: {nextStep.title}</Text>
-          <Ionicons name="arrow-forward" size={16} color="#fff" />
-        </TouchableOpacity>
-      )}
     </TouchableOpacity>
   );
 }
