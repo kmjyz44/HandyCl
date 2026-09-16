@@ -50,17 +50,35 @@ export default function NotificationSettings() {
   };
 
   const connectTelegram = async () => {
+    // iOS Safari/Chrome block window.open() called AFTER an await (the popup loses
+    // the user-gesture context). So on web we open a tab synchronously on tap, then
+    // fill it once we have the link; if the browser blocked it, we fall back to
+    // navigating the current tab (which is never blocked).
+    let popup: Window | null = null;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try { popup = window.open('', '_blank'); } catch { popup = null; }
+    }
     setTgBusy(true);
     try {
       const res = await api.telegramLinkStart();
       if (res?.deep_link) {
-        if (Platform.OS === 'web') window.open(res.deep_link, '_blank');
-        else Linking.openURL(res.deep_link);
+        if (Platform.OS === 'web') {
+          if (popup && !popup.closed) {
+            popup.location.href = res.deep_link;
+          } else {
+            // popup was blocked → open Telegram in the same tab
+            window.location.href = res.deep_link;
+          }
+        } else {
+          Linking.openURL(res.deep_link);
+        }
         showAlert('Connect Telegram', 'Telegram will open — press START in the chat. Then come back and tap "Refresh".');
       } else {
+        if (popup && !popup.closed) popup.close();
         showAlert('Not available', 'Telegram bot is not configured yet. Please try again later.');
       }
     } catch (e: any) {
+      if (popup && !popup.closed) popup.close();
       showAlert('Error', e?.response?.data?.detail || 'Could not start Telegram linking.');
     } finally {
       setTgBusy(false);
