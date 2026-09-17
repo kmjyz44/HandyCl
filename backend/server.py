@@ -13509,6 +13509,45 @@ async def admin_telegram_setup(payload: Dict[str, Any] = Body(default={}), curre
     }
 
 
+@api_router.post("/admin/telegram/link/{user_id}")
+async def admin_telegram_link_for_user(user_id: str, current_user: User = Depends(require_admin)):
+    """Admin: generate a one-time Telegram link + code for ANY user so the admin
+    can send it to them directly (e.g. paste into chat). The user taps the link,
+    presses START, and the webhook stores their chat_id."""
+    target = await db.users.find_one({"user_id": user_id}, {"_id": 0, "user_id": 1, "name": 1, "email": 1, "telegram_chat_id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    keys = await _get_integration_keys()
+    token = (keys.get("telegram_bot_token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Telegram bot is not configured yet. Add the bot token in the Integrations panel.")
+    username = (keys.get("telegram_bot_username") or "").strip()
+    if not username:
+        me = await _telegram_get_me(token)
+        username = (me or {}).get("username") or ""
+        if username:
+            await db.integration_keys.update_one(
+                {"setting_id": "integration_keys"},
+                {"$set": {"telegram_bot_username": username}}, upsert=True,
+            )
+    if not username:
+        raise HTTPException(status_code=400, detail="Could not resolve the bot username. Check the bot token.")
+    code = secrets.token_urlsafe(6)
+    await db.telegram_link_codes.delete_many({"user_id": user_id})
+    await db.telegram_link_codes.insert_one({
+        "code": code,
+        "user_id": user_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {
+        "code": code,
+        "bot_username": username,
+        "deep_link": f"https://t.me/{username}?start={code}",
+        "already_connected": bool(target.get("telegram_chat_id")),
+        "user_name": target.get("name"),
+    }
+
+
 @api_router.get("/admin/telegram/status")
 async def admin_telegram_status(current_user: User = Depends(require_admin)):
     keys = await _get_integration_keys()

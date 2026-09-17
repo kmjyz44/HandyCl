@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06 — Admin Telegram link generator + iPhone connect helper
+- NEW backend endpoint `POST /api/admin/telegram/link/{user_id}` (admin-only): generates a one-time code + `https://t.me/{bot}?start={code}` deep link for ANY user, so admin can send the link directly (bot username = `onofix_bot`, auto-resolved via getMe). Returns `already_connected` + `user_name`. Verified via curl on preview.
+- Admin panel (`app/(tabs)/users.tsx`): added "Telegram connect link" box at top of the user-detail modal — "Generate link" → shows link with Copy / Open / New link buttons + a "Connected" pill when the user already linked. testids: admin-tg-generate-btn, admin-tg-link-text, admin-tg-copy-btn, admin-tg-open-btn, admin-tg-regen-btn.
+- iPhone helper (`app/notification-settings.tsx`): added a "Copy" button next to the manual connect code (navigator.clipboard on web) so iOS users who hit the popup-blocker can copy the code and paste it to the bot. testid: telegram-copy-code.
+- CONTEXT: user confirmed Telegram works fine on Android (prod webhook active); issue is only iOS popup blocking. Admin-generated link bypasses the in-app button entirely.
+- ⚠️ Requires Netlify + Railway redeploy (Save to GitHub) to appear in production. Backend synced /app/backend/server.py → /app/server.py.
+
+
 ## 2026-06 — Blog: "Order a service" CTA at end of every article + prod Soro sync
 - Added a gradient CTA block ("Need this done for you? … Order a service →" linking to `/`) at the bottom of every server-rendered blog article (`blog_render_article` in server.py) to convert Google/readers into bookings.
 - Removed the confusing "View on the web" pill from the in-app Blog feed (`(tabs)/community.tsx`) — now ONE blog: the in-app "Blog" tab, with `/blog` served silently for Google/SEO only.

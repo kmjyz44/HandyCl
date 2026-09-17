@@ -16,7 +16,21 @@ export default function NotificationSettings() {
   const [tgBusy, setTgBusy] = useState(false);
   const [tgDeepLink, setTgDeepLink] = useState<string | null>(null);
   const [tgCode, setTgCode] = useState<string>('');
+  const [tgCodeCopied, setTgCodeCopied] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+
+  const copyTgCode = async () => {
+    if (!tgCode) return;
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(tgCode);
+      }
+      setTgCodeCopied(true);
+      setTimeout(() => setTgCodeCopied(false), 2000);
+    } catch {
+      showAlert('Copy failed', 'Please select and copy the code manually.');
+    }
+  };
 
   const load = useCallback(() => {
     let alive = true;
@@ -187,8 +201,14 @@ export default function NotificationSettings() {
                       <Text style={styles.tgBotLink}>@onofix_bot</Text>
                     </TouchableOpacity>
                     <Text style={styles.tgManualStep}>2. Press START, then send this code in the chat:</Text>
-                    <View style={styles.tgCodeBox}>
-                      <Text selectable style={styles.tgCode}>{tgCode}</Text>
+                    <View style={styles.tgCodeRow}>
+                      <View style={styles.tgCodeBox}>
+                        <Text selectable style={styles.tgCode}>{tgCode}</Text>
+                      </View>
+                      <TouchableOpacity style={styles.tgCopyCodeBtn} onPress={copyTgCode} data-testid="telegram-copy-code">
+                        <Ionicons name={tgCodeCopied ? 'checkmark' : 'copy-outline'} size={15} color="#fff" />
+                        <Text style={styles.tgCopyCodeText}>{tgCodeCopied ? 'Copied' : 'Copy'}</Text>
+                      </TouchableOpacity>
                     </View>
                     <Text style={styles.tgManualHint}>3. Come back here and tap “Refresh status”.</Text>
                   </View>
@@ -239,6 +259,9 @@ const styles = StyleSheet.create({
   tgManualHint: { fontSize: 13, color: '#374151', marginTop: 8 },
   tgBotLink: { fontSize: 16, fontWeight: '800', color: '#2563eb', marginTop: 2 },
   tgCodeBox: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 14, alignSelf: 'flex-start', marginTop: 6 },
+  tgCodeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  tgCopyCodeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#0284c7', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12 },
+  tgCopyCodeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   tgCode: { fontSize: 20, fontWeight: '800', letterSpacing: 2, color: '#111827' },
   intro: { fontSize: 14, color: '#4b5563', lineHeight: 20, marginBottom: 16 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb' },

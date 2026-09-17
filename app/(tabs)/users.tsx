@@ -82,6 +82,37 @@ export default function Users() {
   const [editingEmail, setEditingEmail] = useState(false);
   const [emailValue, setEmailValue] = useState('');
   const [emailBusy, setEmailBusy] = useState(false);
+  const [tgLinkBusy, setTgLinkBusy] = useState(false);
+  const [tgLink, setTgLink] = useState<any>(null);
+  const [tgCopied, setTgCopied] = useState(false);
+
+  const generateTgLink = async () => {
+    if (!detailUser?.user_id) return;
+    setTgLinkBusy(true);
+    setTgCopied(false);
+    try {
+      const res = await api.adminTelegramLinkForUser(detailUser.user_id);
+      setTgLink(res);
+    } catch (e: any) {
+      showAlert('Could not generate', e?.response?.data?.detail || 'Failed to generate Telegram link.');
+    } finally {
+      setTgLinkBusy(false);
+    }
+  };
+
+  const copyTgLink = async () => {
+    const url = tgLink?.deep_link;
+    if (!url) return;
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+      }
+      setTgCopied(true);
+      setTimeout(() => setTgCopied(false), 2000);
+    } catch {
+      showAlert('Copy failed', 'Please select and copy the link manually.');
+    }
+  };
 
   const startEmailEdit = () => {
     setEmailValue(detailUser?.email || '');
@@ -109,13 +140,14 @@ export default function Users() {
     }
   };
 
-  const openUserDetail = async (user: any) => {
-    if (user.role !== 'provider' && user.role !== 'client') return;
+  const openUserDetail = async (user: any) => {    if (user.role !== 'provider' && user.role !== 'client') return;
     setDetailUser(user);
     setDetailProfile(null);
     setDetailSlots([]);
     setDetailClient(null);
     setEditingEmail(false);
+    setTgLink(null);
+    setTgCopied(false);
     setDetailVisible(true);
     setDetailLoading(true);
     try {
@@ -890,6 +922,55 @@ export default function Users() {
               </TouchableOpacity>
             </View>
 
+            {/* Telegram link generator — admin creates a link to send the user directly */}
+            <View style={styles.tgAdminBox}>
+              <View style={styles.tgAdminHead}>
+                <Ionicons name="paper-plane" size={16} color="#0284c7" />
+                <Text style={styles.tgAdminTitle}>Telegram connect link</Text>
+                {detailUser?.telegram_chat_id ? (
+                  <View style={styles.tgConnectedPill}><Text style={styles.tgConnectedPillText}>Connected</Text></View>
+                ) : null}
+              </View>
+              {!tgLink ? (
+                <TouchableOpacity
+                  style={styles.tgGenBtn}
+                  onPress={generateTgLink}
+                  disabled={tgLinkBusy}
+                  data-testid="admin-tg-generate-btn"
+                >
+                  {tgLinkBusy
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={styles.tgGenBtnText}>Generate link for this user</Text>}
+                </TouchableOpacity>
+              ) : (
+                <View>
+                  <Text style={styles.tgAdminHint}>
+                    Send this link to {tgLink.user_name || 'the user'}. They open it, press START in the bot — done.
+                  </Text>
+                  <View style={styles.tgLinkRow}>
+                    <Text selectable style={styles.tgLinkText} numberOfLines={1} data-testid="admin-tg-link-text">{tgLink.deep_link}</Text>
+                  </View>
+                  <View style={styles.tgLinkActions}>
+                    <TouchableOpacity style={styles.tgCopyBtn} onPress={copyTgLink} data-testid="admin-tg-copy-btn">
+                      <Ionicons name={tgCopied ? 'checkmark' : 'copy-outline'} size={15} color="#fff" />
+                      <Text style={styles.tgCopyBtnText}>{tgCopied ? 'Copied!' : 'Copy link'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.tgOpenBtn}
+                      onPress={() => { if (Platform.OS === 'web') window.open(tgLink.deep_link, '_blank'); else Linking.openURL(tgLink.deep_link); }}
+                      data-testid="admin-tg-open-btn"
+                    >
+                      <Ionicons name="open-outline" size={15} color="#0284c7" />
+                      <Text style={styles.tgOpenBtnText}>Open</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.tgRegenBtn} onPress={generateTgLink} disabled={tgLinkBusy} data-testid="admin-tg-regen-btn">
+                      <Text style={styles.tgRegenBtnText}>New link</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+
             {detailLoading ? (
               <ActivityIndicator style={{ marginVertical: 30 }} size="large" color="#2563eb" />
             ) : detailUser?.role === 'client' ? (
@@ -1126,6 +1207,23 @@ const styles = StyleSheet.create({
   },
   detailHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
   detailName: { fontSize: 20, fontWeight: '800', color: '#111827' },
+  tgAdminBox: { backgroundColor: '#f0f9ff', borderWidth: 1, borderColor: '#bae6fd', borderRadius: 12, padding: 12, marginBottom: 12 },
+  tgAdminHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  tgAdminTitle: { fontSize: 13, fontWeight: '800', color: '#0369a1' },
+  tgConnectedPill: { marginLeft: 'auto', backgroundColor: '#d1fae5', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  tgConnectedPillText: { fontSize: 11, fontWeight: '700', color: '#059669' },
+  tgAdminHint: { fontSize: 12, color: '#475569', marginBottom: 8, lineHeight: 17 },
+  tgGenBtn: { backgroundColor: '#0284c7', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  tgGenBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  tgLinkRow: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, marginBottom: 8 },
+  tgLinkText: { fontSize: 12, color: '#1e40af', fontWeight: '600' },
+  tgLinkActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  tgCopyBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#0284c7', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  tgCopyBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  tgOpenBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#fff', borderWidth: 1, borderColor: '#0284c7', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  tgOpenBtnText: { color: '#0284c7', fontWeight: '700', fontSize: 12 },
+  tgRegenBtn: { justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 8 },
+  tgRegenBtnText: { color: '#64748b', fontWeight: '600', fontSize: 12 },
   detailEmail: { fontSize: 13, color: '#6b7280', marginTop: 2 },
   emailDisplayRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   emailEditRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },

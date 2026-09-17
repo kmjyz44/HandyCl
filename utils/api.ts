@@ -205,6 +205,11 @@ export const api = {
     return res.data;
   },
 
+  adminTelegramLinkForUser: async (userId: string) => {
+    const res = await client.post(`/admin/telegram/link/${userId}`);
+    return res.data;
+  },
+
   telegramLinkStart: async () => {
     const res = await client.post('/telegram/link/start');
     return res.data;
