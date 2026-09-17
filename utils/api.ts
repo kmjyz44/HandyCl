@@ -210,6 +210,21 @@ export const api = {
     return res.data;
   },
 
+  getWelcomeEmails: async () => {
+    const res = await client.get('/admin/welcome-emails');
+    return res.data;
+  },
+
+  updateWelcomeEmails: async (payload: any) => {
+    const res = await client.put('/admin/welcome-emails', payload);
+    return res.data;
+  },
+
+  testWelcomeEmail: async (role: string) => {
+    const res = await client.post('/admin/welcome-emails/test', { role });
+    return res.data;
+  },
+
   telegramLinkStart: async () => {
     const res = await client.post('/telegram/link/start');
     return res.data;

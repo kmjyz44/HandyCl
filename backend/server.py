@@ -1641,6 +1641,82 @@ async def _send_email_now(to_email: str, subject: str, body_text: str) -> bool:
     return False
 
 
+WELCOME_EMAIL_DEFAULTS = {
+    "enabled": True,
+    "client_subject": "Welcome to Ono-Fix — here's how it works",
+    "client_body": (
+        "Hi {name},\n\n"
+        "Welcome to Ono-Fix! We connect you with trusted local pros for home services.\n\n"
+        "How it works:\n"
+        "1. Post a job or browse pros in your area.\n"
+        "2. Chat, agree on the details, and schedule the work.\n"
+        "3. Pay securely only after the work is confirmed done.\n\n"
+        "A few house rules:\n"
+        "- Keep all communication and payments inside the app for your protection.\n"
+        "- Provide clear job details so pros can help you fast.\n"
+        "- Confirm completed work honestly so everyone stays protected.\n\n"
+        "Rewards: Earn loyalty points on every completed job, plus bonus points when you refer "
+        "friends. Redeem them for discounts and gift cards in the Rewards section.\n\n"
+        "Need help? Just reply to this email or use in-app Support.\n\n"
+        "— The Ono-Fix Team"
+    ),
+    "provider_subject": "Welcome to Ono-Fix — start earning",
+    "provider_body": (
+        "Hi {name},\n\n"
+        "Welcome to Ono-Fix! You're now part of our network of trusted local pros.\n\n"
+        "Getting started:\n"
+        "1. Complete your profile: skills, service area, rates and availability.\n"
+        "2. Verify your identity so clients can book you.\n"
+        "3. Accept jobs, chat with clients, and get paid securely.\n\n"
+        "Platform rules:\n"
+        "- Keep all communication and payments inside the app.\n"
+        "- Show up on time and deliver quality work as agreed.\n"
+        "- Confirm daily work honestly — this protects you and the client.\n"
+        "- You work as an independent contractor; please follow the Service Provider Agreement.\n\n"
+        "Rewards & ranking: Great ratings and completed jobs boost your ranking, so you appear "
+        "higher to clients and get more work. You can also earn bonus points by referring other pros.\n\n"
+        "Need help? Reply to this email or use in-app Support.\n\n"
+        "— The Ono-Fix Team"
+    ),
+}
+
+
+async def _get_welcome_settings() -> Dict[str, Any]:
+    """Welcome-email templates + on/off toggle, admin-editable. Falls back to defaults."""
+    doc = await db.app_settings.find_one({"setting_id": "welcome_emails"}, {"_id": 0}) or {}
+    out = dict(WELCOME_EMAIL_DEFAULTS)
+    for k in ("client_subject", "client_body", "provider_subject", "provider_body"):
+        if doc.get(k):
+            out[k] = doc[k]
+    if doc.get("enabled") is not None:
+        out["enabled"] = bool(doc["enabled"])
+    return out
+
+
+async def _send_welcome_email(user_dict: Dict[str, Any]):
+    """Fire-and-forget welcome email based on role. Respects the welcome on/off toggle."""
+    try:
+        cfg = await _get_welcome_settings()
+        if not cfg.get("enabled"):
+            return
+        to_email = (user_dict.get("email") or "").strip()
+        if not to_email:
+            return
+        role = str(user_dict.get("role") or "").lower()
+        name = user_dict.get("name") or "there"
+        if "provider" in role:
+            subject = cfg["provider_subject"]
+            body = cfg["provider_body"]
+        else:
+            subject = cfg["client_subject"]
+            body = cfg["client_body"]
+        body = body.replace("{name}", name)
+        subject = subject.replace("{name}", name)
+        await _send_email_now(to_email, subject, body)
+    except Exception as e:
+        logger.warning("Welcome email failed for %s: %s", user_dict.get("email"), e)
+
+
 async def _run_email_campaign(campaign_id: str, emails: List[str], subject: str, body_text: str):
     """Background worker: send a campaign to a list of emails, updating counters."""
     sent = 0
@@ -2794,6 +2870,9 @@ async def register(user_data: UserRegister, request: Request = None):
     except Exception:
         pass
 
+    # Welcome email (role-based, admin-editable, respects its own on/off toggle)
+    asyncio.create_task(_send_welcome_email(user_dict))
+
     # Create session
     session_token = f"session_{uuid.uuid4().hex}"
     session_data = {
@@ -3116,6 +3195,7 @@ async def create_session_from_oauth(session_id: str = Header(..., alias="X-Sessi
         await db.users.insert_one(user_dict)
         await _record_terms_acceptance(user.user_id, oauth_data["email"], str(user.role), request, "google")
         is_new_user = True
+        asyncio.create_task(_send_welcome_email(user_dict))
 
     # Create session
     session_token = oauth_data["session_token"]
@@ -13507,6 +13587,37 @@ async def admin_telegram_setup(payload: Dict[str, Any] = Body(default={}), curre
         "webhook_set": bool(wh_ok),
         "setWebhook_response": (r.json() if r is not None else None),
     }
+
+
+@api_router.get("/admin/welcome-emails")
+async def admin_get_welcome_emails(current_user: User = Depends(require_admin)):
+    """Return current welcome-email templates + on/off toggle (with defaults)."""
+    return await _get_welcome_settings()
+
+
+@api_router.put("/admin/welcome-emails")
+async def admin_update_welcome_emails(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
+    """Update welcome-email templates and/or the on/off toggle."""
+    update: Dict[str, Any] = {}
+    for k in ("client_subject", "client_body", "provider_subject", "provider_body"):
+        if k in payload and payload[k] is not None:
+            update[k] = str(payload[k])
+    if "enabled" in payload and payload["enabled"] is not None:
+        update["enabled"] = bool(payload["enabled"])
+    if not update:
+        raise HTTPException(status_code=422, detail="No fields to update")
+    await db.app_settings.update_one(
+        {"setting_id": "welcome_emails"}, {"$set": update}, upsert=True,
+    )
+    return await _get_welcome_settings()
+
+
+@api_router.post("/admin/welcome-emails/test")
+async def admin_test_welcome_email(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
+    """Send a preview welcome email of the given role to the admin's own address."""
+    role = str(payload.get("role") or "client").lower()
+    await _send_welcome_email({"email": current_user.email, "name": current_user.name, "role": role})
+    return {"ok": True, "sent_to": current_user.email, "role": role}
 
 
 @api_router.post("/admin/telegram/link/{user_id}")

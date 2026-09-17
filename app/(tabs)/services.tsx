@@ -334,6 +334,7 @@ export default function Services() {
             { icon: 'shield-checkmark', color: '#16a34a', label: 'SMS Opt-ins', route: '/admin-sms-consents', tid: 'open-admin-sms-consents-btn' },
             { icon: 'people', color: '#ec4899', label: 'Waitlist', route: '/admin-waitlist', tid: 'open-admin-waitlist-btn' },
             { icon: 'mail', color: '#2563eb', label: 'Email', route: '/admin-email', tid: 'open-admin-email-btn' },
+            { icon: 'happy', color: '#d946ef', label: 'Welcome Emails', route: '/admin-welcome-emails', tid: 'open-admin-welcome-emails-btn' },
             { icon: 'chatbubbles', color: '#0891b2', label: 'SMS', route: '/admin-sms', tid: 'open-admin-sms-btn' },
             { icon: 'gift', color: '#16a34a', label: 'Rewards', route: '/admin-redemptions', tid: 'open-admin-redemptions-btn' },
           ].map((b) => (

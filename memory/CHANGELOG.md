@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06 — Automatic welcome emails (client + provider), admin-editable
+- NEW: on registration each user gets a role-based welcome email covering how the platform works, house/platform rules and the rewards/loyalty system. Client + provider have separate templates. Hooked into `/auth/register` and Google OAuth new-user path (fire-and-forget via `_send_welcome_email`, sent through `_send_email_now` Resend/SendGrid pipeline).
+- Templates + master on/off toggle stored in `app_settings` (setting_id `welcome_emails`), admin-editable anytime. Defaults live in `WELCOME_EMAIL_DEFAULTS` (English — US market). `{name}` placeholder supported.
+- Backend endpoints (admin-only): `GET /api/admin/welcome-emails`, `PUT /api/admin/welcome-emails` (any subset of enabled/client_subject/client_body/provider_subject/provider_body), `POST /api/admin/welcome-emails/test` (sends a preview of a role to the admin's own inbox). All verified via curl on preview.
+- Frontend: new screen `app/admin-welcome-emails.tsx` (master toggle, Client/Provider tabs, subject+body editors, "Send test to me", Save), registered in `_layout.tsx`, linked from admin tools grid in `(tabs)/services.tsx` as "Welcome Emails". api.ts: getWelcomeEmails / updateWelcomeEmails / testWelcomeEmail.
+- NOTE: default copy is English (matches US adaptation); admin can rewrite in any language via the editor. Requires Netlify (frontend) + Railway (backend) redeploy to go live.
+
+
 ## 2026-06 — Admin Telegram link generator + iPhone connect helper
 - NEW backend endpoint `POST /api/admin/telegram/link/{user_id}` (admin-only): generates a one-time code + `https://t.me/{bot}?start={code}` deep link for ANY user, so admin can send the link directly (bot username = `onofix_bot`, auto-resolved via getMe). Returns `already_connected` + `user_name`. Verified via curl on preview.
 - Admin panel (`app/(tabs)/users.tsx`): added "Telegram connect link" box at top of the user-detail modal — "Generate link" → shows link with Copy / Open / New link buttons + a "Connected" pill when the user already linked. testids: admin-tg-generate-btn, admin-tg-link-text, admin-tg-copy-btn, admin-tg-open-btn, admin-tg-regen-btn.
