@@ -15,6 +15,7 @@ export default function NotificationSettings() {
   const [tgLinked, setTgLinked] = useState(false);
   const [tgBusy, setTgBusy] = useState(false);
   const [tgDeepLink, setTgDeepLink] = useState<string | null>(null);
+  const [tgCode, setTgCode] = useState<string>('');
   const [saving, setSaving] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -33,7 +34,7 @@ export default function NotificationSettings() {
         // synchronously on tap (required for iOS, which blocks window.open after await).
         if (!linked) {
           api.telegramLinkStart()
-            .then((res: any) => { if (alive && res?.deep_link) setTgDeepLink(res.deep_link); })
+            .then((res: any) => { if (alive && res?.deep_link) { setTgDeepLink(res.deep_link); setTgCode(res.code || ''); } })
             .catch(() => { /* bot not configured — handled on tap */ });
         }
       } finally {
@@ -80,6 +81,7 @@ export default function NotificationSettings() {
       const res = await api.telegramLinkStart();
       if (res?.deep_link) {
         setTgDeepLink(res.deep_link);
+        setTgCode(res.code || '');
         if (Platform.OS === 'web') window.location.href = res.deep_link;
         else Linking.openURL(res.deep_link);
         showAlert('Connect Telegram', 'Telegram will open — press START in the chat. Then come back and tap "Refresh".');
@@ -173,6 +175,24 @@ export default function NotificationSettings() {
                 <TouchableOpacity style={styles.refreshBtn} onPress={load} data-testid="telegram-refresh">
                   <Text style={styles.refreshText}>Refresh status</Text>
                 </TouchableOpacity>
+
+                {!!tgCode && (
+                  <View style={styles.tgManual} data-testid="telegram-manual-box">
+                    <Text style={styles.tgManualTitle}>If Telegram didn’t open, connect manually:</Text>
+                    <Text style={styles.tgManualStep}>1. Open Telegram and find the bot:</Text>
+                    <TouchableOpacity onPress={() => {
+                      const url = tgDeepLink || 'https://t.me/onofix_bot';
+                      if (Platform.OS === 'web') window.location.href = url; else Linking.openURL(url);
+                    }} data-testid="telegram-bot-link">
+                      <Text style={styles.tgBotLink}>@onofix_bot</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.tgManualStep}>2. Press START, then send this code in the chat:</Text>
+                    <View style={styles.tgCodeBox}>
+                      <Text selectable style={styles.tgCode}>{tgCode}</Text>
+                    </View>
+                    <Text style={styles.tgManualHint}>3. Come back here and tap “Refresh status”.</Text>
+                  </View>
+                )}
               </>
             )}
           </View>
@@ -213,6 +233,13 @@ const styles = StyleSheet.create({
   back: { padding: 4, marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
   content: { padding: 16 },
+  tgManual: { marginTop: 12, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, padding: 14 },
+  tgManualTitle: { fontSize: 13, fontWeight: '800', color: '#1e3a8a', marginBottom: 8 },
+  tgManualStep: { fontSize: 13, color: '#374151', marginTop: 6 },
+  tgManualHint: { fontSize: 13, color: '#374151', marginTop: 8 },
+  tgBotLink: { fontSize: 16, fontWeight: '800', color: '#2563eb', marginTop: 2 },
+  tgCodeBox: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 14, alignSelf: 'flex-start', marginTop: 6 },
+  tgCode: { fontSize: 20, fontWeight: '800', letterSpacing: 2, color: '#111827' },
   intro: { fontSize: 14, color: '#4b5563', lineHeight: 20, marginBottom: 16 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb' },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
