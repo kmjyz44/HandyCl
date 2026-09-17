@@ -14,6 +14,7 @@ export default function NotificationSettings() {
   const [prefs, setPrefs] = useState<Record<string, boolean>>({ email: false, sms: false, telegram: false });
   const [tgLinked, setTgLinked] = useState(false);
   const [tgBusy, setTgBusy] = useState(false);
+  const [tgDeepLink, setTgDeepLink] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -26,7 +27,15 @@ export default function NotificationSettings() {
         ]);
         if (!alive) return;
         setPrefs((prev) => ({ ...prev, ...(p || {}) }));
-        setTgLinked(!!((tg as any)?.connected ?? (tg as any)?.linked));
+        const linked = !!((tg as any)?.connected ?? (tg as any)?.linked);
+        setTgLinked(linked);
+        // Pre-fetch the Telegram deep link so the Connect button can open it
+        // synchronously on tap (required for iOS, which blocks window.open after await).
+        if (!linked) {
+          api.telegramLinkStart()
+            .then((res: any) => { if (alive && res?.deep_link) setTgDeepLink(res.deep_link); })
+            .catch(() => { /* bot not configured — handled on tap */ });
+        }
       } finally {
         if (alive) setLoading(false);
       }
@@ -50,35 +59,34 @@ export default function NotificationSettings() {
   };
 
   const connectTelegram = async () => {
-    // iOS Safari/Chrome block window.open() called AFTER an await (the popup loses
-    // the user-gesture context). So on web we open a tab synchronously on tap, then
-    // fill it once we have the link; if the browser blocked it, we fall back to
-    // navigating the current tab (which is never blocked).
-    let popup: Window | null = null;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      try { popup = window.open('', '_blank'); } catch { popup = null; }
+    // Preferred path (works on iOS): open synchronously within the tap using the
+    // pre-fetched link — no await beforehand, so the browser keeps the user gesture.
+    if (Platform.OS === 'web' && tgDeepLink && typeof window !== 'undefined') {
+      const win = window.open(tgDeepLink, '_blank');
+      if (!win) window.location.href = tgDeepLink;  // popup blocked → same tab
+      showAlert('Connect Telegram', 'Telegram will open — press START in the chat. Then come back and tap "Refresh".');
+      return;
     }
+    if (Platform.OS !== 'web' && tgDeepLink) {
+      Linking.openURL(tgDeepLink);
+      showAlert('Connect Telegram', 'Telegram will open — press START in the chat. Then come back and tap "Refresh".');
+      return;
+    }
+
+    // Fallback: link not pre-fetched yet — fetch, then navigate the SAME tab
+    // (window.location is not blocked by iOS popup blockers, unlike window.open).
     setTgBusy(true);
     try {
       const res = await api.telegramLinkStart();
       if (res?.deep_link) {
-        if (Platform.OS === 'web') {
-          if (popup && !popup.closed) {
-            popup.location.href = res.deep_link;
-          } else {
-            // popup was blocked → open Telegram in the same tab
-            window.location.href = res.deep_link;
-          }
-        } else {
-          Linking.openURL(res.deep_link);
-        }
+        setTgDeepLink(res.deep_link);
+        if (Platform.OS === 'web') window.location.href = res.deep_link;
+        else Linking.openURL(res.deep_link);
         showAlert('Connect Telegram', 'Telegram will open — press START in the chat. Then come back and tap "Refresh".');
       } else {
-        if (popup && !popup.closed) popup.close();
         showAlert('Not available', 'Telegram bot is not configured yet. Please try again later.');
       }
     } catch (e: any) {
-      if (popup && !popup.closed) popup.close();
       showAlert('Error', e?.response?.data?.detail || 'Could not start Telegram linking.');
     } finally {
       setTgBusy(false);
