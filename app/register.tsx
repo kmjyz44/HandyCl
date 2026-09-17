@@ -62,7 +62,7 @@ export default function Register() {
       if (role === 'provider') {
         router.replace('/provider-onboarding' as any);
       } else {
-        router.replace('/(tabs)' as any);
+        router.replace('/welcome' as any);
       }
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
