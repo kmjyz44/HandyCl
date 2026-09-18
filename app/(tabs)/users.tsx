@@ -85,6 +85,20 @@ export default function Users() {
   const [tgLinkBusy, setTgLinkBusy] = useState(false);
   const [tgLink, setTgLink] = useState<any>(null);
   const [tgCopied, setTgCopied] = useState(false);
+  const [welcomeBusy, setWelcomeBusy] = useState(false);
+
+  const sendWelcomeEmail = async () => {
+    if (!detailUser?.user_id) return;
+    setWelcomeBusy(true);
+    try {
+      const res = await api.adminSendWelcomeToUser(detailUser.user_id);
+      showAlert('Welcome email sent', `A ${res.role} welcome email was sent to ${res.sent_to}.`);
+    } catch (e: any) {
+      showAlert('Could not send', e?.response?.data?.detail || 'Failed to send welcome email.');
+    } finally {
+      setWelcomeBusy(false);
+    }
+  };
 
   const generateTgLink = async () => {
     if (!detailUser?.user_id) return;
@@ -971,6 +985,18 @@ export default function Users() {
               )}
             </View>
 
+            {/* Resend the role-based welcome email to this user */}
+            <TouchableOpacity
+              style={styles.welcomeBtn}
+              onPress={sendWelcomeEmail}
+              disabled={welcomeBusy || !detailUser?.email}
+              data-testid="admin-send-welcome-btn"
+            >
+              {welcomeBusy
+                ? <ActivityIndicator color="#2563eb" size="small" />
+                : <><Ionicons name="mail-outline" size={15} color="#2563eb" /><Text style={styles.welcomeBtnText}>Send welcome email</Text></>}
+            </TouchableOpacity>
+
             {detailLoading ? (
               <ActivityIndicator style={{ marginVertical: 30 }} size="large" color="#2563eb" />
             ) : detailUser?.role === 'client' ? (
@@ -1224,6 +1250,8 @@ const styles = StyleSheet.create({
   tgOpenBtnText: { color: '#0284c7', fontWeight: '700', fontSize: 12 },
   tgRegenBtn: { justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 8 },
   tgRegenBtnText: { color: '#64748b', fontWeight: '600', fontSize: 12 },
+  welcomeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderColor: '#2563eb', borderRadius: 10, paddingVertical: 10, marginBottom: 12 },
+  welcomeBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 13 },
   detailEmail: { fontSize: 13, color: '#6b7280', marginTop: 2 },
   emailDisplayRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   emailEditRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },

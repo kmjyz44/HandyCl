@@ -225,6 +225,11 @@ export const api = {
     return res.data;
   },
 
+  adminSendWelcomeToUser: async (userId: string) => {
+    const res = await client.post(`/admin/users/${userId}/send-welcome`);
+    return res.data;
+  },
+
   telegramLinkStart: async () => {
     const res = await client.post('/telegram/link/start');
     return res.data;

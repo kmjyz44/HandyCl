@@ -1693,11 +1693,12 @@ async def _get_welcome_settings() -> Dict[str, Any]:
     return out
 
 
-async def _send_welcome_email(user_dict: Dict[str, Any]):
-    """Fire-and-forget welcome email based on role. Respects the welcome on/off toggle."""
+async def _send_welcome_email(user_dict: Dict[str, Any], force: bool = False):
+    """Fire-and-forget welcome email based on role. Respects the welcome on/off
+    toggle unless force=True (explicit admin resend)."""
     try:
         cfg = await _get_welcome_settings()
-        if not cfg.get("enabled"):
+        if not force and not cfg.get("enabled"):
             return
         to_email = (user_dict.get("email") or "").strip()
         if not to_email:
@@ -13618,6 +13619,19 @@ async def admin_test_welcome_email(payload: Dict[str, Any] = Body(default={}), c
     role = str(payload.get("role") or "client").lower()
     await _send_welcome_email({"email": current_user.email, "name": current_user.name, "role": role})
     return {"ok": True, "sent_to": current_user.email, "role": role}
+
+
+@api_router.post("/admin/users/{user_id}/send-welcome")
+async def admin_send_welcome_to_user(user_id: str, current_user: User = Depends(require_admin)):
+    """Admin: (re)send the role-based welcome email to a specific user now.
+    Sends even if automatic welcome emails are toggled off."""
+    u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "user_id": 1, "name": 1, "email": 1, "role": 1})
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not (u.get("email") or "").strip():
+        raise HTTPException(status_code=400, detail="This user has no email on file.")
+    await _send_welcome_email(u, force=True)
+    return {"ok": True, "sent_to": u["email"], "role": str(u.get("role") or "client")}
 
 
 @api_router.post("/admin/telegram/link/{user_id}")

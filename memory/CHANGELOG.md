@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06 — Admin: manual "Send welcome email" resend per user
+- NEW endpoint `POST /api/admin/users/{user_id}/send-welcome` (admin-only): (re)sends the role-based welcome email to a specific user immediately, even if automatic welcome emails are toggled OFF (`_send_welcome_email(..., force=True)`). 404 on unknown user, 400 if no email. Verified via curl.
+- Frontend: "Send welcome email" button added to the admin user-detail modal (`app/(tabs)/users.tsx`, testid `admin-send-welcome-btn`); api.ts `adminSendWelcomeToUser`. Useful for existing users who registered before welcome emails existed.
+- Requires Netlify + Railway redeploy to go live.
+
+
 ## 2026-06 — Automatic welcome emails (client + provider), admin-editable
 - NEW: on registration each user gets a role-based welcome email covering how the platform works, house/platform rules and the rewards/loyalty system. Client + provider have separate templates. Hooked into `/auth/register` and Google OAuth new-user path (fire-and-forget via `_send_welcome_email`, sent through `_send_email_now` Resend/SendGrid pipeline).
 - Templates + master on/off toggle stored in `app_settings` (setting_id `welcome_emails`), admin-editable anytime. Defaults live in `WELCOME_EMAIL_DEFAULTS` (English — US market). `{name}` placeholder supported.
