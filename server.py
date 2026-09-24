@@ -2050,18 +2050,31 @@ async def notify_user(
     prefs = user_doc.get("notification_prefs") or {}
     def _wants(ch: str) -> bool:
         return prefs.get(ch, True) is not False
+    # Build an absolute deep link to the task/booking so recipients can tap
+    # straight through to accept/confirm it.
+    link = None
+    if related_id and related_type in ("task", "booking"):
+        try:
+            _keys = await _get_integration_keys()
+            _base = (_keys.get("app_base_url") or "").strip().rstrip("/") or "https://ono-fix.com"
+        except Exception:
+            _base = "https://ono-fix.com"
+        link = f"{_base}/task-detail?id={related_id}"
     if "email" in channels and _wants("email") and user_doc.get("email"):
-        asyncio.create_task(_send_email(user_doc["email"], title, message))
+        email_body = message if not link else f"{message}\n\nOpen it here: {link}"
+        asyncio.create_task(_send_email(user_doc["email"], title, email_body))
     if "sms" in channels and _wants("sms") and user_doc.get("phone"):
-        asyncio.create_task(_send_sms(user_doc["phone"], f"{title}: {message}"))
+        sms_body = f"{title}: {message}" if not link else f"{title}: {message} {link}"
+        asyncio.create_task(_send_sms(user_doc["phone"], sms_body))
     # Web push — fire-and-forget; routes notification to /notifications by default
     if "push" in channels and _wants("push"):
-        push_url = None
-        if related_type == "booking" and related_id:
-            push_url = f"/task-detail?id={related_id}"
+        push_url = f"/task-detail?id={related_id}" if link else None
         asyncio.create_task(_send_web_push(user_id, title, message, push_url))
     if "telegram" in channels and _wants("telegram") and user_doc.get("telegram_chat_id"):
-        asyncio.create_task(send_telegram_notification(str(user_doc["telegram_chat_id"]), f"<b>{title}</b>\n{message}"))
+        tg_msg = f"<b>{title}</b>\n{message}"
+        if link:
+            tg_msg += f"\n\n👉 <a href=\"{link}\">Open the task</a>"
+        asyncio.create_task(send_telegram_notification(str(user_doc["telegram_chat_id"]), tg_msg))
 
 
 # ==================== NOTIFICATION ROUTES ====================

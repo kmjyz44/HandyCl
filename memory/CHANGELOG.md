@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06 — Deep link in new-task notifications (Telegram/email/SMS/push)
+- `notify_user` now builds an absolute deep link `{base}/task-detail?id={related_id}` for any notification with related_type task/booking and appends it: Telegram as a clickable `<a href>` "👉 Open the task", email/SMS as a tappable URL, push routes to the task. Base URL = `integration_keys.app_base_url` if set, else `https://ono-fix.com`.
+- Applies automatically to the provider "new_task_pending" alert, the 12h unaccepted reminder, and other task/booking notifications — so the provider taps the message and lands on the task to Accept/Decline.
+- Telegram uses HTML parse mode (link renders). Verified syntax + server reload; endpoint 200.
+- Backend-only → requires Railway redeploy.
+
+
 ## 2026-06 — Unaccepted-task escalation: banner timer, 12h reminder, 24h auto-pause, account pause
 - Banner (`components/ProviderAlertBanner.tsx`): for providers, shows an amber banner with a live COUNT-UP timer ("Xh Ym elapsed") when there's an unaccepted task → tap opens `/task-detail`. When the account is paused, shows a red "Your account is paused" banner → tap = reactivate. Mounted in tasks & bookings tabs and at top of ProviderProfile. Polls `/provider/pending-alert` every 30s, ticks locally each second.
 - Backend endpoints: `GET /provider/pending-alert` (oldest unaccepted task + elapsed_seconds + pause state), `POST /provider/pause` (manual, reason=manual), `POST /provider/unpause` (clears pause; if reason=auto_unaccepted, auto-declines stale >24h tasks via `_auto_decline_task` and applies best-effort -10 loyalty_points). All curl-verified.
