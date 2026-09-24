@@ -1587,6 +1587,16 @@ function ProviderProfile() {
       </TouchableOpacity>
       <View style={pStyles.menuDivider} />
 
+      <TouchableOpacity style={[pStyles.menuRow, { backgroundColor: '#eff6ff' }]} onPress={() => router.push('/provider-guide' as any)} data-testid="provider-guide-row">
+        <Ionicons name="book-outline" size={22} color="#2563eb" style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={[pStyles.menuRowText, { color: '#1d4ed8' }]}>How to work on Ono-Fix</Text>
+          <Text style={[pStyles.menuRowSub, { color: '#1d4ed8' }]}>Step-by-step guide: get set up, accept jobs, update status, send invoices, get paid.</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
       <TouchableOpacity style={pStyles.menuRow} onPress={() => { setSupportEmail(user?.email || ''); setSupportVisible(true); }}>
         <Ionicons name="help-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
         <Text style={[pStyles.menuRowText, { flex: 1 }]}>Support</Text>

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06 — Provider step-by-step guide (in My Profile + Help Center)
+- NEW screen `app/provider-guide.tsx`: 6 illustrated steps using EXACT in-app button labels — (1) Get set up (onboarding checklist), (2) Add payout details (Zelle/Venmo + name), (3) Accept a new order ("Accept task"/"Decline task"), (4) Update status ("I'm on the way" → "Start work" → "Finish work"), (5) Create & send invoice ("Send invoice"), (6) Get paid. Plus a Tips card and a "Contact support" button (→ /support-chat).
+- Illustrations generated via image tool (Gemini), hosted on Emergent static CDN.
+- Entry points: provider "How to work on Ono-Fix" row in ProviderProfile (`(tabs)/my-profile.tsx`, testid `provider-guide-row`) AND a "Provider guide" card in `help-center.tsx` (testid `open-provider-guide-btn`). Registered in `_layout.tsx`.
+- Frontend-only; English. Requires Netlify redeploy only.
+
+
 ## 2026-06 — Payout recipient name (for Zelle/Venmo)
 - Added `payout_name` (full name or company) to provider payout contacts. Model `ProviderPayoutContacts` + PUT/GET `/tasker/payout-contacts` updated (stored on user doc). Verified via curl (save→get round-trip).
 - Client payment instructions (`/payments/...` manual split) now append the payout name to the provider's Zelle/Venmo/PayPal handle (falls back to the pro's account name) so clients know exactly who to pay.

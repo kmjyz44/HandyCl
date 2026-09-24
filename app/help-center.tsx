@@ -117,6 +117,20 @@ export default function HelpCenter() {
           </View>
         </View>
 
+        {/* Provider guide entry */}
+        <TouchableOpacity
+          style={styles.guideCard}
+          onPress={() => require('expo-router').router.push('/provider-guide')}
+          data-testid="open-provider-guide-btn"
+        >
+          <Ionicons name="book" size={22} color="#2563eb" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.guideTitle}>Provider guide</Text>
+            <Text style={styles.guideSub}>How to work on Ono-Fix: setup, accept jobs, status, invoices, payouts.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+        </TouchableOpacity>
+
         {/* FAQ */}
         <Text style={styles.sectionH}>Frequently asked questions</Text>
         {loading ? (
@@ -236,6 +250,9 @@ const styles = StyleSheet.create({
   heroLinkPrimaryText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   sectionH: { fontSize: 15, fontWeight: '800', color: '#111827', marginTop: 8, marginBottom: 12 },
+  guideCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 14, padding: 14, marginBottom: 18 },
+  guideTitle: { fontSize: 15, fontWeight: '800', color: '#1d4ed8' },
+  guideSub: { fontSize: 12, color: '#3b5bdb', marginTop: 2, lineHeight: 16 },
 
   faqCat: { marginBottom: 16 },
   catTitle: { fontSize: 13, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
