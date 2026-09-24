@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-06 — Fix: pending-task banner now on the provider HOME screen
+- The provider's landing/"Tasks" tab is `(tabs)/index.tsx` (ProviderHome, `if role==='provider'`), which had PaymentReminderBanner but NOT the new ProviderAlertBanner — so after login the unaccepted-task banner wasn't visible (pending_acceptance tasks are counted under "Mine", not "Available"). Added `<ProviderAlertBanner />` right under the greeting + import. Now visible immediately on login.
+- Frontend-only; requires Netlify redeploy.
+
+
 ## 2026-06 — Fix: unaccepted-task banner didn't clear after accepting
 - `components/ProviderAlertBanner.tsx`: added `useFocusEffect` (expo-router) to refetch `/provider/pending-alert` every time the screen regains focus. Previously it only polled every 30s, so after a provider accepted a task on task-detail and returned, the banner lingered until a manual refresh. Now it clears immediately on return.
 - Frontend-only (Expo app builds on Netlify; preview is a CRA stub so not runtime-verifiable here). Requires Netlify redeploy.

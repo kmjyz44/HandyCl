@@ -13,6 +13,7 @@ import { useBookingStore } from '../../store/bookingStore';
 import { api } from '../../utils/api';
 import { showAlertWithButtons } from '../../utils/alert';
 import PaymentReminderBanner from '../../components/PaymentReminderBanner';
+import ProviderAlertBanner from '../../components/ProviderAlertBanner';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
 import RewardsBanner from '../../components/RewardsBanner';
 import ProviderOnboardingCard from '../../components/ProviderOnboardingCard';
@@ -256,6 +257,7 @@ function ProviderDashboard() {
       </View>
 
       <PaymentReminderBanner />
+      <ProviderAlertBanner />
 
       <ProviderOnboardingCard />
 
