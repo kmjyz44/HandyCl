@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-06 — Fix: unaccepted-task banner didn't clear after accepting
+- `components/ProviderAlertBanner.tsx`: added `useFocusEffect` (expo-router) to refetch `/provider/pending-alert` every time the screen regains focus. Previously it only polled every 30s, so after a provider accepted a task on task-detail and returned, the banner lingered until a manual refresh. Now it clears immediately on return.
+- Frontend-only (Expo app builds on Netlify; preview is a CRA stub so not runtime-verifiable here). Requires Netlify redeploy.
+
+
 ## 2026-06 — Deep link in new-task notifications (Telegram/email/SMS/push)
 - `notify_user` now builds an absolute deep link `{base}/task-detail?id={related_id}` for any notification with related_type task/booking and appends it: Telegram as a clickable `<a href>` "👉 Open the task", email/SMS as a tappable URL, push routes to the task. Base URL = `integration_keys.app_base_url` if set, else `https://ono-fix.com`.
 - Applies automatically to the provider "new_task_pending" alert, the 12h unaccepted reminder, and other task/booking notifications — so the provider taps the message and lands on the task to Accept/Decline.

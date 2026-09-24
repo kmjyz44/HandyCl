@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { api } from '../utils/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -49,6 +49,15 @@ export default function ProviderAlertBanner() {
     const poll = setInterval(fetch, 30000);
     return () => clearInterval(poll);
   }, [fetch]);
+
+  // Refetch whenever the screen regains focus (e.g. after accepting/declining
+  // a task on the task-detail screen and navigating back) so the banner clears
+  // immediately instead of waiting for the next poll.
+  useFocusEffect(
+    useCallback(() => {
+      fetch();
+    }, [fetch]),
+  );
 
   // Tick the elapsed timer locally every second.
   useEffect(() => {
