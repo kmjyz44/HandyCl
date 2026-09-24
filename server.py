@@ -2825,12 +2825,9 @@ async def register(user_data: UserRegister, request: Request = None):
     user_dict["accepted_terms_ip"] = _client_ip(request)
     user_dict["accepted_terms_user_agent"] = (request.headers.get("user-agent") if request else None)
     user_dict["email_verified"] = False
-    # Notification defaults: new CLIENTS start with all channels OFF (opt-in).
-    # Providers keep job alerts ON (opt-out) so they don't miss new jobs.
-    if user_data.role == UserRole.CLIENT:
-        user_dict["notification_prefs"] = {ch: False for ch in _NOTIF_CHANNELS}
-    else:
-        user_dict["notification_prefs"] = {}
+    # Notifications: both clients and providers start opt-out (channels ON) so
+    # they receive chat messages and order updates. Users can mute in settings.
+    user_dict["notification_prefs"] = {}
 
     await db.users.insert_one(user_dict)
     await _record_terms_acceptance(user_id, reg_email, str(user_data.role), request, "registration")
@@ -16720,6 +16717,30 @@ async def startup_event():
     asyncio.create_task(_telegram_poll_loop())
     asyncio.create_task(_soro_rss_loop())
     asyncio.create_task(_unaccepted_task_loop())
+    asyncio.create_task(_migrate_client_notifications())
+
+
+async def _migrate_client_notifications():
+    """One-time: existing clients were created with all channels OFF. Flip those
+    all-off clients to opt-out (ON) so they receive chat/order notifications
+    like providers. Runs once (guarded by an app_settings flag)."""
+    try:
+        flag = await db.app_settings.find_one({"setting_id": "client_notif_migrated"})
+        if flag:
+            return
+        res = await db.users.update_many(
+            {"role": "client", "notification_prefs.email": False, "notification_prefs.telegram": False,
+             "notification_prefs.push": False, "notification_prefs.sms": False},
+            {"$set": {"notification_prefs": {}}},
+        )
+        await db.app_settings.update_one(
+            {"setting_id": "client_notif_migrated"},
+            {"$set": {"done_at": datetime.now(timezone.utc).isoformat(), "modified": res.modified_count}},
+            upsert=True,
+        )
+        logger.info("client notification migration: %s clients enabled", res.modified_count)
+    except Exception as e:
+        logger.warning("client notif migration failed: %s", e)
 
 
 async def _unaccepted_task_loop():

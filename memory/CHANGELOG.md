@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06 — Clients now get notifications like providers (opt-out by default)
+- Previously new CLIENTS were created with all notification channels OFF, so they didn't receive chat/order emails or Telegram like providers. Registration now gives clients `notification_prefs = {}` (opt-out — all channels ON), same as providers.
+- One-time startup migration `_migrate_client_notifications` (guarded by app_settings `client_notif_migrated`): flips existing strictly-all-off clients to opt-out. Clients with null/partial prefs already received by default.
+- Verified: an admin chat message on a task produced a `chat_message` notification (with text) for BOTH the client and the provider. Clients with default prefs receive via in-app + email + Telegram + push.
+- Backend-only → Railway redeploy (migration runs automatically on boot).
+
+
 ## 2026-06 — Chat message notifications to the recipient (Telegram + email + text)
 - `send_task_message` previously only pinged admins. Now it also notifies the OTHER party via `notify_user` (in-app + email + SMS + Telegram + push per prefs) with the message TEXT (300-char preview) as the body and a deep link to the task/chat. client↔provider counterpart; admin messages notify both client & provider. Skips notifying the sender.
 - So when a client writes and the provider hasn't replied, the provider gets the message text in Telegram + email with a tap-through link. Verified: DB shows `notification_type=chat_message`, title "New message from {sender}", body = message text, related task id.
