@@ -21,6 +21,7 @@ import { useAuthStore } from '../../store/authStore';
 import { showAlertWithButtons } from '../../utils/alert';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
 import IdentityVerificationBanner from '../../components/IdentityVerificationBanner';
+import ProviderAlertBanner from '../../components/ProviderAlertBanner';
 import { NotificationSettingsModal } from '../../components/NotificationSettingsModal';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 
@@ -1455,6 +1456,8 @@ function ProviderProfile() {
   const renderService = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
+      <ProviderAlertBanner />
+
       {/* ACCOUNT INFORMATION */}
       <Text style={pStyles.menuSectionLabel}>ACCOUNT INFORMATION</Text>
 
@@ -1613,6 +1616,17 @@ function ProviderProfile() {
         <View style={{ flex: 1 }}>
           <Text style={pStyles.menuRowText}>Notifications</Text>
           <Text style={pStyles.menuRowSub}>Choose which alerts you receive</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      <View style={pStyles.menuDivider} />
+
+      {/* ACCOUNT PAUSE — hide from search / reactivate */}
+      <TouchableOpacity style={pStyles.menuRow} onPress={() => router.push('/account-pause' as any)} data-testid="account-pause-menu-row">
+        <Ionicons name="pause-circle-outline" size={22} color="#374151" style={pStyles.menuRowIcon} />
+        <View style={{ flex: 1 }}>
+          <Text style={pStyles.menuRowText}>Account pause</Text>
+          <Text style={pStyles.menuRowSub}>Temporarily hide yourself from search</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
       </TouchableOpacity>

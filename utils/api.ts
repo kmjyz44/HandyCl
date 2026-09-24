@@ -1063,6 +1063,18 @@ export const api = {
     const res = await client.post(`/admin/tasks/${taskId}/block`, null, { params: { blocked } });
     return res.data;
   },
+  getProviderPendingAlert: async () => {
+    const res = await client.get('/provider/pending-alert');
+    return res.data;
+  },
+  providerPause: async () => {
+    const res = await client.post('/provider/pause');
+    return res.data;
+  },
+  providerUnpause: async () => {
+    const res = await client.post('/provider/unpause');
+    return res.data;
+  },
 
   // Provider stats
   getMyProviderStats: async () => {

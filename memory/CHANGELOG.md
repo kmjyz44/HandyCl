@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06 — Unaccepted-task escalation: banner timer, 12h reminder, 24h auto-pause, account pause
+- Banner (`components/ProviderAlertBanner.tsx`): for providers, shows an amber banner with a live COUNT-UP timer ("Xh Ym elapsed") when there's an unaccepted task → tap opens `/task-detail`. When the account is paused, shows a red "Your account is paused" banner → tap = reactivate. Mounted in tasks & bookings tabs and at top of ProviderProfile. Polls `/provider/pending-alert` every 30s, ticks locally each second.
+- Backend endpoints: `GET /provider/pending-alert` (oldest unaccepted task + elapsed_seconds + pause state), `POST /provider/pause` (manual, reason=manual), `POST /provider/unpause` (clears pause; if reason=auto_unaccepted, auto-declines stale >24h tasks via `_auto_decline_task` and applies best-effort -10 loyalty_points). All curl-verified.
+- Background loop `_unaccepted_task_loop` (every 15 min, registered in startup): at 12h sends a reminder via `notify_user` (email + Telegram + push per prefs), sets `reminder_12h_sent`; at 24h sets user `search_paused=True, paused_reason=auto_unaccepted` and notifies. Verified: it had already auto-paused the test provider (84-day-old tasks); unpause released 3 stale tasks.
+- Search visibility: `/executors/by-service` $match now excludes `search_paused == True` (flag on users doc).
+- New screen `app/account-pause.tsx` + "Account pause" menu row in ProviderProfile (testid `account-pause-menu-row`): toggle visibility, reactivate button, status card. api.ts: getProviderPendingAlert/providerPause/providerUnpause.
+- Requires Netlify + Railway redeploy. NOTE: frontend flows not visually testable in preview (CRA stub); backend fully curl-verified.
+
+
 ## 2026-06 — Provider step-by-step guide (in My Profile + Help Center)
 - NEW screen `app/provider-guide.tsx`: 6 illustrated steps using EXACT in-app button labels — (1) Get set up (onboarding checklist), (2) Add payout details (Zelle/Venmo + name), (3) Accept a new order ("Accept task"/"Decline task"), (4) Update status ("I'm on the way" → "Start work" → "Finish work"), (5) Create & send invoice ("Send invoice"), (6) Get paid. Plus a Tips card and a "Contact support" button (→ /support-chat).
 - Illustrations generated via image tool (Gemini), hosted on Emergent static CDN.

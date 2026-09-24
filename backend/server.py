@@ -4613,6 +4613,119 @@ async def decline_task(
 
     return {"message": "Task declined", "status": TaskStatus.DECLINED, "reason": reason.strip()}
 
+
+def _to_utc_dt(v) -> Optional[datetime]:
+    """Coerce a stored created_at (datetime or ISO string) into a tz-aware UTC datetime."""
+    if not v:
+        return None
+    if isinstance(v, datetime):
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+async def _auto_decline_task(task: Dict[str, Any], reason: str):
+    """Release a stale unaccepted task on the provider's behalf and notify the client."""
+    task_id = task.get("task_id")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.tasks.update_one({"task_id": task_id}, {"$set": {
+        "status": TaskStatus.DECLINED,
+        "provider_comments": reason,
+        "declined_at": now_iso,
+        "declined_by": task.get("provider_id"),
+        "auto_declined": True,
+    }})
+    if task.get("booking_id"):
+        await db.bookings.update_one({"booking_id": task["booking_id"]}, {"$set": {
+            "status": "declined", "provider_id": None, "decline_reason": reason, "declined_at": now_iso,
+        }})
+    client_id = task.get("client_id") or task.get("user_id")
+    if client_id:
+        try:
+            await notify_user(client_id, "booking_declined", "The pro declined the order",
+                              "The pro didn't accept in time, so the order was released. You can choose another pro.",
+                              related_id=task.get("booking_id") or task_id, related_type="booking")
+        except Exception:
+            pass
+    # Best-effort 10-point penalty to the provider.
+    pid = task.get("provider_id")
+    if pid:
+        try:
+            u = await db.users.find_one({"user_id": pid}, {"_id": 0, "loyalty_points": 1})
+            if u and isinstance(u.get("loyalty_points"), (int, float)):
+                await db.users.update_one({"user_id": pid}, {"$set": {"loyalty_points": max(0, int(u["loyalty_points"]) - 10)}})
+        except Exception:
+            pass
+
+
+@api_router.get("/provider/pending-alert")
+async def provider_pending_alert(current_user: User = Depends(get_current_user)):
+    """Banner data for the provider: oldest unaccepted task (elapsed time) + pause state."""
+    if current_user.role != UserRole.PROVIDER:
+        return {"has_pending": False, "search_paused": False}
+    now = datetime.now(timezone.utc)
+    tasks = await db.tasks.find(
+        {"provider_id": current_user.user_id, "status": "pending_acceptance"},
+        {"_id": 0, "task_id": 1, "title": 1, "created_at": 1},
+    ).sort("created_at", 1).to_list(50)
+    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "search_paused": 1, "paused_reason": 1}) or {}
+    oldest = None
+    if tasks:
+        t0 = tasks[0]
+        dt = _to_utc_dt(t0.get("created_at")) or now
+        oldest = {
+            "task_id": t0["task_id"],
+            "title": t0.get("title") or "New task",
+            "created_at": dt.isoformat(),
+            "elapsed_seconds": max(0, int((now - dt).total_seconds())),
+        }
+    return {
+        "has_pending": bool(tasks),
+        "count": len(tasks),
+        "oldest": oldest,
+        "search_paused": bool(u.get("search_paused")),
+        "paused_reason": u.get("paused_reason"),
+    }
+
+
+@api_router.post("/provider/pause")
+async def provider_pause(current_user: User = Depends(get_current_user)):
+    """Provider hides themselves from search (manual pause)."""
+    if current_user.role != UserRole.PROVIDER:
+        raise HTTPException(status_code=403, detail="Only providers")
+    await db.users.update_one({"user_id": current_user.user_id}, {"$set": {
+        "search_paused": True, "paused_reason": "manual", "paused_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return {"search_paused": True, "paused_reason": "manual"}
+
+
+@api_router.post("/provider/unpause")
+async def provider_unpause(current_user: User = Depends(get_current_user)):
+    """Provider reappears in search. If paused automatically for not accepting a
+    task in time, the stale unaccepted task(s) are released (auto-declined)."""
+    if current_user.role != UserRole.PROVIDER:
+        raise HTTPException(status_code=403, detail="Only providers")
+    u = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "paused_reason": 1}) or {}
+    released = 0
+    if u.get("paused_reason") == "auto_unaccepted":
+        now = datetime.now(timezone.utc)
+        stale = await db.tasks.find(
+            {"provider_id": current_user.user_id, "status": "pending_acceptance"}, {"_id": 0},
+        ).to_list(100)
+        for t in stale:
+            dt = _to_utc_dt(t.get("created_at"))
+            if dt and (now - dt).total_seconds() >= 24 * 3600:
+                await _auto_decline_task(t, "Not accepted within 24h — auto-released on reactivation")
+                released += 1
+    await db.users.update_one({"user_id": current_user.user_id}, {"$set": {
+        "search_paused": False, "paused_reason": None, "paused_at": None,
+    }})
+    return {"search_paused": False, "released_tasks": released}
+
+
 @api_router.get("/admin/tasks")
 async def admin_get_tasks(
     status: Optional[str] = None,
@@ -5883,7 +5996,7 @@ async def get_executors_by_service(
 
     pipeline = [
         # Only active, not blocked, not hidden by admin
-        {"$match": {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}}},
+        {"$match": {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}, "search_paused": {"$ne": True}}},
         {"$lookup": {
             "from": "executor_profiles",
             "localField": "user_id",
@@ -16571,6 +16684,56 @@ async def startup_event():
     asyncio.create_task(_seed_default_categories())
     asyncio.create_task(_telegram_poll_loop())
     asyncio.create_task(_soro_rss_loop())
+    asyncio.create_task(_unaccepted_task_loop())
+
+
+async def _unaccepted_task_loop():
+    """Every 15 min: remind providers about unaccepted tasks at 12h (email+Telegram
+    via notify_user) and auto-pause their account (remove from search) at 24h."""
+    await asyncio.sleep(45)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            tasks = await db.tasks.find(
+                {"status": "pending_acceptance", "provider_id": {"$nin": [None, ""]}}, {"_id": 0},
+            ).to_list(500)
+            for t in tasks:
+                dt = _to_utc_dt(t.get("created_at"))
+                if not dt:
+                    continue
+                age_h = (now - dt).total_seconds() / 3600.0
+                pid = t.get("provider_id")
+                title = t.get("title") or "a task"
+                if age_h >= 12 and not t.get("reminder_12h_sent"):
+                    try:
+                        await notify_user(
+                            pid, "task_reminder", "Unaccepted task waiting",
+                            f"You still haven't accepted \"{title}\". Please Accept or Decline it — "
+                            f"your account will be paused (removed from search) if it stays unaccepted for 24 hours.",
+                            related_id=t.get("task_id"), related_type="task",
+                        )
+                    except Exception:
+                        pass
+                    await db.tasks.update_one({"task_id": t["task_id"]}, {"$set": {"reminder_12h_sent": True}})
+                if age_h >= 24:
+                    u = await db.users.find_one({"user_id": pid}, {"_id": 0, "search_paused": 1})
+                    if not (u and u.get("search_paused")):
+                        await db.users.update_one({"user_id": pid}, {"$set": {
+                            "search_paused": True, "paused_reason": "auto_unaccepted",
+                            "paused_at": now.isoformat(),
+                        }})
+                        try:
+                            await notify_user(
+                                pid, "account_paused", "Your account was paused",
+                                "You didn't accept a task within 24 hours, so your account was removed from search. "
+                                "Open the app and tap Reactivate to appear in search again.",
+                                related_id=t.get("task_id"), related_type="task",
+                            )
+                        except Exception:
+                            pass
+        except Exception as e:
+            logger.warning("unaccepted_task_loop: %s", e)
+        await asyncio.sleep(900)
 
 
 async def _ensure_indexes():

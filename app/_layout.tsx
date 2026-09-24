@@ -77,6 +77,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin-search-stats" />
         <Stack.Screen name="admin-bookings" />
         <Stack.Screen name="provider-guide" />
+        <Stack.Screen name="account-pause" />
         <Stack.Screen name="admin-sms" />
         <Stack.Screen name="admin-redemptions" />
         <Stack.Screen name="my-ranking" />
