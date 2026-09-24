@@ -39,6 +39,7 @@ export default function PayoutSetup() {
   const [accountNumber, setAccountNumber] = useState('');
 
   const [paypalEmail, setPaypalEmail] = useState('');
+  const [payoutName, setPayoutName] = useState('');
   const [zelleHandle, setZelleHandle] = useState('');
   const [venmoHandle, setVenmoHandle] = useState('');
   const [savingContacts, setSavingContacts] = useState(false);
@@ -73,6 +74,7 @@ export default function PayoutSetup() {
     } catch {}
     try {
       const c = await api.getTaskerPayoutContacts();
+      setPayoutName(c?.payout_name || '');
       setPaypalEmail(c?.paypal_email || '');
       setZelleHandle(c?.zelle_handle || '');
       setVenmoHandle(c?.venmo_handle || '');
@@ -135,6 +137,7 @@ export default function PayoutSetup() {
     setSavingContacts(true);
     try {
       await api.updateTaskerPayoutContacts({
+        payout_name: payoutName.trim(),
         paypal_email: paypalEmail.trim(),
         zelle_handle: zelleHandle.trim(),
         venmo_handle: venmoHandle.trim(),
@@ -361,6 +364,15 @@ export default function PayoutSetup() {
           <Text style={styles.altSub}>
             If a client chooses PayPal / Zelle / Venmo — they will send money directly to these accounts.
           </Text>
+          <Text style={styles.label}>Full name or company name</Text>
+          <TextInput
+            value={payoutName}
+            onChangeText={setPayoutName}
+            placeholder="John Doe or Doe Handyman LLC"
+            style={styles.input}
+            data-testid="payout-name-input"
+          />
+          <Text style={styles.altHint}>Zelle and Venmo sometimes require the recipient's name — enter it exactly as on your account.</Text>
           {enabledMethods.includes('paypal') && (<>
           <Text style={styles.label}>PayPal email</Text>
           <TextInput
@@ -561,6 +573,7 @@ const styles = StyleSheet.create({
   },
   altTitle: { fontSize: 15, fontWeight: '800', color: '#111827' },
   altSub: { fontSize: 12, color: '#6b7280', marginTop: 4, marginBottom: 8, lineHeight: 17 },
+  altHint: { fontSize: 11, color: '#059669', marginTop: 4, marginBottom: 6, lineHeight: 16 },
 });
 
 

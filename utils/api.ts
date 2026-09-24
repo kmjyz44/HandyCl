@@ -723,7 +723,7 @@ export const api = {
     const res = await client.get('/tasker/payout-contacts');
     return res.data;
   },
-  updateTaskerPayoutContacts: async (data: { paypal_email?: string; zelle_handle?: string; venmo_handle?: string }) => {
+  updateTaskerPayoutContacts: async (data: { payout_name?: string; paypal_email?: string; zelle_handle?: string; venmo_handle?: string }) => {
     const res = await client.put('/tasker/payout-contacts', data);
     return res.data;
   },

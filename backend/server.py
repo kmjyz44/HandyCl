@@ -11817,12 +11817,15 @@ async def get_manual_instructions(
                 else:
                     provider_handle = f"{pa.get('bank_name') or 'Bank'} routing {pa.get('routing_number','?')} acct •••• {pa.get('account_number_last4', '????')} — {pa.get('account_holder_name','')}"
         else:
-            prov = await db.users.find_one({"user_id": provider_id}, {"_id": 0, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1}) or {}
+            prov = await db.users.find_one({"user_id": provider_id}, {"_id": 0, "payout_name": 1, "name": 1, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1}) or {}
             provider_handle = prov.get({
                 "paypal": "paypal_email",
                 "zelle": "zelle_handle",
                 "venmo": "venmo_handle",
             }[method])
+            payout_name = prov.get("payout_name") or prov.get("name")
+            if provider_handle and payout_name:
+                provider_handle = f"{provider_handle} — {payout_name}"
 
     currency = (keys.get("stripe_currency") or "usd").upper()
 
@@ -12437,6 +12440,7 @@ async def list_pending_manual_payments(current_user: User = Depends(require_admi
 
 
 class ProviderPayoutContacts(BaseModel):
+    payout_name: Optional[str] = None
     paypal_email: Optional[str] = None
     zelle_handle: Optional[str] = None
     venmo_handle: Optional[str] = None
@@ -12451,6 +12455,8 @@ async def update_tasker_payout_contacts(
     if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
         raise HTTPException(status_code=403, detail="Only providers can update payout contacts")
     update: Dict[str, Any] = {}
+    if data.payout_name is not None:
+        update["payout_name"] = data.payout_name.strip() or None
     if data.paypal_email is not None:
         update["paypal_email"] = data.paypal_email.strip() or None
     if data.zelle_handle is not None:
@@ -12469,9 +12475,10 @@ async def get_tasker_payout_contacts(current_user: User = Depends(get_current_us
         raise HTTPException(status_code=403, detail="Only providers")
     u = await db.users.find_one(
         {"user_id": current_user.user_id},
-        {"_id": 0, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1},
+        {"_id": 0, "payout_name": 1, "paypal_email": 1, "zelle_handle": 1, "venmo_handle": 1},
     ) or {}
     return {
+        "payout_name": u.get("payout_name"),
         "paypal_email": u.get("paypal_email"),
         "zelle_handle": u.get("zelle_handle"),
         "venmo_handle": u.get("venmo_handle"),

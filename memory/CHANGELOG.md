@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06 — Payout recipient name (for Zelle/Venmo)
+- Added `payout_name` (full name or company) to provider payout contacts. Model `ProviderPayoutContacts` + PUT/GET `/tasker/payout-contacts` updated (stored on user doc). Verified via curl (save→get round-trip).
+- Client payment instructions (`/payments/...` manual split) now append the payout name to the provider's Zelle/Venmo/PayPal handle (falls back to the pro's account name) so clients know exactly who to pay.
+- Frontend `app/payout-setup.tsx`: new "Full name or company name" input at top of the Zelle/Venmo card with a green hint that Zelle/Venmo may require the recipient name. api.ts type updated. Compiles.
+- Requires Netlify + Railway redeploy.
+
+
 ## 2026-06 — Payouts = Zelle/Venmo only + payout step in provider onboarding
 - `app/payout-setup.tsx`: removed the Debit card / Bank (ACH) section (tabs + card/bank form + saved-accounts list). Payouts are now Zelle/Venmo (+PayPal if admin-enabled) only. Updated header sub-copy and removed the "save details manually" divider. Stripe/Finix connect cards remain gated by `enabledMethods` (hidden unless admin enables). Frontend compiles.
 - Provider onboarding gained a new step "Set up how you get paid" → routes to `/payout-setup`. `utils/onboardingSteps.ts`: added `payout` key/def (cash icon, green). Backend `GET /provider/onboarding-status`: added `payout` step, done when user has zelle_handle/venmo_handle/paypal_email. Verified via curl: 7 steps now, payout detected.
