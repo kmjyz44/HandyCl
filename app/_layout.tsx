@@ -74,6 +74,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin-waitlist" />
         <Stack.Screen name="admin-email" />
         <Stack.Screen name="admin-welcome-emails" />
+        <Stack.Screen name="admin-search-stats" />
         <Stack.Screen name="admin-sms" />
         <Stack.Screen name="admin-redemptions" />
         <Stack.Screen name="my-ranking" />

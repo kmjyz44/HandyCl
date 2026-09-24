@@ -5742,6 +5742,35 @@ async def admin_adjust_provider_ranking(
 
 
 
+async def _log_search_event(*, user_id: Optional[str], service_name: Optional[str],
+                            category: Optional[str], city: Optional[str],
+                            lat: Optional[float], lng: Optional[float],
+                            date: Optional[str], source: str = "pros_search"):
+    """Fire-and-forget: record a service search for admin analytics."""
+    try:
+        if not (service_name or category or city):
+            return  # ignore empty/browse-all calls
+        category_name = None
+        if category:
+            cat = await db.categories.find_one({"category_id": category}, {"_id": 0, "name": 1})
+            category_name = (cat or {}).get("name")
+        await db.search_events.insert_one({
+            "event_id": f"srch_{uuid.uuid4().hex[:12]}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "user_id": user_id,
+            "service_name": (service_name or "").strip() or None,
+            "category": category,
+            "category_name": category_name,
+            "city": (city or "").strip() or None,
+            "lat": lat,
+            "lng": lng,
+            "date": date,
+            "source": source,
+        })
+    except Exception as e:
+        logger.warning("search event log failed: %s", e)
+
+
 @api_router.get("/executors/by-service")
 async def get_executors_by_service(
     service_name: Optional[str] = None,
@@ -5758,6 +5787,11 @@ async def get_executors_by_service(
     Public endpoint — guests (no auth) can also browse executors from the
     landing page booking flow.
     """
+    asyncio.create_task(_log_search_event(
+        user_id=(current_user.user_id if current_user else None),
+        service_name=service_name, category=category, city=city,
+        lat=lat, lng=lng, date=date, source="pros_search",
+    ))
     settings_doc = await db.settings.find_one({"setting_id": "app_settings"}, {"_id": 0})
     settings = Settings(**settings_doc) if settings_doc else Settings()
 
@@ -13632,6 +13666,52 @@ async def admin_send_welcome_to_user(user_id: str, current_user: User = Depends(
         raise HTTPException(status_code=400, detail="This user has no email on file.")
     await _send_welcome_email(u, force=True)
     return {"ok": True, "sent_to": u["email"], "role": str(u.get("role") or "client")}
+
+
+@api_router.get("/admin/search-analytics")
+async def admin_search_analytics(days: int = 30, current_user: User = Depends(require_admin)):
+    """Aggregated service-search stats for the admin dashboard: totals, top
+    services, top regions/cities, per-day trend and recent searches."""
+    try:
+        days = max(1, min(int(days), 365))
+    except Exception:
+        days = 30
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    match = {"created_at": {"$gte": since}}
+
+    total = await db.search_events.count_documents(match)
+
+    async def _top(field: str, limit: int = 10):
+        cur = db.search_events.aggregate([
+            {"$match": {**match, field: {"$nin": [None, ""]}}},
+            {"$group": {"_id": f"${field}", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": limit},
+        ])
+        return [{"label": r["_id"], "count": r["count"]} async for r in cur]
+
+    top_services_named = await _top("category_name", 12)
+    top_services_raw = await _top("service_name", 12)
+    top_cities = await _top("city", 12)
+
+    by_day_cur = db.search_events.aggregate([
+        {"$match": match},
+        {"$group": {"_id": {"$substr": ["$created_at", 0, 10]}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ])
+    by_day = [{"date": r["_id"], "count": r["count"]} async for r in by_day_cur]
+
+    recent = await db.search_events.find(match, {"_id": 0}).sort("created_at", -1).limit(40).to_list(40)
+
+    return {
+        "range_days": days,
+        "total_searches": total,
+        "top_services": top_services_named,
+        "top_services_raw": top_services_raw,
+        "top_cities": top_cities,
+        "by_day": by_day,
+        "recent": recent,
+    }
 
 
 @api_router.post("/admin/telegram/link/{user_id}")

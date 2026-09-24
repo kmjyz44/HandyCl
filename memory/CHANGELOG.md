@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06 — Custom service-search analytics + admin "Search Insights" screen
+- Backend: `/executors/by-service` now fire-and-forget logs each meaningful search (service_name, category+resolved category_name, city, lat/lng, date, user_id or guest, source) into `search_events` via `_log_search_event`. Empty/browse-all calls ignored.
+- NEW endpoint `GET /api/admin/search-analytics?days=N` (admin-only): total searches, top services (by category_name, raw service_name fallback), top regions/cities, per-day trend, 40 recent searches. Verified via curl (logged 2 guest searches → aggregated correctly).
+- Frontend: new admin screen `app/admin-search-stats.tsx` (7/30/90-day range, total card, top-services & top-cities bar charts, daily trend bars, recent list). Registered in `_layout.tsx`; linked from admin tools grid in `(tabs)/services.tsx` as "Search Insights". api.ts `getSearchAnalytics`.
+- Design note: user chose CUSTOM in-app analytics (owns data, in admin panel) over Google/PostHog. GA4 activation deferred. Future voice-search will log with source!="pros_search" and show up here too.
+- Requires Netlify + Railway redeploy to go live.
+
+
+## PARKED / BACKLOG — Voice AI service search (deferred by user 2026-06)
+User wants but postponed. Spec agreed:
+- Flow: mic → Whisper STT → GPT-5 intent parse → CONFIRMATION screen ("You're looking for: 4 cameras in Niles — correct?") → results via existing `/executors/by-service` → book (existing flow).
+- Parse into: service (map to a real category_id/skill from `/categories`), quantity, city/location, extra requirements.
+- Languages to recognise: English, Spanish, Ukrainian.
+- Mic button placement: home (index) + Pros tab.
+- Models: GPT-5 (text intent extraction/classification/location/confirmation copy) + Whisper STT, both via Emergent LLM key (no new API keys).
+- Reuse: `/categories` (feed list to LLM for accurate mapping), `/executors/by-service` (params: skill/category, city, lat/lng, date, timeFrom). Frontend records audio via MediaRecorder (web).
+- Effort estimate given: ~1 focused build session for MVP + a testing round.
+
+
 ## 2026-06 — Admin: manual "Send welcome email" resend per user
 - NEW endpoint `POST /api/admin/users/{user_id}/send-welcome` (admin-only): (re)sends the role-based welcome email to a specific user immediately, even if automatic welcome emails are toggled OFF (`_send_welcome_email(..., force=True)`). 404 on unknown user, 400 if no email. Verified via curl.
 - Frontend: "Send welcome email" button added to the admin user-detail modal (`app/(tabs)/users.tsx`, testid `admin-send-welcome-btn`); api.ts `adminSendWelcomeToUser`. Useful for existing users who registered before welcome emails existed.

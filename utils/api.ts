@@ -230,6 +230,11 @@ export const api = {
     return res.data;
   },
 
+  getSearchAnalytics: async (days: number = 30) => {
+    const res = await client.get('/admin/search-analytics', { params: { days } });
+    return res.data;
+  },
+
   telegramLinkStart: async () => {
     const res = await client.post('/telegram/link/start');
     return res.data;
