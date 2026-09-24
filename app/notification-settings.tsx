@@ -32,6 +32,23 @@ export default function NotificationSettings() {
     }
   };
 
+  const ensureCode = async () => {
+    setTgBusy(true);
+    try {
+      const res = await api.telegramLinkStart();
+      if (res?.code) {
+        setTgCode(res.code);
+        if (res.deep_link) setTgDeepLink(res.deep_link);
+      } else {
+        showAlert('Not available', 'Telegram bot is not configured yet. Please try again later.');
+      }
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Could not get your connection code. Please try again.');
+    } finally {
+      setTgBusy(false);
+    }
+  };
+
   const load = useCallback(() => {
     let alive = true;
     (async () => {
@@ -182,37 +199,42 @@ export default function NotificationSettings() {
               </TouchableOpacity>
             ) : (
               <>
-                <TouchableOpacity style={styles.linkBtn} onPress={connectTelegram} disabled={tgBusy} data-testid="telegram-connect">
-                  <Ionicons name="paper-plane" size={16} color="#fff" />
-                  <Text style={styles.linkBtnText}>{tgBusy ? 'Opening…' : 'Connect Telegram'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.refreshBtn} onPress={load} data-testid="telegram-refresh">
-                  <Text style={styles.refreshText}>Refresh status</Text>
-                </TouchableOpacity>
-
-                {!!tgCode && (
-                  <View style={styles.tgManual} data-testid="telegram-manual-box">
-                    <Text style={styles.tgManualTitle}>If Telegram didn’t open, connect manually:</Text>
-                    <Text style={styles.tgManualStep}>1. Open Telegram and find the bot:</Text>
-                    <TouchableOpacity onPress={() => {
-                      const url = tgDeepLink || 'https://t.me/onofix_bot';
-                      if (Platform.OS === 'web') window.location.href = url; else Linking.openURL(url);
-                    }} data-testid="telegram-bot-link">
-                      <Text style={styles.tgBotLink}>@onofix_bot</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.tgManualStep}>2. Press START, then send this code in the chat:</Text>
+                {/* Connection code — the primary, always-visible way to link */}
+                {tgCode ? (
+                  <View style={styles.tgCodeCard} data-testid="telegram-code-card">
+                    <Text style={styles.tgCodeCardTitle}>Your Telegram connection code</Text>
                     <View style={styles.tgCodeRow}>
                       <View style={styles.tgCodeBox}>
-                        <Text selectable style={styles.tgCode}>{tgCode}</Text>
+                        <Text selectable style={styles.tgCode} data-testid="telegram-code-value">{tgCode}</Text>
                       </View>
                       <TouchableOpacity style={styles.tgCopyCodeBtn} onPress={copyTgCode} data-testid="telegram-copy-code">
-                        <Ionicons name={tgCodeCopied ? 'checkmark' : 'copy-outline'} size={15} color="#fff" />
+                        <Ionicons name={tgCodeCopied ? 'checkmark' : 'copy-outline'} size={16} color="#fff" />
                         <Text style={styles.tgCopyCodeText}>{tgCodeCopied ? 'Copied' : 'Copy'}</Text>
                       </TouchableOpacity>
                     </View>
-                    <Text style={styles.tgManualHint}>3. Come back here and tap “Refresh status”.</Text>
+                    <Text style={styles.tgCodeHelp}>
+                      Open{' '}
+                      <Text style={styles.tgBotLinkInline} onPress={() => {
+                        const url = tgDeepLink || 'https://t.me/onofix_bot';
+                        if (Platform.OS === 'web') window.location.href = url; else Linking.openURL(url);
+                      }} data-testid="telegram-bot-link">@onofix_bot</Text>
+                      {' '}in Telegram, press START, then send this code in the chat.
+                    </Text>
                   </View>
+                ) : (
+                  <TouchableOpacity style={styles.getCodeBtn} onPress={ensureCode} disabled={tgBusy} data-testid="telegram-get-code">
+                    <Ionicons name="key-outline" size={16} color="#0284c7" />
+                    <Text style={styles.getCodeText}>{tgBusy ? 'Getting code…' : 'Get my connection code'}</Text>
+                  </TouchableOpacity>
                 )}
+
+                <TouchableOpacity style={styles.linkBtn} onPress={connectTelegram} disabled={tgBusy} data-testid="telegram-connect">
+                  <Ionicons name="paper-plane" size={16} color="#fff" />
+                  <Text style={styles.linkBtnText}>{tgBusy ? 'Opening…' : 'Open Telegram bot'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.refreshBtn} onPress={load} data-testid="telegram-refresh">
+                  <Text style={styles.refreshText}>I’ve sent the code — refresh status</Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
@@ -263,6 +285,12 @@ const styles = StyleSheet.create({
   tgCopyCodeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#0284c7', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12 },
   tgCopyCodeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   tgCode: { fontSize: 20, fontWeight: '800', letterSpacing: 2, color: '#111827' },
+  tgCodeCard: { marginTop: 14, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, padding: 14 },
+  tgCodeCardTitle: { fontSize: 13, fontWeight: '800', color: '#1e3a8a' },
+  tgCodeHelp: { fontSize: 13, color: '#374151', marginTop: 10, lineHeight: 19 },
+  tgBotLinkInline: { color: '#2563eb', fontWeight: '800' },
+  getCodeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: '#0284c7', borderRadius: 12, paddingVertical: 12, marginTop: 14 },
+  getCodeText: { color: '#0284c7', fontWeight: '700', fontSize: 14 },
   intro: { fontSize: 14, color: '#4b5563', lineHeight: 20, marginBottom: 16 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb' },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
