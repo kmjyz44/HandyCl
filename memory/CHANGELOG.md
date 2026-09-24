@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06 — Admin Bookings management screen + task block + new-order email alert
+- NEW admin screen `app/admin-bookings.tsx`: one combined task list with "filter by provider" (searchable modal) + status filter chips, manual refresh. Each task card shows client, provider, date/time, price, status badge, Blocked tag.
+- Per-task actions: Open shared chat (routes to existing `/task-chat`, admin already has full read/write access even in closed chats), Change status (modal with full TaskStatus list), Block/Unblock, Delete. Registered in `_layout.tsx`; linked from admin tools grid in `(tabs)/services.tsx` as "Bookings".
+- NEW backend `POST /api/admin/tasks/{id}/block?blocked=` — sets `admin_blocked`; `send_task_message` now blocks client/provider (admin can still post) when `admin_blocked` is true. Verified via curl (block→true, unblock→false).
+- Reused existing: `GET /admin/tasks` (status/provider filters), `PATCH /admin/tasks/{id}/status`, `DELETE /admin/tasks/{id}`.
+- New-order notifications: admin Telegram alert already existed on booking creation; ADDED admin/moderator EMAIL alert too (via `_send_email_now`). api.ts: `adminBlockTask`.
+- Requires Netlify + Railway redeploy.
+
+
 ## 2026-06 — Role-based pricing display (clients see commission-included, pros see net)
 - Bug: Pro profile & Pros list showed the provider's RAW net rate to everyone. Clients must see the price WITH platform commission; providers/admins see their own net rate.
 - `/profile/executor/{user_id}` now takes optional auth. For viewers who are NOT the profile owner or an admin, prices are marked up to the client total via new helper `_apply_client_pricing_to_profile` (per-skill uses that skill's category commission; top-level uses global). Adds `prices_include_commission` flag and preserves net in `provider_hourly_rate`.

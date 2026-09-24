@@ -3630,6 +3630,29 @@ async def create_booking(booking_data: BookingCreate, current_user: User = Depen
     except Exception as e:
         logger.warning("Telegram new-order alert failed: %s", e)
 
+    # Email alert to admins/moderators about the new order.
+    try:
+        _admins = await db.users.find(
+            {"role": {"$in": ["admin", "moderator"]}, "email": {"$nin": [None, ""]}},
+            {"_id": 0, "email": 1},
+        ).to_list(50)
+        _cat2 = booking_data.category or booking_data.title or "New order"
+        _addr2 = ", ".join([p for p in [booking_data.address, booking_data.city, booking_data.state] if p])
+        _price2 = booking_dict.get("total_price") or price or 0
+        _subject = f"New order: {_cat2}"
+        _body = (
+            f"A new order was created on Ono-Fix.\n\n"
+            f"Service: {_cat2}\n"
+            f"Client: {current_user.name}\n"
+            f"When: {booking_data.date} {booking_data.time}\n"
+            f"Where: {_addr2}\n"
+            f"Total: ${float(_price2):.0f}\n"
+        )
+        for _a in _admins:
+            asyncio.create_task(_send_email_now(_a["email"], _subject, _body))
+    except Exception as e:
+        logger.warning("Email new-order alert failed: %s", e)
+
     return JSONResponse(content=clean_bson(booking_dict))
 
 @api_router.get("/bookings")
@@ -4622,6 +4645,23 @@ async def admin_get_tasks(
     total = await db.tasks.count_documents(query)
     return {"tasks": tasks, "total": total}
 
+@api_router.post("/admin/tasks/{task_id}/block")
+async def admin_block_task(task_id: str, blocked: bool = True, current_user: User = Depends(require_admin)):
+    """Admin: block/unblock a task. A blocked task's chat is closed for the
+    client and provider (admin can still message); it is flagged 'Blocked'."""
+    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    await db.tasks.update_one(
+        {"task_id": task_id},
+        {"$set": {
+            "admin_blocked": bool(blocked),
+            "blocked_at": datetime.now(timezone.utc).isoformat() if blocked else None,
+        }},
+    )
+    return {"task_id": task_id, "admin_blocked": bool(blocked)}
+
+
 @api_router.delete("/admin/tasks/{task_id}")
 async def admin_delete_task(
     task_id: str,
@@ -4809,6 +4849,8 @@ async def send_task_message(task_id: str, body: MessageCreate, current_user: Use
                             "cancelled_by_client", "cancelled_by_tasker", "paid"}
     if not is_admin and task.get("status") in CLOSED_TASK_STATUSES:
         raise HTTPException(status_code=403, detail="This chat is closed for this task.")
+    if not is_admin and task.get("admin_blocked"):
+        raise HTTPException(status_code=403, detail="This task has been blocked by support.")
 
     msg_id = f"msg_{uuid.uuid4().hex[:12]}"
     msg = {

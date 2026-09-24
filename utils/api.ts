@@ -1059,6 +1059,10 @@ export const api = {
     const res = await client.put(`/admin/tasks/${taskId}`, null, { params: data });
     return res.data;
   },
+  adminBlockTask: async (taskId: string, blocked: boolean) => {
+    const res = await client.post(`/admin/tasks/${taskId}/block`, null, { params: { blocked } });
+    return res.data;
+  },
 
   // Provider stats
   getMyProviderStats: async () => {
