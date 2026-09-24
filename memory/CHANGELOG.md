@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06 — Payouts = Zelle/Venmo only + payout step in provider onboarding
+- `app/payout-setup.tsx`: removed the Debit card / Bank (ACH) section (tabs + card/bank form + saved-accounts list). Payouts are now Zelle/Venmo (+PayPal if admin-enabled) only. Updated header sub-copy and removed the "save details manually" divider. Stripe/Finix connect cards remain gated by `enabledMethods` (hidden unless admin enables). Frontend compiles.
+- Provider onboarding gained a new step "Set up how you get paid" → routes to `/payout-setup`. `utils/onboardingSteps.ts`: added `payout` key/def (cash icon, green). Backend `GET /provider/onboarding-status`: added `payout` step, done when user has zelle_handle/venmo_handle/paypal_email. Verified via curl: 7 steps now, payout detected.
+- Requires Netlify + Railway redeploy.
+
+
 ## 2026-06 — Admin Bookings management screen + task block + new-order email alert
 - NEW admin screen `app/admin-bookings.tsx`: one combined task list with "filter by provider" (searchable modal) + status filter chips, manual refresh. Each task card shows client, provider, date/time, price, status badge, Blocked tag.
 - Per-task actions: Open shared chat (routes to existing `/task-chat`, admin already has full read/write access even in closed chats), Change status (modal with full TaskStatus list), Block/Unblock, Delete. Registered in `_layout.tsx`; linked from admin tools grid in `(tabs)/services.tsx` as "Bookings".

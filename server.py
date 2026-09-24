@@ -8563,6 +8563,7 @@ async def provider_onboarding_status(current_user: User = Depends(get_current_us
         {"key": "work_zone", "done": has_zone},
         {"key": "skills", "done": len(profile.get("skills") or []) > 0},
         {"key": "availability", "done": slots > 0},
+        {"key": "payout", "done": bool(user.get("zelle_handle") or user.get("venmo_handle") or user.get("paypal_email"))},
         {"key": "identity", "done": bool(user.get("identity_verified"))},
         {"key": "notifications", "done": bool(user.get("telegram_chat_id") or user.get("notification_prefs"))},
     ]

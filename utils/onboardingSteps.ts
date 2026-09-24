@@ -5,6 +5,7 @@ export type OnboardingStepKey =
   | 'work_zone'
   | 'skills'
   | 'availability'
+  | 'payout'
   | 'identity'
   | 'notifications';
 
@@ -50,6 +51,14 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     icon: 'calendar-outline',
     route: '/(tabs)/availability',
     color: '#f59e0b',
+  },
+  {
+    key: 'payout',
+    title: 'Set up how you get paid',
+    desc: 'Add your Zelle and/or Venmo so clients can pay you directly for completed jobs.',
+    icon: 'cash-outline',
+    route: '/payout-setup',
+    color: '#059669',
   },
   {
     key: 'identity',

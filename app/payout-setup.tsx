@@ -269,9 +269,8 @@ export default function PayoutSetup() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
         <Text style={styles.h1}>Where we'll send your money</Text>
         <Text style={styles.sub}>
-          Connect Stripe Connect — and funds will be automatically transferred to your card
-          after each paid task. Stripe verifies your documents itself (5 min) — we
-          don't need to do anything manually.
+          Clients pay you directly via Zelle or Venmo. Add your details below so
+          they know where to send your payment.
         </Text>
 
         {/* Stripe Connect — recommended (only if admin enabled Stripe) */}
@@ -355,9 +354,8 @@ export default function PayoutSetup() {
         {/* Manual / alternative payout methods — hidden when admin has enabled Finix (Finix-only payouts) */}
         {!enabledMethods.includes('finix') && (
         <>
-        <Text style={styles.dividerLabel}>or save details manually (for reference)</Text>
 
-        {/* PayPal / Zelle / Venmo contacts — for manual-split methods */}
+        {/* Zelle / Venmo contacts — the payout methods clients use */}
         <View style={styles.altCard}>
           <Text style={styles.altTitle}>Alternative payout methods</Text>
           <Text style={styles.altSub}>
@@ -407,169 +405,7 @@ export default function PayoutSetup() {
           </TouchableOpacity>
         </View>
 
-        {/* Existing accounts */}
-        {loading ? (
-          <ActivityIndicator style={{ marginTop: 16 }} color="#2563eb" />
-        ) : accounts.length > 0 ? (
-          <View style={styles.list}>
-            <Text style={styles.h2}>Saved details</Text>
-            {accounts.map((a) => (
-              <View key={a.account_id} style={styles.acc} data-testid={`payout-account-${a.account_id}`}>
-                <View style={styles.accIcon}>
-                  <Ionicons
-                    name={a.account_type === 'card' ? 'card' : 'business'}
-                    size={20}
-                    color="#2563eb"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.accTitle}>
-                    {a.account_type === 'card'
-                      ? `${(a.card_brand || 'Card').toUpperCase()} •••• ${a.card_last4}`
-                      : `${a.bank_name || 'Bank'} •••• ${a.account_number_last4}`}
-                  </Text>
-                  <Text style={styles.accSub}>
-                    {a.account_holder_name || '—'} · {a.is_default ? 'Primary' : 'Backup'}
-                    {a.is_verified ? ' · ✓' : ' · awaiting verification'}
-                  </Text>
-                </View>
-                {!a.is_default && (
-                  <TouchableOpacity onPress={() => makeDefault(a.account_id)} style={styles.accBtn} data-testid={`set-default-${a.account_id}`}>
-                    <Text style={styles.accBtnText}>Primary</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={() => remove(a.account_id)} style={[styles.accBtn, styles.accBtnDanger]} data-testid={`delete-${a.account_id}`}>
-                  <Ionicons name="trash-outline" size={16} color="#dc2626" />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Tabs */}
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'card' && styles.tabActive]}
-            onPress={() => setTab('card')}
-            data-testid="tab-card"
-          >
-            <Ionicons name="card-outline" size={18} color={tab === 'card' ? '#fff' : '#374151'} />
-            <Text style={[styles.tabText, tab === 'card' && styles.tabTextActive]}>Debit card</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'bank' && styles.tabActive]}
-            onPress={() => setTab('bank')}
-            data-testid="tab-bank"
-          >
-            <Ionicons name="business-outline" size={18} color={tab === 'bank' ? '#fff' : '#374151'} />
-            <Text style={[styles.tabText, tab === 'bank' && styles.tabTextActive]}>Bank (ACH)</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Form */}
-        <View style={styles.card}>
-          <Text style={styles.label}>Account holder name</Text>
-          <TextInput
-            value={holderName}
-            onChangeText={setHolderName}
-            placeholder="John Doe"
-            style={styles.input}
-            data-testid="payout-holder-name"
-          />
-
-          {tab === 'card' ? (
-            <>
-              <Text style={styles.label}>Debit card number</Text>
-              <TextInput
-                value={cardNumber}
-                onChangeText={(t) => setCardNumber(t.replace(/[^\d\s]/g, ''))}
-                placeholder="4242 4242 4242 4242"
-                keyboardType="number-pad"
-                style={styles.input}
-                data-testid="payout-card-number"
-              />
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Month (MM)</Text>
-                  <TextInput
-                    value={cardExpMonth}
-                    onChangeText={(t) => setCardExpMonth(t.replace(/\D/g, '').slice(0, 2))}
-                    placeholder="12"
-                    keyboardType="number-pad"
-                    style={styles.input}
-                    data-testid="payout-card-exp-month"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Year (YYYY)</Text>
-                  <TextInput
-                    value={cardExpYear}
-                    onChangeText={(t) => setCardExpYear(t.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="2028"
-                    keyboardType="number-pad"
-                    style={styles.input}
-                    data-testid="payout-card-exp-year"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>CVC</Text>
-                  <TextInput
-                    value={cardCvc}
-                    onChangeText={(t) => setCardCvc(t.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="123"
-                    keyboardType="number-pad"
-                    style={styles.input}
-                    secureTextEntry
-                    data-testid="payout-card-cvc"
-                  />
-                </View>
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={styles.label}>Bank name</Text>
-              <TextInput
-                value={bankName}
-                onChangeText={setBankName}
-                placeholder="Chase, Wells Fargo, ..."
-                style={styles.input}
-                data-testid="payout-bank-name"
-              />
-              <Text style={styles.label}>Routing number (9 digits)</Text>
-              <TextInput
-                value={routingNumber}
-                onChangeText={(t) => setRoutingNumber(t.replace(/\D/g, '').slice(0, 9))}
-                placeholder="110000000"
-                keyboardType="number-pad"
-                style={styles.input}
-                data-testid="payout-routing-number"
-              />
-              <Text style={styles.label}>Account number</Text>
-              <TextInput
-                value={accountNumber}
-                onChangeText={(t) => setAccountNumber(t.replace(/\D/g, '').slice(0, 17))}
-                placeholder="000123456789"
-                keyboardType="number-pad"
-                style={styles.input}
-                data-testid="payout-account-number"
-              />
-            </>
-          )}
-
-          <TouchableOpacity
-            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-            onPress={submit}
-            disabled={saving}
-            data-testid="save-payout-method-btn"
-          >
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save payout method</Text>}
-          </TouchableOpacity>
-
-          <Text style={styles.helper}>
-            🔒 Your data is protected. After connecting Stripe Connect, your funds will automatically
-            be transferred to this card/account after each completed task.
-          </Text>
-        </View>
+        {/* Tabs + card/bank form removed — payouts are Zelle/Venmo only for now */}
         </>
         )}
       </ScrollView>
