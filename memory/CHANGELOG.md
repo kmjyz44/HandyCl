@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06 — Role-based pricing display (clients see commission-included, pros see net)
+- Bug: Pro profile & Pros list showed the provider's RAW net rate to everyone. Clients must see the price WITH platform commission; providers/admins see their own net rate.
+- `/profile/executor/{user_id}` now takes optional auth. For viewers who are NOT the profile owner or an admin, prices are marked up to the client total via new helper `_apply_client_pricing_to_profile` (per-skill uses that skill's category commission; top-level uses global). Adds `prices_include_commission` flag and preserves net in `provider_hourly_rate`.
+- `/executors/by-service` now also marks up each `profile.skills[].hourly_rate` for non-admin viewers (per-category commission, cached via `_skill_commission`), preserving net in `provider_hourly_rate`. Top-level `final_hourly_rate` (client) / `base_hourly_rate` (net) unchanged.
+- Formula reused from `compute_client_pricing`: client = net / (1 - commission%/100). Verified via curl: net 30 (cleaning 15%) → client 35.29; owner/admin → 30. Guest top rate 60 → 70.59.
+- Frontend `app/executor/[id].tsx`: renders `skill.hourly_rate` as-is (now role-correct) + shows "Prices shown include the Ono-Fix service fee." caption to clients (testid `price-includes-fee-note`). Provider's own profile (`get_my_executor_profile`) unaffected — still raw.
+- Requires Netlify + Railway redeploy.
+
+
 ## 2026-06 — Custom service-search analytics + admin "Search Insights" screen
 - Backend: `/executors/by-service` now fire-and-forget logs each meaningful search (service_name, category+resolved category_name, city, lat/lng, date, user_id or guest, source) into `search_events` via `_log_search_event`. Empty/browse-all calls ignored.
 - NEW endpoint `GET /api/admin/search-analytics?days=N` (admin-only): total searches, top services (by category_name, raw service_name fallback), top regions/cities, per-day trend, 40 recent searches. Verified via curl (logged 2 guest searches → aggregated correctly).

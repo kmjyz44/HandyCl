@@ -241,6 +241,9 @@ export default function ExecutorProfile() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Services</Text>
             <Text style={styles.servicesHint}>Tap a service to see the pro's experience and photos of completed work.</Text>
+            {(profile as any).prices_include_commission ? (
+              <Text style={styles.priceNote} data-testid="price-includes-fee-note">Prices shown include the Ono-Fix service fee.</Text>
+            ) : null}
             {profile.skills.map((raw, index) => {
               const skill: any = typeof raw === 'string' ? { name: raw } : (raw || {});
               const photos = (Array.isArray(skill.photos) ? skill.photos : []).filter((p: any) => p && p.uri);
@@ -662,6 +665,7 @@ const styles = StyleSheet.create({
   skillCardExp: { fontSize: 13, color: '#4b5563', marginTop: 8, lineHeight: 19 },
   aboutLabel: { fontSize: 12, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 14 },
   servicesHint: { fontSize: 13, color: '#6b7280', marginBottom: 12, marginTop: -4 },
+  priceNote: { fontSize: 12, color: '#2563eb', marginBottom: 12, marginTop: -6, fontWeight: '600' },
   skillExpanded: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#eef2f7' },
   skillEmptyText: { fontSize: 13, color: '#9ca3af', fontStyle: 'italic', marginTop: 8 },
   skillCardPhoto: { width: 140, height: 105, borderRadius: 8, backgroundColor: '#e5e7eb' },

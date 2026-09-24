@@ -5154,8 +5154,12 @@ async def create_executor_profile(profile_data: ExecutorProfileCreate, current_u
         return profile.dict()
 
 @api_router.get("/profile/executor/{user_id}")
-async def get_executor_profile(user_id: str):
-    """Get executor profile by user_id"""
+async def get_executor_profile(user_id: str, current_user: Optional[User] = Depends(get_current_user_optional)):
+    """Get executor profile by user_id.
+
+    Prices shown to CLIENTS/guests include the platform commission; the profile
+    owner and admins see the raw (net) rates they set themselves.
+    """
     profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -5172,11 +5176,19 @@ async def get_executor_profile(user_id: str):
     merged_lng = profile.get("longitude") or (user.get("longitude") if user else None)
     merged_radius = profile.get("service_radius_km")
 
+    is_owner = bool(current_user and current_user.user_id == user_id)
+    is_admin = bool(current_user and current_user.role == UserRole.ADMIN)
+    prices_include_commission = False
+    if not (is_owner or is_admin):
+        profile = await _apply_client_pricing_to_profile(profile)
+        prices_include_commission = True
+
     return {
         **profile,
         "latitude": merged_lat,
         "longitude": merged_lng,
         "service_radius_km": merged_radius,
+        "prices_include_commission": prices_include_commission,
         "user": user,
         "average_rating": round(avg_rating, 2),
         "total_reviews": len(reviews)
@@ -5809,6 +5821,24 @@ async def get_executors_by_service(
     if commission_percent == 0.0 and settings.apply_admin_commission:
         commission_percent = settings.admin_commission_percentage or 0.0
 
+    # Per-skill client pricing: providers see their raw net rate, clients/guests
+    # see the price WITH the platform commission. Cache category commissions.
+    _is_admin_viewer = bool(current_user and current_user.role == UserRole.ADMIN)
+    _comm_cache: Dict[str, float] = {}
+
+    async def _skill_commission(category_id: Optional[str]) -> float:
+        key = category_id or "__global__"
+        if key not in _comm_cache:
+            rate = None
+            if category_id:
+                cd = await db.categories.find_one({"category_id": category_id}, {"_id": 0, "commission_rate": 1})
+                if cd and cd.get("commission_rate") is not None:
+                    rate = float(cd["commission_rate"])
+            if rate is None:
+                rate = float(commission_percent or 0.0)
+            _comm_cache[key] = max(0.0, min(rate, 99.0))
+        return _comm_cache[key]
+
     pipeline = [
         # Only active, not blocked, not hidden by admin
         {"$match": {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}}},
@@ -6011,6 +6041,22 @@ async def get_executors_by_service(
         executor["commission_percentage"] = commission_percent
         executor["minimum_hours"] = max(1.0, float(profile.get("minimum_hours") or 1.0))
         executor["work_photos_count"] = len(profile.get("portfolio_photos") or [])
+
+        # Show CLIENTS/guests per-skill prices WITH commission; admins see raw.
+        if not _is_admin_viewer:
+            skills_list = profile.get("skills")
+            if isinstance(skills_list, list):
+                marked = []
+                for sk in skills_list:
+                    if isinstance(sk, dict) and sk.get("hourly_rate"):
+                        c = await _skill_commission(sk.get("category_id"))
+                        raw = float(sk["hourly_rate"])
+                        sk = dict(sk)
+                        sk["provider_hourly_rate"] = round(raw, 2)
+                        sk["hourly_rate"] = round(raw / (1 - c / 100.0), 2) if c > 0 else round(raw, 2)
+                    marked.append(sk)
+                profile["skills"] = marked
+                executor["profile"] = profile
 
         filtered.append(executor)
 
@@ -11321,6 +11367,31 @@ async def compute_client_pricing(executor_rate: float, category_id: Optional[str
         "category_id": category_id,
         "category_name": category_doc.get("name") if category_doc else None,
     }
+
+
+async def _apply_client_pricing_to_profile(profile: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of the executor profile with all rates marked up to the
+    CLIENT-facing price (executor net rate + platform commission). Per-skill
+    rates use that skill's category commission; the top-level hourly_rate uses
+    the global/default commission. The raw net rate is preserved alongside."""
+    p = dict(profile)
+    skills = p.get("skills")
+    if isinstance(skills, list):
+        new_skills = []
+        for s in skills:
+            if isinstance(s, dict) and s.get("hourly_rate"):
+                pricing = await compute_client_pricing(float(s["hourly_rate"]), s.get("category_id"))
+                s = dict(s)
+                s["provider_hourly_rate"] = pricing["executor_rate"]
+                s["hourly_rate"] = pricing["client_total"]
+                s["commission_rate"] = pricing["commission_rate"]
+            new_skills.append(s)
+        p["skills"] = new_skills
+    if p.get("hourly_rate"):
+        top = await compute_client_pricing(float(p["hourly_rate"]), None)
+        p["provider_hourly_rate"] = top["executor_rate"]
+        p["hourly_rate"] = top["client_total"]
+    return p
 
 
 @api_router.get("/pricing-preview")
