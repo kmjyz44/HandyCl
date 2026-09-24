@@ -4993,8 +4993,30 @@ async def send_task_message(task_id: str, body: MessageCreate, current_user: Use
 
     # Enrich with sender
     msg["sender"] = {"name": current_user.name, "role": current_user.role, "picture": getattr(current_user, "picture", None)}
+    _preview = (body.text or "[photo]")[:300]
+
+    # Notify the OTHER party (so an unanswered message reaches them by
+    # in-app + email + Telegram + push, with a deep link to the chat).
+    recipients: List[str] = []
+    if is_client and task.get("provider_id"):
+        recipients.append(task["provider_id"])
+    elif is_provider and task.get("client_id"):
+        recipients.append(task["client_id"])
+    elif is_admin:
+        for rid in (task.get("provider_id"), task.get("client_id")):
+            if rid:
+                recipients.append(rid)
+    for rid in recipients:
+        if rid and rid != current_user.user_id:
+            asyncio.create_task(notify_user(
+                rid, "chat_message",
+                f"New message from {current_user.name}",
+                _preview,
+                related_id=real_task_id, related_type="task",
+            ))
+
+    # Keep admins informed of client/provider chatter.
     if current_user.role not in [UserRole.ADMIN, UserRole.MODERATOR]:
-        _preview = (body.text or "[attachment]")[:200]
         asyncio.create_task(_notify_admins_telegram(
             f"💬 <b>New chat message</b>\nFrom: {current_user.name} ({current_user.role})\nTask: {real_task_id}\n{_preview}"))
     return msg

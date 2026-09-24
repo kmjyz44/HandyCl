@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06 — Chat message notifications to the recipient (Telegram + email + text)
+- `send_task_message` previously only pinged admins. Now it also notifies the OTHER party via `notify_user` (in-app + email + SMS + Telegram + push per prefs) with the message TEXT (300-char preview) as the body and a deep link to the task/chat. client↔provider counterpart; admin messages notify both client & provider. Skips notifying the sender.
+- So when a client writes and the provider hasn't replied, the provider gets the message text in Telegram + email with a tap-through link. Verified: DB shows `notification_type=chat_message`, title "New message from {sender}", body = message text, related task id.
+- Backend-only → Railway redeploy. NOTE: fires per message; recipients can mute email/Telegram in notification prefs if it's too frequent.
+
+
 ## 2026-06 — Fix: pending-task banner now on the provider HOME screen
 - The provider's landing/"Tasks" tab is `(tabs)/index.tsx` (ProviderHome, `if role==='provider'`), which had PaymentReminderBanner but NOT the new ProviderAlertBanner — so after login the unaccepted-task banner wasn't visible (pending_acceptance tasks are counted under "Mine", not "Available"). Added `<ProviderAlertBanner />` right under the greeting + import. Now visible immediately on login.
 - Frontend-only; requires Netlify redeploy.
