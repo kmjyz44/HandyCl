@@ -35,6 +35,16 @@ const statusColor = (s: string): string => {
 };
 const pretty = (s: string) => (s || '').replace(/_/g, ' ');
 
+const DRow = ({ label, value, highlight }: { label: string; value?: string | null; highlight?: boolean }) => {
+  if (value === null || value === undefined || value === '') return null;
+  return (
+    <View style={s.dRow}>
+      <Text style={s.dLabel}>{label}</Text>
+      <Text style={[s.dValue, highlight && s.dValueHi]}>{value}</Text>
+    </View>
+  );
+};
+
 export default function AdminBookingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -47,6 +57,20 @@ export default function AdminBookingsPage() {
   const [providerModal, setProviderModal] = useState(false);
   const [provSearch, setProvSearch] = useState('');
   const [statusModalTask, setStatusModalTask] = useState<any>(null);
+  const [detailTask, setDetailTask] = useState<any>(null);
+  const [reminding, setReminding] = useState(false);
+
+  const sendReminder = async (t: any) => {
+    setReminding(true);
+    try {
+      const res = await api.adminPaymentReminder(t.task_id);
+      showAlert('Reminder sent', `A payment reminder for $${Math.round(res.amount || 0)} was sent to the client.`);
+    } catch (e: any) {
+      showAlert('Error', e?.response?.data?.detail || 'Failed to send reminder.');
+    } finally {
+      setReminding(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -193,6 +217,10 @@ export default function AdminBookingsPage() {
               </Text>
 
               <View style={s.actions}>
+                <TouchableOpacity style={s.actBtn} onPress={() => setDetailTask(t)} data-testid={`booking-details-${t.task_id}`}>
+                  <Ionicons name="information-circle-outline" size={16} color="#2563eb" />
+                  <Text style={s.actText}>Details</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={s.actBtn} onPress={() => openChat(t)} data-testid={`booking-chat-${t.task_id}`}>
                   <Ionicons name="chatbubble-ellipses-outline" size={16} color="#2563eb" />
                   <Text style={s.actText}>Chat</Text>
@@ -201,6 +229,12 @@ export default function AdminBookingsPage() {
                   <Ionicons name="swap-horizontal" size={16} color="#2563eb" />
                   <Text style={s.actText}>Status</Text>
                 </TouchableOpacity>
+                {String(t.status).includes('pending_payment') || String(t.status) === 'completed' ? (
+                  <TouchableOpacity style={s.actBtn} onPress={() => sendReminder(t)} disabled={reminding} data-testid={`booking-remind-${t.task_id}`}>
+                    <Ionicons name="notifications-outline" size={16} color="#059669" />
+                    <Text style={[s.actText, { color: '#059669' }]}>Remind to pay</Text>
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity style={s.actBtn} onPress={() => toggleBlock(t)} data-testid={`booking-block-${t.task_id}`}>
                   <Ionicons name={t.admin_blocked ? 'lock-open-outline' : 'lock-closed-outline'} size={16} color="#d97706" />
                   <Text style={[s.actText, { color: '#d97706' }]}>{t.admin_blocked ? 'Unblock' : 'Block'}</Text>
@@ -215,6 +249,70 @@ export default function AdminBookingsPage() {
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
+
+      {/* Task detail modal — full data */}
+      <Modal visible={!!detailTask} transparent animationType="slide" onRequestClose={() => setDetailTask(null)}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalSheet}>
+            <View style={s.modalHead}>
+              <Text style={s.modalTitle} numberOfLines={1}>{detailTask?.title || detailTask?.category || 'Task'}</Text>
+              <TouchableOpacity onPress={() => setDetailTask(null)} data-testid="detail-modal-close"><Ionicons name="close" size={24} color="#111827" /></TouchableOpacity>
+            </View>
+            {detailTask ? (
+              <ScrollView style={{ maxHeight: 460 }}>
+                <View style={[s.badge, { alignSelf: 'flex-start', backgroundColor: statusColor(detailTask.status) + '22', marginBottom: 12 }]}>
+                  <Text style={[s.badgeText, { color: statusColor(detailTask.status) }]}>{pretty(detailTask.status)}</Text>
+                </View>
+
+                <Text style={s.dSection}>People</Text>
+                <DRow label="Client" value={detailTask.client?.name} />
+                <DRow label="Client email" value={detailTask.client?.email} />
+                <DRow label="Client phone" value={detailTask.client?.phone} />
+                <DRow label="Provider" value={detailTask.provider?.name} />
+                <DRow label="Provider email" value={detailTask.provider?.email} />
+                <DRow label="Provider phone" value={detailTask.provider?.phone} />
+
+                <Text style={s.dSection}>Schedule & location</Text>
+                <DRow label="Date" value={detailTask.scheduled_date || detailTask.date} />
+                <DRow label="Time" value={detailTask.scheduled_time || detailTask.time} />
+                <DRow label="Address" value={[detailTask.address, detailTask.city, detailTask.state, detailTask.zip_code].filter(Boolean).join(', ')} />
+
+                <Text style={s.dSection}>Work & payment</Text>
+                <DRow label="Hourly rate" value={detailTask.hourly_rate != null ? `$${detailTask.hourly_rate}/hr` : null} />
+                <DRow label="Estimated hours" value={detailTask.estimated_hours != null ? `${detailTask.estimated_hours} h` : null} />
+                <DRow label="Hours worked" value={detailTask.actual_hours != null ? `${detailTask.actual_hours} h` : null} highlight />
+                <DRow label="Materials" value={detailTask.materials_cost ? `$${Math.round(detailTask.materials_cost)}` : null} />
+                <DRow label="Amount due" value={`$${Math.round(detailTask.final_price || detailTask.total_price || 0)}`} highlight />
+
+                {detailTask.description ? (
+                  <>
+                    <Text style={s.dSection}>Description</Text>
+                    <Text style={s.dDesc}>{detailTask.description}</Text>
+                  </>
+                ) : null}
+
+                {String(detailTask.status).includes('pending_payment') || String(detailTask.status) === 'completed' ? (
+                  <TouchableOpacity
+                    style={s.remindBtn}
+                    onPress={() => sendReminder(detailTask)}
+                    disabled={reminding}
+                    data-testid="detail-remind-btn"
+                  >
+                    {reminding
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <><Ionicons name="notifications" size={18} color="#fff" /><Text style={s.remindBtnText}>Send payment reminder to client</Text></>}
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity style={s.detailChatBtn} onPress={() => { const t = detailTask; setDetailTask(null); openChat(t); }} data-testid="detail-chat-btn">
+                  <Ionicons name="chatbubble-ellipses-outline" size={18} color="#2563eb" />
+                  <Text style={s.detailChatText}>Open chat</Text>
+                </TouchableOpacity>
+                <View style={{ height: 20 }} />
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
 
       {/* Provider picker modal */}
       <Modal visible={providerModal} transparent animationType="slide" onRequestClose={() => setProviderModal(false)}>
@@ -321,4 +419,14 @@ const s = StyleSheet.create({
   statusRowActive: { backgroundColor: '#eff6ff' },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   statusRowText: { fontSize: 15, color: '#111827', textTransform: 'capitalize' },
+  dSection: { fontSize: 12, fontWeight: '800', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 14, marginBottom: 6 },
+  dRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', gap: 12 },
+  dLabel: { fontSize: 13, color: '#6b7280', flexShrink: 0 },
+  dValue: { fontSize: 13, color: '#111827', fontWeight: '600', flex: 1, textAlign: 'right' },
+  dValueHi: { color: '#059669', fontWeight: '800', fontSize: 15 },
+  dDesc: { fontSize: 13, color: '#374151', lineHeight: 19 },
+  remindBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#059669', borderRadius: 12, paddingVertical: 14, marginTop: 18 },
+  remindBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  detailChatBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: '#2563eb', borderRadius: 12, paddingVertical: 12, marginTop: 10 },
+  detailChatText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
 });

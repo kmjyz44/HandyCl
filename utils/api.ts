@@ -1063,6 +1063,10 @@ export const api = {
     const res = await client.post(`/admin/tasks/${taskId}/block`, null, { params: { blocked } });
     return res.data;
   },
+  adminPaymentReminder: async (taskId: string) => {
+    const res = await client.post(`/admin/tasks/${taskId}/payment-reminder`);
+    return res.data;
+  },
   getProviderPendingAlert: async () => {
     const res = await client.get('/provider/pending-alert');
     return res.data;

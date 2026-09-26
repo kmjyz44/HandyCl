@@ -4760,13 +4760,33 @@ async def admin_get_tasks(
     # Enrich with client and provider names
     for t in tasks:
         if t.get("client_id"):
-            c = await db.users.find_one({"user_id": t["client_id"]}, {"_id": 0, "name": 1, "email": 1})
+            c = await db.users.find_one({"user_id": t["client_id"]}, {"_id": 0, "name": 1, "email": 1, "phone": 1})
             t["client"] = c or {}
         if t.get("provider_id"):
-            p = await db.users.find_one({"user_id": t["provider_id"]}, {"_id": 0, "name": 1, "email": 1})
+            p = await db.users.find_one({"user_id": t["provider_id"]}, {"_id": 0, "name": 1, "email": 1, "phone": 1})
             t["provider"] = p or {}
     total = await db.tasks.count_documents(query)
     return {"tasks": tasks, "total": total}
+
+
+@api_router.post("/admin/tasks/{task_id}/payment-reminder")
+async def admin_payment_reminder(task_id: str, current_user: User = Depends(require_admin)):
+    """Admin: send the client a 'please pay' reminder (in-app + email + Telegram + push)."""
+    task = await db.tasks.find_one({"task_id": task_id}, {"_id": 0}) or await db.bookings.find_one({"booking_id": task_id}, {"_id": 0})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    client_id = task.get("client_id") or task.get("user_id")
+    if not client_id:
+        raise HTTPException(status_code=400, detail="No client on this task")
+    amount = task.get("final_price") or task.get("total_price") or 0
+    svc = task.get("title") or task.get("category") or "your order"
+    await notify_user(
+        client_id, "payment_reminder", "Payment reminder",
+        f"Your order \"{svc}\" is completed and awaiting payment of ${float(amount):.0f}. "
+        f"Please complete the payment to your pro. Thank you!",
+        related_id=task.get("task_id") or task_id, related_type="task",
+    )
+    return {"ok": True, "client_id": client_id, "amount": float(amount)}
 
 @api_router.post("/admin/tasks/{task_id}/block")
 async def admin_block_task(task_id: str, blocked: bool = True, current_user: User = Depends(require_admin)):

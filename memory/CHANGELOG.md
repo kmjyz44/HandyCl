@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06 — Admin Bookings: task detail modal + payment reminder
+- `app/admin-bookings.tsx`: added a "Details" button on each card → full detail modal showing people (client/provider name, email, phone), schedule & address, and work & payment (hourly rate, estimated hours, HOURS WORKED, materials, AMOUNT DUE highlighted), plus description and an Open-chat shortcut.
+- "Remind to pay" action on the card (for completed_pending_payment / completed) AND a "Send payment reminder to client" button in the modal → NEW endpoint `POST /api/admin/tasks/{id}/payment-reminder` notifies the client (in-app + email + Telegram + push) with the amount due and a deep link. Verified via curl (sent, amount computed).
+- `admin_get_tasks` enrichment now also returns client/provider phone. api.ts: `adminPaymentReminder`.
+- Requires Netlify + Railway redeploy.
+
+
 ## 2026-06 — Clients now get notifications like providers (opt-out by default)
 - Previously new CLIENTS were created with all notification channels OFF, so they didn't receive chat/order emails or Telegram like providers. Registration now gives clients `notification_prefs = {}` (opt-out — all channels ON), same as providers.
 - One-time startup migration `_migrate_client_notifications` (guarded by app_settings `client_notif_migrated`): flips existing strictly-all-off clients to opt-out. Clients with null/partial prefs already received by default.
