@@ -6,7 +6,7 @@ const SITE_NAME = 'Ono-Fix';
 const TAGLINE = 'One Photo. One Solution.';
 const DESCRIPTION =
   'Ono-Fix — snap a photo of any home problem. Our AI identifies the issue and instantly matches you with the right trusted local pro. Plumbing, electrical, furniture assembly, cleaning and more.';
-const OG_IMAGE = `${SITE_URL}/onofix-og.png`;
+const OG_IMAGE = `${SITE_URL}/onofix-og-v2.png`;
 
 // Optional analytics / verification (set in Netlify env at build time).
 const GA4_ID = process.env.EXPO_PUBLIC_GA4_ID || '';

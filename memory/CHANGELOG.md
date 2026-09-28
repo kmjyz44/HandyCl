@@ -381,3 +381,8 @@ User wants but postponed. Spec agreed:
 - Provider skill catalog (app/(tabs)/my-profile.tsx): now merges admin-created DB categories into the built-in SKILL_CATEGORIES via allSkillCategories memo (loads api.getCategories). DB-only categories expose a single synthetic skill = category name so providers can add them (set rate, agree, save). Updated Add-Skills modal, Skill Detail (findSkillCategory replaces unsafe SKILL_CATEGORIES.find(...)!), Service Detail, and skillsByCategory to use the merged list. Skills persist with category_id so search/matching works.
 - Home grid cover image (app/(tabs)/index.tsx): added KEYWORD_COVERS + coverByKeyword so admin categories with no uploaded image and no id fallback still get a relevant photo by name keyword (cctv/surveillance/security camera/alarm/video doorbell -> Unsplash CCTV photo). coverImage = dbCat.image || FALLBACK_COVERS[id] || coverByKeyword(name).
 - Both files compile (esbuild). Frontend-only. Needs Netlify redeploy. (Preview DB has no custom category; verified logic via code + prior API checks.)
+
+## 2026-06 — OG share image updated
+- Replaced social share preview (og:image) with a new AI-generated banner clearly showing a handyman in blue work uniform with a full tool belt (drill, screwdrivers, tape measure, wrench) taking a photo with a phone.
+- Kept Ono-Fix logo + camera icon + tagline "One Photo. One Solution."
+- New file: public/onofix-og-v2.png (1200x630). Updated OG_IMAGE in app/+html.tsx to /onofix-og-v2.png for cache-busting across social platforms.
