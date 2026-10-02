@@ -386,3 +386,13 @@ User wants but postponed. Spec agreed:
 - Replaced social share preview (og:image) with a new AI-generated banner clearly showing a handyman in blue work uniform with a full tool belt (drill, screwdrivers, tape measure, wrench) taking a photo with a phone.
 - Kept Ono-Fix logo + camera icon + tagline "One Photo. One Solution."
 - New file: public/onofix-og-v2.png (1200x630). Updated OG_IMAGE in app/+html.tsx to /onofix-og-v2.png for cache-busting across social platforms.
+
+## 2026-10 — SEO: server-rendered service category pages
+- PROBLEM: GSC showed /?category=... URLs as not indexed. Cause: every category URL returned the homepage SPA shell with canonical pointing to the homepage (treated as duplicates) and no server-side content.
+- Blog pages (Soro/Doro) were already server-rendered and indexable — confirmed OK.
+- Added server-rendered service landing pages (like /blog): GET /api/services-render (index) and GET /api/services-render/{slug}; proxied by Netlify at /services and /services/*.
+- Each page has unique title, meta description, self-canonical, Service JSON-LD, how-it-works, sub-categories, related blog links, CTA.
+- Sitemap now lists /services + /services/{slug} for each top-level category instead of /?category=... (no more param URLs).
+- _render_blog_shell extended with optional ld_override for custom JSON-LD.
+- Synced root /app/server.py with /app/backend/server.py.
+- Requires GitHub push -> Railway (backend) + Netlify (_redirects) redeploy to go live.

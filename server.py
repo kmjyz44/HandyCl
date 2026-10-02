@@ -9121,23 +9121,27 @@ async def admin_sync_soro_rss(request: Request, current_user: User = Depends(req
 
 def _render_blog_shell(title: str, description: str, canonical: str, body_html: str,
                        og_image: Optional[str] = None, article: bool = False,
-                       published: Optional[str] = None) -> str:
+                       published: Optional[str] = None,
+                       ld_override: Optional[dict] = None) -> str:
     import html as _html
     t = _html.escape(title or "Ono-Fix Blog")
     d = _html.escape((description or "").replace("\n", " ").strip()[:300])
     og_img_tag = f'<meta property="og:image" content="{_html.escape(og_image)}"><meta name="twitter:image" content="{_html.escape(og_image)}">' if og_image else ""
-    ld = {
-        "@context": "https://schema.org",
-        "@type": "Article" if article else "Blog",
-        "headline": title,
-        "description": (description or "")[:300],
-        "url": canonical,
-        "publisher": {"@type": "Organization", "name": "Ono-Fix", "url": "https://ono-fix.com"},
-    }
-    if og_image:
-        ld["image"] = og_image
-    if published:
-        ld["datePublished"] = published
+    if ld_override is not None:
+        ld = ld_override
+    else:
+        ld = {
+            "@context": "https://schema.org",
+            "@type": "Article" if article else "Blog",
+            "headline": title,
+            "description": (description or "")[:300],
+            "url": canonical,
+            "publisher": {"@type": "Organization", "name": "Ono-Fix", "url": "https://ono-fix.com"},
+        }
+        if og_image:
+            ld["image"] = og_image
+        if published:
+            ld["datePublished"] = published
     import json as _json
     ld_json = _json.dumps(ld, ensure_ascii=False)
     return f"""<!DOCTYPE html>
@@ -9190,6 +9194,8 @@ def _render_blog_shell(title: str, description: str, canonical: str, body_html: 
   .grid{{display:grid;grid-template-columns:1fr;gap:20px}}
   @media(min-width:640px){{.grid{{grid-template-columns:1fr 1fr}}}}
   .lead{{color:var(--muted);font-size:16px;margin:-8px 0 28px}}
+  ol.steps{{padding-left:20px;margin:16px 0}} ol.steps li{{margin:10px 0}}
+  ul.links{{padding-left:20px;margin:16px 0}} ul.links li{{margin:8px 0}} ul.links a{{color:var(--brand)}}
   footer.site{{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px;text-align:center;padding:24px}}
   .empty{{text-align:center;color:var(--muted);padding:60px 20px}}
 </style>
@@ -9302,6 +9308,181 @@ async def blog_render_article(slug: str):
         published=published,
     )
     return HTMLResponse(content=html_out)
+
+
+def _category_slug(cat: dict) -> str:
+    """Stable, SEO-friendly slug for a category (hyphenated name, fallback id)."""
+    base = (cat.get("name") or cat.get("category_id") or "").lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", base).strip("-")
+    return slug or (cat.get("category_id") or "").lower()
+
+
+async def _related_blog_cards(limit: int = 4) -> str:
+    """Small list of recent published articles for internal linking."""
+    import html as _html
+    try:
+        posts = await db.blog_posts.find(
+            {"is_published": True}, {"_id": 0, "slug": 1, "post_id": 1, "title": 1}
+        ).sort("created_at", -1).limit(limit).to_list(limit)
+    except Exception:
+        posts = []
+    if not posts:
+        return ""
+    items = []
+    for p in posts:
+        s = p.get("slug") or p.get("post_id")
+        if not s:
+            continue
+        items.append(
+            f'<li><a href="/blog/{_html.escape(str(s))}">{_html.escape(p.get("title") or "Read more")}</a></li>'
+        )
+    if not items:
+        return ""
+    return f'<h2>Helpful reading</h2><ul class="links">{"".join(items)}</ul>'
+
+
+@api_router.get("/services-render")
+async def services_render_index():
+    """Server-rendered services directory for SEO. Proxied by Netlify at /services."""
+    from fastapi.responses import HTMLResponse
+    import html as _html
+    cats = await db.categories.find(
+        {"is_active": True}, {"_id": 0, "image": 0}
+    ).to_list(200)
+    # Only top-level categories in the directory (skip sub-categories).
+    top = [c for c in cats if not c.get("parent_id")]
+    if not top:
+        top = cats
+
+    cards = []
+    for c in sorted(top, key=lambda x: (x.get("name") or "").lower()):
+        slug = _category_slug(c)
+        if not slug:
+            continue
+        name = _html.escape(c.get("name") or slug.replace("-", " ").title())
+        desc = _html.escape((c.get("description") or f"Book a trusted local pro for {c.get('name') or 'this service'}. Snap a photo and get matched in minutes.").strip()[:150])
+        cards.append(
+            f'<a class="card" href="/services/{_html.escape(slug)}"><div class="body"><h2>{name}</h2><p>{desc}</p></div></a>'
+        )
+
+    body = (
+        '<h1>Home Services Near You</h1>'
+        '<p class="lead">Browse every service Ono-Fix covers. Snap a photo of the problem and our AI matches you with the right trusted local pro in minutes.</p>'
+        f'<div class="grid">{"".join(cards)}</div>'
+    )
+    ld = {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "Home Services — Ono-Fix",
+        "url": "https://ono-fix.com/services",
+        "description": "Browse every home service Ono-Fix covers across the United States.",
+    }
+    html_out = _render_blog_shell(
+        title="Home Services Near You",
+        description="Browse every home service Ono-Fix covers — plumbing, electrical, assembly, moving, cleaning and more. Snap a photo, get matched with a trusted local pro.",
+        canonical="https://ono-fix.com/services",
+        body_html=body,
+        og_image="https://ono-fix.com/onofix-og-v2.png",
+        ld_override=ld,
+    )
+    return HTMLResponse(content=html_out)
+
+
+@api_router.get("/services-render/{slug}")
+async def services_render_one(slug: str):
+    """Server-rendered single service landing page for SEO. Proxied by Netlify at /services/{slug}."""
+    from fastapi.responses import HTMLResponse
+    import html as _html
+    want = (slug or "").lower().strip()
+    cats = await db.categories.find(
+        {"is_active": True}, {"_id": 0, "image": 0}
+    ).to_list(300)
+
+    cat = None
+    for c in cats:
+        if _category_slug(c) == want or (c.get("category_id") or "").lower() == want:
+            cat = c
+            break
+
+    if not cat:
+        body = '<div class="empty"><h1>Service not found</h1><p>This service may have been moved or renamed.</p><p><a href="/services">← All services</a></p></div>'
+        return HTMLResponse(
+            content=_render_blog_shell("Service not found", "", "https://ono-fix.com/services", body),
+            status_code=404,
+        )
+
+    name = cat.get("name") or want.replace("-", " ").title()
+    final_slug = _category_slug(cat)
+    canonical = f"https://ono-fix.com/services/{final_slug}"
+    desc = (cat.get("description") or "").strip()
+    meta_desc = desc or (
+        f"Need {name.lower()} help? Snap a photo of the problem and Ono-Fix matches you with a trusted, "
+        f"vetted local pro in minutes. Upfront pricing, no guesswork. Serving homes across the US."
+    )
+
+    # Sub-categories of this category (what's included).
+    subs = [c for c in cats if (c.get("parent_id") == cat.get("category_id"))]
+    if subs:
+        sub_items = "".join(
+            f'<li>{_html.escape(s.get("name") or "")}</li>'
+            for s in sorted(subs, key=lambda x: (x.get("name") or "").lower()) if s.get("name")
+        )
+        included = f'<h2>What {_html.escape(name)} covers</h2><ul class="links">{sub_items}</ul>'
+    else:
+        included = ""
+
+    intro = (
+        f'<p>{_html.escape(desc)}</p>' if desc else
+        f'<p>Looking for reliable <strong>{_html.escape(name.lower())}</strong> near you? '
+        f'With Ono-Fix you simply snap a photo of the problem. Our AI identifies the issue and instantly '
+        f'matches you with a trusted, background-checked local pro — with clear pricing before any work starts.</p>'
+    )
+
+    steps = (
+        '<h2>How it works</h2>'
+        '<ol class="steps">'
+        '<li><strong>Snap a photo</strong> of the problem right from your phone.</li>'
+        '<li><strong>Get matched</strong> — our AI identifies the issue and finds the right local pro.</li>'
+        '<li><strong>Book &amp; relax</strong> — see upfront pricing, pick a time, and the pro arrives.</li>'
+        '</ol>'
+    )
+
+    related = await _related_blog_cards(4)
+
+    cta_block = (
+        '<div class="cta-block">'
+        f'<h3>Need {_html.escape(name.lower())} done?</h3>'
+        '<p>Snap a photo of the problem and our AI matches you with a trusted local pro in minutes.</p>'
+        '<a class="cta-btn" href="/">Order this service →</a>'
+        '</div>'
+    )
+
+    body = (
+        '<a href="/services" style="color:#64748b;text-decoration:none;font-size:14px">← All services</a>'
+        f'<h1>{_html.escape(name)} Near You</h1>'
+        f'{intro}{steps}{included}{related}{cta_block}'
+    )
+
+    ld = {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "serviceType": name,
+        "name": f"{name} — Ono-Fix",
+        "description": meta_desc[:300],
+        "url": canonical,
+        "areaServed": {"@type": "Country", "name": "United States"},
+        "provider": {"@type": "Organization", "name": "Ono-Fix", "url": "https://ono-fix.com"},
+    }
+    html_out = _render_blog_shell(
+        title=f"{name} Near You",
+        description=meta_desc,
+        canonical=canonical,
+        body_html=body,
+        og_image="https://ono-fix.com/onofix-og-v2.png",
+        ld_override=ld,
+    )
+    return HTMLResponse(content=html_out)
+
 
 
 @api_router.post("/webhook/stripe")
@@ -16631,10 +16812,15 @@ async def seo_sitemap():
         cats = await db.categories.find({"is_active": True}).to_list(200)
         if not cats:
             cats = await db.categories.find({}).to_list(200)
+        urls.append((f"{base}/services", "0.8", "weekly"))
+        seen_slugs = set()
         for c in cats:
-            cid = c.get("category_id")
-            if cid:
-                urls.append((f"{base}/?category={cid}", "0.8", "weekly"))
+            if c.get("parent_id"):
+                continue  # only top-level categories get a landing page
+            slug = _category_slug(c)
+            if slug and slug not in seen_slugs:
+                seen_slugs.add(slug)
+                urls.append((f"{base}/services/{slug}", "0.8", "weekly"))
     except Exception:
         pass
 
