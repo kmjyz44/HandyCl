@@ -9170,6 +9170,10 @@ def _render_blog_shell(title: str, description: str, canonical: str, body_html: 
   header.site .wrap{{max-width:820px;margin:0 auto;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}}
   .brand{{font-weight:800;font-size:20px;color:var(--ink);text-decoration:none;letter-spacing:-.02em}}
   .brand span{{color:var(--brand)}}
+  .nav{{display:flex;gap:20px;margin-left:auto;margin-right:20px}}
+  .nav a{{color:var(--ink);text-decoration:none;font-weight:600;font-size:15px}}
+  .nav a:hover{{color:var(--brand)}}
+  footer.site a{{color:var(--brand);text-decoration:none}}
   .cta{{background:var(--brand);color:#fff;text-decoration:none;padding:9px 16px;border-radius:999px;font-weight:600;font-size:14px}}
   main{{max-width:820px;margin:0 auto;padding:32px 20px 80px}}
   h1{{font-size:34px;line-height:1.2;letter-spacing:-.03em;margin:0 0 12px}}
@@ -9203,12 +9207,13 @@ def _render_blog_shell(title: str, description: str, canonical: str, body_html: 
 <body>
 <header class="site"><div class="wrap">
   <a class="brand" href="/">Ono<span>-Fix</span></a>
+  <nav class="nav"><a href="/services">Services</a><a href="/blog">Blog</a></nav>
   <a class="cta" href="/">Book a pro →</a>
 </div></header>
 <main>
 {body_html}
 </main>
-<footer class="site">© Ono-Fix — Find trusted local pros. <a href="/">ono-fix.com</a></footer>
+<footer class="site">© Ono-Fix — <a href="/">Home</a> · <a href="/services">Services</a> · <a href="/blog">Blog</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></footer>
 </body>
 </html>"""
 
@@ -9295,6 +9300,7 @@ async def blog_render_article(slug: str):
         '<p>Snap a photo of the problem and our AI matches you with a trusted local pro in minutes.</p>'
         '<a class="cta-btn" href="/">Order a service →</a>'
         '</div>'
+        '<p style="margin-top:24px"><a href="/services">Browse all home services →</a></p>'
     )
     body = f'<a href="/blog" style="color:#64748b;text-decoration:none;font-size:14px">← All articles</a><h1>{_html.escape(title)}</h1>{meta_line}{cover_tag}<article>{content}</article>{cta_block}'
 
