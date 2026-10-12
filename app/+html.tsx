@@ -137,7 +137,32 @@ export default function Root({ children }: PropsWithChildren) {
         <ScrollViewStyleReset />
         <script dangerouslySetInnerHTML={{ __html: swReg }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Crawlable site footer — gives search engines a path from the SPA
+            homepage to the server-rendered /blog and /services sections. */}
+        <footer
+          aria-label="Site links"
+          style={{
+            padding: '28px 20px',
+            textAlign: 'center',
+            fontSize: 14,
+            fontFamily: '-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
+            borderTop: '1px solid #e2e8f0',
+            background: '#ffffff',
+            color: '#64748b',
+          }}
+        >
+          <nav style={{ display: 'flex', gap: 18, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+            <a href="/" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Home</a>
+            <a href="/services" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Services</a>
+            <a href="/blog" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Blog</a>
+            <a href="/terms" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Terms</a>
+            <a href="/privacy" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Privacy</a>
+          </nav>
+          <div>© Ono-Fix — One Photo. One Solution.</div>
+        </footer>
+      </body>
     </html>
   );
 }
