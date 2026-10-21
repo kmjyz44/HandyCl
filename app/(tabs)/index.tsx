@@ -19,6 +19,7 @@ import RewardsBanner from '../../components/RewardsBanner';
 import ProviderOnboardingCard from '../../components/ProviderOnboardingCard';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import { SiteFooter } from '../../components/SiteFooter';
+import { HeroCarousel, HeroBenefits } from '../../components/HeroCarousel';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
 
@@ -1199,6 +1200,109 @@ export default function HomeScreen() {
   if (step === 'home') {
     const isGuest = !user;
     const focusedScan = isStandalone && !showFullHome;
+    const heroMode = isGuest && !focusedScan;
+    const topTools = (
+      <>
+          {/* AI photo-first block — primary CTA, the first thing users see */}
+          <View style={s.aiBlock}>
+            <View style={s.aiTitleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.aiBlockTitle}>Identify it with AI</Text>
+                <Text style={s.aiBlockSub}>Snap the problem — AI finds the right pro.</Text>
+              </View>
+              {Platform.OS === 'web' && !isStandalone ? (
+                <TouchableOpacity style={s.installBtn} onPress={installApp} disabled={installWaiting} data-testid="install-app-btn">
+                  {installWaiting ? (
+                    <ActivityIndicator size="small" color="#2563eb" />
+                  ) : (
+                    <Ionicons name="download-outline" size={14} color="#2563eb" />
+                  )}
+                  <Text style={s.installBtnText}>{installWaiting ? 'Preparing…' : 'Install app'}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <View style={s.aiSteps}>
+              <View style={s.aiStep}>
+                <View style={[s.aiStepIcon, { backgroundColor: '#dbeafe' }]}><Ionicons name="camera" size={18} color="#2563eb" /></View>
+                <Text style={s.aiStepText}>Take a photo</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={13} color="#c7d2fe" />
+              <View style={s.aiStep}>
+                <View style={[s.aiStepIcon, { backgroundColor: '#ede9fe' }]}><Ionicons name="sparkles" size={18} color="#7c3aed" /></View>
+                <Text style={s.aiStepText}>AI finds it</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={13} color="#c7d2fe" />
+              <View style={s.aiStep}>
+                <View style={[s.aiStepIcon, { backgroundColor: '#dcfce7' }]}><Ionicons name="people" size={18} color="#16a34a" /></View>
+                <Text style={s.aiStepText}>Get matched</Text>
+              </View>
+            </View>
+
+            {scanPhotos.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.aiTray} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                {scanPhotos.map((p, i) => (
+                  <View key={i} style={s.aiThumbWrap}>
+                    <Image source={{ uri: `data:image/jpeg;base64,${p}` }} style={s.aiThumb} />
+                    <TouchableOpacity style={s.aiThumbX} onPress={() => removeScanPhoto(i)} data-testid={`remove-scan-${i}`}>
+                      <Ionicons name="close" size={12} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {scanPhotos.length < 5 && (
+                  <TouchableOpacity style={s.aiThumbAdd} onPress={() => addScanPhoto(false)} data-testid="add-scan-more">
+                    <Ionicons name="add" size={22} color="#2563eb" />
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            )}
+
+            <View style={s.aiBtnRow}>
+              <TouchableOpacity style={s.aiPrimaryBtn} onPress={() => addScanPhoto(true)} data-testid="ai-take-photo-btn">
+                <Ionicons name="camera" size={18} color="#fff" />
+                <Text style={s.aiPrimaryBtnText}>Take a photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.aiGhostBtn} onPress={() => addScanPhoto(false)} data-testid="ai-gallery-btn">
+                <Ionicons name="images-outline" size={18} color="#2563eb" />
+                <Text style={s.aiGhostBtnText}>Gallery</Text>
+              </TouchableOpacity>
+            </View>
+            {scanPhotos.length > 0 && (
+              <TouchableOpacity style={s.aiAnalyzeBtn} onPress={analyzeScans} data-testid="ai-identify-btn">
+                <Ionicons name="sparkles" size={16} color="#fff" />
+                <Text style={s.aiAnalyzeBtnText}>Identify {scanPhotos.length > 1 ? `${scanPhotos.length} photos` : 'photo'} with AI</Text>
+              </TouchableOpacity>
+            )}
+            <Text style={s.aiHint}>Add up to 5 photos · AI suggests a few options to choose from</Text>
+          </View>
+
+          {/* Search */}
+          {!focusedScan && (
+          <View style={s.searchBox}>
+            <Ionicons name="search-outline" size={20} color="#9ca3af" />
+            <TextInput
+              style={s.searchInput}
+              placeholder={isGuest ? 'Or search a service (e.g., furniture assembly)' : 'Search for a service...'}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#9ca3af"
+            />
+            {searchQuery ? (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              style={s.searchCamBtn}
+              onPress={() => addScanPhoto(true)}
+              data-testid="search-photo-btn"
+              accessibilityLabel="Take a photo to identify a service"
+            >
+              <Ionicons name="camera" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          )}
+      </>
+    );
     return (
       <View style={s.container}>
         <Head>
@@ -1227,16 +1331,14 @@ export default function HomeScreen() {
                 <Text style={s.heroBrandText}>Ono-Fix</Text>
               </View>
               <View style={s.heroAuthBtns}>
-                <TouchableOpacity onPress={() => router.push('/login')} style={s.heroLoginBtn}>
+                <TouchableOpacity onPress={() => router.push('/login')} style={s.heroLoginBtn} data-testid="header-login-btn">
                   <Text style={s.heroLoginBtnText}>Log in</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => router.push('/register')} style={s.heroSignupBtn}>
+                <TouchableOpacity onPress={() => router.push('/register')} style={s.heroSignupBtn} data-testid="header-signup-btn">
                   <Text style={s.heroSignupBtnText}>Sign up</Text>
                 </TouchableOpacity>
               </View>
             </View>
-            <Text style={s.heroTitle}>One Photo. One Solution.</Text>
-            <Text style={s.heroSubtitle}>Snap the problem — AI finds the right pro.</Text>
           </View>
         ) : (
           <View style={s.header}>
@@ -1283,108 +1385,18 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* AI photo-first block — primary CTA, the first thing users see */}
-        <View style={s.aiBlock}>
-          <View style={s.aiTitleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.aiBlockTitle}>Identify it with AI</Text>
-              <Text style={s.aiBlockSub}>Snap the problem — AI finds the right pro.</Text>
-            </View>
-            {Platform.OS === 'web' && !isStandalone ? (
-              <TouchableOpacity style={s.installBtn} onPress={installApp} disabled={installWaiting} data-testid="install-app-btn">
-                {installWaiting ? (
-                  <ActivityIndicator size="small" color="#2563eb" />
-                ) : (
-                  <Ionicons name="download-outline" size={14} color="#2563eb" />
-                )}
-                <Text style={s.installBtnText}>{installWaiting ? 'Preparing…' : 'Install app'}</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-          <View style={s.aiSteps}>
-            <View style={s.aiStep}>
-              <View style={[s.aiStepIcon, { backgroundColor: '#dbeafe' }]}><Ionicons name="camera" size={18} color="#2563eb" /></View>
-              <Text style={s.aiStepText}>Take a photo</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={13} color="#c7d2fe" />
-            <View style={s.aiStep}>
-              <View style={[s.aiStepIcon, { backgroundColor: '#ede9fe' }]}><Ionicons name="sparkles" size={18} color="#7c3aed" /></View>
-              <Text style={s.aiStepText}>AI finds it</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={13} color="#c7d2fe" />
-            <View style={s.aiStep}>
-              <View style={[s.aiStepIcon, { backgroundColor: '#dcfce7' }]}><Ionicons name="people" size={18} color="#16a34a" /></View>
-              <Text style={s.aiStepText}>Get matched</Text>
-            </View>
-          </View>
-
-          {scanPhotos.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.aiTray} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-              {scanPhotos.map((p, i) => (
-                <View key={i} style={s.aiThumbWrap}>
-                  <Image source={{ uri: `data:image/jpeg;base64,${p}` }} style={s.aiThumb} />
-                  <TouchableOpacity style={s.aiThumbX} onPress={() => removeScanPhoto(i)} data-testid={`remove-scan-${i}`}>
-                    <Ionicons name="close" size={12} color="#fff" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {scanPhotos.length < 5 && (
-                <TouchableOpacity style={s.aiThumbAdd} onPress={() => addScanPhoto(false)} data-testid="add-scan-more">
-                  <Ionicons name="add" size={22} color="#2563eb" />
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-          )}
-
-          <View style={s.aiBtnRow}>
-            <TouchableOpacity style={s.aiPrimaryBtn} onPress={() => addScanPhoto(true)} data-testid="ai-take-photo-btn">
-              <Ionicons name="camera" size={18} color="#fff" />
-              <Text style={s.aiPrimaryBtnText}>Take a photo</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.aiGhostBtn} onPress={() => addScanPhoto(false)} data-testid="ai-gallery-btn">
-              <Ionicons name="images-outline" size={18} color="#2563eb" />
-              <Text style={s.aiGhostBtnText}>Gallery</Text>
-            </TouchableOpacity>
-          </View>
-          {scanPhotos.length > 0 && (
-            <TouchableOpacity style={s.aiAnalyzeBtn} onPress={analyzeScans} data-testid="ai-identify-btn">
-              <Ionicons name="sparkles" size={16} color="#fff" />
-              <Text style={s.aiAnalyzeBtnText}>Identify {scanPhotos.length > 1 ? `${scanPhotos.length} photos` : 'photo'} with AI</Text>
-            </TouchableOpacity>
-          )}
-          <Text style={s.aiHint}>Add up to 5 photos · AI suggests a few options to choose from</Text>
-        </View>
-
-        {/* Search */}
-        {!focusedScan && (
-        <View style={s.searchBox}>
-          <Ionicons name="search-outline" size={20} color="#9ca3af" />
-          <TextInput
-            style={s.searchInput}
-            placeholder={isGuest ? 'Or search a service (e.g., furniture assembly)' : 'Search for a service...'}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#9ca3af"
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#9ca3af" />
-            </TouchableOpacity>
-          ) : null}
-          <TouchableOpacity
-            style={s.searchCamBtn}
-            onPress={() => addScanPhoto(true)}
-            data-testid="search-photo-btn"
-            accessibilityLabel="Take a photo to identify a service"
-          >
-            <Ionicons name="camera" size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        )}
+        {!heroMode && topTools}
 
         {/* Category grid */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <PaymentReminderBanner />
+          {heroMode && (
+            <>
+              <HeroCarousel onIdentify={() => addScanPhoto(true)} />
+              <View style={{ marginHorizontal: -16 }}>{topTools}</View>
+              <HeroBenefits />
+            </>
+          )}
           {focusedScan ? (
             <TouchableOpacity
               style={s.browseAllBtn}
@@ -3187,16 +3199,16 @@ const s = StyleSheet.create({
   },
 
   // Landing hero (guest)
-  heroHeader: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingTop: 26, paddingBottom: 14 },
-  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  heroBrand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroLogo: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  heroBrandText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  heroAuthBtns: { flexDirection: 'row', gap: 8 },
-  heroLoginBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  heroLoginBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  heroSignupBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: '#fff' },
-  heroSignupBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
+  heroHeader: { backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#eef2f7' },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroLogo: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' },
+  heroBrandText: { color: '#0f172a', fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  heroAuthBtns: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  heroLoginBtn: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
+  heroLoginBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 15 },
+  heroSignupBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: '#2563eb' },
+  heroSignupBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   heroTitle: { color: '#fff', fontSize: 15, fontWeight: '800', lineHeight: 20, marginBottom: 3 },
   heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 11, lineHeight: 15, marginBottom: 4 },
 

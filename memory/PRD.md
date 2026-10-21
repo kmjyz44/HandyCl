@@ -709,3 +709,5 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - BUG FIXED (pre-existing): support-chat.tsx + api.sendDirectMessage used field `message` but backend Message uses `text` → support chat sent/rendered empty. Now uses `text` (client↔admin support chat works both ways).
 - The user receives admin messages in their existing Support chat thread.
 - VERIFIED e2e (curl): admin→client send stores exact text; client GET /messages?with_user_id=admin returns it. esbuild-clean. Visible after Save to GitHub.
+
+- 2026-06: Guest landing redesigned with auto-sliding hero carousel (components/HeroCarousel.tsx). Needs Netlify deploy to go live.

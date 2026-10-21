@@ -396,3 +396,9 @@ User wants but postponed. Spec agreed:
 - _render_blog_shell extended with optional ld_override for custom JSON-LD.
 - Synced root /app/server.py with /app/backend/server.py.
 - Requires GitHub push -> Railway (backend) + Netlify (_redirects) redeploy to go live.
+
+## 2026-06 — Guest homepage redesign
+- New components/HeroCarousel.tsx: auto-sliding hero (5s, fade+zoom) with 4 AI photos of pros fixing problems (assets/images/hero/*.jpg), counter 1/4, dots, arrows (desktop), CTA "Identify my problem" -> addScanPhoto(true); HeroBenefits strip.
+- (tabs)/index.tsx: guest header now white; for guests the AI block + search moved inside the scroll under the hero (topTools/heroMode). Logged-in & installed-PWA views unchanged.
+- +html.tsx crawlable footer links (Blog/Services) verified present in exported index.html.
+- Verified via local `expo export -p web` build in /tmp/build (needs react-native-worklets added locally only).
