@@ -407,3 +407,7 @@ User wants but postponed. Spec agreed:
 - Backend: /api/hero-slides (public, active + date window), /api/hero-slides/image/{id}, /api/admin/hero-slides CRUD (soft delete). Images in Emergent Object Storage (EMERGENT_LLM_KEY required on Railway), path onofix/hero/{slide_id}/...
 - Frontend: app/admin-hero-slides.tsx (upload photo, tag/title/accent, on/off, from/until dates, order); Services admin nav "Home Slides". HeroCarousel loads live slides, falls back to 4 defaults.
 - Tested: iteration_24 (backend 12/13 -> minor fixes applied, frontend flows pass).
+
+## 2026-06 — Fix: Netlify build failing
+- Root cause: .gitignore has *.jpg so assets/images/hero/*.jpg never reached GitHub -> "Unable to resolve module ../assets/images/hero/electrical.jpg" -> Netlify build failed, site kept old bundle. Added `!assets/images/hero/*.jpg`. Verified clean `npm ci && npm run build` from git-tracked files passes.
+- LESSON: any new image asset in /assets must be un-ignored in .gitignore (verify with git check-ignore).

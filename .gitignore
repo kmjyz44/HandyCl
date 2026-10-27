@@ -44,6 +44,7 @@ build/
 
 # PWA / SEO static assets that MUST be deployed (override the *.png / *.jpg rules above)
 !public/*.png
+!assets/images/hero/*.jpg
 
 **/*.tar
 **/*.tar.gz
