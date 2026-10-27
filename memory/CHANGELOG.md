@@ -402,3 +402,8 @@ User wants but postponed. Spec agreed:
 - (tabs)/index.tsx: guest header now white; for guests the AI block + search moved inside the scroll under the hero (topTools/heroMode). Logged-in & installed-PWA views unchanged.
 - +html.tsx crawlable footer links (Blog/Services) verified present in exported index.html.
 - Verified via local `expo export -p web` build in /tmp/build (needs react-native-worklets added locally only).
+
+## 2026-06 — Seasonal homepage slides (admin)
+- Backend: /api/hero-slides (public, active + date window), /api/hero-slides/image/{id}, /api/admin/hero-slides CRUD (soft delete). Images in Emergent Object Storage (EMERGENT_LLM_KEY required on Railway), path onofix/hero/{slide_id}/...
+- Frontend: app/admin-hero-slides.tsx (upload photo, tag/title/accent, on/off, from/until dates, order); Services admin nav "Home Slides". HeroCarousel loads live slides, falls back to 4 defaults.
+- Tested: iteration_24 (backend 12/13 -> minor fixes applied, frontend flows pass).

@@ -1,0 +1,41 @@
+{
+  "summary": "Seasonal Slides feature tested end-to-end. Backend (pytest, 13 tests): 12 passed. Public list filtering (active/not deleted/date window incl. today boundaries, open-ended), admin CRUD, image ?v increment, soft delete -> 404 image, auth 401/403, validation 422 for missing photo/title, bad mime, bad date, end<start, 404 unknown id all OK. One minor failure: non-numeric 'order' -> 500. Frontend (static Expo build at :8090): guest carousel with 1 live slide shows no counter/arrows/dots; with 2 slides shows 1/2, next/prev, dots and ~5s auto-advance all work; with 0 live slides it falls back to the 4 defaults (1/4, wrap-around prev, dot nav, auto-advance, mobile 390px hides arrows). Admin: Services tab 'Home Slides' button -> /admin-hero-slides, 'Missing photo' validation toast, file chooser upload with preview, create, edit (prefilled), 'Starts YYYY-MM-DD' / 'Off' / 'Live now' badges, toggle, delete with confirm modal, and info box live count all work. DB left with only the original 'Furnace not heating?' slide (active).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/admin/hero-slides", "issue": "order='abc' (non-numeric) -> 500 because of int(payload['order']) in _hero_fields. Should return 422. The UI strips non-digits, so this only affects direct API calls."},
+      {"endpoint": "DELETE /api/admin/hero-slides/{id}", "issue": "Doesn't filter is_deleted, so deleting an already-deleted slide returns 200 instead of 404 (cosmetic)."},
+      {"endpoint": "_decode_hero_image", "issue": "Bytes aren't checked to be a real image (b64decode without validate=True; mime comes only from the data-URL header). Consider validate=True plus a magic-byte check."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "All new components (HeroCarousel, admin-hero-slides)", "issue": "react-native-web 0.21 does not forward the 'data-testid' prop, so none of hero-carousel, hero-counter, hero-next-btn, hero-dot-N, hero-slide-* exist in the DOM. Tests had to use text, aria-label and placeholder selectors. Use testID='...' (RN-web renders it as data-testid). This is a codebase-wide pattern.", "selector": "[data-testid^=hero]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Admin session after a full page reload (pre-existing, not part of this feature)", "issue": "store/authStore.ts hardcodes API_BASE='https://backend-production-a461.up.railway.app/api' for /auth/me in loadToken(). On the local :8090 build a hard reload sends the local token to prod, gets a 401 and deleteToken() clears it. Admin GET happened to work by racing ahead, but the later POST from /admin-hero-slides failed with 401 (seen in backend log). In-app navigation works fine. In prod both URLs point to the same backend, so users are unaffected, but authStore should use the same EXPO_PUBLIC_API_URL as utils/api.ts.", "affected_selectors": []}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_hero_slides.py", "/app/test_reports/pytest/hero_slides.xml"],
+  "action_items": [
+    "Wrap int(payload['order']) in try/except -> 422 (server.py _hero_fields)",
+    "Replace data-testid props with testID in HeroCarousel.tsx and admin-hero-slides.tsx so the test ids appear in the DOM on web",
+    "Optional: make store/authStore.ts API_BASE use process.env.EXPO_PUBLIC_API_URL (same as utils/api.ts) to avoid clearing the session on reload in non-prod builds"
+  ],
+  "critical_code_review_comments": [
+    "server.py _hero_fields: int(order) raises ValueError -> 500",
+    "server.py admin_delete_hero_slide: should match is_deleted != True for proper 404",
+    "server.py _decode_hero_image: no real image validation; b64decode is lenient",
+    "Today is computed in UTC on both backend and admin UI (consistent), but slides switch at UTC midnight, not local midnight. Fine but worth noting for US users.",
+    "authStore.ts hardcoded prod API_BASE (pre-existing) differs from utils/api.ts env-based URL"
+  ],
+  "updated_files": ["/app/backend/tests/test_hero_slides.py"],
+  "success_rate": {"backend": "92% (12/13)", "frontend": "100% of tested flows (data-testid attributes missing in the DOM)"},
+  "test_credentials": "admin@handyhub.com / Admin2024!, client@handyhub.com / Client2024! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Test slides created were all deleted. The 'Furnace not heating?' slide was toggled off temporarily to test the defaults, then turned back on.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use http://localhost:8001/api for the backend and http://localhost:8090 for the Expo web build. data-testid props are NOT rendered by RN-web, so use get_by_text, get_by_label('Next slide'/'Previous slide'/'Slide N') and get_by_placeholder ('Heating', 'Furnace not heating?', 'Get warm again today.', '2026-11-01', '2027-02-28'). After UI login, do NOT page.goto a protected route (a full reload clears the token through authStore's prod /auth/me call). Navigate in-app instead: Services tab -> 'Home Slides'. The delete confirm is an in-app modal ('Delete' button), and alerts are toasts. The admin upload file chooser works with page.expect_file_chooser.",
+  "rca of the issue": "The 401 on POST /api/admin/hero-slides during UI testing came from store/authStore.ts loadToken() calling the hardcoded prod URL /auth/me on reload. Prod rejects the local token with 401 and deleteToken() removes localStorage.session_token, so later axios calls go out without Authorization. Repro: log in at :8090/login, page.goto(':8090/admin-hero-slides'), save a slide -> 401. Fix: use the env API URL in authStore."
+}

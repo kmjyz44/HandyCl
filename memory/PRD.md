@@ -711,3 +711,5 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - VERIFIED e2e (curl): admin→client send stores exact text; client GET /messages?with_user_id=admin returns it. esbuild-clean. Visible after Save to GitHub.
 
 - 2026-06: Guest landing redesigned with auto-sliding hero carousel (components/HeroCarousel.tsx). Needs Netlify deploy to go live.
+
+- 2026-06: Admin "Home Slides" (seasonal hero slides with dates/on-off, object storage). Needs GitHub push + Netlify/Railway deploy; Railway must have EMERGENT_LLM_KEY.

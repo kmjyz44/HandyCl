@@ -16907,9 +16907,11 @@ def _decode_hero_image(raw: str) -> Tuple[bytes, str]:
     if mime not in _HERO_MIME:
         raise HTTPException(status_code=422, detail="Only JPEG, PNG or WEBP images are allowed")
     try:
-        data = b64mod.b64decode(raw)
+        data = b64mod.b64decode(raw, validate=True)
     except Exception:
         raise HTTPException(status_code=422, detail="Invalid image data")
+    if not (data[:3] == b"\xff\xd8\xff" or data[:8] == b"\x89PNG\r\n\x1a\n" or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")):
+        raise HTTPException(status_code=422, detail="Only JPEG, PNG or WEBP images are allowed")
     if len(data) > 8 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Image is too large (max 8 MB)")
     return data, mime
@@ -16940,7 +16942,10 @@ async def _hero_fields(payload: Dict[str, Any], doc: dict) -> dict:
     if "active" in payload:
         doc["active"] = bool(payload["active"])
     if "order" in payload:
-        doc["order"] = int(payload["order"] or 0)
+        try:
+            doc["order"] = int(payload["order"] or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="Order must be a number")
     if "start_date" in payload:
         doc["start_date"] = _valid_date(payload["start_date"])
     if "end_date" in payload:
@@ -17019,7 +17024,7 @@ async def admin_update_hero_slide(slide_id: str, payload: Dict[str, Any] = Body(
 
 @api_router.delete("/admin/hero-slides/{slide_id}")
 async def admin_delete_hero_slide(slide_id: str, current_user: User = Depends(require_admin)):
-    r = await db.hero_slides.update_one({"slide_id": slide_id}, {"$set": {"is_deleted": True}})
+    r = await db.hero_slides.update_one({"slide_id": slide_id, "is_deleted": {"$ne": True}}, {"$set": {"is_deleted": True}})
     if not r.matched_count:
         raise HTTPException(status_code=404, detail="Slide not found")
     return {"ok": True}
