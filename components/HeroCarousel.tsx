@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Animated, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { api, BACKEND_BASE_URL } from '../utils/api';
 
-const SLIDES = [
-  { img: require('../assets/images/hero/electrical.jpg'), tag: 'Electrical', title: 'Light not working?', accent: 'Snap it. Get it fixed.' },
-  { img: require('../assets/images/hero/plumbing.jpg'), tag: 'Plumbing', title: 'Leaky sink?', accent: 'A pro is one photo away.' },
-  { img: require('../assets/images/hero/furniture.jpg'), tag: 'Furniture Assembly', title: 'Furniture to assemble?', accent: 'Matched in minutes.' },
-  { img: require('../assets/images/hero/wallrepair.jpg'), tag: 'Home Repairs', title: 'Holes or cracks?', accent: 'Fixed like new.' },
+type Slide = { key: string; img: any; tag: string; title: string; accent: string };
+
+const DEFAULT_SLIDES: Slide[] = [
+  { key: 'electrical', img: require('../assets/images/hero/electrical.jpg'), tag: 'Electrical', title: 'Light not working?', accent: 'Snap it. Get it fixed.' },
+  { key: 'plumbing', img: require('../assets/images/hero/plumbing.jpg'), tag: 'Plumbing', title: 'Leaky sink?', accent: 'A pro is one photo away.' },
+  { key: 'furniture', img: require('../assets/images/hero/furniture.jpg'), tag: 'Furniture Assembly', title: 'Furniture to assemble?', accent: 'Matched in minutes.' },
+  { key: 'wallrepair', img: require('../assets/images/hero/wallrepair.jpg'), tag: 'Home Repairs', title: 'Holes or cracks?', accent: 'Fixed like new.' },
 ];
 const INTERVAL = 5000;
 
@@ -19,6 +22,22 @@ const Fade = ({ wide }: { wide: boolean }) => {
 };
 
 export const HeroCarousel = ({ onIdentify }: { onIdentify: () => void }) => {
+  const [slides, setSlides] = useState<Slide[]>(DEFAULT_SLIDES);
+  useEffect(() => {
+    api.getHeroSlides()
+      .then((d) => {
+        const list = (d?.slides || []).map((x: any) => ({
+          key: x.slide_id, img: { uri: `${BACKEND_BASE_URL}${x.image_url}` },
+          tag: x.tag, title: x.title, accent: x.accent,
+        }));
+        if (list.length) setSlides(list);
+      })
+      .catch(() => {});
+  }, []);
+  return <HeroSlides key={slides.map((x) => x.key).join('|')} slides={slides} onIdentify={onIdentify} />;
+};
+
+const HeroSlides = ({ slides: SLIDES, onIdentify }: { slides: Slide[]; onIdentify: () => void }) => {
   const { width } = useWindowDimensions();
   const wide = width >= 760;
   const height = wide ? Math.min(Math.max(width * 0.34, 400), 520) : 440;
@@ -28,7 +47,7 @@ export const HeroCarousel = ({ onIdentify }: { onIdentify: () => void }) => {
 
   const start = useCallback(() => {
     if (timer.current) clearInterval(timer.current);
-    timer.current = setInterval(() => setIdx((p) => (p + 1) % SLIDES.length), INTERVAL);
+    if (SLIDES.length > 1) timer.current = setInterval(() => setIdx((p) => (p + 1) % SLIDES.length), INTERVAL);
   }, []);
 
   useEffect(() => { start(); return () => { if (timer.current) clearInterval(timer.current); }; }, [start]);
@@ -44,19 +63,21 @@ export const HeroCarousel = ({ onIdentify }: { onIdentify: () => void }) => {
   return (
     <View style={[s.wrap, { height }]} data-testid="hero-carousel">
       {SLIDES.map((sl, i) => (
-        <Animated.View key={sl.tag} style={[wide ? s.imgWide : s.imgNarrow, { opacity: anims[i], transform: [{ scale: anims[i].interpolate({ inputRange: [0, 1], outputRange: [1.06, 1] }) }] }]}>
+        <Animated.View key={sl.key} style={[wide ? s.imgWide : s.imgNarrow, { opacity: anims[i], transform: [{ scale: anims[i].interpolate({ inputRange: [0, 1], outputRange: [1.06, 1] }) }] }]}>
           <Image source={sl.img} style={s.img} resizeMode="cover" accessibilityLabel={`Ono-Fix pro: ${sl.tag}`} />
         </Animated.View>
       ))}
       <Fade wide={wide} />
 
-      <View style={s.counter} data-testid="hero-counter"><Text style={s.counterText}>{idx + 1}/{SLIDES.length}</Text></View>
+      {SLIDES.length > 1 && <View style={s.counter} data-testid="hero-counter"><Text style={s.counterText}>{idx + 1}/{SLIDES.length}</Text></View>}
 
       <View style={[s.content, wide ? s.contentWide : s.contentNarrow]}>
-        <View style={[s.tag, dark && s.tagDark]}>
-          <Ionicons name="sparkles" size={12} color={dark ? '#fff' : '#2563eb'} />
-          <Text style={[s.tagText, dark && { color: '#fff' }]} data-testid="hero-slide-tag">{slide.tag}</Text>
-        </View>
+        {!!slide.tag && (
+          <View style={[s.tag, dark && s.tagDark]}>
+            <Ionicons name="sparkles" size={12} color={dark ? '#fff' : '#2563eb'} />
+            <Text numberOfLines={1} style={[s.tagText, dark && { color: '#fff' }]} data-testid="hero-slide-tag">{slide.tag}</Text>
+          </View>
+        )}
         <Text style={[s.title, !wide && s.titleSm, dark && { color: '#fff' }]} data-testid="hero-slide-title">{slide.title}</Text>
         <Text style={[s.accent, !wide && s.titleSm, dark && { color: '#93c5fd' }]}>{slide.accent}</Text>
         <Text style={[s.sub, dark && { color: 'rgba(255,255,255,0.88)' }]}>Take a photo — AI finds the right service and connects you with a local pro.</Text>
@@ -67,7 +88,7 @@ export const HeroCarousel = ({ onIdentify }: { onIdentify: () => void }) => {
         <Text style={[s.note, dark && { color: 'rgba(255,255,255,0.75)' }]}>Free to get started · No phone call needed</Text>
       </View>
 
-      {wide && (
+      {wide && SLIDES.length > 1 && (
         <>
           <TouchableOpacity style={[s.arrow, { left: 12 }]} onPress={() => go(-1)} data-testid="hero-prev-btn" accessibilityLabel="Previous slide">
             <Ionicons name="chevron-back" size={22} color="#0f172a" />
@@ -78,11 +99,13 @@ export const HeroCarousel = ({ onIdentify }: { onIdentify: () => void }) => {
         </>
       )}
 
-      <View style={s.dots}>
-        {SLIDES.map((sl, i) => (
-          <TouchableOpacity key={sl.tag} onPress={() => { setIdx(i); start(); }} style={[s.dot, wide && s.dotWide, i === idx && s.dotActive]} data-testid={`hero-dot-${i}`} accessibilityLabel={`Slide ${i + 1}`} />
-        ))}
-      </View>
+      {SLIDES.length > 1 && (
+        <View style={s.dots}>
+          {SLIDES.map((sl, i) => (
+            <TouchableOpacity key={sl.key} onPress={() => { setIdx(i); start(); }} style={[s.dot, wide && s.dotWide, i === idx && s.dotActive]} data-testid={`hero-dot-${i}`} accessibilityLabel={`Slide ${i + 1}`} />
+          ))}
+        </View>
+      )}
     </View>
   );
 };

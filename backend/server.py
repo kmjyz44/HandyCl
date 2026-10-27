@@ -16868,6 +16868,163 @@ async def seo_robots():
     return Response(content=body, media_type="text/plain")
 
 
+# ─── Homepage hero slides (admin-managed, seasonal) ───────────────────────
+_STORAGE_URL = ((os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com").rstrip("/") + "/objstore/api/v1/storage"
+_storage_key: Optional[str] = None
+
+
+async def _storage_init(force: bool = False) -> str:
+    global _storage_key
+    if _storage_key and not force:
+        return _storage_key
+    async with httpx.AsyncClient(timeout=30) as hc:
+        r = await hc.post(f"{_STORAGE_URL}/init", json={"emergent_key": os.environ.get("EMERGENT_LLM_KEY")})
+        r.raise_for_status()
+        _storage_key = r.json()["storage_key"]
+    return _storage_key
+
+
+async def _storage_request(method: str, path: str, **kw) -> httpx.Response:
+    for attempt in (0, 1):
+        key = await _storage_init(force=attempt == 1)
+        headers = {"X-Storage-Key": key, **kw.pop("headers", {})}
+        async with httpx.AsyncClient(timeout=120) as hc:
+            r = await hc.request(method, f"{_STORAGE_URL}/objects/{path}", headers=headers, **kw)
+        if r.status_code != 404 or attempt == 1:
+            r.raise_for_status()
+            return r
+    return r
+
+
+_HERO_MIME = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+
+
+def _decode_hero_image(raw: str) -> Tuple[bytes, str]:
+    mime = "image/jpeg"
+    if raw.startswith("data:"):
+        head, raw = raw.split(",", 1)
+        mime = head[5:].split(";")[0] or mime
+    if mime not in _HERO_MIME:
+        raise HTTPException(status_code=422, detail="Only JPEG, PNG or WEBP images are allowed")
+    try:
+        data = b64mod.b64decode(raw)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid image data")
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image is too large (max 8 MB)")
+    return data, mime
+
+
+def _valid_date(v: Any) -> Optional[str]:
+    if not v:
+        return None
+    try:
+        return datetime.strptime(str(v)[:10], "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Dates must be YYYY-MM-DD")
+
+
+def _hero_out(d: dict) -> dict:
+    return {
+        "slide_id": d["slide_id"], "tag": d.get("tag", ""), "title": d.get("title", ""),
+        "accent": d.get("accent", ""), "active": bool(d.get("active", True)),
+        "start_date": d.get("start_date"), "end_date": d.get("end_date"),
+        "order": d.get("order", 0), "image_url": f"/api/hero-slides/image/{d['slide_id']}?v={d.get('image_version', 1)}",
+    }
+
+
+async def _hero_fields(payload: Dict[str, Any], doc: dict) -> dict:
+    for k, limit in (("tag", 40), ("title", 80), ("accent", 80)):
+        if k in payload:
+            doc[k] = str(payload[k] or "").strip()[:limit]
+    if "active" in payload:
+        doc["active"] = bool(payload["active"])
+    if "order" in payload:
+        doc["order"] = int(payload["order"] or 0)
+    if "start_date" in payload:
+        doc["start_date"] = _valid_date(payload["start_date"])
+    if "end_date" in payload:
+        doc["end_date"] = _valid_date(payload["end_date"])
+    if doc.get("start_date") and doc.get("end_date") and doc["start_date"] > doc["end_date"]:
+        raise HTTPException(status_code=422, detail="End date must be after start date")
+    if payload.get("image_base64"):
+        data, mime = _decode_hero_image(payload["image_base64"])
+        path = f"onofix/hero/{doc['slide_id']}/{uuid.uuid4().hex}.{_HERO_MIME[mime]}"
+        try:
+            await _storage_request("PUT", path, content=data, headers={"Content-Type": mime})
+        except Exception as e:
+            logger.error(f"Hero image upload failed: {e}")
+            raise HTTPException(status_code=502, detail="Image upload failed, please try again")
+        doc["image_path"], doc["image_mime"] = path, mime
+        doc["image_version"] = int(doc.get("image_version", 0)) + 1
+    return doc
+
+
+@api_router.get("/hero-slides")
+async def public_hero_slides():
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    q = {
+        "is_deleted": {"$ne": True}, "active": True, "image_path": {"$exists": True},
+        "$and": [
+            {"$or": [{"start_date": None}, {"start_date": {"$lte": today}}]},
+            {"$or": [{"end_date": None}, {"end_date": {"$gte": today}}]},
+        ],
+    }
+    docs = await db.hero_slides.find(q, {"_id": 0}).sort([("order", 1), ("created_at", 1)]).to_list(20)
+    return {"slides": [_hero_out(d) for d in docs]}
+
+
+@api_router.get("/hero-slides/image/{slide_id}")
+async def hero_slide_image(slide_id: str):
+    d = await db.hero_slides.find_one({"slide_id": slide_id, "is_deleted": {"$ne": True}}, {"_id": 0, "image_path": 1, "image_mime": 1})
+    if not d or not d.get("image_path"):
+        raise HTTPException(status_code=404, detail="Image not found")
+    try:
+        r = await _storage_request("GET", d["image_path"])
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return Response(content=r.content, media_type=d.get("image_mime") or "image/jpeg",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@api_router.get("/admin/hero-slides")
+async def admin_list_hero_slides(current_user: User = Depends(require_admin)):
+    docs = await db.hero_slides.find({"is_deleted": {"$ne": True}}, {"_id": 0}).sort([("order", 1), ("created_at", 1)]).to_list(100)
+    return {"slides": [_hero_out(d) for d in docs]}
+
+
+@api_router.post("/admin/hero-slides")
+async def admin_create_hero_slide(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
+    if not payload.get("image_base64"):
+        raise HTTPException(status_code=422, detail="Please add a photo")
+    if not str(payload.get("title") or "").strip():
+        raise HTTPException(status_code=422, detail="Please add a title")
+    doc = {"slide_id": f"hero_{uuid.uuid4().hex[:12]}", "active": True, "order": 0,
+           "start_date": None, "end_date": None, "is_deleted": False,
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    doc = await _hero_fields(payload, doc)
+    await db.hero_slides.insert_one(dict(doc))
+    return _hero_out(doc)
+
+
+@api_router.put("/admin/hero-slides/{slide_id}")
+async def admin_update_hero_slide(slide_id: str, payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
+    doc = await db.hero_slides.find_one({"slide_id": slide_id, "is_deleted": {"$ne": True}}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Slide not found")
+    doc = await _hero_fields(payload, doc)
+    await db.hero_slides.update_one({"slide_id": slide_id}, {"$set": doc})
+    return _hero_out(doc)
+
+
+@api_router.delete("/admin/hero-slides/{slide_id}")
+async def admin_delete_hero_slide(slide_id: str, current_user: User = Depends(require_admin)):
+    r = await db.hero_slides.update_one({"slide_id": slide_id}, {"$set": {"is_deleted": True}})
+    if not r.matched_count:
+        raise HTTPException(status_code=404, detail="Slide not found")
+    return {"ok": True}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 

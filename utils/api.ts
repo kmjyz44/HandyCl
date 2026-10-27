@@ -230,6 +230,27 @@ export const api = {
     return res.data;
   },
 
+  getHeroSlides: async () => {
+    const res = await client.get('/hero-slides');
+    return res.data;
+  },
+  adminGetHeroSlides: async () => {
+    const res = await client.get('/admin/hero-slides');
+    return res.data;
+  },
+  adminCreateHeroSlide: async (data: Record<string, any>) => {
+    const res = await client.post('/admin/hero-slides', data);
+    return res.data;
+  },
+  adminUpdateHeroSlide: async (id: string, data: Record<string, any>) => {
+    const res = await client.put(`/admin/hero-slides/${id}`, data);
+    return res.data;
+  },
+  adminDeleteHeroSlide: async (id: string) => {
+    const res = await client.delete(`/admin/hero-slides/${id}`);
+    return res.data;
+  },
+
   getSearchAnalytics: async (days: number = 30) => {
     const res = await client.get('/admin/search-analytics', { params: { days } });
     return res.data;
