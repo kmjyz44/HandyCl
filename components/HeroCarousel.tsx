@@ -39,19 +39,19 @@ export const HeroCarousel = (props: Handlers) => {
 const RewardsPill = ({ onPress, compact }: { onPress: () => void; compact?: boolean }) => (
   <TouchableOpacity style={[s.reward, compact && s.rewardCompact]} onPress={onPress} activeOpacity={0.85} data-testid="hero-rewards-btn">
     <Gradient css="linear-gradient(90deg, #fbbf24 0%, #f97316 100%)" fallback="#f59e0b" />
-    <Ionicons name="gift" size={compact ? 26 : 30} color="#dc2626" />
+    <Ionicons name="gift" size={compact ? 20 : 30} color="#dc2626" />
     <View style={{ flex: 1 }}>
-      <Text style={s.rewardTitle}>Get rewarded!</Text>
-      <Text style={s.rewardSub}>Earn up to $100 for completing your first service.</Text>
+      <Text style={[s.rewardTitle, compact && s.rewardTitleSm]}>Get rewarded!</Text>
+      <Text style={[s.rewardSub, compact && s.rewardSubSm]} numberOfLines={compact ? 1 : 2}>Earn up to $100 for your first service.</Text>
     </View>
-    <Ionicons name="chevron-forward" size={20} color="#1f2937" />
+    <Ionicons name="chevron-forward" size={compact ? 16 : 20} color="#1f2937" />
   </TouchableOpacity>
 );
 
-const Cta = ({ onPress }: { onPress: () => void }) => (
-  <TouchableOpacity style={s.cta} onPress={onPress} activeOpacity={0.85} data-testid="hero-identify-btn">
-    <Ionicons name="camera" size={22} color="#fff" />
-    <Text style={s.ctaText}>Identify my problem</Text>
+const Cta = ({ onPress, compact }: { onPress: () => void; compact?: boolean }) => (
+  <TouchableOpacity style={[s.cta, compact && s.ctaCompact]} onPress={onPress} activeOpacity={0.85} data-testid="hero-identify-btn">
+    <Ionicons name="camera" size={compact ? 18 : 22} color="#fff" />
+    <Text style={[s.ctaText, compact && s.ctaTextSm]}>Identify my problem</Text>
   </TouchableOpacity>
 );
 
@@ -109,7 +109,7 @@ const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards }: Handlers & { slid
         <View style={s.mBody}>
           <Text style={s.mSub}>{SUB}</Text>
           <RewardsPill onPress={onRewards} compact />
-          <Cta onPress={onIdentify} />
+          <Cta onPress={onIdentify} compact />
           <Text style={s.note}>Free to get started · No phone call needed</Text>
         </View>
       </View>
@@ -193,11 +193,15 @@ const s = StyleSheet.create({
   accent: { color: '#2563eb', fontSize: 50, fontWeight: '800', lineHeight: 56, letterSpacing: -1.2 },
   sub: { color: '#334155', fontSize: 19, lineHeight: 27, marginTop: 12, marginBottom: 18, maxWidth: 380 },
   reward: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 18, overflow: 'hidden', marginBottom: 14, shadowColor: '#f97316', shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
-  rewardCompact: { paddingVertical: 10, paddingHorizontal: 14, gap: 12 },
+  rewardCompact: { paddingVertical: 8, paddingHorizontal: 12, gap: 10, borderRadius: 12, marginBottom: 10, alignSelf: 'center', width: '88%', maxWidth: 360 },
+  rewardTitleSm: { fontSize: 14 },
+  rewardSubSm: { fontSize: 11, lineHeight: 15 },
   rewardTitle: { color: '#111827', fontSize: 18, fontWeight: '800' },
   rewardSub: { color: '#1f2937', fontSize: 13, lineHeight: 18 },
-  cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: '#2563eb', paddingVertical: 17, paddingHorizontal: 26, borderRadius: 16, shadowColor: '#2563eb', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
+  cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: 'rgba(37,99,235,0.85)', paddingVertical: 17, paddingHorizontal: 26, borderRadius: 16, shadowColor: '#2563eb', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
   ctaText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  ctaCompact: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: 12, gap: 8, alignSelf: 'center', width: '88%', maxWidth: 360, shadowOpacity: 0.2, shadowRadius: 8 },
+  ctaTextSm: { fontSize: 15 },
   note: { color: '#64748b', fontSize: 13, marginTop: 10, textAlign: 'center' },
   arrow: { position: 'absolute', top: '50%', marginTop: -24, width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(15,23,42,0.35)', alignItems: 'center', justifyContent: 'center' },
   dots: { position: 'absolute', bottom: 14, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
@@ -209,7 +213,7 @@ const s = StyleSheet.create({
   mTitle: { color: '#fff', fontSize: 28, fontWeight: '800', lineHeight: 33, letterSpacing: -0.6 },
   mAccent: { color: '#93c5fd', fontSize: 28, fontWeight: '800', lineHeight: 33, letterSpacing: -0.6 },
   mBody: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
-  mSub: { color: '#334155', fontSize: 15, lineHeight: 21, marginBottom: 12 },
+  mSub: { color: '#334155', fontSize: 14, lineHeight: 20, marginBottom: 10, textAlign: 'center' },
   steps: { backgroundColor: '#fff', borderRadius: 24, paddingTop: 20, paddingBottom: 12, paddingHorizontal: 10, marginBottom: 14, shadowColor: '#1e3a8a', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: -2 } },
   stepsWide: { marginTop: -24, paddingTop: 24 },
   stepsNarrow: { marginHorizontal: 16, marginTop: 6, borderWidth: 1, borderColor: '#eef2f7' },

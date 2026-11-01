@@ -417,3 +417,5 @@ User wants but postponed. Spec agreed:
 - HowItWorksSteps (3 steps + Upload from gallery + Install app) replaces "Identify it with AI" block for guests; original block returns once photos are added (tray/Identify button).
 - New AI category photos in assets/images/categories/*.jpg (LOCAL_COVERS in (tabs)/index.tsx, take priority over DB images for the 9 default ids); bottom gradient on cards; 3 columns on width>=760.
 - .gitignore un-ignores assets/images/categories/*.jpg. Clean npm build passes.
+
+- 2026-06: Mobile hero buttons compact (88% width, max 360, smaller text); Identify button bg rgba(37,99,235,0.85).
