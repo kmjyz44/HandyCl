@@ -4,24 +4,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { api, BACKEND_BASE_URL } from '../utils/api';
 
 type Slide = { key: string; img: any; tag: string; title: string; accent: string };
+type Handlers = { onIdentify: () => void; onRewards: () => void };
 
 const DEFAULT_SLIDES: Slide[] = [
-  { key: 'electrical', img: require('../assets/images/hero/electrical.jpg'), tag: 'Electrical', title: 'Light not working?', accent: 'Snap it. Get it fixed.' },
+  { key: 'electrical', img: require('../assets/images/hero/electrical.jpg'), tag: 'Electrical', title: 'Home problem?', accent: 'Start with a photo.' },
   { key: 'plumbing', img: require('../assets/images/hero/plumbing.jpg'), tag: 'Plumbing', title: 'Leaky sink?', accent: 'A pro is one photo away.' },
   { key: 'furniture', img: require('../assets/images/hero/furniture.jpg'), tag: 'Furniture Assembly', title: 'Furniture to assemble?', accent: 'Matched in minutes.' },
   { key: 'wallrepair', img: require('../assets/images/hero/wallrepair.jpg'), tag: 'Home Repairs', title: 'Holes or cracks?', accent: 'Fixed like new.' },
 ];
 const INTERVAL = 5000;
+const SUB = 'Find the right service and connect with a pro — easily.';
 
-const Fade = ({ wide }: { wide: boolean }) => {
-  const bg = wide
-    ? 'linear-gradient(90deg, #ffffff 0%, #ffffff 36%, rgba(255,255,255,0.75) 46%, rgba(255,255,255,0) 62%)'
-    : 'linear-gradient(0deg, rgba(15,23,42,0.88) 0%, rgba(15,23,42,0.55) 55%, rgba(15,23,42,0.1) 100%)';
-  if (Platform.OS === 'web') return React.createElement('div', { style: { position: 'absolute', inset: 0, backgroundImage: bg } });
-  return <View style={[StyleSheet.absoluteFill, { backgroundColor: wide ? 'rgba(255,255,255,0.6)' : 'rgba(15,23,42,0.55)' }]} />;
-};
+const Gradient = ({ css, fallback }: { css: string; fallback: string }) =>
+  Platform.OS === 'web'
+    ? React.createElement('div', { style: { position: 'absolute', inset: 0, backgroundImage: css, pointerEvents: 'none' } })
+    : <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: fallback }]} />;
 
-export const HeroCarousel = ({ onIdentify }: { onIdentify: () => void }) => {
+export const HeroCarousel = (props: Handlers) => {
   const [slides, setSlides] = useState<Slide[]>(DEFAULT_SLIDES);
   useEffect(() => {
     api.getHeroSlides()
@@ -34,21 +33,41 @@ export const HeroCarousel = ({ onIdentify }: { onIdentify: () => void }) => {
       })
       .catch(() => {});
   }, []);
-  return <HeroSlides key={slides.map((x) => x.key).join('|')} slides={slides} onIdentify={onIdentify} />;
+  return <HeroSlides key={slides.map((x) => x.key).join('|')} slides={slides} {...props} />;
 };
 
-const HeroSlides = ({ slides: SLIDES, onIdentify }: { slides: Slide[]; onIdentify: () => void }) => {
+const RewardsPill = ({ onPress, compact }: { onPress: () => void; compact?: boolean }) => (
+  <TouchableOpacity style={[s.reward, compact && s.rewardCompact]} onPress={onPress} activeOpacity={0.85} data-testid="hero-rewards-btn">
+    <Gradient css="linear-gradient(90deg, #fbbf24 0%, #f97316 100%)" fallback="#f59e0b" />
+    <Ionicons name="gift" size={compact ? 26 : 30} color="#dc2626" />
+    <View style={{ flex: 1 }}>
+      <Text style={s.rewardTitle}>Get rewarded!</Text>
+      <Text style={s.rewardSub}>Earn up to $100 for completing your first service.</Text>
+    </View>
+    <Ionicons name="chevron-forward" size={20} color="#1f2937" />
+  </TouchableOpacity>
+);
+
+const Cta = ({ onPress }: { onPress: () => void }) => (
+  <TouchableOpacity style={s.cta} onPress={onPress} activeOpacity={0.85} data-testid="hero-identify-btn">
+    <Ionicons name="camera" size={22} color="#fff" />
+    <Text style={s.ctaText}>Identify my problem</Text>
+  </TouchableOpacity>
+);
+
+const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards }: Handlers & { slides: Slide[] }) => {
   const { width } = useWindowDimensions();
   const wide = width >= 760;
-  const height = wide ? Math.min(Math.max(width * 0.34, 400), 520) : 440;
+  const imgH = wide ? Math.min(Math.max(width * 0.42, 440), 600) : Math.round(Math.min(width * 0.62, 280));
   const [idx, setIdx] = useState(0);
   const anims = useRef(SLIDES.map((_, i) => new Animated.Value(i === 0 ? 1 : 0))).current;
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const many = SLIDES.length > 1;
 
   const start = useCallback(() => {
     if (timer.current) clearInterval(timer.current);
     if (SLIDES.length > 1) timer.current = setInterval(() => setIdx((p) => (p + 1) % SLIDES.length), INTERVAL);
-  }, []);
+  }, [SLIDES.length]);
 
   useEffect(() => { start(); return () => { if (timer.current) clearInterval(timer.current); }; }, [start]);
 
@@ -58,81 +77,148 @@ const HeroSlides = ({ slides: SLIDES, onIdentify }: { slides: Slide[]; onIdentif
 
   const go = (d: number) => { setIdx((p) => (p + d + SLIDES.length) % SLIDES.length); start(); };
   const slide = SLIDES[idx];
-  const dark = !wide;
+
+  const images = SLIDES.map((sl, i) => (
+    <Animated.View key={sl.key} style={[wide ? s.imgWide : StyleSheet.absoluteFill, { opacity: anims[i], transform: [{ scale: anims[i].interpolate({ inputRange: [0, 1], outputRange: [1.06, 1] }) }] }]}>
+      <Image source={sl.img} style={s.img} resizeMode="cover" accessibilityLabel={`Ono-Fix pro: ${sl.tag || sl.title}`} />
+    </Animated.View>
+  ));
+
+  const dots = many && (
+    <View style={s.dots}>
+      {SLIDES.map((sl, i) => (
+        <TouchableOpacity key={sl.key} onPress={() => { setIdx(i); start(); }} style={[s.dot, wide && s.dotWide, i === idx && s.dotActive]} data-testid={`hero-dot-${i}`} accessibilityLabel={`Slide ${i + 1}`} />
+      ))}
+    </View>
+  );
+  const counter = many && <View style={s.counter} data-testid="hero-counter"><Text style={s.counterText}>{idx + 1}/{SLIDES.length}</Text></View>;
+
+  if (!wide) {
+    return (
+      <View style={s.mWrap} data-testid="hero-carousel">
+        <View style={{ height: imgH, overflow: 'hidden' }}>
+          {images}
+          <Gradient css="linear-gradient(180deg, rgba(15,23,42,0) 30%, rgba(15,23,42,0.82) 100%)" fallback="rgba(15,23,42,0.35)" />
+          {counter}
+          <View style={s.mText}>
+            <Text style={s.mTitle} data-testid="hero-slide-title">{slide.title}</Text>
+            {!!slide.accent && <Text style={s.mAccent}>{slide.accent}</Text>}
+          </View>
+          {dots}
+        </View>
+        <View style={s.mBody}>
+          <Text style={s.mSub}>{SUB}</Text>
+          <RewardsPill onPress={onRewards} compact />
+          <Cta onPress={onIdentify} />
+          <Text style={s.note}>Free to get started · No phone call needed</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View style={[s.wrap, { height }]} data-testid="hero-carousel">
-      {SLIDES.map((sl, i) => (
-        <Animated.View key={sl.key} style={[wide ? s.imgWide : s.imgNarrow, { opacity: anims[i], transform: [{ scale: anims[i].interpolate({ inputRange: [0, 1], outputRange: [1.06, 1] }) }] }]}>
-          <Image source={sl.img} style={s.img} resizeMode="cover" accessibilityLabel={`Ono-Fix pro: ${sl.tag}`} />
-        </Animated.View>
-      ))}
-      <Fade wide={wide} />
-
-      {SLIDES.length > 1 && <View style={s.counter} data-testid="hero-counter"><Text style={s.counterText}>{idx + 1}/{SLIDES.length}</Text></View>}
-
-      <View style={[s.content, wide ? s.contentWide : s.contentNarrow]}>
-        {!!slide.tag && (
-          <View style={[s.tag, dark && s.tagDark]}>
-            <Ionicons name="sparkles" size={12} color={dark ? '#fff' : '#2563eb'} />
-            <Text numberOfLines={1} style={[s.tagText, dark && { color: '#fff' }]} data-testid="hero-slide-tag">{slide.tag}</Text>
-          </View>
-        )}
-        <Text style={[s.title, !wide && s.titleSm, dark && { color: '#fff' }]} data-testid="hero-slide-title">{slide.title}</Text>
-        <Text style={[s.accent, !wide && s.titleSm, dark && { color: '#93c5fd' }]}>{slide.accent}</Text>
-        <Text style={[s.sub, dark && { color: 'rgba(255,255,255,0.88)' }]}>Take a photo — AI finds the right service and connects you with a local pro.</Text>
-        <TouchableOpacity style={s.cta} onPress={onIdentify} activeOpacity={0.85} data-testid="hero-identify-btn">
-          <Ionicons name="camera" size={20} color="#fff" />
-          <Text style={s.ctaText}>Identify my problem</Text>
-        </TouchableOpacity>
-        <Text style={[s.note, dark && { color: 'rgba(255,255,255,0.75)' }]}>Free to get started · No phone call needed</Text>
+    <View style={[s.wrap, { height: imgH }]} data-testid="hero-carousel">
+      {images}
+      <Gradient css="linear-gradient(90deg, #ffffff 0%, #ffffff 37%, rgba(255,255,255,0.85) 44%, rgba(255,255,255,0) 62%)" fallback="rgba(255,255,255,0.6)" />
+      {counter}
+      <View style={s.content}>
+        <Text style={s.title} data-testid="hero-slide-title">{slide.title}</Text>
+        {!!slide.accent && <Text style={s.accent}>{slide.accent}</Text>}
+        <Text style={s.sub}>{SUB}</Text>
+        <RewardsPill onPress={onRewards} />
+        <Cta onPress={onIdentify} />
+        <Text style={[s.note, { textAlign: 'center' }]}>Free to get started · No phone call needed</Text>
       </View>
-
-      {wide && SLIDES.length > 1 && (
+      {many && (
         <>
-          <TouchableOpacity style={[s.arrow, { left: 12 }]} onPress={() => go(-1)} data-testid="hero-prev-btn" accessibilityLabel="Previous slide">
-            <Ionicons name="chevron-back" size={22} color="#0f172a" />
+          <TouchableOpacity style={[s.arrow, { left: 16 }]} onPress={() => go(-1)} data-testid="hero-prev-btn" accessibilityLabel="Previous slide">
+            <Ionicons name="chevron-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={[s.arrow, { right: 12 }]} onPress={() => go(1)} data-testid="hero-next-btn" accessibilityLabel="Next slide">
-            <Ionicons name="chevron-forward" size={22} color="#0f172a" />
+          <TouchableOpacity style={[s.arrow, { right: 16 }]} onPress={() => go(1)} data-testid="hero-next-btn" accessibilityLabel="Next slide">
+            <Ionicons name="chevron-forward" size={24} color="#fff" />
           </TouchableOpacity>
         </>
       )}
-
-      {SLIDES.length > 1 && (
-        <View style={s.dots}>
-          {SLIDES.map((sl, i) => (
-            <TouchableOpacity key={sl.key} onPress={() => { setIdx(i); start(); }} style={[s.dot, wide && s.dotWide, i === idx && s.dotActive]} data-testid={`hero-dot-${i}`} accessibilityLabel={`Slide ${i + 1}`} />
-          ))}
-        </View>
-      )}
+      {dots}
     </View>
   );
 };
 
+const STEPS = [
+  { icon: 'camera', color: '#2563eb', bg: '#dbeafe', title: '1. Add a photo', sub: 'Show us the problem' },
+  { icon: 'document-text', color: '#7c3aed', bg: '#ede9fe', title: '2. Get service options', sub: 'AI finds the right service' },
+  { icon: 'people', color: '#16a34a', bg: '#dcfce7', title: '3. Choose a pro', sub: 'Connect with a qualified professional' },
+] as const;
+
+export const HowItWorksSteps = ({ onGallery, onInstall }: { onGallery: () => void; onInstall?: () => void }) => {
+  const wide = useWindowDimensions().width >= 760;
+  return (
+  <View style={[s.steps, wide ? s.stepsWide : s.stepsNarrow]} data-testid="how-it-works-steps">
+    <View style={s.stepsRow}>
+      {STEPS.map((st, i) => (
+        <React.Fragment key={st.title}>
+          <View style={s.step}>
+            <View style={[s.stepIcon, { backgroundColor: st.bg }]}><Ionicons name={st.icon} size={24} color={st.color} /></View>
+            <Text style={s.stepTitle}>{st.title}</Text>
+            <Text style={s.stepSub}>{st.sub}</Text>
+          </View>
+          {i < STEPS.length - 1 && <Ionicons name="chevron-forward" size={18} color="#94a3b8" style={{ marginTop: 18 }} />}
+        </React.Fragment>
+      ))}
+    </View>
+    <View style={s.stepsLinks}>
+      <TouchableOpacity style={s.link} onPress={onGallery} data-testid="ai-gallery-btn">
+        <Ionicons name="images-outline" size={16} color="#2563eb" />
+        <Text style={s.linkText}>Upload from gallery</Text>
+      </TouchableOpacity>
+      {onInstall && (
+        <TouchableOpacity style={s.link} onPress={onInstall} data-testid="install-app-btn">
+          <Ionicons name="download-outline" size={16} color="#2563eb" />
+          <Text style={s.linkText}>Install app</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  </View>
+  );
+};
+
 const s = StyleSheet.create({
-  wrap: { borderRadius: 22, overflow: 'hidden', backgroundColor: '#fff', marginBottom: 14, borderWidth: 1, borderColor: '#eef2f7' },
+  wrap: { overflow: 'hidden', backgroundColor: '#fff' },
   img: { width: '100%', height: '100%' },
-  imgNarrow: { position: 'absolute', top: 0, bottom: 0, right: 0, width: '165%' },
-  imgWide: { position: 'absolute', top: 0, bottom: 0, right: 0, width: '66%' },
-  counter: { position: 'absolute', top: 14, left: 14, backgroundColor: 'rgba(15,23,42,0.55)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  imgWide: { position: 'absolute', top: 0, bottom: 0, right: 0, width: '64%' },
+  counter: { position: 'absolute', top: 14, left: 14, backgroundColor: 'rgba(15,23,42,0.45)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   counterText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  content: { position: 'absolute' },
-  contentWide: { left: 64, top: 0, bottom: 0, width: '40%', maxWidth: 520, justifyContent: 'center' },
-  contentNarrow: { left: 20, right: 20, bottom: 40 },
-  tag: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#dbeafe', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, marginBottom: 12 },
-  tagDark: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  tagText: { color: '#2563eb', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
-  title: { color: '#0f172a', fontSize: 40, fontWeight: '800', lineHeight: 46, letterSpacing: -0.8 },
-  titleSm: { fontSize: 28, lineHeight: 33 },
-  accent: { color: '#2563eb', fontSize: 40, fontWeight: '800', lineHeight: 46, letterSpacing: -0.8, marginBottom: 12 },
-  sub: { color: '#334155', fontSize: 15, lineHeight: 22, marginBottom: 18, maxWidth: 420 },
-  cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#2563eb', paddingVertical: 15, paddingHorizontal: 26, borderRadius: 14, alignSelf: 'flex-start', shadowColor: '#2563eb', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
-  ctaText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  note: { color: '#64748b', fontSize: 12, marginTop: 10 },
-  arrow: { position: 'absolute', top: '50%', marginTop: -20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.85)', alignItems: 'center', justifyContent: 'center' },
+  content: { position: 'absolute', left: 88, top: 0, bottom: 28, width: '40%', maxWidth: 520, justifyContent: 'center' },
+  title: { color: '#0f172a', fontSize: 50, fontWeight: '800', lineHeight: 56, letterSpacing: -1.2 },
+  accent: { color: '#2563eb', fontSize: 50, fontWeight: '800', lineHeight: 56, letterSpacing: -1.2 },
+  sub: { color: '#334155', fontSize: 19, lineHeight: 27, marginTop: 12, marginBottom: 18, maxWidth: 380 },
+  reward: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 18, overflow: 'hidden', marginBottom: 14, shadowColor: '#f97316', shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  rewardCompact: { paddingVertical: 10, paddingHorizontal: 14, gap: 12 },
+  rewardTitle: { color: '#111827', fontSize: 18, fontWeight: '800' },
+  rewardSub: { color: '#1f2937', fontSize: 13, lineHeight: 18 },
+  cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: '#2563eb', paddingVertical: 17, paddingHorizontal: 26, borderRadius: 16, shadowColor: '#2563eb', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
+  ctaText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  note: { color: '#64748b', fontSize: 13, marginTop: 10, textAlign: 'center' },
+  arrow: { position: 'absolute', top: '50%', marginTop: -24, width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(15,23,42,0.35)', alignItems: 'center', justifyContent: 'center' },
   dots: { position: 'absolute', bottom: 14, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.6)' },
-  dotWide: { backgroundColor: 'rgba(15,23,42,0.22)' },
-  dotActive: { width: 24, backgroundColor: '#2563eb' },
+  dotWide: { backgroundColor: 'rgba(15,23,42,0.2)' },
+  dotActive: { width: 22, backgroundColor: '#2563eb' },
+  mWrap: { backgroundColor: '#fff' },
+  mText: { position: 'absolute', left: 18, right: 18, bottom: 30 },
+  mTitle: { color: '#fff', fontSize: 28, fontWeight: '800', lineHeight: 33, letterSpacing: -0.6 },
+  mAccent: { color: '#93c5fd', fontSize: 28, fontWeight: '800', lineHeight: 33, letterSpacing: -0.6 },
+  mBody: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
+  mSub: { color: '#334155', fontSize: 15, lineHeight: 21, marginBottom: 12 },
+  steps: { backgroundColor: '#fff', borderRadius: 24, paddingTop: 20, paddingBottom: 12, paddingHorizontal: 10, marginBottom: 14, shadowColor: '#1e3a8a', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: -2 } },
+  stepsWide: { marginTop: -24, paddingTop: 24 },
+  stepsNarrow: { marginHorizontal: 16, marginTop: 6, borderWidth: 1, borderColor: '#eef2f7' },
+  stepsRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around' },
+  step: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
+  stepIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  stepTitle: { color: '#0f172a', fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  stepSub: { color: '#64748b', fontSize: 12, lineHeight: 16, textAlign: 'center', marginTop: 2 },
+  stepsLinks: { flexDirection: 'row', justifyContent: 'center', gap: 18, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  link: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+  linkText: { color: '#2563eb', fontSize: 13, fontWeight: '700' },
 });

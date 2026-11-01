@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Image, ActivityIndicator, Alert, Platform, Modal, RefreshControl,
+  TextInput, Image, ActivityIndicator, Alert, Platform, Modal, RefreshControl, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -19,7 +19,7 @@ import RewardsBanner from '../../components/RewardsBanner';
 import ProviderOnboardingCard from '../../components/ProviderOnboardingCard';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import { SiteFooter } from '../../components/SiteFooter';
-import { HeroCarousel } from '../../components/HeroCarousel';
+import { HeroCarousel, HowItWorksSteps } from '../../components/HeroCarousel';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
 
@@ -41,6 +41,18 @@ const FALLBACK_COVERS: Record<string, string> = {
 
 // Keyword-based cover fallback for admin-created categories that have no
 // uploaded image and no id in FALLBACK_COVERS (e.g. "CCTV install").
+const LOCAL_COVERS: Record<string, any> = {
+  assembly: require('../../assets/images/categories/assembly.jpg'),
+  cleaning: require('../../assets/images/categories/cleaning.jpg'),
+  home_improvements: require('../../assets/images/categories/home_improvements.jpg'),
+  moving: require('../../assets/images/categories/moving.jpg'),
+  outdoor: require('../../assets/images/categories/outdoor.jpg'),
+  personal: require('../../assets/images/categories/personal.jpg'),
+  it_tech: require('../../assets/images/categories/it_tech.jpg'),
+  events: require('../../assets/images/categories/events.jpg'),
+  other: require('../../assets/images/categories/other.jpg'),
+};
+
 const KEYWORD_COVERS: { kw: string[]; url: string }[] = [
   { kw: ['cctv', 'surveillance', 'security camera', 'camera install', 'security system', 'alarm', 'video doorbell'], url: 'https://images.unsplash.com/photo-1549109926-58f039549485?w=500&q=75&auto=format&fit=crop' },
 ];
@@ -404,6 +416,7 @@ export default function HomeScreen() {
   const { user } = useAuthStore();
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURN (Rules of Hooks)
   const { addBooking } = useBookingStore();
+  const { width: winW } = useWindowDimensions();
   const [step, setStep] = useState<BookingStep>('home');
   const [showFullHome, setShowFullHome] = useState(false);
   const [forcedProvider, setForcedProvider] = useState<any | null>(null);
@@ -1204,6 +1217,12 @@ export default function HomeScreen() {
     const topTools = (
       <>
           {/* AI photo-first block — primary CTA, the first thing users see */}
+          {heroMode && scanPhotos.length === 0 ? (
+            <HowItWorksSteps
+              onGallery={() => addScanPhoto(false)}
+              onInstall={Platform.OS === 'web' && !isStandalone ? installApp : undefined}
+            />
+          ) : (
           <View style={s.aiBlock}>
             <View style={s.aiTitleRow}>
               <View style={{ flex: 1 }}>
@@ -1274,6 +1293,7 @@ export default function HomeScreen() {
             )}
             <Text style={s.aiHint}>Add up to 5 photos · AI suggests a few options to choose from</Text>
           </View>
+          )}
 
           {/* Search */}
           {!focusedScan && (
@@ -1392,8 +1412,10 @@ export default function HomeScreen() {
           <PaymentReminderBanner />
           {heroMode && (
             <>
-              <HeroCarousel onIdentify={() => addScanPhoto(true)} />
-              <View style={{ marginHorizontal: -16 }}>{topTools}</View>
+              <View style={{ marginHorizontal: -16, marginTop: -16 }}>
+                <HeroCarousel onIdentify={() => addScanPhoto(true)} onRewards={() => router.push('/register')} />
+                {topTools}
+              </View>
             </>
           )}
           {focusedScan ? (
@@ -1421,18 +1443,21 @@ export default function HomeScreen() {
             {filteredCategories.map(cat => {
               const dbCat = dbCatById[cat.id];
               const displayName = dbCat?.name || cat.name;
+              const localCover = LOCAL_COVERS[cat.id];
               const coverImage = dbCat?.image || FALLBACK_COVERS[cat.id] || coverByKeyword(displayName);
-              if (coverImage) {
+              if (localCover || coverImage) {
                 // Premium card: real photo with gradient overlay + label
                 return (
                   <TouchableOpacity
                     key={cat.id}
-                    style={s.catCardPhoto}
+                    style={[s.catCardPhoto, winW >= 760 && { width: Math.floor((winW - 32 - 24) / 3), aspectRatio: 1.55 }]}
                     onPress={() => selectCategory(cat)}
                     activeOpacity={0.85}
                   >
-                    <Image source={{ uri: coverImage }} style={s.catCardPhotoImg} />
-                    <View style={s.catCardPhotoOverlay} />
+                    <Image source={localCover || { uri: coverImage }} style={s.catCardPhotoImg} />
+                    {Platform.OS === 'web'
+                      ? React.createElement('div', { style: { position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(180deg, rgba(15,23,42,0) 40%, rgba(15,23,42,0.78) 100%)' } })
+                      : <View style={s.catCardPhotoOverlay} />}
                     <View style={s.catCardPhotoBadge}>
                       <Ionicons name={cat.icon} size={16} color={cat.color} />
                     </View>
@@ -3143,8 +3168,8 @@ const s = StyleSheet.create({
   // Premium photo-cover category card
   catCardPhoto: {
     width: '48%',
-    aspectRatio: 1.35,
-    borderRadius: 16,
+    aspectRatio: 1.2,
+    borderRadius: 18,
     overflow: 'hidden',
     marginBottom: 10,
     position: 'relative',

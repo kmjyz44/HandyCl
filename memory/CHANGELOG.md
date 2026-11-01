@@ -411,3 +411,9 @@ User wants but postponed. Spec agreed:
 ## 2026-06 — Fix: Netlify build failing
 - Root cause: .gitignore has *.jpg so assets/images/hero/*.jpg never reached GitHub -> "Unable to resolve module ../assets/images/hero/electrical.jpg" -> Netlify build failed, site kept old bundle. Added `!assets/images/hero/*.jpg`. Verified clean `npm ci && npm run build` from git-tracked files passes.
 - LESSON: any new image asset in /assets must be un-ignored in .gitignore (verify with git check-ignore).
+
+## 2026-06 — Homepage like reference screenshot
+- HeroCarousel: desktop = white-left gradient + text, "Get rewarded" orange pill (guests -> /register), big CTA, round arrows; mobile = shorter image (~62% width, max 280) with title overlay, then sub/pill/CTA on white.
+- HowItWorksSteps (3 steps + Upload from gallery + Install app) replaces "Identify it with AI" block for guests; original block returns once photos are added (tray/Identify button).
+- New AI category photos in assets/images/categories/*.jpg (LOCAL_COVERS in (tabs)/index.tsx, take priority over DB images for the 9 default ids); bottom gradient on cards; 3 columns on width>=760.
+- .gitignore un-ignores assets/images/categories/*.jpg. Clean npm build passes.
