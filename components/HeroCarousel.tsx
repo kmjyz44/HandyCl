@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Animated, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Animated, Platform, useWindowDimensions, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, BACKEND_BASE_URL } from '../utils/api';
 
@@ -89,6 +89,14 @@ const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards, categories, onCateg
   }, [idx, anims]);
 
   const go = (d: number) => { setIdx((p) => (p + d + SLIDES.length) % SLIDES.length); start(); };
+  const goRef = useRef(go);
+  goRef.current = go;
+  const pan = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderRelease: (_, g) => { if (Math.abs(g.dx) > 40) goRef.current(g.dx < 0 ? 1 : -1); },
+  })).current;
+  const swipe: any = many ? { ...pan.panHandlers, style: Platform.OS === 'web' ? ({ touchAction: 'pan-y' } as any) : undefined } : {};
   const slide = SLIDES[idx];
   const long = (slide.title.length + (slide.accent || '').length) > 34;
   const big = long ? { fontSize: 40, lineHeight: 46 } : null;
@@ -113,7 +121,7 @@ const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards, categories, onCateg
   if (!wide) {
     return (
       <View style={s.mWrap} data-testid="hero-carousel">
-        <View style={{ height: imgH, overflow: 'hidden' }}>
+        <View {...swipe} style={[{ height: imgH, overflow: 'hidden' }, swipe.style]} data-testid="hero-swipe-area">
           {images}
           <Gradient css="linear-gradient(180deg, rgba(15,23,42,0) 30%, rgba(15,23,42,0.82) 100%)" fallback="rgba(15,23,42,0.35)" />
           {counter}
@@ -135,7 +143,7 @@ const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards, categories, onCateg
   }
 
   return (
-    <View style={[s.wrap, { height: imgH }]} data-testid="hero-carousel">
+    <View {...swipe} style={[s.wrap, { height: imgH }, swipe.style]} data-testid="hero-carousel">
       {images}
       <Gradient css="linear-gradient(90deg, #ffffff 0%, #ffffff 37%, rgba(255,255,255,0.85) 44%, rgba(255,255,255,0) 62%)" fallback="rgba(255,255,255,0.6)" />
       {counter}
