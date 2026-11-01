@@ -12,8 +12,28 @@ import { compressBase64Image } from '../utils/imageCompress';
 
 type Slide = {
   slide_id?: string; tag: string; title: string; accent: string; active: boolean;
-  start_date: string | null; end_date: string | null; order: number; image_url?: string;
+  start_date: string | null; end_date: string | null; order: number; image_url?: string; category_id?: string | null;
 };
+type Cat = { id: string; name: string };
+
+function CategoryPicker({ cats, value, onChange }: { cats: Cat[]; value?: string | null; onChange: (v: string | null) => void }) {
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <Text style={s.label}>Button opens category (optional)</Text>
+      <View style={s.chips}>
+        {[{ id: '', name: 'No button' }, ...cats].map((c) => {
+          const on = (value || '') === c.id;
+          return (
+            <TouchableOpacity key={c.id || 'none'} style={[s.chip, on && s.chipOn]} onPress={() => onChange(c.id || null)} data-testid={`hero-slide-cat-${c.id || 'none'}`}>
+              <Text style={[s.chipText, on && s.chipTextOn]}>{c.name}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={s.hint}>Shows a "Book …" button on the slide that opens this category.</Text>
+    </View>
+  );
+}
 
 const EMPTY: Slide = { tag: '', title: '', accent: '', active: true, start_date: null, end_date: null, order: 0 };
 const today = () => new Date().toISOString().slice(0, 10);
@@ -28,7 +48,7 @@ const statusOf = (sl: Slide) => {
 
 const errMsg = (e: any) => e?.response?.data?.detail || e?.message || 'Something went wrong';
 
-function SlideRow({ sl, onEdit, onToggle, onDelete }: { sl: Slide; onEdit: () => void; onToggle: (v: boolean) => void; onDelete: () => void }) {
+function SlideRow({ sl, catName, onEdit, onToggle, onDelete }: { sl: Slide; catName?: string; onEdit: () => void; onToggle: (v: boolean) => void; onDelete: () => void }) {
   const st = statusOf(sl);
   const dates = sl.start_date || sl.end_date ? `${sl.start_date || '…'} → ${sl.end_date || '…'}` : 'Always (no dates)';
   return (
@@ -40,6 +60,7 @@ function SlideRow({ sl, onEdit, onToggle, onDelete }: { sl: Slide; onEdit: () =>
         <View style={s.rowMeta}>
           <View style={[s.badge, { backgroundColor: st.bg }]}><Text style={[s.badgeText, { color: st.color }]}>{st.label}</Text></View>
           <Text style={s.rowDates}>{dates}</Text>
+          {!!catName && <Text style={s.rowDates}>· Book {catName}</Text>}
         </View>
       </View>
       <View style={s.rowActions}>
@@ -62,7 +83,7 @@ function Field({ label, value, onChange, placeholder, tid, max }: { label: strin
   );
 }
 
-function SlideForm({ initial, onDone, onCancel }: { initial: Slide; onDone: () => void; onCancel: () => void }) {
+function SlideForm({ initial, cats, onDone, onCancel }: { initial: Slide; cats: Cat[]; onDone: () => void; onCancel: () => void }) {
   const [f, setF] = useState<Slide>(initial);
   const [img, setImg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,7 +111,7 @@ function SlideForm({ initial, onDone, onCancel }: { initial: Slide; onDone: () =
     try {
       const payload: Record<string, any> = {
         tag: f.tag, title: f.title, accent: f.accent, active: f.active, order: Number(f.order) || 0,
-        start_date: f.start_date || null, end_date: f.end_date || null,
+        start_date: f.start_date || null, end_date: f.end_date || null, category_id: f.category_id || null,
       };
       if (img) payload.image_base64 = img;
       if (f.slide_id) await api.adminUpdateHeroSlide(f.slide_id, payload);
@@ -121,6 +142,7 @@ function SlideForm({ initial, onDone, onCancel }: { initial: Slide; onDone: () =
       <Field label="Label (small tag)" value={f.tag} onChange={(v) => set('tag', v)} placeholder="Heating" tid="hero-slide-tag-input" max={40} />
       <Field label="Title" value={f.title} onChange={(v) => set('title', v)} placeholder="Furnace not heating?" tid="hero-slide-title-input" max={80} />
       <Field label="Blue line" value={f.accent} onChange={(v) => set('accent', v)} placeholder="Get warm again today." tid="hero-slide-accent-input" max={80} />
+      <CategoryPicker cats={cats} value={f.category_id} onChange={(v) => set('category_id', v)} />
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Field label="Show from (YYYY-MM-DD)" value={f.start_date || ''} onChange={(v) => set('start_date', v.trim() || null)} placeholder="2026-11-01" tid="hero-slide-start-input" max={10} />
         <Field label="Show until (YYYY-MM-DD)" value={f.end_date || ''} onChange={(v) => set('end_date', v.trim() || null)} placeholder="2027-02-28" tid="hero-slide-end-input" max={10} />
@@ -148,6 +170,7 @@ export default function AdminHeroSlidesPage() {
   const [loading, setLoading] = useState(true);
   const [slides, setSlides] = useState<Slide[]>([]);
   const [editing, setEditing] = useState<Slide | null>(null);
+  const [cats, setCats] = useState<Cat[]>([]);
 
   const load = async () => {
     try {
@@ -159,7 +182,15 @@ export default function AdminHeroSlidesPage() {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    api.getCategories()
+      .then((d: any) => {
+        const list = Array.isArray(d) ? d : d?.categories || [];
+        setCats(list.filter((c: any) => c.is_active !== false).map((c: any) => ({ id: c.category_id || c.id, name: c.name })));
+      })
+      .catch(() => {});
+  }, []);
 
   const toggle = async (sl: Slide, v: boolean) => {
     setSlides((p) => p.map((x) => (x.slide_id === sl.slide_id ? { ...x, active: v } : x)));
@@ -192,7 +223,7 @@ export default function AdminHeroSlidesPage() {
           </View>
 
           {editing ? (
-            <SlideForm initial={editing} onCancel={() => setEditing(null)} onDone={() => { setEditing(null); load(); }} />
+            <SlideForm initial={editing} cats={cats} onCancel={() => setEditing(null)} onDone={() => { setEditing(null); load(); }} />
           ) : (
             <TouchableOpacity style={s.addBtn} onPress={() => setEditing({ ...EMPTY })} data-testid="hero-slide-add-btn">
               <Ionicons name="add-circle" size={20} color="#fff" />
@@ -202,7 +233,7 @@ export default function AdminHeroSlidesPage() {
 
           {slides.length === 0 && !editing && <Text style={s.empty}>No custom slides yet.</Text>}
           {slides.map((sl) => (
-            <SlideRow key={sl.slide_id} sl={sl} onEdit={() => setEditing(sl)} onToggle={(v) => toggle(sl, v)} onDelete={() => remove(sl)} />
+            <SlideRow key={sl.slide_id} sl={sl} catName={cats.find((c) => c.id === sl.category_id)?.name} onEdit={() => setEditing(sl)} onToggle={(v) => toggle(sl, v)} onDelete={() => remove(sl)} />
           ))}
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -247,5 +278,10 @@ const s = StyleSheet.create({
   cancelBtn: { flex: 1, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   cancelText: { color: '#374151', fontWeight: '700' },
   saveBtn: { flex: 2, backgroundColor: '#2563eb', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
+  chipOn: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  chipText: { color: '#374151', fontSize: 13, fontWeight: '600' },
+  chipTextOn: { color: '#fff' },
   saveText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 });

@@ -16931,7 +16931,8 @@ def _hero_out(d: dict) -> dict:
         "slide_id": d["slide_id"], "tag": d.get("tag", ""), "title": d.get("title", ""),
         "accent": d.get("accent", ""), "active": bool(d.get("active", True)),
         "start_date": d.get("start_date"), "end_date": d.get("end_date"),
-        "order": d.get("order", 0), "image_url": f"/api/hero-slides/image/{d['slide_id']}?v={d.get('image_version', 1)}",
+        "order": d.get("order", 0), "category_id": d.get("category_id"),
+        "image_url": f"/api/hero-slides/image/{d['slide_id']}?v={d.get('image_version', 1)}",
     }
 
 
@@ -16941,6 +16942,8 @@ async def _hero_fields(payload: Dict[str, Any], doc: dict) -> dict:
             doc[k] = str(payload[k] or "").strip()[:limit]
     if "active" in payload:
         doc["active"] = bool(payload["active"])
+    if "category_id" in payload:
+        doc["category_id"] = (str(payload["category_id"] or "").strip()[:60]) or None
     if "order" in payload:
         try:
             doc["order"] = int(payload["order"] or 0)

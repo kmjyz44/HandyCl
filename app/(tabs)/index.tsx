@@ -447,6 +447,7 @@ export default function HomeScreen() {
   const [installWaiting, setInstallWaiting] = useState(false);
   const submittingRef = useRef(false); // synchronous guard against rapid double-taps
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
@@ -1300,6 +1301,7 @@ export default function HomeScreen() {
           <View style={s.searchBox}>
             <Ionicons name="search-outline" size={20} color="#9ca3af" />
             <TextInput
+              ref={searchInputRef}
               style={s.searchInput}
               placeholder={isGuest ? 'Or search a service (e.g., furniture assembly)' : 'Search for a service...'}
               value={searchQuery}
@@ -1351,6 +1353,9 @@ export default function HomeScreen() {
                 <Text style={s.heroBrandText}>Ono-Fix</Text>
               </View>
               <View style={s.heroAuthBtns}>
+                <TouchableOpacity onPress={() => searchInputRef.current?.focus()} style={s.heroSearchBtn} data-testid="header-search-btn" accessibilityLabel="Search services">
+                  <Ionicons name="search" size={22} color="#0f172a" />
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => router.push('/login')} style={s.heroLoginBtn} data-testid="header-login-btn">
                   <Text style={s.heroLoginBtnText}>Log in</Text>
                 </TouchableOpacity>
@@ -1413,7 +1418,12 @@ export default function HomeScreen() {
           {heroMode && (
             <>
               <View style={{ marginHorizontal: -16, marginTop: -16 }}>
-                <HeroCarousel onIdentify={() => addScanPhoto(true)} onRewards={() => router.push('/register')} />
+                <HeroCarousel
+                  onIdentify={() => addScanPhoto(true)}
+                  onRewards={() => router.push('/register')}
+                  categories={mergedCategories.map(c => ({ id: c.id, name: dbCatById[c.id]?.name || c.name }))}
+                  onCategory={(id) => { const c = mergedCategories.find(x => x.id === id); if (c) selectCategory(c as any); }}
+                />
                 {topTools}
               </View>
             </>
@@ -3229,6 +3239,7 @@ const s = StyleSheet.create({
   heroLogo: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' },
   heroBrandText: { color: '#0f172a', fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
   heroAuthBtns: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  heroSearchBtn: { padding: 8, borderRadius: 10 },
   heroLoginBtn: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
   heroLoginBtnText: { color: '#2563eb', fontWeight: '700', fontSize: 15 },
   heroSignupBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: '#2563eb' },

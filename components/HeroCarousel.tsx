@@ -3,14 +3,15 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, Animated, Platform, us
 import { Ionicons } from '@expo/vector-icons';
 import { api, BACKEND_BASE_URL } from '../utils/api';
 
-type Slide = { key: string; img: any; tag: string; title: string; accent: string };
-type Handlers = { onIdentify: () => void; onRewards: () => void };
+type Slide = { key: string; img: any; tag: string; title: string; accent: string; categoryId?: string | null };
+type Cat = { id: string; name: string };
+type Handlers = { onIdentify: () => void; onRewards: () => void; categories: Cat[]; onCategory: (id: string) => void };
 
 const DEFAULT_SLIDES: Slide[] = [
-  { key: 'electrical', img: require('../assets/images/hero/electrical.jpg'), tag: 'Electrical', title: 'Home problem?', accent: 'Start with a photo.' },
-  { key: 'plumbing', img: require('../assets/images/hero/plumbing.jpg'), tag: 'Plumbing', title: 'Leaky sink?', accent: 'A pro is one photo away.' },
-  { key: 'furniture', img: require('../assets/images/hero/furniture.jpg'), tag: 'Furniture Assembly', title: 'Furniture to assemble?', accent: 'Matched in minutes.' },
-  { key: 'wallrepair', img: require('../assets/images/hero/wallrepair.jpg'), tag: 'Home Repairs', title: 'Holes or cracks?', accent: 'Fixed like new.' },
+  { key: 'electrical', img: require('../assets/images/hero/electrical.jpg'), tag: 'Electrical', title: 'Home problem?', accent: 'Start with a photo.', categoryId: 'home_improvements' },
+  { key: 'plumbing', img: require('../assets/images/hero/plumbing.jpg'), tag: 'Plumbing', title: 'Leaky sink?', accent: 'A pro is one photo away.', categoryId: 'home_improvements' },
+  { key: 'furniture', img: require('../assets/images/hero/furniture.jpg'), tag: 'Furniture Assembly', title: 'Furniture to assemble?', accent: 'Matched in minutes.', categoryId: 'assembly' },
+  { key: 'wallrepair', img: require('../assets/images/hero/wallrepair.jpg'), tag: 'Home Repairs', title: 'Holes or cracks?', accent: 'Fixed like new.', categoryId: 'home_improvements' },
 ];
 const INTERVAL = 5000;
 const SUB = 'Find the right service and connect with a pro — easily.';
@@ -27,7 +28,7 @@ export const HeroCarousel = (props: Handlers) => {
       .then((d) => {
         const list = (d?.slides || []).map((x: any) => ({
           key: x.slide_id, img: { uri: `${BACKEND_BASE_URL}${x.image_url}` },
-          tag: x.tag, title: x.title, accent: x.accent,
+          tag: x.tag, title: x.title, accent: x.accent, categoryId: x.category_id,
         }));
         if (list.length) setSlides(list);
       })
@@ -55,7 +56,14 @@ const Cta = ({ onPress, compact }: { onPress: () => void; compact?: boolean }) =
   </TouchableOpacity>
 );
 
-const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards }: Handlers & { slides: Slide[] }) => {
+const BookPill = ({ name, onPress, dark }: { name: string; onPress: () => void; dark?: boolean }) => (
+  <TouchableOpacity style={[s.book, dark && s.bookDark]} onPress={onPress} activeOpacity={0.85} data-testid="hero-book-category-btn">
+    <Text style={[s.bookText, dark && { color: '#fff' }]} numberOfLines={1}>Book {name}</Text>
+    <Ionicons name="arrow-forward" size={15} color={dark ? '#fff' : '#2563eb'} />
+  </TouchableOpacity>
+);
+
+const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards, categories, onCategory }: Handlers & { slides: Slide[] }) => {
   const { width } = useWindowDimensions();
   const wide = width >= 760;
   const imgH = wide ? Math.min(Math.max(width * 0.42, 440), 600) : Math.round(Math.min(width * 0.62, 280));
@@ -77,6 +85,8 @@ const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards }: Handlers & { slid
 
   const go = (d: number) => { setIdx((p) => (p + d + SLIDES.length) % SLIDES.length); start(); };
   const slide = SLIDES[idx];
+  const cat = slide.categoryId ? categories.find((c) => c.id === slide.categoryId) : undefined;
+  const book = cat ? () => onCategory(cat.id) : undefined;
 
   const images = SLIDES.map((sl, i) => (
     <Animated.View key={sl.key} style={[wide ? s.imgWide : StyleSheet.absoluteFill, { opacity: anims[i], transform: [{ scale: anims[i].interpolate({ inputRange: [0, 1], outputRange: [1.06, 1] }) }] }]}>
@@ -103,6 +113,7 @@ const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards }: Handlers & { slid
           <View style={s.mText}>
             <Text style={s.mTitle} data-testid="hero-slide-title">{slide.title}</Text>
             {!!slide.accent && <Text style={s.mAccent}>{slide.accent}</Text>}
+            {cat && book && <BookPill name={cat.name} onPress={book} dark />}
           </View>
           {dots}
         </View>
@@ -125,6 +136,7 @@ const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards }: Handlers & { slid
         <Text style={s.title} data-testid="hero-slide-title">{slide.title}</Text>
         {!!slide.accent && <Text style={s.accent}>{slide.accent}</Text>}
         <Text style={s.sub}>{SUB}</Text>
+        {cat && book && <BookPill name={cat.name} onPress={book} />}
         <RewardsPill onPress={onRewards} />
         <Cta onPress={onIdentify} />
         <Text style={[s.note, { textAlign: 'center' }]}>Free to get started · No phone call needed</Text>
@@ -208,6 +220,9 @@ const s = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.6)' },
   dotWide: { backgroundColor: 'rgba(15,23,42,0.2)' },
   dotActive: { width: 22, backgroundColor: '#2563eb' },
+  book: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, marginBottom: 14, maxWidth: '100%' },
+  bookDark: { backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.45)', marginTop: 10, marginBottom: 0, paddingVertical: 6, paddingHorizontal: 12 },
+  bookText: { color: '#2563eb', fontSize: 14, fontWeight: '800', flexShrink: 1 },
   mWrap: { backgroundColor: '#fff' },
   mText: { position: 'absolute', left: 18, right: 18, bottom: 30 },
   mTitle: { color: '#fff', fontSize: 28, fontWeight: '800', lineHeight: 33, letterSpacing: -0.6 },
