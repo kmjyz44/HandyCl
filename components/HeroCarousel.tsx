@@ -110,27 +110,6 @@ const HeroSlides = ({ slides: SLIDES, onIdentify }: { slides: Slide[]; onIdentif
   );
 };
 
-const BENEFITS = [
-  { icon: 'gift-outline', title: 'Earn rewards', sub: 'Up to $100' },
-  { icon: 'flash-outline', title: 'Save time', sub: 'No guesswork' },
-  { icon: 'shield-checkmark-outline', title: 'The right pro', sub: 'For your exact need' },
-  { icon: 'call-outline', title: 'No phone call', sub: 'Needed to start' },
-] as const;
-
-export const HeroBenefits = () => (
-  <View style={s.benefits} data-testid="hero-benefits">
-    {BENEFITS.map((b) => (
-      <View key={b.title} style={s.benefit}>
-        <View style={s.benefitIcon}><Ionicons name={b.icon} size={18} color="#2563eb" /></View>
-        <View style={{ flexShrink: 1 }}>
-          <Text style={s.benefitTitle}>{b.title}</Text>
-          <Text style={s.benefitSub}>{b.sub}</Text>
-        </View>
-      </View>
-    ))}
-  </View>
-);
-
 const s = StyleSheet.create({
   wrap: { borderRadius: 22, overflow: 'hidden', backgroundColor: '#fff', marginBottom: 14, borderWidth: 1, borderColor: '#eef2f7' },
   img: { width: '100%', height: '100%' },
@@ -156,9 +135,4 @@ const s = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.6)' },
   dotWide: { backgroundColor: 'rgba(15,23,42,0.22)' },
   dotActive: { width: 24, backgroundColor: '#2563eb' },
-  benefits: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', paddingVertical: 12, paddingHorizontal: 8, marginBottom: 18 },
-  benefit: { flexDirection: 'row', alignItems: 'center', gap: 10, flexGrow: 1, flexBasis: 170, paddingHorizontal: 8, paddingVertical: 6 },
-  benefitIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' },
-  benefitTitle: { color: '#0f172a', fontSize: 13, fontWeight: '700' },
-  benefitSub: { color: '#64748b', fontSize: 12 },
 });

@@ -19,7 +19,7 @@ import RewardsBanner from '../../components/RewardsBanner';
 import ProviderOnboardingCard from '../../components/ProviderOnboardingCard';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import { SiteFooter } from '../../components/SiteFooter';
-import { HeroCarousel, HeroBenefits } from '../../components/HeroCarousel';
+import { HeroCarousel } from '../../components/HeroCarousel';
 
 // ─── SKILL CATEGORIES (same as provider profile) ─────────────────────────────
 
@@ -1394,7 +1394,6 @@ export default function HomeScreen() {
             <>
               <HeroCarousel onIdentify={() => addScanPhoto(true)} />
               <View style={{ marginHorizontal: -16 }}>{topTools}</View>
-              <HeroBenefits />
             </>
           )}
           {focusedScan ? (
