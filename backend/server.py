@@ -16943,7 +16943,10 @@ async def _hero_fields(payload: Dict[str, Any], doc: dict) -> dict:
     if "active" in payload:
         doc["active"] = bool(payload["active"])
     if "category_id" in payload:
-        doc["category_id"] = (str(payload["category_id"] or "").strip()[:60]) or None
+        cid = (str(payload["category_id"] or "").strip()[:60]) or None
+        if cid and not await db.categories.find_one({"category_id": cid, "is_active": {"$ne": False}}, {"_id": 1}):
+            raise HTTPException(status_code=422, detail="Unknown category")
+        doc["category_id"] = cid
     if "order" in payload:
         try:
             doc["order"] = int(payload["order"] or 0)

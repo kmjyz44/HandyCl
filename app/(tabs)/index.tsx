@@ -1353,7 +1353,18 @@ export default function HomeScreen() {
                 <Text style={s.heroBrandText}>Ono-Fix</Text>
               </View>
               <View style={s.heroAuthBtns}>
-                <TouchableOpacity onPress={() => searchInputRef.current?.focus()} style={s.heroSearchBtn} data-testid="header-search-btn" accessibilityLabel="Search services">
+                <TouchableOpacity onPress={() => {
+                  const el: any = searchInputRef.current;
+                  el?.focus?.({ preventScroll: true });
+                  if (Platform.OS !== 'web') return;
+                  setTimeout(() => {
+                    const node: any = document.activeElement;
+                    if (!node?.getBoundingClientRect) return;
+                    let p = node.parentElement;
+                    while (p && !/(auto|scroll)/.test(getComputedStyle(p).overflowY)) p = p.parentElement;
+                    if (p) p.scrollTop = p.scrollTop + node.getBoundingClientRect().top - p.getBoundingClientRect().top - 24;
+                  }, 80);
+                }} style={s.heroSearchBtn} data-testid="header-search-btn" accessibilityLabel="Search services">
                   <Ionicons name="search" size={22} color="#0f172a" />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => router.push('/login')} style={s.heroLoginBtn} data-testid="header-login-btn">

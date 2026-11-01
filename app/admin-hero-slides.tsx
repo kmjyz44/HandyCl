@@ -30,7 +30,7 @@ function CategoryPicker({ cats, value, onChange }: { cats: Cat[]; value?: string
           );
         })}
       </View>
-      <Text style={s.hint}>Shows a "Book …" button on the slide that opens this category.</Text>
+      <Text style={[s.hint, { marginTop: 8, marginBottom: 0 }]}>Shows a "Book …" button on the slide that opens this category.</Text>
     </View>
   );
 }

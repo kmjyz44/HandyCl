@@ -157,3 +157,44 @@ class TestCRUD:
         if r.status_code == 200:
             created.append(r.json()["slide_id"])
         assert r.status_code in (200, 422), f"got {r.status_code}"
+
+
+# Hero slide "Book <Category>" button: category_id persisted / cleared / returned publicly
+class TestCategoryId:
+    def test_create_with_category_and_public(self, admin, created):
+        r = requests.post(f"{BASE}/admin/hero-slides", headers=admin,
+                          json={"title": "TEST_Cat", "image_base64": _img(), "category_id": "assembly"})
+        assert r.status_code == 200, r.text
+        d = r.json(); created.append(d["slide_id"])
+        assert d["category_id"] == "assembly"
+        pub = requests.get(f"{BASE}/hero-slides").json()["slides"]
+        assert next(s for s in pub if s["slide_id"] == d["slide_id"])["category_id"] == "assembly"
+
+    def test_create_without_category_is_null(self, admin, created):
+        r = requests.post(f"{BASE}/admin/hero-slides", headers=admin, json={"title": "TEST_NoCat", "image_base64": _img()})
+        d = r.json(); created.append(d["slide_id"])
+        assert d["category_id"] is None
+
+    def test_update_set_and_clear(self, admin, created):
+        r = requests.post(f"{BASE}/admin/hero-slides", headers=admin, json={"title": "TEST_CatUpd", "image_base64": _img()})
+        sid = r.json()["slide_id"]; created.append(sid)
+        r = requests.put(f"{BASE}/admin/hero-slides/{sid}", headers=admin, json={"category_id": "home_improvements"})
+        assert r.status_code == 200 and r.json()["category_id"] == "home_improvements"
+        lst = requests.get(f"{BASE}/admin/hero-slides", headers=admin).json()["slides"]
+        assert next(s for s in lst if s["slide_id"] == sid)["category_id"] == "home_improvements"
+        # unrelated update keeps it
+        r = requests.put(f"{BASE}/admin/hero-slides/{sid}", headers=admin, json={"title": "TEST_CatUpd2"})
+        assert r.json()["category_id"] == "home_improvements"
+        for empty in (None, "", "   "):
+            r = requests.put(f"{BASE}/admin/hero-slides/{sid}", headers=admin, json={"category_id": empty})
+            assert r.status_code == 200 and r.json()["category_id"] is None, empty
+        pub = requests.get(f"{BASE}/hero-slides").json()["slides"]
+        assert next(s for s in pub if s["slide_id"] == sid)["category_id"] is None
+
+    def test_unknown_category_behaviour(self, admin, created):
+        r = requests.post(f"{BASE}/admin/hero-slides", headers=admin,
+                          json={"title": "TEST_BadCat", "image_base64": _img(), "category_id": "does_not_exist_xyz"})
+        if r.status_code == 200:
+            created.append(r.json()["slide_id"])
+        print("unknown category status", r.status_code, r.json().get("category_id"))
+        assert r.status_code in (200, 422)

@@ -22,18 +22,23 @@ const Gradient = ({ css, fallback }: { css: string; fallback: string }) =>
     : <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: fallback }]} />;
 
 export const HeroCarousel = (props: Handlers) => {
-  const [slides, setSlides] = useState<Slide[]>(DEFAULT_SLIDES);
+  const [slides, setSlides] = useState<Slide[] | null>(null);
+  const wide = useWindowDimensions().width >= 760;
   useEffect(() => {
+    const fallback = setTimeout(() => setSlides((p) => p || DEFAULT_SLIDES), 2500);
     api.getHeroSlides()
       .then((d) => {
         const list = (d?.slides || []).map((x: any) => ({
           key: x.slide_id, img: { uri: `${BACKEND_BASE_URL}${x.image_url}` },
           tag: x.tag, title: x.title, accent: x.accent, categoryId: x.category_id,
         }));
-        if (list.length) setSlides(list);
+        setSlides(list.length ? list : DEFAULT_SLIDES);
       })
-      .catch(() => {});
+      .catch(() => setSlides(DEFAULT_SLIDES))
+      .finally(() => clearTimeout(fallback));
+    return () => clearTimeout(fallback);
   }, []);
+  if (!slides) return <View style={{ height: wide ? 540 : 520, backgroundColor: '#f8fafc' }} />;
   return <HeroSlides key={slides.map((x) => x.key).join('|')} slides={slides} {...props} />;
 };
 
@@ -85,6 +90,8 @@ const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards, categories, onCateg
 
   const go = (d: number) => { setIdx((p) => (p + d + SLIDES.length) % SLIDES.length); start(); };
   const slide = SLIDES[idx];
+  const long = (slide.title.length + (slide.accent || '').length) > 34;
+  const big = long ? { fontSize: 40, lineHeight: 46 } : null;
   const cat = slide.categoryId ? categories.find((c) => c.id === slide.categoryId) : undefined;
   const book = cat ? () => onCategory(cat.id) : undefined;
 
@@ -133,8 +140,8 @@ const HeroSlides = ({ slides: SLIDES, onIdentify, onRewards, categories, onCateg
       <Gradient css="linear-gradient(90deg, #ffffff 0%, #ffffff 37%, rgba(255,255,255,0.85) 44%, rgba(255,255,255,0) 62%)" fallback="rgba(255,255,255,0.6)" />
       {counter}
       <View style={s.content}>
-        <Text style={s.title} data-testid="hero-slide-title">{slide.title}</Text>
-        {!!slide.accent && <Text style={s.accent}>{slide.accent}</Text>}
+        <Text style={[s.title, big]} data-testid="hero-slide-title">{slide.title}</Text>
+        {!!slide.accent && <Text style={[s.accent, big]}>{slide.accent}</Text>}
         <Text style={s.sub}>{SUB}</Text>
         {cat && book && <BookPill name={cat.name} onPress={book} />}
         <RewardsPill onPress={onRewards} />
@@ -200,7 +207,7 @@ const s = StyleSheet.create({
   imgWide: { position: 'absolute', top: 0, bottom: 0, right: 0, width: '64%' },
   counter: { position: 'absolute', top: 14, left: 14, backgroundColor: 'rgba(15,23,42,0.45)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   counterText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  content: { position: 'absolute', left: 88, top: 0, bottom: 28, width: '40%', maxWidth: 520, justifyContent: 'center' },
+  content: { position: 'absolute', left: 88, top: 0, bottom: 28, width: '37%', maxWidth: 500, justifyContent: 'center' },
   title: { color: '#0f172a', fontSize: 50, fontWeight: '800', lineHeight: 56, letterSpacing: -1.2 },
   accent: { color: '#2563eb', fontSize: 50, fontWeight: '800', lineHeight: 56, letterSpacing: -1.2 },
   sub: { color: '#334155', fontSize: 19, lineHeight: 27, marginTop: 12, marginBottom: 18, maxWidth: 380 },

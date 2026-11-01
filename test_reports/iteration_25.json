@@ -1,0 +1,37 @@
+{
+  "summary": "Tested the hero 'Book <Category>' pill, the admin category picker and the guest header search icon on the static Expo build at :8090, with the backend on :8001. Backend: 17/17 pytest tests pass, including 4 new category_id tests (create with a category, create without one gives null, set/keep/clear with null, '' and '   ', and the public GET returns category_id). Frontend at 1280 and 390: the live admin slide 'Furnace not heating?' shows 'Book Home Repair', and clicking it opens the Home Improvements service list. That is the same screen as clicking the 'Home Repair' card. With the admin slide deactivated, the 4 default slides appear (1/4..4/4). Slides 1, 2 and 4 show 'Book Home Repair' and the furniture slide shows 'Book Furniture Assembly', which opens Furniture Assembly (IKEA, Office, Bed...). The header search icon (aria-label 'Search services') focuses the 'Or search a service' input on desktop and mobile, and typing 'plumb' narrows the grid to Home Repair. Admin /admin-hero-slides: the form shows 'Button opens category (optional)' with 'No button' plus 9 category chips. Choosing Furniture Assembly and saving makes the row show '· Book Furniture Assembly' and the API returns assembly. Choosing 'No button' and saving removes the row label, the API returns null, and the guest homepage then has no Book pill. Regressions checked: next/prev arrows, dots, ~5s auto-advance, 'Get rewarded!' goes to /register, 'Identify my problem' opens the file chooser, and the logged-in client home shows 'Identify it with AI' with no hero and no header search icon.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/admin/hero-slides", "issue": "category_id is not checked against db.categories. Any string such as 'does_not_exist_xyz' is saved (returns 200), and the slide then quietly shows no Book button. Suggest returning 422 for unknown or inactive category ids."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin-hero-slides form", "issues": ["The hint text 'Shows a \"Book …\" button on the slide…' overlaps the bottom of the second row of category chips (Personal Assistance / IT & Tech / Events & Parties / Other). Cause: s.hint has marginTop: -6. Give the CategoryPicker hint its own style with marginTop >= 6."]},
+      {"screen": "Guest home – header search", "issues": ["The search icon focuses the input, but the page does not scroll. The input sits near the bottom of the viewport (top ~800/900 on desktop, ~756/844 on mobile), so the filtered results are below the fold. Consider scrolling the input to the top on focus."]},
+      {"screen": "Guest home – hero", "issues": ["HeroCarousel starts with DEFAULT_SLIDES until /api/hero-slides returns, so guests briefly see the default 'Home problem?' slide before it switches to the admin slide. Consider holding off rendering (or using a neutral placeholder) until the fetch finishes.", "Desktop 1280: the long blue line 'Get warm again today.' runs past the white gradient onto the photo (this was already there before this change and is cosmetic)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_hero_slides.py", "/app/test_reports/pytest/pytest_hero_cat.xml"],
+  "action_items": [
+    "Optional: validate category_id against existing active categories in _hero_fields (return 422 if it is unknown)",
+    "Fix the overlap between the CategoryPicker hint and the chips on the admin form (remove marginTop -6 for that hint)",
+    "Optional: scroll the search input into view when the header search icon is tapped",
+    "Optional: avoid the brief flash of the default slide before admin slides load"
+  ],
+  "critical_code_review_comments": [
+    "HeroCarousel.tsx: the Book pill is hidden when the category is not in mergedCategories. This is safe, but a misconfigured slide gives the admin no feedback.",
+    "admin-hero-slides.tsx: the category chips come from api.getCategories(), which currently returns only the 9 top-level categories. If subcategories are ever returned, they would appear as chips but would never match on the homepage.",
+    "server.py _hero_fields: category_id is trimmed and capped at 60 characters, and empty values become None, which is correct. There is no existence check."
+  ],
+  "updated_files": ["/app/backend/tests/test_hero_slides.py"],
+  "success_rate": {"backend": "100%", "frontend": "100% (functional); 2 minor design issues"},
+  "test_credentials": "admin@handyhub.com / Admin2024!, client@handyhub.com / Client2024! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "No permanent data. TEST_ slides are created and deleted by the pytest fixture. The 'Furnace not heating?' slide (hero_59c878a6cd9d) was switched off and on and its category changed during testing, then restored to active=true and category_id=home_improvements.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use :8090 (static Expo build, served by /root/serve.py) and the :8001 API. RN-web drops data-testid, so use text/aria-label: 'Search services', 'Next slide', 'Previous slide', 'Slide N'. Hidden duplicate screens exist in the DOM, so use get_by_text(...).locator('visible=true').first. The login button is 'Log in'. To reach admin slides: Services tab, then 'Home Slides'. The edit icon for the first row is at about (971,276) at 1280x900. Category ids: home_improvements='Home Repair', assembly='Furniture Assembly'. Clicking a Book pill opens a screen titled 'Home Improvements' or 'Furniture Assembly' with 'What service do you need?'."
+}
