@@ -177,15 +177,15 @@ export const HowItWorksSteps = ({ onGallery, onInstall }: { onGallery: () => voi
       {STEPS.map((st, i) => (
         <React.Fragment key={st.title}>
           <View style={s.step}>
-            <View style={[s.stepIcon, { backgroundColor: st.bg }]}><Ionicons name={st.icon} size={24} color={st.color} /></View>
-            <Text style={s.stepTitle}>{st.title}</Text>
-            <Text style={s.stepSub}>{st.sub}</Text>
+            <View style={[s.stepIcon, !wide && s.stepIconSm, { backgroundColor: st.bg }]}><Ionicons name={st.icon} size={wide ? 24 : 17} color={st.color} /></View>
+            <Text style={[s.stepTitle, !wide && s.stepTitleSm]}>{st.title}</Text>
+            {wide && <Text style={s.stepSub}>{st.sub}</Text>}
           </View>
-          {i < STEPS.length - 1 && <Ionicons name="chevron-forward" size={18} color="#94a3b8" style={{ marginTop: 18 }} />}
+          {i < STEPS.length - 1 && <Ionicons name="chevron-forward" size={wide ? 18 : 14} color="#94a3b8" style={{ marginTop: wide ? 18 : 12 }} />}
         </React.Fragment>
       ))}
     </View>
-    <View style={s.stepsLinks}>
+    <View style={[s.stepsLinks, !wide && s.stepsLinksSm]}>
       <TouchableOpacity style={s.link} onPress={onGallery} data-testid="ai-gallery-btn">
         <Ionicons name="images-outline" size={16} color="#2563eb" />
         <Text style={s.linkText}>Upload from gallery</Text>
@@ -238,7 +238,10 @@ const s = StyleSheet.create({
   mSub: { color: '#334155', fontSize: 14, lineHeight: 20, marginBottom: 10, textAlign: 'center' },
   steps: { backgroundColor: '#fff', borderRadius: 24, paddingTop: 20, paddingBottom: 12, paddingHorizontal: 10, marginBottom: 14, shadowColor: '#1e3a8a', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: -2 } },
   stepsWide: { marginTop: -24, paddingTop: 24 },
-  stepsNarrow: { marginHorizontal: 16, marginTop: 6, borderWidth: 1, borderColor: '#eef2f7' },
+  stepsNarrow: { marginHorizontal: 16, marginTop: 6, borderWidth: 1, borderColor: '#eef2f7', paddingTop: 12, paddingBottom: 6, borderRadius: 18 },
+  stepIconSm: { width: 38, height: 38, borderRadius: 19, marginBottom: 5 },
+  stepTitleSm: { fontSize: 12, fontWeight: '700' },
+  stepsLinksSm: { marginTop: 8, paddingTop: 6 },
   stepsRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around' },
   step: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
   stepIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },

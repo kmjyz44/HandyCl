@@ -421,3 +421,5 @@ User wants but postponed. Spec agreed:
 - 2026-06: Mobile hero buttons compact (88% width, max 360, smaller text); Identify button bg rgba(37,99,235,0.85).
 
 - 2026-06: Hero slide "Book <Category>" pill (category_id on hero_slides, validated vs db.categories; defaults linked to home_improvements/assembly; opens selectCategory). Admin chips picker. Guest header search icon focuses + scrolls ScrollView to search (direct scrollTop; smooth ignored). Hero waits for /hero-slides (2.5s fallback) to avoid default-slide flash. Tested iteration_25.
+
+- 2026-06: Mobile (<760) compact guest header (logo 30, brand 18, smaller Log in/Sign up) and compact 3-step block (icons 38, titles 12, subtitles hidden on mobile).

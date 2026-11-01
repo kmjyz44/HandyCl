@@ -1347,10 +1347,10 @@ export default function HomeScreen() {
           <View style={s.heroHeader}>
             <View style={s.heroTopRow}>
               <View style={s.heroBrand}>
-                <View style={s.heroLogo}>
-                  <Ionicons name="construct" size={20} color="#fff" />
+                <View style={[s.heroLogo, winW < 760 && { width: 30, height: 30, borderRadius: 8 }]}>
+                  <Ionicons name="construct" size={winW < 760 ? 16 : 20} color="#fff" />
                 </View>
-                <Text style={s.heroBrandText}>Ono-Fix</Text>
+                <Text style={[s.heroBrandText, winW < 760 && { fontSize: 18 }]}>Ono-Fix</Text>
               </View>
               <View style={s.heroAuthBtns}>
                 <TouchableOpacity onPress={() => {
@@ -1365,13 +1365,13 @@ export default function HomeScreen() {
                     if (p) p.scrollTop = p.scrollTop + node.getBoundingClientRect().top - p.getBoundingClientRect().top - 24;
                   }, 80);
                 }} style={s.heroSearchBtn} data-testid="header-search-btn" accessibilityLabel="Search services">
-                  <Ionicons name="search" size={22} color="#0f172a" />
+                  <Ionicons name="search" size={winW < 760 ? 19 : 22} color="#0f172a" />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => router.push('/login')} style={s.heroLoginBtn} data-testid="header-login-btn">
-                  <Text style={s.heroLoginBtnText}>Log in</Text>
+                <TouchableOpacity onPress={() => router.push('/login')} style={[s.heroLoginBtn, winW < 760 && { paddingHorizontal: 8, paddingVertical: 6 }]} data-testid="header-login-btn">
+                  <Text style={[s.heroLoginBtnText, winW < 760 && { fontSize: 14 }]}>Log in</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => router.push('/register')} style={s.heroSignupBtn} data-testid="header-signup-btn">
-                  <Text style={s.heroSignupBtnText}>Sign up</Text>
+                <TouchableOpacity onPress={() => router.push('/register')} style={[s.heroSignupBtn, winW < 760 && { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 }]} data-testid="header-signup-btn">
+                  <Text style={[s.heroSignupBtnText, winW < 760 && { fontSize: 14 }]}>Sign up</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -3244,7 +3244,7 @@ const s = StyleSheet.create({
   },
 
   // Landing hero (guest)
-  heroHeader: { backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#eef2f7' },
+  heroHeader: { backgroundColor: '#fff', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#eef2f7' },
   heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   heroBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heroLogo: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' },
