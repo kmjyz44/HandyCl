@@ -9302,7 +9302,7 @@ async def blog_render_article(slug: str):
         '</div>'
         '<p style="margin-top:24px"><a href="/services">Browse all home services →</a></p>'
     )
-    body = f'<a href="/blog" style="color:#64748b;text-decoration:none;font-size:14px">← All articles</a><h1>{_html.escape(title)}</h1>{meta_line}{cover_tag}<article>{content}</article>{cta_block}'
+    body = f'<a href="/blog" style="color:#64748b;text-decoration:none;font-size:14px">← All articles</a><h1>{_html.escape(title)}</h1>{meta_line}{cover_tag}<article>{content}</article>{cta_block}{await _neighbor_articles(post)}'
 
     html_out = _render_blog_shell(
         title=title,
@@ -9314,6 +9314,24 @@ async def blog_render_article(slug: str):
         published=published,
     )
     return HTMLResponse(content=html_out)
+
+
+async def _neighbor_articles(post: dict) -> str:
+    """3 newer + 3 older articles around this one, so every article gets internal links."""
+    import html as _html
+    ca = post.get("created_at")
+    proj = {"_id": 0, "slug": 1, "post_id": 1, "title": 1}
+    base_q = {"is_published": True, "post_id": {"$ne": post.get("post_id")}}
+    try:
+        newer = await db.blog_posts.find({**base_q, "created_at": {"$gt": ca}}, proj).sort("created_at", 1).limit(3).to_list(3)
+        older = await db.blog_posts.find({**base_q, "created_at": {"$lt": ca}}, proj).sort("created_at", -1).limit(6 - len(newer)).to_list(6)
+    except Exception:
+        return ""
+    items = "".join(
+        f'<li><a href="/blog/{_html.escape(p.get("slug") or p.get("post_id"))}">{_html.escape(p.get("title") or "Article")}</a></li>'
+        for p in newer[::-1] + older if (p.get("slug") or p.get("post_id"))
+    )
+    return f'<section style="margin-top:32px"><h2 style="font-size:20px">More articles</h2><ul>{items}</ul></section>' if items else ""
 
 
 def _category_slug(cat: dict) -> str:
@@ -16806,19 +16824,20 @@ async def seo_sitemap():
     """Dynamically generated sitemap including all active service categories."""
     from fastapi.responses import Response
     base = "https://ono-fix.com"
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    def _day(v):
+        if isinstance(v, datetime):
+            return v.strftime("%Y-%m-%d")
+        return str(v)[:10] if v and len(str(v)) >= 10 else None
+
     urls = [
-        (f"{base}/", "1.0", "daily"),
-        (f"{base}/login", "0.5", "monthly"),
-        (f"{base}/register", "0.6", "monthly"),
-        (f"{base}/terms", "0.3", "yearly"),
-        (f"{base}/privacy", "0.3", "yearly"),
+        (f"{base}/", "1.0", "daily", None),
+        (f"{base}/terms", "0.3", "yearly", None),
+        (f"{base}/privacy", "0.3", "yearly", None),
     ]
     try:
         cats = await db.categories.find({"is_active": True}).to_list(200)
         if not cats:
             cats = await db.categories.find({}).to_list(200)
-        urls.append((f"{base}/services", "0.8", "weekly"))
         seen_slugs = set()
         for c in cats:
             if c.get("parent_id"):
@@ -16826,27 +16845,31 @@ async def seo_sitemap():
             slug = _category_slug(c)
             if slug and slug not in seen_slugs:
                 seen_slugs.add(slug)
-                urls.append((f"{base}/services/{slug}", "0.8", "weekly"))
+                urls.append((f"{base}/services/{slug}", "0.8", "weekly", None))
     except Exception:
         pass
 
     # Blog index + all published articles (server-rendered for SEO)
     try:
-        urls.append((f"{base}/blog", "0.7", "daily"))
         blog_posts = await db.blog_posts.find(
-            {"is_published": True}, {"_id": 0, "slug": 1, "post_id": 1}
+            {"is_published": True}, {"_id": 0, "slug": 1, "post_id": 1, "created_at": 1, "updated_at": 1, "published_at": 1}
         ).sort("created_at", -1).limit(500).to_list(500)
-        for bp in blog_posts:
+        days = [_day(bp.get("published_at") or bp.get("created_at")) for bp in blog_posts]
+        latest = max([d for d in days if d] or [None]) if blog_posts else None
+        urls.append((f"{base}/blog", "0.7", "daily", latest))
+        if latest:
+            urls[0] = (f"{base}/", "1.0", "daily", latest)
+        for bp, d in zip(blog_posts, days):
             s = bp.get("slug") or bp.get("post_id")
             if s:
-                urls.append((f"{base}/blog/{s}", "0.7", "weekly"))
+                urls.append((f"{base}/blog/{s}", "0.7", "weekly", d))
     except Exception:
         pass
 
     items = "".join(
-        f"<url><loc>{loc}</loc><lastmod>{today}</lastmod>"
+        f"<url><loc>{loc}</loc>{f'<lastmod>{lm}</lastmod>' if lm else ''}"
         f"<changefreq>{cf}</changefreq><priority>{pr}</priority></url>"
-        for loc, pr, cf in urls
+        for loc, pr, cf, lm in urls
     )
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'

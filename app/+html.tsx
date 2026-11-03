@@ -79,7 +79,6 @@ export default function Root({ children }: PropsWithChildren) {
         <title>{`${SITE_NAME} — ${TAGLINE} | AI Home Services`}</title>
         <meta name="description" content={DESCRIPTION} />
         <meta name="robots" content="index, follow, max-image-preview:large" />
-        <link rel="canonical" href={SITE_URL} />
 
         {/* Open Graph */}
         <meta property="og:type" content="website" />

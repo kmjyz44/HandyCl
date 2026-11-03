@@ -425,3 +425,8 @@ User wants but postponed. Spec agreed:
 - 2026-06: Mobile (<760) compact guest header (logo 30, brand 18, smaller Log in/Sign up) and compact 3-step block (icons 38, titles 12, subtitles hidden on mobile).
 
 - 2026-06: Hero swipe (PanResponder, horizontal only, 40px threshold, touchAction pan-y on web; vertical page scroll preserved). Verified with CDP touch events.
+
+## 2026-06 — Blog indexing audit/fixes
+- Live audit: sitemap has all 42 published posts (+1 post w/o slug uses post_id), all 200 + self-canonical, no noindex; /blog links all 42.
+- Fixed: removed global canonical (root) from +html.tsx (terms/privacy/login static HTML said canonical=homepage); sitemap drops /login,/register and /services hub (Netlify serves SPA services.html there, canonical mismatch); real lastmod (published_at/created_at; updated_at ignored because Soro sync bumps it daily); articles get "More articles" (3 newer + 3 older) for internal links.
+- Root cause in GSC: Google has not re-read sitemap ("no referring sitemaps", "URL unknown") -> user must resubmit sitemap & check Sitemaps report.
