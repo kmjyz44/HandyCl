@@ -430,3 +430,5 @@ User wants but postponed. Spec agreed:
 - Live audit: sitemap has all 42 published posts (+1 post w/o slug uses post_id), all 200 + self-canonical, no noindex; /blog links all 42.
 - Fixed: removed global canonical (root) from +html.tsx (terms/privacy/login static HTML said canonical=homepage); sitemap drops /login,/register and /services hub (Netlify serves SPA services.html there, canonical mismatch); real lastmod (published_at/created_at; updated_at ignored because Soro sync bumps it daily); articles get "More articles" (3 newer + 3 older) for internal links.
 - Root cause in GSC: Google has not re-read sitemap ("no referring sitemaps", "URL unknown") -> user must resubmit sitemap & check Sitemaps report.
+
+- 2026-06: Google tag G-HVVD9QVZ98 installed: +html.tsx (GA4_ID default, env EXPO_PUBLIC_GA4_ID overrides) -> all app pages; backend _render_blog_shell -> /blog, /blog/*, /services/*.

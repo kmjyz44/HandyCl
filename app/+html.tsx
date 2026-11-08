@@ -9,7 +9,7 @@ const DESCRIPTION =
 const OG_IMAGE = `${SITE_URL}/onofix-og-v2.png`;
 
 // Optional analytics / verification (set in Netlify env at build time).
-const GA4_ID = process.env.EXPO_PUBLIC_GA4_ID || '';
+const GA4_ID = process.env.EXPO_PUBLIC_GA4_ID || 'G-HVVD9QVZ98';
 const GSC_VERIFICATION = process.env.EXPO_PUBLIC_GSC_VERIFICATION || '';
 
 const swReg = `

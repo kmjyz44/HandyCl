@@ -9203,6 +9203,8 @@ def _render_blog_shell(title: str, description: str, canonical: str, body_html: 
   footer.site{{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px;text-align:center;padding:24px}}
   .empty{{text-align:center;color:var(--muted);padding:60px 20px}}
 </style>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-HVVD9QVZ98"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){{dataLayer.push(arguments);}}gtag('js',new Date());gtag('config','G-HVVD9QVZ98');</script>
 </head>
 <body>
 <header class="site"><div class="wrap">
