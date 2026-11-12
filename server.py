@@ -9296,14 +9296,7 @@ async def blog_render_article(slug: str):
 
     cover_tag = f'<img class="cover" src="{_html.escape(cover)}" alt="{_html.escape(title)}">' if cover else ""
     meta_line = f'<div class="meta">By {_html.escape(post.get("author_name") or "Ono-Fix")}{" · " + date_label if date_label else ""}</div>'
-    cta_block = (
-        '<div class="cta-block">'
-        '<h3>Need this done for you?</h3>'
-        '<p>Snap a photo of the problem and our AI matches you with a trusted local pro in minutes.</p>'
-        '<a class="cta-btn" href="/">Order a service →</a>'
-        '</div>'
-        '<p style="margin-top:24px"><a href="/services">Browse all home services →</a></p>'
-    )
+    cta_block = await _article_cta(post)
     body = f'<a href="/blog" style="color:#64748b;text-decoration:none;font-size:14px">← All articles</a><h1>{_html.escape(title)}</h1>{meta_line}{cover_tag}<article>{content}</article>{cta_block}{await _neighbor_articles(post)}'
 
     html_out = _render_blog_shell(
@@ -9334,6 +9327,56 @@ async def _neighbor_articles(post: dict) -> str:
         for p in newer[::-1] + older if (p.get("slug") or p.get("post_id"))
     )
     return f'<section style="margin-top:32px"><h2 style="font-size:20px">More articles</h2><ul>{items}</ul></section>' if items else ""
+
+
+_ARTICLE_TOPICS = [
+    (r"plumb|leak|drain|faucet|toilet|pipe|water|clog|sink|shower|sewer|garbage disposal", "home_improvements", "Plumbing", "a plumber"),
+    (r"electric|outlet|breaker|wiring|light|flicker|ceiling fan|gfci|circuit|smoke detector", "home_improvements", "Electrical", "an electrician"),
+    (r"furnace|heating|hvac|air condition|\bac\b|thermostat|heat pump|boiler", "home_improvements", "Appliance installation", "a heating & AC pro"),
+    (r"paint", "home_improvements", "Painting", "a painter"),
+    (r"drywall|wall crack|wall hole|hole in (the )?wall|ceiling crack", "home_improvements", "Drywall", "a drywall pro"),
+    (r"\btile|tiling|grout", "home_improvements", "Tiling", "a tiling pro"),
+    (r"floor", "home_improvements", "Flooring", "a flooring pro"),
+    (r"appliance|dishwasher|washer|dryer|refrigerator|fridge|oven|stove", "home_improvements", "Appliance installation", "an appliance pro"),
+    (r"\bdoor|hinge|cabinet", "home_improvements", "Door & furniture repair", "a handyman"),
+    (r"assembl|ikea|tv mount|mount(ing)? (a )?tv|shelf|shelves|wardrobe|dresser", "assembly", None, "a furniture assembly pro"),
+    (r"clean|mold|mildew", "cleaning", None, "a cleaning pro"),
+    (r"moving (help|company|service|day|truck)|movers|move-out|relocat|junk removal|hauling|packing", "moving", None, "a moving helper"),
+    (r"lawn|snow|garden|yard|fence|pressure wash|gutter|landscap", "outdoor", None, "an outdoor pro"),
+    (r"computer|wi-?fi|router|network|smart tv|laptop|printer", "it_tech", None, "a tech pro"),
+    (r"party|event|wedding|birthday", "events", None, "an event helper"),
+]
+
+
+async def _article_cta(post: dict) -> str:
+    """Topic-matched 'find a pro' block at the end of an article."""
+    import html as _html
+    from urllib.parse import urlencode
+    text = " ".join([post.get("title") or "", post.get("slug") or "", " ".join(post.get("tags") or [])]).lower()
+    cat_id, skill, who = "home_improvements", None, "a local pro"
+    for pattern, cid, sk, label in _ARTICLE_TOPICS:
+        if re.search(pattern, text):
+            cat_id, skill, who = cid, sk, label
+            break
+    cat = await db.categories.find_one({"category_id": cat_id, "is_active": {"$ne": False}}, {"_id": 0})
+    if not cat:
+        cat_id, skill, cat = None, None, None
+    q = {"category": cat_id} if cat_id else {}
+    if skill:
+        q["skill"] = skill
+    book_href = "/?" + urlencode(q) if q else "/"
+    cat_name = (cat or {}).get("name") or "home"
+    services_link = (
+        f'<p style="margin-top:16px"><a href="/services/{_html.escape(_category_slug(cat))}">See all {_html.escape(cat_name)} services →</a></p>'
+        if cat else '<p style="margin-top:16px"><a href="/blog">More home repair tips →</a></p>'
+    )
+    return (
+        '<div class="cta-block">'
+        f'<h3>Need {_html.escape(who)}?</h3>'
+        f'<p>Book {_html.escape(who)} near you on Ono-Fix — describe the job or snap a photo and get matched with a trusted local pro in minutes.</p>'
+        f'<a class="cta-btn" href="{_html.escape(book_href)}" rel="nofollow">Find {_html.escape(who)} →</a>'
+        '</div>' + services_link
+    )
 
 
 def _category_slug(cat: dict) -> str:
@@ -16887,7 +16930,7 @@ async def seo_robots():
     body = (
         "User-agent: *\nAllow: /\n"
         "Disallow: /admin\nDisallow: /my-profile\nDisallow: /payout-setup\n"
-        "Disallow: /payment-success\nDisallow: /payment-cancelled\n\n"
+        "Disallow: /payment-success\nDisallow: /payment-cancelled\nDisallow: /*?category=\n\n"
         "Sitemap: https://ono-fix.com/sitemap.xml\n"
     )
     return Response(content=body, media_type="text/plain")

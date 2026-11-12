@@ -1208,6 +1208,20 @@ export default function HomeScreen() {
     c.skills.some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  // Deep link from blog articles: /?category=<id>&skill=<name> opens that category (and sub-service).
+  const deepLinkDoneRef = useRef(false);
+  useEffect(() => {
+    const catId = bookParams?.category as string | undefined;
+    if (!catId || deepLinkDoneRef.current) return;
+    const cat = mergedCategories.find(c => c.id === catId);
+    if (!cat) return;
+    deepLinkDoneRef.current = true;
+    selectCategory(cat as any);
+    const skill = bookParams?.skill as string | undefined;
+    if (skill && cat.skills.includes(skill)) selectSkill(skill);
+  }, [bookParams?.category, bookParams?.skill, mergedCategories]);
+
+
   // ── RENDER STEPS ──────────────────────────────────────────────────────────
 
   // STEP: HOME — category grid (landing for guests, dashboard-like for authed clients)

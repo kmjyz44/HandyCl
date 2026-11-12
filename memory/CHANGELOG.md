@@ -432,3 +432,5 @@ User wants but postponed. Spec agreed:
 - Root cause in GSC: Google has not re-read sitemap ("no referring sitemaps", "URL unknown") -> user must resubmit sitemap & check Sitemaps report.
 
 - 2026-06: Google tag G-HVVD9QVZ98 installed: +html.tsx (GA4_ID default, env EXPO_PUBLIC_GA4_ID overrides) -> all app pages; backend _render_blog_shell -> /blog, /blog/*, /services/*.
+
+- 2026-06: Blog article end CTA is topic-matched (_ARTICLE_TOPICS regex on title/slug/tags -> category+skill): "Need a plumber? Find a plumber ->" links /?category=home_improvements&skill=Plumbing (rel=nofollow; robots Disallow /*?category=) + "See all <Category> services" -> /services/<slug>. App deep link: app/index.tsx forwards query params to /(tabs); (tabs)/index.tsx opens category (+skill -> Task details).
