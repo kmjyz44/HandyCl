@@ -12884,12 +12884,14 @@ async def admin_mark_paid(payload: Dict[str, Any] = Body(default={}), current_us
         await db.bookings.update_one({"booking_id": item_id}, {"$set": mark})
         await db.tasks.update_one({"booking_id": item_id}, {"$set": mark})
     elif kind == "task":
-        t = await db.tasks.find_one({"task_id": item_id}, {"_id": 0, "status": 1})
+        t = await db.tasks.find_one({"task_id": item_id}, {"_id": 0, "status": 1, "booking_id": 1})
         if not t:
             raise HTTPException(status_code=404, detail="Task not found")
         if t.get("status") != "completed_pending_payment":
             raise HTTPException(status_code=400, detail="This service is not waiting for payment")
         await db.tasks.update_one({"task_id": item_id}, {"$set": mark})
+        if t.get("booking_id"):
+            await db.bookings.update_one({"booking_id": t["booking_id"]}, {"$set": mark})
     else:
         raise HTTPException(status_code=422, detail="kind must be booking or task")
     return {"ok": True}
@@ -12899,8 +12901,9 @@ async def admin_mark_paid(payload: Dict[str, Any] = Body(default={}), current_us
 async def admin_paid_by_admin(current_user: User = Depends(require_admin)):
     rows = []
     for b in await db.bookings.find({"paid_by_admin": True}, {"_id": 0}).sort("paid_by_admin_at", -1).to_list(300):
+        bt = await db.tasks.find_one({"booking_id": b["booking_id"]}, {"_id": 0, "final_price": 1})
         rows.append({"kind": "booking", "id": b["booking_id"], "client_id": b.get("client_id"), "provider_id": b.get("provider_id"),
-                     "title": b.get("title") or b.get("service_name") or "Service", "amount": b.get("total_price"),
+                     "title": b.get("title") or b.get("service_name") or "Service", "amount": (bt or {}).get("final_price") or b.get("total_price"),
                      "paid_by_admin_at": b.get("paid_by_admin_at"), "note": b.get("paid_by_admin_note")})
     for t in await db.tasks.find({"paid_by_admin": True, "$or": [{"booking_id": None}, {"booking_id": {"$exists": False}}, {"booking_id": ""}]}, {"_id": 0}).sort("paid_by_admin_at", -1).to_list(300):
         rows.append({"kind": "task", "id": t["task_id"], "client_id": t.get("client_id"), "provider_id": t.get("provider_id"),
@@ -12940,7 +12943,14 @@ async def get_payment_reminders(current_user: User = Depends(get_current_user)):
             "$or": [{"payment_status": {"$exists": False}}, {"payment_status": "pending"}],
         }
         counts["needs_pay"] = await db.bookings.count_documents(q)
-        counts["blocked"] = (await _payment_block_state(current_user.user_id))[0]
+        blocked, unpaid, unblocked_at = await _payment_block_state(current_user.user_id)
+        counts["blocked"] = blocked
+        if blocked:
+            counts["needs_pay"] = max(counts["needs_pay"], len(unpaid))
+            od = next((i for i in unpaid if _is_overdue(i, unblocked_at)), None)
+            if od:
+                counts["first_pending_id"] = od.get("task_id") or od["id"]
+                counts["first_pending_kind"] = "task" if od.get("task_id") else "booking"
         if counts["needs_pay"] > 0:
             first = await db.bookings.find_one(q, {"_id": 0, "booking_id": 1}, sort=[("created_at", -1)])
             if first:

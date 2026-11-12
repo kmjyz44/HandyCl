@@ -110,13 +110,13 @@ export default function AdminUnpaidClientsPage() {
         </TouchableOpacity>
         <Text style={s.title}>Unpaid clients</Text>
       </View>
-      <View style={s.tabs}>
+      <View style={s.tabsBar}><View style={s.tabs}>
         {([['unpaid', `Unpaid (${clients.length})`], ['settled', `Paid by admin (${settled.length})`]] as const).map(([k, label]) => (
           <TouchableOpacity key={k} style={[s.tab, tab === k && s.tabOn]} onPress={() => setTab(k)} data-testid={`unpaid-tab-${k}`}>
             <Text style={[s.tabText, tab === k && s.tabTextOn]}>{label}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </View></View>
       {loading ? <View style={s.center}><ActivityIndicator color="#2563eb" /></View> : (
         <ScrollView contentContainerStyle={s.content} refreshControl={<RefreshControl refreshing={false} onRefresh={load} />}>
           {tab === 'unpaid' ? (
@@ -148,7 +148,8 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   title: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  tabs: { flexDirection: 'row', gap: 8, padding: 12, backgroundColor: '#fff' },
+  tabsBar: { backgroundColor: '#fff' },
+  tabs: { flexDirection: 'row', gap: 8, paddingVertical: 12, paddingHorizontal: 16, maxWidth: 820, width: '100%', alignSelf: 'center' },
   tab: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#f3f4f6' },
   tabOn: { backgroundColor: '#2563eb' },
   tabText: { color: '#374151', fontWeight: '700', fontSize: 13 },

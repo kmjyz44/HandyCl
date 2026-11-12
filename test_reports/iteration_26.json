@@ -1,0 +1,38 @@
+{
+  "summary": "Tested the 'Unpaid clients blocking' feature on the backend and frontend. Backend: new pytest suite /app/backend/tests/test_unpaid_client_blocking.py, 16/16 passing. It covers reminders.blocked, the 403 with the message on POST /bookings, /client/bookings and /client/tasks, role guards (admin passes the guard, provider has no blocked flag), and the admin unpaid-clients endpoint (grouping, overdue flags, total_due, sorting). It also covers payment-unblock (including 404), mark-paid (booking/task, 400/404/422, booking+task mirrored to paid/paid_by_admin), paid-by-admin, and the full lifecycle on a throwaway TEST_ client: recent unpaid = not blocked; pending_verification = not blocked; overdue = blocked; unblock = not blocked but needs_pay stays; overdue after unblock = blocked again; a standalone task blocks; mark-paid task clears it. Regression: test_manual_payment_flow.py 6/6 passing, plus spot checks of GET /bookings (client, admin), /tasks (provider) and /admin/tasks. Frontend (:8090): the client home banner showed 'New orders paused — payment overdue' while blocked. The admin flow worked: Services tab -> Unpaid Clients -> client shown as Blocked with the TEST Overdue faucet repair service; Mark paid (custom confirm modal) removed it; Unblock changed the badge to 'Unblocked by admin'; the Paid by admin tab listed the marked items (2). After the unblock, the client banner showed 'Pay for tasks (2)'. The marked booking stays in the client's history with status paid. One integration bug was found by code review: on the main home booking wizard, a blocked client sees a generic error instead of the payment-block message.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/payments/reminders", "issue": "needs_pay counts only bookings, but 'blocked' also looks at standalone tasks (tasks with no booking_id). A client blocked only by a standalone task gets blocked=true with needs_pay=0, so PaymentReminderBanner (which renders only when needs_pay>0) shows nothing and the client gets 403s with no explanation."},
+      {"endpoint": "GET /api/payments/reminders", "issue": "The reminders query uses payment_status $exists:false|'pending', while _unpaid_items uses $in [None,'pending'], which also matches an explicit null. A booking with payment_status:null can block the client without being counted in needs_pay. first_pending_id is the newest pending booking, not the overdue one, so the 'paused' banner may deep-link to a service that isn't the one causing the block."},
+      {"endpoint": "GET /api/admin/paid-by-admin", "issue": "For bookings, amount comes from booking.total_price, while unpaid-clients uses the linked task.final_price. The same service can show different amounts on the two tabs."},
+      {"endpoint": "POST /api/admin/unpaid/mark-paid kind=task", "issue": "Only the task is updated. If the task has a booking_id, the linked booking is not mirrored. The UI only sends kind=task for standalone tasks, so the risk is low."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Blocked client books a pro from the home wizard (app/(tabs)/index.tsx ~L1141-1183)", "issue": "api.createBooking (utils/api.ts L569-576) catches the axios error and rethrows new Error(detail), which has no .response. index.tsx then reads e?.response?.data?.detail, which is always undefined, so a blocked client sees the generic 'We couldn't create your booking. Please check your details and try again.' instead of the payment-block message. The same applies to the 451 service-area message. Also, the client only finds out after finishing the whole wizard. Consider checking reminders.blocked when the wizard starts. Found by code review; not reproduced through the full wizard in the UI.", "affected_selectors": ["Booking failed alert"]}
+    ],
+    "design_issues": [
+      {"screen": "/admin-unpaid-clients", "issues": ["The tab pills (Unpaid / Paid by admin) sit at the far left of the full width, while the content column is centered at maxWidth 820. They look misaligned on desktop.", "There is no way to enter a note when marking paid, although the API supports note and the Paid by admin tab displays it."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_unpaid_client_blocking.py", "/app/test_reports/pytest/unpaid_blocking.xml"],
+  "action_items": [
+    "Fix the blocked-booking error message: in app/(tabs)/index.tsx use e?.message as a fallback (or make api.createBooking rethrow while preserving err.response), so the 403 payment-block message is shown.",
+    "Make the reminders needs_pay/banner consistent with the block logic (include standalone tasks, use the same payment_status filter), so a blocked client always sees the 'New orders paused' banner.",
+    "Optional: show the block before the booking wizard starts; align the tabs with the centered content on the Unpaid clients page; add an optional note input to Mark paid."
+  ],
+  "critical_code_review_comments": [
+    "api.createBooking error wrapping drops err.response, so callers reading e.response.data.detail never get the server message.",
+    "server.py is about 17.6k lines; the new block is clean but the file badly needs splitting into modules.",
+    "admin_unpaid_clients and admin_paid_by_admin do an N+1 users lookup per row, which is fine at current scale."
+  ],
+  "updated_files": ["/app/backend/tests/test_unpaid_client_blocking.py"],
+  "success_rate": {"backend": "100% (16/16 new + 6/6 manual payment regression)", "frontend": "100% of the requested flows; 1 integration issue found by code review"},
+  "seed_data_creation": "The pytest suite inserts a throwaway TEST_ client (users + user_sessions) with TEST_ bookings and tasks in local Mongo, and deletes them by id in teardown. The UI test changed the seeded state as the request asked: booking_unpaidtest3 is now paid_by_admin, and client@handyhub.com was unblocked during the UI test; after testing I $unset payment_unblocked_at, so the client is BLOCKED again (by booking_c7835a709ada469f, Paint wall, still unpaid and overdue). booking_unpaidtest2 is unpaid and not yet overdue.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use http://localhost:8090 (static Expo build). Admin dashboard: click the bottom-tab 'Services' (get_by_text('Services', exact=True).nth(1)), NOT the footer link (nth(2)); the footer does a hard reload, which drops auth and causes 401s. Confirm dialogs are custom modals: click the last 'Mark paid' / 'Unblock' text. Run: cd /app/backend && python -m pytest tests/test_unpaid_client_blocking.py -v. The seeded-client tests expect client@handyhub.com to be BLOCKED (unset payment_unblocked_at first)."
+}

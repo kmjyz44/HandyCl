@@ -11,7 +11,7 @@ import Head from 'expo-router/head';
 import { useAuthStore } from '../../store/authStore';
 import { useBookingStore } from '../../store/bookingStore';
 import { api } from '../../utils/api';
-import { showAlertWithButtons } from '../../utils/alert';
+import { showAlertWithButtons, showConfirm } from '../../utils/alert';
 import PaymentReminderBanner from '../../components/PaymentReminderBanner';
 import ProviderAlertBanner from '../../components/ProviderAlertBanner';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
@@ -419,6 +419,11 @@ export default function HomeScreen() {
   const { width: winW } = useWindowDimensions();
   const [step, setStep] = useState<BookingStep>('home');
   const [showFullHome, setShowFullHome] = useState(false);
+  const [paymentBlocked, setPaymentBlocked] = useState(false);
+  useEffect(() => {
+    if (user?.role !== 'client') { setPaymentBlocked(false); return; }
+    api.getPaymentReminders().then((r: any) => setPaymentBlocked(!!r?.blocked)).catch(() => {});
+  }, [user?.user_id, user?.role]);
   const [forcedProvider, setForcedProvider] = useState<any | null>(null);
   const [providerAvailableDays, setProviderAvailableDays] = useState<number[]>([]);
   const [stateModalVisible, setStateModalVisible] = useState(false);
@@ -745,6 +750,16 @@ export default function HomeScreen() {
   };
 
   const selectCategory = (cat: typeof SKILL_CATEGORIES[0]) => {
+    if (paymentBlocked) {
+      showConfirm(
+        'New orders paused',
+        'You have a completed service that hasn\u2019t been paid yet. Please pay for it first to book a new pro.',
+        () => router.push('/(tabs)/bookings' as any),
+        'Pay now',
+        'Later',
+      );
+      return;
+    }
     setBooking(b => ({ ...b, categoryId: cat.id, categoryName: cat.name, skillName: '' }));
     // Admin-created categories don't have predefined sub-skills — skip the
     // skills step and go straight to "describe your task".
@@ -1176,8 +1191,8 @@ export default function HomeScreen() {
     } catch (e: any) {
       submittingRef.current = false;
       setBookingSubmitting(false);
-      const detail = e?.response?.data?.detail;
-      const msg = typeof detail === 'string' && detail
+      const detail = e?.response?.data?.detail || e?.message;
+      const msg = typeof detail === 'string' && detail && detail.length < 300 && !/^[\[{]/.test(detail) && !/^Request failed/.test(detail)
         ? detail
         : 'We couldn’t create your booking. Please check your details and try again.';
       showAlertWithButtons('Booking failed', msg, [{ text: 'OK' }]);
