@@ -3490,6 +3490,7 @@ async def _notify_waitlist_matches(user_id: str):
 
 @api_router.post("/bookings")
 async def create_booking(booking_data: BookingCreate, current_user: User = Depends(get_current_user)):
+    await _assert_not_payment_blocked(current_user)
     # Service-area gate: block bookings outside the configured working zone.
     sa = await _get_service_area()
     if not _is_location_allowed(sa, booking_data.state, booking_data.city, booking_data.latitude, booking_data.longitude):
@@ -10799,6 +10800,7 @@ async def client_create_task(
     """Client creates a new task"""
     if current_user.role != UserRole.CLIENT:
         raise HTTPException(status_code=403, detail="Only clients can create tasks")
+    await _assert_not_payment_blocked(current_user)
 
     # Get settings for pricing
     settings = await db.settings.find_one({"setting_id": "app_settings"}, {"_id": 0})
@@ -11611,6 +11613,7 @@ async def client_create_booking(
     """Client creates booking from Services tab"""
     if current_user.role not in [UserRole.CLIENT, UserRole.ADMIN]:
         raise HTTPException(status_code=403, detail="Only clients can create bookings")
+    await _assert_not_payment_blocked(current_user)
 
     # Get service
     service = await db.services.find_one({"service_id": data.service_id}, {"_id": 0})
@@ -12755,6 +12758,164 @@ async def admin_payment_stats(
     }
 
 
+# ─── Unpaid-service blocking (client can't order until paid / admin resolves) ──
+UNPAID_BLOCK_HOURS = 24
+_UNPAID_PAY_STATES = [None, "pending"]
+PAYMENT_BLOCKED_MSG = ("You have a completed service that hasn't been paid yet. "
+                       "Please pay for it first to book a new pro. If you think this is a mistake, contact support.")
+
+
+def _as_dt(v):
+    if isinstance(v, datetime):
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+    if isinstance(v, str) and v:
+        try:
+            d = datetime.fromisoformat(v.replace("Z", "+00:00"))
+            return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    return None
+
+
+async def _unpaid_items(client_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Completed-but-unpaid bookings + standalone tasks (normalized)."""
+    base = {"status": "completed_pending_payment", "payment_status": {"$in": _UNPAID_PAY_STATES}}
+    bq = dict(base)
+    tq = {**base, "$or": [{"booking_id": None}, {"booking_id": {"$exists": False}}, {"booking_id": ""}]}
+    if client_id:
+        bq["client_id"] = client_id
+        tq["client_id"] = client_id
+    items: List[Dict[str, Any]] = []
+    for b in await db.bookings.find(bq, {"_id": 0}).sort("completed_at", 1).to_list(1000):
+        t = await db.tasks.find_one({"booking_id": b["booking_id"]}, {"_id": 0, "task_id": 1, "final_price": 1, "completed_at": 1})
+        items.append({
+            "kind": "booking", "id": b["booking_id"], "task_id": (t or {}).get("task_id"),
+            "client_id": b.get("client_id"), "provider_id": b.get("provider_id"),
+            "title": b.get("title") or b.get("service_name") or "Service",
+            "amount": (t or {}).get("final_price") or b.get("total_price"),
+            "completed_at": _as_dt(b.get("completed_at") or (t or {}).get("completed_at") or b.get("updated_at") or b.get("created_at")),
+        })
+    for t in await db.tasks.find(tq, {"_id": 0}).sort("completed_at", 1).to_list(1000):
+        items.append({
+            "kind": "task", "id": t["task_id"], "task_id": t["task_id"],
+            "client_id": t.get("client_id") or t.get("user_id"), "provider_id": t.get("provider_id"),
+            "title": t.get("title") or "Task", "amount": t.get("final_price"),
+            "completed_at": _as_dt(t.get("completed_at") or t.get("actual_end_time") or t.get("updated_at") or t.get("created_at")),
+        })
+    return items
+
+
+def _is_overdue(item: Dict[str, Any], unblocked_at: Optional[datetime]) -> bool:
+    c = item.get("completed_at")
+    if not c or c > datetime.now(timezone.utc) - timedelta(hours=UNPAID_BLOCK_HOURS):
+        return False
+    return not (unblocked_at and c <= unblocked_at)
+
+
+async def _payment_block_state(user_id: str) -> Tuple[bool, List[Dict[str, Any]], Optional[datetime]]:
+    u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "payment_unblocked_at": 1})
+    unblocked_at = _as_dt((u or {}).get("payment_unblocked_at"))
+    items = await _unpaid_items(user_id)
+    return any(_is_overdue(i, unblocked_at) for i in items), items, unblocked_at
+
+
+async def _assert_not_payment_blocked(user: "User"):
+    if user.role != UserRole.CLIENT:
+        return
+    blocked, _, _ = await _payment_block_state(user.user_id)
+    if blocked:
+        raise HTTPException(status_code=403, detail=PAYMENT_BLOCKED_MSG)
+
+
+def _unpaid_out(i: Dict[str, Any], unblocked_at: Optional[datetime]) -> Dict[str, Any]:
+    c = i.get("completed_at")
+    return {**i, "completed_at": c.isoformat() if c else None, "overdue": _is_overdue(i, unblocked_at)}
+
+
+@api_router.get("/admin/unpaid-clients")
+async def admin_unpaid_clients(current_user: User = Depends(require_admin)):
+    items = await _unpaid_items()
+    by_client: Dict[str, List[Dict[str, Any]]] = {}
+    for i in items:
+        if i.get("client_id"):
+            by_client.setdefault(i["client_id"], []).append(i)
+    out = []
+    for cid, its in by_client.items():
+        u = await db.users.find_one({"user_id": cid}, {"_id": 0, "name": 1, "email": 1, "phone": 1, "payment_unblocked_at": 1}) or {}
+        ub = _as_dt(u.get("payment_unblocked_at"))
+        rows = [_unpaid_out(i, ub) for i in its]
+        for r in rows:
+            p = await db.users.find_one({"user_id": r.get("provider_id")}, {"_id": 0, "name": 1}) if r.get("provider_id") else None
+            r["provider_name"] = (p or {}).get("name")
+        out.append({
+            "client_id": cid, "name": u.get("name"), "email": u.get("email"), "phone": u.get("phone"),
+            "blocked": any(r["overdue"] for r in rows),
+            "unblocked_at": ub.isoformat() if ub else None,
+            "total_due": round(sum(float(r.get("amount") or 0) for r in rows), 2),
+            "items": rows,
+        })
+    out.sort(key=lambda c: (not c["blocked"], -(c["total_due"] or 0)))
+    return {"clients": out, "block_hours": UNPAID_BLOCK_HOURS}
+
+
+@api_router.post("/admin/users/{user_id}/payment-unblock")
+async def admin_payment_unblock(user_id: str, current_user: User = Depends(require_admin)):
+    now = datetime.now(timezone.utc)
+    r = await db.users.update_one({"user_id": user_id}, {"$set": {"payment_unblocked_at": now, "payment_unblocked_by": current_user.user_id}})
+    if not r.matched_count:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return {"ok": True, "unblocked_at": now.isoformat()}
+
+
+@api_router.post("/admin/unpaid/mark-paid")
+async def admin_mark_paid(payload: Dict[str, Any] = Body(default={}), current_user: User = Depends(require_admin)):
+    kind, item_id = payload.get("kind"), payload.get("id")
+    note = str(payload.get("note") or "").strip()[:300]
+    now = datetime.now(timezone.utc)
+    mark = {"status": "paid", "payment_status": "paid", "paid_at": now, "updated_at": now,
+            "paid_by_admin": True, "paid_by_admin_at": now, "paid_by_admin_id": current_user.user_id,
+            "paid_by_admin_note": note}
+    if kind == "booking":
+        b = await db.bookings.find_one({"booking_id": item_id}, {"_id": 0, "status": 1})
+        if not b:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        if b.get("status") != "completed_pending_payment":
+            raise HTTPException(status_code=400, detail="This service is not waiting for payment")
+        await db.bookings.update_one({"booking_id": item_id}, {"$set": mark})
+        await db.tasks.update_one({"booking_id": item_id}, {"$set": mark})
+    elif kind == "task":
+        t = await db.tasks.find_one({"task_id": item_id}, {"_id": 0, "status": 1})
+        if not t:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if t.get("status") != "completed_pending_payment":
+            raise HTTPException(status_code=400, detail="This service is not waiting for payment")
+        await db.tasks.update_one({"task_id": item_id}, {"$set": mark})
+    else:
+        raise HTTPException(status_code=422, detail="kind must be booking or task")
+    return {"ok": True}
+
+
+@api_router.get("/admin/paid-by-admin")
+async def admin_paid_by_admin(current_user: User = Depends(require_admin)):
+    rows = []
+    for b in await db.bookings.find({"paid_by_admin": True}, {"_id": 0}).sort("paid_by_admin_at", -1).to_list(300):
+        rows.append({"kind": "booking", "id": b["booking_id"], "client_id": b.get("client_id"), "provider_id": b.get("provider_id"),
+                     "title": b.get("title") or b.get("service_name") or "Service", "amount": b.get("total_price"),
+                     "paid_by_admin_at": b.get("paid_by_admin_at"), "note": b.get("paid_by_admin_note")})
+    for t in await db.tasks.find({"paid_by_admin": True, "$or": [{"booking_id": None}, {"booking_id": {"$exists": False}}, {"booking_id": ""}]}, {"_id": 0}).sort("paid_by_admin_at", -1).to_list(300):
+        rows.append({"kind": "task", "id": t["task_id"], "client_id": t.get("client_id"), "provider_id": t.get("provider_id"),
+                     "title": t.get("title") or "Task", "amount": t.get("final_price"),
+                     "paid_by_admin_at": t.get("paid_by_admin_at"), "note": t.get("paid_by_admin_note")})
+    for r in rows:
+        c = await db.users.find_one({"user_id": r.get("client_id")}, {"_id": 0, "name": 1, "email": 1}) if r.get("client_id") else None
+        p = await db.users.find_one({"user_id": r.get("provider_id")}, {"_id": 0, "name": 1}) if r.get("provider_id") else None
+        r["client_name"], r["client_email"], r["provider_name"] = (c or {}).get("name"), (c or {}).get("email"), (p or {}).get("name")
+        d = _as_dt(r.get("paid_by_admin_at"))
+        r["paid_by_admin_at"] = d.isoformat() if d else None
+    rows.sort(key=lambda r: r.get("paid_by_admin_at") or "", reverse=True)
+    return {"items": rows}
+
+
 @api_router.get("/payments/reminders")
 async def get_payment_reminders(current_user: User = Depends(get_current_user)):
     """Return counts of pending payment-related actions for the current user.
@@ -12779,6 +12940,7 @@ async def get_payment_reminders(current_user: User = Depends(get_current_user)):
             "$or": [{"payment_status": {"$exists": False}}, {"payment_status": "pending"}],
         }
         counts["needs_pay"] = await db.bookings.count_documents(q)
+        counts["blocked"] = (await _payment_block_state(current_user.user_id))[0]
         if counts["needs_pay"] > 0:
             first = await db.bookings.find_one(q, {"_id": 0, "booking_id": 1}, sort=[("created_at", -1)])
             if first:
@@ -15335,7 +15497,7 @@ async def provider_create_invoice(
     # Update booking status to completed_pending_payment
     await db.bookings.update_one(
         {"booking_id": data.booking_id},
-        {"$set": {"status": "completed_pending_payment", "invoice_id": invoice_id}}
+        {"$set": {"status": "completed_pending_payment", "invoice_id": invoice_id, "completed_at": datetime.now(timezone.utc)}}
     )
 
     # Notify client

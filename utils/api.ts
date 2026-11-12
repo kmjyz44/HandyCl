@@ -234,6 +234,22 @@ export const api = {
     const res = await client.get('/hero-slides');
     return res.data;
   },
+  adminGetUnpaidClients: async () => {
+    const res = await client.get('/admin/unpaid-clients');
+    return res.data;
+  },
+  adminGetPaidByAdmin: async () => {
+    const res = await client.get('/admin/paid-by-admin');
+    return res.data;
+  },
+  adminMarkPaid: async (kind: string, id: string, note?: string) => {
+    const res = await client.post('/admin/unpaid/mark-paid', { kind, id, note });
+    return res.data;
+  },
+  adminPaymentUnblock: async (userId: string) => {
+    const res = await client.post(`/admin/users/${userId}/payment-unblock`);
+    return res.data;
+  },
   adminGetHeroSlides: async () => {
     const res = await client.get('/admin/hero-slides');
     return res.data;

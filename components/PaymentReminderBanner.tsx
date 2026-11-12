@@ -13,6 +13,7 @@ type Reminders = {
   disputed?: number;
   first_pending_id?: string | null;
   first_pending_kind?: string | null;
+  blocked?: boolean;
 };
 
 export default function PaymentReminderBanner() {
@@ -46,8 +47,10 @@ export default function PaymentReminderBanner() {
   let testId = '';
 
   if (data.role === 'client' && (data.needs_pay || 0) > 0) {
-    title = `Pay for tasks (${data.needs_pay})`;
-    message = 'Pros are waiting for payment for completed work';
+    title = data.blocked ? 'New orders paused — payment overdue' : `Pay for tasks (${data.needs_pay})`;
+    message = data.blocked
+      ? 'Please pay for your completed service to book a new pro'
+      : 'Pros are waiting for payment for completed work';
     icon = 'card-outline';
     color = '#dc2626';
     bg = '#fef2f2';

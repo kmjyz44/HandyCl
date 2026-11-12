@@ -336,6 +336,7 @@ export default function Services() {
             { icon: 'mail', color: '#2563eb', label: 'Email', route: '/admin-email', tid: 'open-admin-email-btn' },
             { icon: 'happy', color: '#d946ef', label: 'Welcome Emails', route: '/admin-welcome-emails', tid: 'open-admin-welcome-emails-btn' },
             { icon: 'images', color: '#f97316', label: 'Home Slides', route: '/admin-hero-slides', tid: 'open-admin-hero-slides-btn' },
+            { icon: 'lock-closed', color: '#dc2626', label: 'Unpaid Clients', route: '/admin-unpaid-clients', tid: 'open-admin-unpaid-clients-btn' },
             { icon: 'search', color: '#0d9488', label: 'Search Insights', route: '/admin-search-stats', tid: 'open-admin-search-stats-btn' },
             { icon: 'clipboard', color: '#7c3aed', label: 'Bookings', route: '/admin-bookings', tid: 'open-admin-bookings-btn' },
             { icon: 'chatbubbles', color: '#0891b2', label: 'SMS', route: '/admin-sms', tid: 'open-admin-sms-btn' },
