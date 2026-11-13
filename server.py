@@ -9349,10 +9349,8 @@ _ARTICLE_TOPICS = [
 ]
 
 
-async def _article_cta(post: dict) -> str:
-    """Topic-matched 'find a pro' block at the end of an article."""
-    import html as _html
-    from urllib.parse import urlencode
+async def _article_topic(post: dict):
+    """(category_id, skill, 'a plumber', category doc) matched from the article's title/slug/tags."""
     text = " ".join([post.get("title") or "", post.get("slug") or "", " ".join(post.get("tags") or [])]).lower()
     cat_id, skill, who = "home_improvements", None, "a local pro"
     for pattern, cid, sk, label in _ARTICLE_TOPICS:
@@ -9361,7 +9359,15 @@ async def _article_cta(post: dict) -> str:
             break
     cat = await db.categories.find_one({"category_id": cat_id, "is_active": {"$ne": False}}, {"_id": 0})
     if not cat:
-        cat_id, skill, cat = None, None, None
+        return None, None, who, None
+    return cat_id, skill, who, cat
+
+
+async def _article_cta(post: dict) -> str:
+    """Topic-matched 'find a pro' block at the end of an article."""
+    import html as _html
+    from urllib.parse import urlencode
+    cat_id, skill, who, cat = await _article_topic(post)
     q = {"category": cat_id} if cat_id else {}
     if skill:
         q["skill"] = skill
@@ -13912,6 +13918,8 @@ async def get_blog_post(post_id: str, request: Request):
     post["comments"] = comments
     await _resolve_blog_author_names([post])
     await _resolve_blog_author_names(comments)
+    cat_id, skill, who, cat = await _article_topic(post)
+    post["cta"] = {"category_id": cat_id, "skill": skill, "who": who, "category_name": (cat or {}).get("name")}
     return post
 
 

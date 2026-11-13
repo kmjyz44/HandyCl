@@ -438,3 +438,5 @@ User wants but postponed. Spec agreed:
 ## 2026-06 — Unpaid clients blocking
 - Backend (block before /payments/reminders): client with completed_pending_payment + payment_status null/pending, completed_at older than 24h (UNPAID_BLOCK_HOURS) -> 403 PAYMENT_BLOCKED_MSG on POST /bookings, /client/bookings, /client/tasks. users.payment_unblocked_at waives services overdue before that time. Admin: GET /admin/unpaid-clients, POST /admin/users/{id}/payment-unblock, POST /admin/unpaid/mark-paid {kind,id,note} (status+payment_status paid, paid_by_admin*), GET /admin/paid-by-admin. reminders returns blocked.
 - Frontend: app/admin-unpaid-clients.tsx (tabs Unpaid / Paid by admin), nav "Unpaid Clients"; banner "New orders paused"; home wizard pre-check dialog (Pay now -> Orders). Tested iteration_26 (16/16 + regression).
+
+- 2026-06: In-app blog article (app/blog/[id].tsx) now shows "Need a plumber? / Find a plumber" CTA from API post.cta (_article_topic shared with SSR). Deep-link ref keyed by category|skill so repeated taps work.

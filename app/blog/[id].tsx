@@ -234,6 +234,24 @@ export default function BlogPostDetail() {
           </View>
         </View>
 
+        {post.cta && (
+          <View style={styles.ctaBox} data-testid="blog-find-pro-block">
+            <Text style={styles.ctaTitle}>Need {post.cta.who}?</Text>
+            <Text style={styles.ctaText}>Book {post.cta.who} near you — describe the job or snap a photo and get matched with a trusted local pro in minutes.</Text>
+            <TouchableOpacity
+              style={styles.ctaBtn}
+              data-testid="blog-find-pro-btn"
+              onPress={() => router.push({
+                pathname: '/(tabs)',
+                params: post.cta.category_id ? { category: post.cta.category_id, ...(post.cta.skill ? { skill: post.cta.skill } : {}) } : {},
+              } as any)}
+            >
+              <Ionicons name="search" size={18} color="#fff" />
+              <Text style={styles.ctaBtnText}>Find {post.cta.who}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Comments */}
         <View style={styles.commentsBlock}>
           <Text style={styles.commentsHeader}>Comments ({post.comments?.length || 0})</Text>
@@ -284,6 +302,11 @@ export default function BlogPostDetail() {
 }
 
 const styles = StyleSheet.create({
+  ctaBox: { marginHorizontal: 16, marginTop: 8, marginBottom: 8, padding: 18, borderRadius: 16, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' },
+  ctaTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 6 },
+  ctaText: { fontSize: 14, lineHeight: 20, color: '#334155', marginBottom: 14 },
+  ctaBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563eb', paddingVertical: 13, borderRadius: 12 },
+  ctaBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#f9fafb' },
   notFound: { color: '#6b7280', fontSize: 14, marginTop: 12 },
 

@@ -1224,13 +1224,14 @@ export default function HomeScreen() {
   );
 
   // Deep link from blog articles: /?category=<id>&skill=<name> opens that category (and sub-service).
-  const deepLinkDoneRef = useRef(false);
+  const deepLinkDoneRef = useRef('');
   useEffect(() => {
     const catId = bookParams?.category as string | undefined;
-    if (!catId || deepLinkDoneRef.current) return;
+    const key = `${catId}|${bookParams?.skill || ''}`;
+    if (!catId || deepLinkDoneRef.current === key) return;
     const cat = mergedCategories.find(c => c.id === catId);
     if (!cat) return;
-    deepLinkDoneRef.current = true;
+    deepLinkDoneRef.current = key;
     selectCategory(cat as any);
     const skill = bookParams?.skill as string | undefined;
     if (skill && cat.skills.includes(skill)) selectSkill(skill);
