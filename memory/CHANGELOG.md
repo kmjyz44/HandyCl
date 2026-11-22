@@ -447,3 +447,5 @@ User wants but postponed. Spec agreed:
 
 ## 2026-06 — Fix: pros search "nobody found"
 - Prod GET /api/executors/by-service hung >60s (other endpoints <0.2s) -> frontend catch -> empty list -> "no pros found". Cause: users aggregate with per-provider $lookup/$expr pipelines on tasks + availability_slots (no index use). Replaced with batched indexed queries (profiles, reviews $group, completed tasks $group, active slots); added index availability_slots(user_id,is_active). Output verified byte-identical on 5 local queries. /admin/executors still uses old $expr lookup (tasks) — candidate if admin list gets slow.
+
+- 2026-06 (follow-up): Prod still hangs (no first byte in 100s, event loop not blocked -> waiting on Mongo). Prod backend is OLD: /api/blog/posts/{id} lacks "cta" (Nov-13 code) -> Railway has not deployed recent pushes. Perf sim (60 pros, 30k tasks, 20k slots): old pipeline 0.51s vs batched 0.04s locally.
