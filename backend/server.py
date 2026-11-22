@@ -6047,55 +6047,36 @@ async def get_executors_by_service(
             _comm_cache[key] = max(0.0, min(rate, 99.0))
         return _comm_cache[key]
 
-    pipeline = [
-        # Only active, not blocked, not hidden by admin
-        {"$match": {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}, "search_paused": {"$ne": True}}},
-        {"$lookup": {
-            "from": "executor_profiles",
-            "localField": "user_id",
-            "foreignField": "user_id",
-            "as": "profile"
-        }},
-        {"$lookup": {
-            "from": "reviews",
-            "localField": "user_id",
-            "foreignField": "provider_id",
-            "as": "reviews"
-        }},
-        {"$lookup": {
-            "from": "tasks",
-            "let": {"uid": "$user_id"},
-            "pipeline": [{"$match": {"$expr": {"$and": [
-                {"$eq": ["$provider_id", "$$uid"]},
-                {"$eq": ["$status", "completed"]}
-            ]}}}],
-            "as": "completed_tasks"
-        }},
-        {"$lookup": {
-            "from": "availability_slots",
-            "let": {"uid": "$user_id"},
-            "pipeline": [{"$match": {"$expr": {"$and": [
-                {"$eq": ["$user_id", "$$uid"]},
-                {"$eq": ["$is_active", True]}
-            ]}}}],
-            "as": "availability_slots"
-        }},
-        {"$addFields": {
-            "profile": {"$arrayElemAt": ["$profile", 0]},
-            "total_reviews": {"$size": "$reviews"},
-            "average_rating": {
-                "$cond": {
-                    "if": {"$gt": [{"$size": "$reviews"}, 0]},
-                    "then": {"$avg": "$reviews.rating"},
-                    "else": 0
-                }
-            },
-            "completed_tasks_count": {"$size": "$completed_tasks"}
-        }},
-        {"$project": {"_id": 0, "password_hash": 0, "reviews": 0, "completed_tasks": 0, "profile._id": 0, "availability_slots._id": 0}}
-    ]
-
-    result = await db.users.aggregate(pipeline).to_list(1000)
+    # Batched lookups (one indexed query per collection) instead of per-provider
+    # $lookup/$expr pipelines, which scanned tasks/slots for every provider and
+    # made this endpoint time out on production data.
+    result = await db.users.find(
+        {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}, "search_paused": {"$ne": True}},
+        {"_id": 0, "password_hash": 0},
+    ).to_list(1000)
+    _uids = [u["user_id"] for u in result if u.get("user_id")]
+    _profiles = {p["user_id"]: p for p in await db.executor_profiles.find({"user_id": {"$in": _uids}}, {"_id": 0}).to_list(2000)}
+    _rev = {r["_id"]: r for r in await db.reviews.aggregate([
+        {"$match": {"provider_id": {"$in": _uids}}},
+        {"$group": {"_id": "$provider_id", "n": {"$sum": 1}, "avg": {"$avg": "$rating"}}},
+    ]).to_list(2000)}
+    _done = {r["_id"]: r["n"] for r in await db.tasks.aggregate([
+        {"$match": {"provider_id": {"$in": _uids}, "status": "completed"}},
+        {"$group": {"_id": "$provider_id", "n": {"$sum": 1}}},
+    ]).to_list(2000)}
+    _slots: Dict[str, list] = {}
+    for sl in await db.availability_slots.find({"user_id": {"$in": _uids}, "is_active": True}, {"_id": 0}).to_list(20000):
+        _slots.setdefault(sl["user_id"], []).append(sl)
+    for u in result:
+        uid = u.get("user_id")
+        r = _rev.get(uid) or {}
+        u["profile"] = _profiles.get(uid)
+        u["total_reviews"] = r.get("n", 0)
+        u["average_rating"] = (r.get("avg") or 0) if r.get("n") else 0
+        u["completed_tasks_count"] = _done.get(uid, 0)
+        u["availability_slots"] = _slots.get(uid, [])
+        if u["profile"] is None:
+            u.pop("profile")
 
     # If the client supplied a city/address but no coordinates (e.g. the
     # browser-side geocoder was blocked, common for guests), geocode it
@@ -17429,6 +17410,7 @@ async def _ensure_indexes():
             ("users", [("email", 1)]),
             ("users", [("role", 1)]),
             ("executor_profiles", [("user_id", 1)]),
+            ("availability_slots", [("user_id", 1), ("is_active", 1)]),
             ("bookings", [("provider_id", 1), ("category", 1), ("status", 1)]),
             ("bookings", [("client_id", 1)]),
             ("bookings", [("booking_id", 1)]),

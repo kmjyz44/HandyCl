@@ -444,3 +444,6 @@ User wants but postponed. Spec agreed:
 - 2026-06: Booking Address city chips now from STATE_CITIES[booking.state] (all 50 states; Illinois incl. Niles/Skokie/Evanston...). IP city only added if visitor is in US and same state. Removed CITIES_BY_COUNTRY (fallback was UA -> Kyiv/Kharkiv for non-listed countries e.g. Sweden VPN).
 
 - 2026-06: "Book this pro" fix: with forcedProvider the guest hero / installed-PWA focused view are skipped so the "Booking <pro>" banner + category grid are visible right away; banner has step hint + "Message <pro>" (guests -> /login).
+
+## 2026-06 — Fix: pros search "nobody found"
+- Prod GET /api/executors/by-service hung >60s (other endpoints <0.2s) -> frontend catch -> empty list -> "no pros found". Cause: users aggregate with per-provider $lookup/$expr pipelines on tasks + availability_slots (no index use). Replaced with batched indexed queries (profiles, reviews $group, completed tasks $group, active slots); added index availability_slots(user_id,is_active). Output verified byte-identical on 5 local queries. /admin/executors still uses old $expr lookup (tasks) — candidate if admin list gets slow.
