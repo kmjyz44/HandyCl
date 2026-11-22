@@ -440,3 +440,5 @@ User wants but postponed. Spec agreed:
 - Frontend: app/admin-unpaid-clients.tsx (tabs Unpaid / Paid by admin), nav "Unpaid Clients"; banner "New orders paused"; home wizard pre-check dialog (Pay now -> Orders). Tested iteration_26 (16/16 + regression).
 
 - 2026-06: In-app blog article (app/blog/[id].tsx) now shows "Need a plumber? / Find a plumber" CTA from API post.cta (_article_topic shared with SSR). Deep-link ref keyed by category|skill so repeated taps work.
+
+- 2026-06: Booking Address city chips now from STATE_CITIES[booking.state] (all 50 states; Illinois incl. Niles/Skokie/Evanston...). IP city only added if visitor is in US and same state. Removed CITIES_BY_COUNTRY (fallback was UA -> Kyiv/Kharkiv for non-listed countries e.g. Sweden VPN).

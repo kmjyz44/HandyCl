@@ -190,6 +190,59 @@ const getNext7Availability = (slots?: any[]) => {
   return out;
 };
 
+const STATE_CITIES: Record<string, string[]> = {
+  Alabama: ['Birmingham', 'Montgomery', 'Huntsville', 'Mobile', 'Tuscaloosa'],
+  Alaska: ['Anchorage', 'Fairbanks', 'Juneau', 'Wasilla', 'Sitka'],
+  Arizona: ['Phoenix', 'Tucson', 'Mesa', 'Chandler', 'Scottsdale'],
+  Arkansas: ['Little Rock', 'Fayetteville', 'Fort Smith', 'Springdale', 'Jonesboro'],
+  California: ['Los Angeles', 'San Diego', 'San Jose', 'San Francisco', 'Sacramento'],
+  Colorado: ['Denver', 'Colorado Springs', 'Aurora', 'Fort Collins', 'Boulder'],
+  Connecticut: ['Bridgeport', 'New Haven', 'Stamford', 'Hartford', 'Waterbury'],
+  Delaware: ['Wilmington', 'Dover', 'Newark', 'Middletown', 'Smyrna'],
+  Florida: ['Miami', 'Orlando', 'Tampa', 'Jacksonville', 'Fort Lauderdale'],
+  Georgia: ['Atlanta', 'Savannah', 'Augusta', 'Columbus', 'Macon'],
+  Hawaii: ['Honolulu', 'Hilo', 'Kailua', 'Kapolei', 'Kahului'],
+  Idaho: ['Boise', 'Meridian', 'Nampa', 'Idaho Falls', 'Pocatello'],
+  Illinois: ['Chicago', 'Niles', 'Skokie', 'Evanston', 'Des Plaines', 'Schaumburg', 'Naperville', 'Aurora', 'Joliet', 'Rockford'],
+  Indiana: ['Indianapolis', 'Fort Wayne', 'Evansville', 'South Bend', 'Carmel'],
+  Iowa: ['Des Moines', 'Cedar Rapids', 'Davenport', 'Sioux City', 'Iowa City'],
+  Kansas: ['Wichita', 'Overland Park', 'Kansas City', 'Olathe', 'Topeka'],
+  Kentucky: ['Louisville', 'Lexington', 'Bowling Green', 'Owensboro', 'Covington'],
+  Louisiana: ['New Orleans', 'Baton Rouge', 'Shreveport', 'Lafayette', 'Lake Charles'],
+  Maine: ['Portland', 'Lewiston', 'Bangor', 'South Portland', 'Auburn'],
+  Maryland: ['Baltimore', 'Columbia', 'Germantown', 'Silver Spring', 'Frederick'],
+  Massachusetts: ['Boston', 'Worcester', 'Springfield', 'Cambridge', 'Lowell'],
+  Michigan: ['Detroit', 'Grand Rapids', 'Warren', 'Ann Arbor', 'Lansing'],
+  Minnesota: ['Minneapolis', 'Saint Paul', 'Rochester', 'Duluth', 'Bloomington'],
+  Mississippi: ['Jackson', 'Gulfport', 'Southaven', 'Hattiesburg', 'Biloxi'],
+  Missouri: ['Kansas City', 'St. Louis', 'Springfield', 'Columbia', 'Independence'],
+  Montana: ['Billings', 'Missoula', 'Great Falls', 'Bozeman', 'Helena'],
+  Nebraska: ['Omaha', 'Lincoln', 'Bellevue', 'Grand Island', 'Kearney'],
+  Nevada: ['Las Vegas', 'Henderson', 'Reno', 'North Las Vegas', 'Sparks'],
+  'New Hampshire': ['Manchester', 'Nashua', 'Concord', 'Dover', 'Rochester'],
+  'New Jersey': ['Newark', 'Jersey City', 'Paterson', 'Edison', 'Trenton'],
+  'New Mexico': ['Albuquerque', 'Las Cruces', 'Rio Rancho', 'Santa Fe', 'Roswell'],
+  'New York': ['New York', 'Buffalo', 'Rochester', 'Yonkers', 'Syracuse'],
+  'North Carolina': ['Charlotte', 'Raleigh', 'Greensboro', 'Durham', 'Winston-Salem'],
+  'North Dakota': ['Fargo', 'Bismarck', 'Grand Forks', 'Minot', 'West Fargo'],
+  Ohio: ['Columbus', 'Cleveland', 'Cincinnati', 'Toledo', 'Akron'],
+  Oklahoma: ['Oklahoma City', 'Tulsa', 'Norman', 'Broken Arrow', 'Edmond'],
+  Oregon: ['Portland', 'Salem', 'Eugene', 'Gresham', 'Bend'],
+  Pennsylvania: ['Philadelphia', 'Pittsburgh', 'Allentown', 'Erie', 'Reading'],
+  'Rhode Island': ['Providence', 'Warwick', 'Cranston', 'Pawtucket', 'Newport'],
+  'South Carolina': ['Charleston', 'Columbia', 'Greenville', 'Myrtle Beach', 'Rock Hill'],
+  'South Dakota': ['Sioux Falls', 'Rapid City', 'Aberdeen', 'Brookings', 'Watertown'],
+  Tennessee: ['Nashville', 'Memphis', 'Knoxville', 'Chattanooga', 'Clarksville'],
+  Texas: ['Houston', 'Dallas', 'San Antonio', 'Austin', 'Fort Worth'],
+  Utah: ['Salt Lake City', 'West Valley City', 'Provo', 'West Jordan', 'Orem'],
+  Vermont: ['Burlington', 'South Burlington', 'Rutland', 'Barre', 'Montpelier'],
+  Virginia: ['Virginia Beach', 'Richmond', 'Norfolk', 'Arlington', 'Alexandria'],
+  Washington: ['Seattle', 'Spokane', 'Tacoma', 'Bellevue', 'Vancouver'],
+  'West Virginia': ['Charleston', 'Huntington', 'Morgantown', 'Parkersburg', 'Wheeling'],
+  Wisconsin: ['Milwaukee', 'Madison', 'Green Bay', 'Kenosha', 'Racine'],
+  Wyoming: ['Cheyenne', 'Casper', 'Laramie', 'Gillette', 'Rock Springs'],
+};
+
 const US_STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'];
 
 
@@ -611,7 +664,7 @@ export default function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookParams?.bookProvider]);
   const [userCountry, setUserCountry] = useState<string>('US'); // default US
-  const [quickCities, setQuickCities] = useState<string[]>(['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia']);
+  const [ipCity, setIpCity] = useState<{ city: string; region: string } | null>(null);
   const [calDayIdx, setCalDayIdx] = useState(0); // for datetime step — must be here (Rules of Hooks)
   const [anyDayTime, setAnyDayTime] = useState(false); // "any day and time" checkbox
   const [unreadNotifs, setUnreadNotifs] = useState(0);
@@ -661,38 +714,15 @@ export default function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumingBooking, user?.user_id, booking.selectedTasker]);
 
-  // Detect user country via IP on mount
+  // Detect the visitor's US city via IP so it can be offered first (only for US visitors)
   React.useEffect(() => {
     fetch('https://ipapi.co/json/')
       .then(r => r.json())
       .then(data => {
-        const country = data.country_code || 'US';
-        const city = data.city || '';
-        setUserCountry(country);
-        const CITIES_BY_COUNTRY: Record<string, string[]> = {
-          UA: ['Kyiv', 'Kharkiv', 'Odesa', 'Dnipro', 'Lviv', 'Zaporizhzhia'],
-          US: ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia'],
-          PL: ['Warszawa', 'Kraków', 'Wrocław', 'Poznań', 'Gdańsk', 'Łódź'],
-          DE: ['Berlin', 'Hamburg', 'München', 'Köln', 'Frankfurt', 'Stuttgart'],
-          GB: ['London', 'Birmingham', 'Manchester', 'Leeds', 'Glasgow', 'Liverpool'],
-          FR: ['Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes'],
-          ES: ['Madrid', 'Barcelona', 'Valencia', 'Seville', 'Zaragoza', 'Málaga'],
-          IT: ['Roma', 'Milano', 'Napoli', 'Torino', 'Palermo', 'Genova'],
-          CZ: ['Praha', 'Brno', 'Ostrava', 'Plzeň', 'Liberec', 'Olomouc'],
-          CA: ['Toronto', 'Montreal', 'Vancouver', 'Calgary', 'Edmonton', 'Ottawa'],
-          AU: ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 'Canberra'],
-        };
-        const cities = CITIES_BY_COUNTRY[country] || CITIES_BY_COUNTRY['UA'];
-        // Put detected city first if available and not already in list
-        if (city && !cities.includes(city)) {
-          setQuickCities([city, ...cities.slice(0, 5)]);
-        } else if (city && cities.includes(city)) {
-          setQuickCities([city, ...cities.filter(c => c !== city).slice(0, 5)]);
-        } else {
-          setQuickCities(cities);
-        }
+        setUserCountry(data.country_code || 'US');
+        if (data.country_code === 'US' && data.city && data.region) setIpCity({ city: data.city, region: data.region });
       })
-      .catch(() => {}); // silently fail, keep defaults
+      .catch(() => {});
   }, []);
 
   // Load DB categories so admin-uploaded cover images and overrides show up
@@ -2018,7 +2048,10 @@ export default function HomeScreen() {
           <Text style={s.fieldLabel}>City</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
             <View style={[s.chipsRow, { flexWrap: 'nowrap' }]}>
-              {quickCities.map(city => (
+              {(() => {
+                const list = STATE_CITIES[booking.state] || [];
+                return ipCity && ipCity.region === booking.state ? [ipCity.city, ...list.filter(c => c !== ipCity.city)].slice(0, 6) : list;
+              })().map(city => (
                 <TouchableOpacity key={city} style={[s.chip, booking.city === city && s.chipActive]} onPress={() => setBooking(b => ({ ...b, city }))}>
                   <Text style={[s.chipText, booking.city === city && s.chipTextActive]}>{city}</Text>
                 </TouchableOpacity>
