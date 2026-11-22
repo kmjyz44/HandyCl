@@ -1273,8 +1273,8 @@ export default function HomeScreen() {
   // STEP: HOME — category grid (landing for guests, dashboard-like for authed clients)
   if (step === 'home') {
     const isGuest = !user;
-    const focusedScan = isStandalone && !showFullHome;
-    const heroMode = isGuest && !focusedScan;
+    const focusedScan = isStandalone && !showFullHome && !forcedProvider;
+    const heroMode = isGuest && !focusedScan && !forcedProvider;
     const topTools = (
       <>
           {/* AI photo-first block — primary CTA, the first thing users see */}
@@ -1513,7 +1513,18 @@ export default function HomeScreen() {
           {forcedProvider ? (
             <View style={s.bookingProviderBanner} data-testid="booking-provider-banner">
               <Ionicons name="person-circle" size={22} color="#2563eb" />
-              <Text style={s.bookingProviderText}>Booking <Text style={{ fontWeight: '800' }}>{forcedProvider.name}</Text> — pick a category & date</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.bookingProviderText}>Booking <Text style={{ fontWeight: '800' }}>{forcedProvider.name}</Text></Text>
+                <Text style={s.bookingProviderHint}>Step 1: choose what you need below. Then add details, address and pick one of {forcedProvider.name}'s available dates.</Text>
+                <TouchableOpacity
+                  style={s.bookingProviderMsgBtn}
+                  onPress={() => (user ? router.push(`/(tabs)/messages?userId=${forcedProvider.user_id}` as any) : router.push('/login' as any))}
+                  data-testid="forced-provider-message-btn"
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={16} color="#2563eb" />
+                  <Text style={s.bookingProviderMsgText}>Message {forcedProvider.name}</Text>
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity onPress={() => { setForcedProvider(null); setProviderAvailableDays([]); setBooking(b => ({ ...b, selectedTasker: null })); }} data-testid="cancel-forced-provider">
                 <Ionicons name="close-circle" size={20} color="#9ca3af" />
               </TouchableOpacity>
@@ -3328,8 +3339,11 @@ const s = StyleSheet.create({
   scanTagline: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 2 },
   browseAllBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, paddingVertical: 13, marginTop: 4 },
   browseAllText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
-  bookingProviderBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 },
-  bookingProviderText: { flex: 1, fontSize: 13, color: '#1e40af' },
+  bookingProviderBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 },
+  bookingProviderText: { fontSize: 15, color: '#1e40af' },
+  bookingProviderHint: { fontSize: 12, color: '#334155', marginTop: 4, lineHeight: 17 },
+  bookingProviderMsgBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 8, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: '#bfdbfe' },
+  bookingProviderMsgText: { color: '#2563eb', fontWeight: '700', fontSize: 13 },
   noResults: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16, gap: 8 },
   noResultsTitle: { fontSize: 15, fontWeight: '700', color: '#374151', textAlign: 'center' },
   noResultsSub: { fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 6 },

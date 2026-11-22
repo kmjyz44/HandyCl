@@ -442,3 +442,5 @@ User wants but postponed. Spec agreed:
 - 2026-06: In-app blog article (app/blog/[id].tsx) now shows "Need a plumber? / Find a plumber" CTA from API post.cta (_article_topic shared with SSR). Deep-link ref keyed by category|skill so repeated taps work.
 
 - 2026-06: Booking Address city chips now from STATE_CITIES[booking.state] (all 50 states; Illinois incl. Niles/Skokie/Evanston...). IP city only added if visitor is in US and same state. Removed CITIES_BY_COUNTRY (fallback was UA -> Kyiv/Kharkiv for non-listed countries e.g. Sweden VPN).
+
+- 2026-06: "Book this pro" fix: with forcedProvider the guest hero / installed-PWA focused view are skipped so the "Booking <pro>" banner + category grid are visible right away; banner has step hint + "Message <pro>" (guests -> /login).
