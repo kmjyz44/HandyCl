@@ -5547,7 +5547,7 @@ async def get_provider_tasks_with_prices(current_user: User = Depends(get_curren
     }
 
 @api_router.get("/executors")
-async def get_all_executors(current_user: User = Depends(get_current_user)):
+async def get_all_executors(request: Request, current_user: User = Depends(get_current_user)):
     """Get list of all executors/providers with optimized queries"""
     # Use aggregation pipeline to avoid N+1 queries
     pipeline = [
@@ -5578,12 +5578,19 @@ async def get_all_executors(current_user: User = Depends(get_current_user)):
         {"$project": {
             "_id": 0,
             "password_hash": 0,
+            "payment_methods": 0,
+            "saved_addresses": 0,
             "reviews": 0,
-            "profile._id": 0
-        }}
+            "profile._id": 0,
+            "profile.portfolio_photos": 0,
+            "profile.skills.photos": 0,
+            "profile.certifications": 0,
+        }},
+        {"$addFields": {"picture": _light_picture_expr()}},
     ]
 
     result = await db.users.aggregate(pipeline).to_list(1000)
+    _resolve_avatar_urls(result, request)
 
     # Round average ratings
     for executor in result:
@@ -14046,8 +14053,13 @@ async def list_blog_posts(
         q["author_role"] = author_role
 
     sort_order = [("is_pinned", -1), ("created_at", -1)] if pinned_first else [("created_at", -1)]
-    cursor = db.blog_posts.find(q, {"_id": 0}).sort(sort_order).skip(max(0, offset)).limit(min(50, max(1, limit)))
-    posts = await cursor.to_list(50)
+    # List view: no full article HTML and a short description (the article page loads the rest).
+    posts = await db.blog_posts.aggregate([
+        {"$match": q}, {"$sort": dict(sort_order)},
+        {"$skip": max(0, offset)}, {"$limit": min(50, max(1, limit))},
+        {"$project": {"_id": 0, "content_html": 0}},
+        {"$addFields": {"description": {"$substrCP": [{"$ifNull": ["$description", ""]}, 0, 600]}}},
+    ]).to_list(50)
 
     # Add liked_by_me flag for the requesting user (if logged in)
     me_id: Optional[str] = None
