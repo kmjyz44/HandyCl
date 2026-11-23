@@ -19,4 +19,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN echo "build ${CACHE_BUST} sha=${BUILD_SHA}" > /app/.build-info
 
 COPY . .
-CMD uvicorn server:app --host 0.0.0.0 --port $PORT
+CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"]

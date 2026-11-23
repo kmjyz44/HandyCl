@@ -713,3 +713,6 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - 2026-06: Guest landing redesigned with auto-sliding hero carousel (components/HeroCarousel.tsx). Needs Netlify deploy to go live.
 
 - 2026-06: Admin "Home Slides" (seasonal hero slides with dates/on-off, object storage). Needs GitHub push + Netlify/Railway deploy; Railway must have EMERGENT_LLM_KEY.
+
+## 2026-06 Railway start fix
+- Dockerfile CMD -> sh -c with ${PORT:-8000}; railway.json startCommand added; Procfile/nixpacks/start.sh same; feedparser added to root requirements.txt
