@@ -121,11 +121,11 @@ export default function Executors() {
   const applySearch = (list: Executor[]) => {
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase().trim();
+    const skillText = (s: any) => String(typeof s === 'string' ? s : (s?.name || s?.label || '')).toLowerCase();
     return list.filter(e =>
-      e.name?.toLowerCase().includes(q) ||
-      e.email?.toLowerCase().includes(q) ||
-      e.profile?.skills?.some(s => s.toLowerCase().includes(q)) ||
-      e.profile?.bio?.toLowerCase().includes(q)
+      String(e.name || '').toLowerCase().includes(q) ||
+      (e.profile?.skills || []).some((s: any) => skillText(s).includes(q)) ||
+      String(e.profile?.bio || '').toLowerCase().includes(q)
     );
   };
 
