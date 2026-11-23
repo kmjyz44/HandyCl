@@ -6697,8 +6697,14 @@ async def get_available_executors(
         client_lat = client_lng = None
 
     # Apply filters
+    _today = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
     filtered = []
     for executor in executors:
+        # Only active, upcoming slots are useful to clients (keeps the payload small).
+        executor["availability"] = [
+            sl for sl in (executor.get("availability") or [])
+            if sl.get("is_active", True) and (not sl.get("specific_date") or str(sl["specific_date"])[:10] >= _today)
+        ]
         # Hide pros with no configured work zone. When the client has a known
         # location, also hide pros whose zone doesn't cover it.
         has_config, covers = _provider_service_match(executor, client_city, client_lat, client_lng)

@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { api } from '../../utils/api';
+import { ProAvailabilityModal, upcomingAvailability } from '../../components/ProAvailabilityModal';
 
 interface Executor {
   user_id: string;
@@ -53,6 +54,7 @@ export default function Executors() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [minRating, setMinRating] = useState<number | null>(null);
+  const [calPro, setCalPro] = useState<Executor | null>(null);
 
   const loadFavorites = useCallback(async () => {
     try {
@@ -347,13 +349,18 @@ export default function Executors() {
                   ) : null}
                 </View>
               ) : null}
-              {executor.availability && executor.availability.length > 0 ? (
-                <View style={styles.availabilityContainer}>
-                  <Ionicons name="calendar-outline" size={14} color="#10b981" />
-                  <Text style={styles.availabilityText}>
-                    Available: {executor.availability.map((slot: any) => DAYS[slot.day_of_week]).join(', ')}
-                  </Text>
-                </View>
+              {!executor.is_inactive && executor.availability && upcomingAvailability(executor.availability).length > 0 ? (
+                <TouchableOpacity
+                  style={styles.availabilityContainer}
+                  onPress={(e) => { e.stopPropagation?.(); setCalPro(executor); }}
+                  data-testid={`pro-available-btn-${executor.user_id}`}
+                >
+                  <Text style={styles.availabilityText}>Available</Text>
+                  <View style={styles.calIconBtn}>
+                    <Ionicons name="calendar" size={16} color="#059669" />
+                    <Text style={styles.calIconText}>See dates</Text>
+                  </View>
+                </TouchableOpacity>
               ) : null}
               <View style={styles.cardFooter}>
                 <TouchableOpacity
@@ -368,6 +375,13 @@ export default function Executors() {
           ))
         )}
       </ScrollView>
+      <ProAvailabilityModal
+        visible={!!calPro}
+        name={calPro?.name || 'Pro'}
+        slots={calPro?.availability || []}
+        onClose={() => setCalPro(null)}
+        onBook={() => { const id = calPro?.user_id; setCalPro(null); if (id) router.push(`/executor/${id}` as any); }}
+      />
     </View>
   );
 }
@@ -425,7 +439,9 @@ const styles = StyleSheet.create({
   skillBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   skillText: { fontSize: 12, color: '#2563eb', fontWeight: '500' },
   availabilityContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 6 },
-  availabilityText: { fontSize: 12, color: '#10b981' },
+  availabilityText: { fontSize: 13, color: '#059669', fontWeight: '700' },
+  calIconBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
+  calIconText: { fontSize: 12, color: '#059669', fontWeight: '700' },
   cardFooter: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
   viewProfileButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   viewProfileText: { fontSize: 14, fontWeight: '600', color: '#2563eb' },
