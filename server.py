@@ -5369,18 +5369,52 @@ async def create_executor_profile(profile_data: ExecutorProfileCreate, current_u
         return profile.dict()
 
 @api_router.get("/profile/executor/{user_id}")
-async def get_executor_profile(user_id: str, current_user: Optional[User] = Depends(get_current_user_optional)):
+async def get_executor_profile(user_id: str, request: Request, current_user: Optional[User] = Depends(get_current_user_optional)):
     """Get executor profile by user_id.
 
     Prices shown to CLIENTS/guests include the platform commission; the profile
     owner and admins see the raw (net) rates they set themselves.
     """
-    profile = await db.executor_profiles.find_one({"user_id": user_id}, {"_id": 0})
+    # Inline base64 photos are swapped for per-photo URLs server-side (DB link is slow).
+    _long = lambda v: {"$gt": [{"$strLenBytes": {"$ifNull": [v, ""]}}, _AVATAR_INLINE_MAX]}
+    rows = await db.executor_profiles.aggregate([
+        {"$match": {"user_id": user_id}},
+        {"$limit": 1},
+        {"$project": {"_id": 0, "certifications": 0}},
+        {"$addFields": {
+            "portfolio_photos": {"$map": {"input": {"$ifNull": ["$portfolio_photos", []]}, "as": "p",
+                                          "in": {"$cond": [_long("$$p"), {"$concat": ["__PHOTO__", {"$toString": {"$strLenBytes": "$$p"}}]}, "$$p"]}}},
+            "skills": {"$map": {"input": {"$ifNull": ["$skills", []]}, "as": "sk", "in": {"$cond": [
+                {"$and": [{"$eq": [{"$type": "$$sk"}, "object"]}, {"$isArray": "$$sk.photos"}]},
+                {"$mergeObjects": ["$$sk", {"photos": {"$map": {"input": "$$sk.photos", "as": "ph", "in": {"$cond": [
+                    {"$eq": [{"$type": "$$ph"}, "object"]},
+                    {"$mergeObjects": ["$$ph", {"uri": {"$cond": [_long("$$ph.uri"), {"$concat": ["__PHOTO__", {"$toString": {"$strLenBytes": "$$ph.uri"}}]}, "$$ph.uri"]}}]},
+                    "$$ph"]}}}}]},
+                "$$sk"]}}},
+        }},
+    ]).to_list(1)
+    profile = rows[0] if rows else None
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
+    _base = _avatar_base_url(request)
+    profile["portfolio_photos"] = [
+        f"{_base}/api/executors/{user_id}/photo/p/{i}?v={ph[9:]}" if isinstance(ph, str) and ph.startswith("__PHOTO__") else ph
+        for i, ph in enumerate(profile.get("portfolio_photos") or [])
+    ]
+    for si, sk in enumerate(profile.get("skills") or []):
+        if isinstance(sk, dict) and isinstance(sk.get("photos"), list):
+            for pi, ph in enumerate(sk["photos"]):
+                if isinstance(ph, dict) and str(ph.get("uri") or "").startswith("__PHOTO__"):
+                    ph["uri"] = f"{_base}/api/executors/{user_id}/photo/s/{si}/{pi}?v={ph['uri'][9:]}"
 
     # Get user details
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    user = (await db.users.aggregate([
+        {"$match": {"user_id": user_id}}, {"$limit": 1},
+        {"$project": {"_id": 0, "password_hash": 0, "payment_methods": 0, "saved_addresses": 0}},
+        {"$addFields": {"picture": _light_picture_expr()}},
+    ]).to_list(1) or [None])[0]
+    if user:
+        _resolve_avatar_urls([user], request)
 
     # Get reviews
     reviews = await db.reviews.find({"provider_id": user_id}, {"_id": 0}).to_list(100)
@@ -6028,10 +6062,52 @@ def _resolve_avatar_urls(items: list, request: Request):
             u["picture"] = f"{base}/api/users/{u.get('user_id')}/avatar?v={pic[10:]}"
 
 
-@api_router.get("/users/{user_id}/avatar")
-async def get_user_avatar(user_id: str):
+_photo_cache: Dict[str, tuple] = {}
+
+
+def _data_uri_bytes(pic: str):
     import base64 as _b64
-    hit = _avatar_cache.get(user_id)
+    header, _, data = pic.partition(",")
+    return (header[5:].split(";")[0] or "image/jpeg"), _b64.b64decode(data)
+
+
+async def _serve_profile_photo(key: str, user_id: str, expr):
+    hit = _photo_cache.get(key)
+    if not hit:
+        rows = await db.executor_profiles.aggregate([
+            {"$match": {"user_id": user_id}}, {"$limit": 1},
+            {"$project": {"_id": 0, "v": expr}},
+        ]).to_list(1)
+        v = rows[0].get("v") if rows else None
+        if isinstance(v, dict):
+            v = v.get("uri")
+        if not isinstance(v, str) or not v:
+            raise HTTPException(status_code=404, detail="Photo not found")
+        if not v.startswith("data:"):
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(v)
+        hit = _data_uri_bytes(v)
+        if sum(len(x[1]) for x in _photo_cache.values()) > 80_000_000:
+            _photo_cache.clear()
+        _photo_cache[key] = hit
+    return Response(content=hit[1], media_type=hit[0], headers={"Cache-Control": "public, max-age=86400"})
+
+
+@api_router.get("/executors/{user_id}/photo/p/{idx}")
+async def get_portfolio_photo(user_id: str, idx: int, v: str = ""):
+    return await _serve_profile_photo(f"{user_id}:p:{idx}:{v}", user_id, {"$arrayElemAt": ["$portfolio_photos", idx]})
+
+
+@api_router.get("/executors/{user_id}/photo/s/{si}/{pi}")
+async def get_skill_photo(user_id: str, si: int, pi: int, v: str = ""):
+    expr = {"$let": {"vars": {"sk": {"$arrayElemAt": ["$skills", si]}}, "in": {"$arrayElemAt": ["$$sk.photos", pi]}}}
+    return await _serve_profile_photo(f"{user_id}:s:{si}:{pi}:{v}", user_id, expr)
+
+
+@api_router.get("/users/{user_id}/avatar")
+async def get_user_avatar(user_id: str, v: str = ""):
+    import base64 as _b64
+    hit = _avatar_cache.get(f"{user_id}:{v}")
     if not hit:
         u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "picture": 1}) or {}
         pic = u.get("picture") or ""
@@ -6045,7 +6121,7 @@ async def get_user_avatar(user_id: str):
         hit = (mime, _b64.b64decode(data))
         if len(_avatar_cache) > 300:
             _avatar_cache.clear()
-        _avatar_cache[user_id] = hit
+        _avatar_cache[f"{user_id}:{v}"] = hit
     return Response(content=hit[1], media_type=hit[0], headers={"Cache-Control": "public, max-age=86400"})
 
 

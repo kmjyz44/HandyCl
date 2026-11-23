@@ -723,3 +723,4 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - Prod diag: 8 profiles = 26.7MB (base64 photos). Search now excludes portfolio_photos, skills.photos, certifications; pro profile step lazy-loads them.
 - Calendar fix: booking date values used toISOString (UTC) -> wrong day in US evenings; replaced with local Y-M-D in index.tsx, ScheduleModal, service pages, admin-hero-slides.
 - Prod DB link ~100KB/s: search lists now replace base64 avatars (>2KB) with /api/users/{id}/avatar URL (in-memory cached); saved_addresses removed from lists.
+- Public pro profile (/profile/executor/{id}) now returns photo URLs (/api/executors/{id}/photo/p/{i}, /photo/s/{si}/{pi}) served from cached server endpoints; avatar via /api/users/{id}/avatar.
