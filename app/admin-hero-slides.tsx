@@ -36,7 +36,7 @@ function CategoryPicker({ cats, value, onChange }: { cats: Cat[]; value?: string
 }
 
 const EMPTY: Slide = { tag: '', title: '', accent: '', active: true, start_date: null, end_date: null, order: 0 };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 const statusOf = (sl: Slide) => {
   const t = today();

@@ -121,7 +121,7 @@ export default function ServiceDetail() {
     try {
       const bookingData = {
         service_id: service.service_id,
-        date: selectedDate.toISOString().split('T')[0],
+        date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`,
         time: selectedTime.toTimeString().split(' ')[0].substring(0, 5),
         address: address.trim(),
         problem_description: problemDescription.trim(),

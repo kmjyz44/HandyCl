@@ -257,7 +257,7 @@ function getDates() {
       label: `${months[d.getMonth()]} ${d.getDate()}`,
       dayName: days[d.getDay()],
       dayNum: d.getDate(),
-      value: d.toISOString().split('T')[0],
+      value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
     });
   }
   return dates;

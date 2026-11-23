@@ -721,3 +721,4 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - Pros tab (/executors/available): paused pros shown last with is_inactive badge "Not active right now"; profile page shows disabled notice instead of Book; POST /bookings rejects paused provider (409). Booking search still hides paused. Provider banner Reactivate already existed.
 - Search payload: portfolio_photos excluded (lazy-loaded on pro profile step); /api/diag/search-timing added for prod profiling.
 - Prod diag: 8 profiles = 26.7MB (base64 photos). Search now excludes portfolio_photos, skills.photos, certifications; pro profile step lazy-loads them.
+- Calendar fix: booking date values used toISOString (UTC) -> wrong day in US evenings; replaced with local Y-M-D in index.tsx, ScheduleModal, service pages, admin-hero-slides.

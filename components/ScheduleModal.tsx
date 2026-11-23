@@ -24,7 +24,7 @@ function nextDates(count = 14): { value: string; dayName: string; label: string 
   const out: { value: string; dayName: string; label: string }[] = [];
   for (let i = 0; i < count; i++) {
     const d = new Date(); d.setDate(d.getDate() + i);
-    out.push({ value: d.toISOString().split('T')[0], dayName: days[d.getDay()], label: `${months[d.getMonth()]} ${d.getDate()}` });
+    out.push({ value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, dayName: days[d.getDay()], label: `${months[d.getMonth()]} ${d.getDate()}` });
   }
   return out;
 }
