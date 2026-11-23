@@ -33,6 +33,9 @@ except ImportError:
 ROOT_DIR = Path(__file__).parent
 
 
+import time as _time
+
+
 def clean_bson(obj):
     """Recursively convert BSON types (ObjectId, datetime) to JSON-serializable Python types."""
     if isinstance(obj, ObjectId):
@@ -6050,12 +6053,19 @@ async def get_executors_by_service(
     # Batched lookups (one indexed query per collection) instead of per-provider
     # $lookup/$expr pipelines, which scanned tasks/slots for every provider and
     # made this endpoint time out on production data.
+    _t0 = _time.monotonic()
     result = await db.users.find(
         {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}, "search_paused": {"$ne": True}},
-        {"_id": 0, "password_hash": 0},
+        {"_id": 0, "password_hash": 0, "payment_methods": 0},
     ).to_list(1000)
     _uids = [u["user_id"] for u in result if u.get("user_id")]
-    _profiles = {p["user_id"]: p for p in await db.executor_profiles.find({"user_id": {"$in": _uids}}, {"_id": 0}).to_list(2000)}
+    # Heavy base64 portfolio photos are excluded here; the pro profile step loads them lazily.
+    _profiles = {p["user_id"]: p for p in await db.executor_profiles.find({"user_id": {"$in": _uids}}, {"_id": 0, "portfolio_photos": 0}).to_list(2000)}
+    _photo_counts = {r["user_id"]: r.get("n", 0) for r in await db.executor_profiles.aggregate([
+        {"$match": {"user_id": {"$in": _uids}}},
+        {"$project": {"_id": 0, "user_id": 1, "n": {"$size": {"$ifNull": ["$portfolio_photos", []]}}}},
+    ]).to_list(2000)}
+    logger.info("by-service timing: users+profiles %.2fs (%s providers)", _time.monotonic() - _t0, len(result))
     _rev = {r["_id"]: r for r in await db.reviews.aggregate([
         {"$match": {"provider_id": {"$in": _uids}}},
         {"$group": {"_id": "$provider_id", "n": {"$sum": 1}, "avg": {"$avg": "$rating"}}},
@@ -6067,6 +6077,7 @@ async def get_executors_by_service(
     _slots: Dict[str, list] = {}
     for sl in await db.availability_slots.find({"user_id": {"$in": _uids}, "is_active": True}, {"_id": 0}).to_list(20000):
         _slots.setdefault(sl["user_id"], []).append(sl)
+    logger.info("by-service timing: reviews+tasks+slots %.2fs", _time.monotonic() - _t0)
     for u in result:
         uid = u.get("user_id")
         r = _rev.get(uid) or {}
@@ -6229,7 +6240,7 @@ async def get_executors_by_service(
         executor["final_hourly_rate"] = final_rate
         executor["commission_percentage"] = commission_percent
         executor["minimum_hours"] = max(1.0, float(profile.get("minimum_hours") or 1.0))
-        executor["work_photos_count"] = len(profile.get("portfolio_photos") or [])
+        executor["work_photos_count"] = _photo_counts.get(executor.get("user_id"), 0)
 
         # Show CLIENTS/guests per-skill prices WITH commission; admins see raw.
         if not _is_admin_viewer:
@@ -6294,7 +6305,46 @@ async def get_executors_by_service(
             -(min(x.get("completed_tasks_count") or 0, 500) / 500) * 0.4
         ))
 
+    logger.info("by-service timing: total %.2fs (%s returned)", _time.monotonic() - _t0, len(filtered))
     return JSONResponse(content=clean_bson(filtered))
+
+
+@api_router.get("/diag/search-timing")
+async def diag_search_timing(category: str = "electrical"):
+    """Timings/counts only (no personal data) for each step of the pro search."""
+    out: Dict[str, Any] = {}
+
+    async def step(name, coro):
+        t = _time.monotonic()
+        try:
+            res = await asyncio.wait_for(coro, timeout=20)
+            out[name] = {"sec": round(_time.monotonic() - t, 2), "n": (res[0]["b"] if isinstance(res, list) and res and isinstance(res[0], dict) and "b" in res[0] else len(res) if isinstance(res, list) else res)}
+            return res
+        except Exception as e:
+            out[name] = {"sec": round(_time.monotonic() - t, 2), "error": type(e).__name__}
+            return []
+
+    users = await step("users", db.users.find(
+        {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}, "search_paused": {"$ne": True}},
+        {"_id": 0, "user_id": 1}).to_list(1000))
+    uids = [u["user_id"] for u in users if u.get("user_id")]
+    await step("profiles_light", db.executor_profiles.find({"user_id": {"$in": uids}}, {"_id": 0, "portfolio_photos": 0}).to_list(2000))
+    await step("profiles_bytes", db.executor_profiles.aggregate([
+        {"$match": {"user_id": {"$in": uids}}},
+        {"$group": {"_id": None, "b": {"$sum": {"$bsonSize": "$$ROOT"}}}}]).to_list(1))
+    await step("users_bytes", db.users.aggregate([
+        {"$match": {"user_id": {"$in": uids}}},
+        {"$group": {"_id": None, "b": {"$sum": {"$bsonSize": "$$ROOT"}}}}]).to_list(1))
+    await step("reviews", db.reviews.aggregate([
+        {"$match": {"provider_id": {"$in": uids}}}, {"$group": {"_id": "$provider_id", "n": {"$sum": 1}}}]).to_list(2000))
+    await step("tasks_done", db.tasks.aggregate([
+        {"$match": {"provider_id": {"$in": uids}, "status": "completed"}}, {"$group": {"_id": "$provider_id", "n": {"$sum": 1}}}]).to_list(2000))
+    await step("slots", db.availability_slots.find({"user_id": {"$in": uids}, "is_active": True}, {"_id": 0, "user_id": 1}).to_list(20000))
+    await step("ranking", _compute_category_ranking(category, uids))
+    for name, coll in (("count_users", db.users), ("count_tasks", db.tasks), ("count_bookings", db.bookings),
+                       ("count_reviews", db.reviews), ("count_slots", db.availability_slots), ("count_blog", db.blog_posts)):
+        await step(name, coll.estimated_document_count())
+    return out
 
 
 # Availability Calendar Routes
@@ -9208,7 +9258,8 @@ async def blog_render_list():
     from fastapi.responses import HTMLResponse
     import html as _html
     posts = await db.blog_posts.find(
-        {"is_published": True}, {"_id": 0}
+        {"is_published": True},
+        {"_id": 0, "slug": 1, "post_id": 1, "title": 1, "description": 1, "cover_image": 1, "images": {"$slice": 1}},
     ).sort([("is_pinned", -1), ("created_at", -1)]).limit(60).to_list(60)
 
     if posts:

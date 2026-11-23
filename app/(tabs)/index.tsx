@@ -714,6 +714,22 @@ export default function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumingBooking, user?.user_id, booking.selectedTasker]);
 
+  // Search results omit heavy portfolio photos; load them when the pro profile opens.
+  const _profileTaskerId = step === 'tasker_profile' ? booking.selectedTasker?.user_id : null;
+  React.useEffect(() => {
+    if (!_profileTaskerId || booking.selectedTasker?.profile?.portfolio_photos) return;
+    let alive = true;
+    api.getExecutorProfile(_profileTaskerId).then((full: any) => {
+      if (!alive || !full) return;
+      setBooking(b => (b.selectedTasker?.user_id === _profileTaskerId
+        ? { ...b, selectedTasker: { ...b.selectedTasker, profile: { ...(b.selectedTasker.profile || {}), portfolio_photos: full.portfolio_photos || [] } } }
+        : b));
+    }).catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_profileTaskerId]);
+
+
   // Detect the visitor's US city via IP so it can be offered first (only for US visitors)
   React.useEffect(() => {
     fetch('https://ipapi.co/json/')
