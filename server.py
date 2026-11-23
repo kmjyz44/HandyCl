@@ -5998,6 +5998,10 @@ async def _log_search_event(*, user_id: Optional[str], service_name: Optional[st
         logger.warning("search event log failed: %s", e)
 
 
+# Base64 photo fields make profiles multi-MB; search lists never need them.
+_SEARCH_PROFILE_EXCLUDE = {"_id": 0, "portfolio_photos": 0, "skills.photos": 0, "certifications": 0}
+
+
 @api_router.get("/executors/by-service")
 async def get_executors_by_service(
     service_name: Optional[str] = None,
@@ -6064,7 +6068,7 @@ async def get_executors_by_service(
     ).to_list(1000)
     _uids = [u["user_id"] for u in result if u.get("user_id")]
     # Heavy base64 portfolio photos are excluded here; the pro profile step loads them lazily.
-    _profiles = {p["user_id"]: p for p in await db.executor_profiles.find({"user_id": {"$in": _uids}}, {"_id": 0, "portfolio_photos": 0}).to_list(2000)}
+    _profiles = {p["user_id"]: p for p in await db.executor_profiles.find({"user_id": {"$in": _uids}}, _SEARCH_PROFILE_EXCLUDE).to_list(2000)}
     _photo_counts = {r["user_id"]: r.get("n", 0) for r in await db.executor_profiles.aggregate([
         {"$match": {"user_id": {"$in": _uids}}},
         {"$project": {"_id": 0, "user_id": 1, "n": {"$size": {"$ifNull": ["$portfolio_photos", []]}}}},
@@ -6332,7 +6336,14 @@ async def diag_search_timing(category: str = "electrical"):
         {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}, "search_paused": {"$ne": True}},
         {"_id": 0, "user_id": 1}).to_list(1000))
     uids = [u["user_id"] for u in users if u.get("user_id")]
-    await step("profiles_light", db.executor_profiles.find({"user_id": {"$in": uids}}, {"_id": 0, "portfolio_photos": 0}).to_list(2000))
+    await step("profiles_light", db.executor_profiles.find({"user_id": {"$in": uids}}, _SEARCH_PROFILE_EXCLUDE).to_list(2000))
+    t = _time.monotonic()
+    rows = await db.executor_profiles.aggregate([
+        {"$match": {"user_id": {"$in": uids}}},
+        {"$project": {"kv": {"$objectToArray": "$$ROOT"}}}, {"$unwind": "$kv"},
+        {"$group": {"_id": "$kv.k", "b": {"$sum": {"$bsonSize": {"$arrayToObject": [[{"k": "f", "v": "$kv.v"}]]}}}}},
+        {"$sort": {"b": -1}}, {"$limit": 8}]).to_list(8)
+    out["profile_field_bytes"] = {"sec": round(_time.monotonic() - t, 2), "n": {r["_id"]: r["b"] for r in rows}}
     await step("profiles_bytes", db.executor_profiles.aggregate([
         {"$match": {"user_id": {"$in": uids}}},
         {"$group": {"_id": None, "b": {"$sum": {"$bsonSize": "$$ROOT"}}}}]).to_list(1))
@@ -6607,6 +6618,8 @@ async def get_available_executors(
             "reviews": 0,
             "profile._id": 0,
             "profile.portfolio_photos": 0,
+            "profile.skills.photos": 0,
+            "profile.certifications": 0,
             "payment_methods": 0,
             "availability._id": 0
         }}

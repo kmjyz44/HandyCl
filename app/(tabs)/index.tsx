@@ -721,9 +721,19 @@ export default function HomeScreen() {
     let alive = true;
     api.getExecutorProfile(_profileTaskerId).then((full: any) => {
       if (!alive || !full) return;
-      setBooking(b => (b.selectedTasker?.user_id === _profileTaskerId
-        ? { ...b, selectedTasker: { ...b.selectedTasker, profile: { ...(b.selectedTasker.profile || {}), portfolio_photos: full.portfolio_photos || [] } } }
-        : b));
+      const fullSkills: any[] = Array.isArray(full.skills) ? full.skills : [];
+      const photosFor = (sk: any) => {
+        const m = fullSkills.find((f: any) => f && typeof f === 'object' && (f.id || f.name) === (sk.id || sk.name));
+        return m?.photos;
+      };
+      setBooking(b => {
+        if (b.selectedTasker?.user_id !== _profileTaskerId) return b;
+        const prof = b.selectedTasker.profile || {};
+        const skills = Array.isArray(prof.skills)
+          ? prof.skills.map((sk: any) => (sk && typeof sk === 'object' && photosFor(sk) ? { ...sk, photos: photosFor(sk) } : sk))
+          : prof.skills;
+        return { ...b, selectedTasker: { ...b.selectedTasker, profile: { ...prof, skills, portfolio_photos: full.portfolio_photos || [] } } };
+      });
     }).catch(() => {});
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
