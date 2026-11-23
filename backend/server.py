@@ -5333,10 +5333,20 @@ async def delete_review(review_id: str, current_user: User = Depends(require_adm
 
 # Executor Profile Routes
 @api_router.post("/profile/executor")
-async def create_executor_profile(profile_data: ExecutorProfileCreate, current_user: User = Depends(get_current_user)):
+async def create_executor_profile(profile_data: ExecutorProfileCreate, request: Request, current_user: User = Depends(get_current_user)):
     """Create or update executor profile"""
     if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
         raise HTTPException(status_code=403, detail="Only providers can create profiles")
+    _payload = profile_data.dict()
+    try:
+        await _externalize_profile_photos(_payload, current_user.user_id, _public_base(request))
+    except Exception as e:
+        logger.error("photo upload failed: %s", e)
+        raise HTTPException(status_code=502, detail="Photo upload failed, please try again")
+    _was_set = set(profile_data.model_fields_set)
+    for _k in ("portfolio_photos", "skills"):
+        if _k in _was_set:
+            setattr(profile_data, _k, _payload[_k])
 
     # Check if profile already exists
     existing_profile = await db.executor_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
@@ -5453,7 +5463,7 @@ async def get_my_executor_profile(current_user: User = Depends(get_current_user)
     return profile
 
 @api_router.put("/profile/executor")
-async def update_executor_profile(profile_data: ExecutorProfileUpdate, current_user: User = Depends(get_current_user)):
+async def update_executor_profile(profile_data: ExecutorProfileUpdate, request: Request, current_user: User = Depends(get_current_user)):
     """Update executor profile"""
     if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
         raise HTTPException(status_code=403, detail="Only providers can update profiles")
@@ -5463,6 +5473,11 @@ async def update_executor_profile(profile_data: ExecutorProfileUpdate, current_u
         raise HTTPException(status_code=400, detail="No fields to update")
 
     update_dict["updated_at"] = datetime.now(timezone.utc)
+    try:
+        await _externalize_profile_photos(update_dict, current_user.user_id, _public_base(request))
+    except Exception as e:
+        logger.error("photo upload failed: %s", e)
+        raise HTTPException(status_code=502, detail="Photo upload failed, please try again")
 
     # Upsert: if the user became a provider (e.g. role changed by an admin) but
     # has no executor profile yet, create it on first save instead of erroring.
@@ -11531,12 +11546,18 @@ class ProfilePhotoUpdate(BaseModel):
 @api_router.put("/users/profile/photo")
 async def update_profile_photo(
     data: ProfilePhotoUpdate,
+    request: Request,
     current_user: User = Depends(get_current_user)
 ):
     """Update user profile photo"""
+    try:
+        picture = await _store_data_uri(data.picture, f"avatars/{current_user.user_id}", _public_base(request))
+    except Exception as e:
+        logger.error("avatar upload failed: %s", e)
+        raise HTTPException(status_code=502, detail="Photo upload failed, please try again")
     await db.users.update_one(
         {"user_id": current_user.user_id},
-        {"$set": {"picture": data.picture}}
+        {"$set": {"picture": picture}}
     )
 
     updated_user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "password_hash": 0})
@@ -17473,6 +17494,185 @@ async def admin_delete_hero_slide(slide_id: str, current_user: User = Depends(re
 
 
 # Include the router in the main app
+# ─── Pro photos in object storage (instead of base64 inside Mongo docs) ───
+_MEDIA_MAX_SIDE = 1920          # sharp on phones and PC screens
+_MEDIA_JPEG_QUALITY = 82
+_MAX_PHOTOS_PER_SKILL = 15
+_MAX_PORTFOLIO_PHOTOS = 30
+_media_cache: Dict[str, tuple] = {}
+_seen_public_base: Optional[str] = None
+
+
+def _public_base(request: Optional[Request] = None) -> Optional[str]:
+    global _seen_public_base
+    dom = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or "").strip()
+    if dom:
+        return f"https://{dom}"
+    if request is not None:
+        _seen_public_base = _avatar_base_url(request)
+    return _seen_public_base
+
+
+def _compress_image(data: bytes, mime: str) -> Tuple[bytes, str]:
+    try:
+        from PIL import Image, ImageOps
+        import io
+        im = Image.open(io.BytesIO(data))
+        im = ImageOps.exif_transpose(im)
+        if im.mode in ("RGBA", "LA", "P"):
+            im = im.convert("RGBA")
+            bg = Image.new("RGB", im.size, (255, 255, 255))
+            bg.paste(im, mask=im.split()[-1])
+            im = bg
+        elif im.mode != "RGB":
+            im = im.convert("RGB")
+        im.thumbnail((_MEDIA_MAX_SIDE, _MEDIA_MAX_SIDE))
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=_MEDIA_JPEG_QUALITY, optimize=True, progressive=True)
+        b = out.getvalue()
+        return (b, "image/jpeg") if len(b) < len(data) or mime not in ("image/jpeg", "image/png", "image/webp") else (data, mime)
+    except Exception:
+        return data, mime
+
+
+async def _store_data_uri(value: Any, folder: str, base: Optional[str]) -> Any:
+    """data:image/... → uploaded, compressed URL. Anything else is returned unchanged."""
+    if not (isinstance(value, str) and value.startswith("data:") and base):
+        return value
+    try:
+        mime, raw = _data_uri_bytes(value)
+    except Exception:
+        return value
+    data, mime = await asyncio.to_thread(_compress_image, raw, mime)
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(mime, "jpg")
+    path = f"onofix/{folder}/{uuid.uuid4().hex}.{ext}"
+    try:
+        await _storage_request("PUT", path, content=data, headers={"Content-Type": mime})
+    except Exception as e:
+        # Never lose a photo: keep it inline if storage is unavailable.
+        logger.warning("media upload failed, keeping inline: %s", e)
+        _image_migration_state["last_upload_error"] = str(e)[:200]
+        return value
+    return f"{base}/api/media/{path}"
+
+
+async def _externalize_profile_photos(doc: Dict[str, Any], uid: str, base: Optional[str], trim: bool = True):
+    """Move inline photos of an executor-profile payload to storage (in place)."""
+    if isinstance(doc.get("portfolio_photos"), list):
+        photos = doc["portfolio_photos"][:_MAX_PORTFOLIO_PHOTOS] if trim else doc["portfolio_photos"]
+        doc["portfolio_photos"] = [await _store_data_uri(p, f"pros/{uid}/portfolio", base) for p in photos]
+    if isinstance(doc.get("skills"), list):
+        new_skills = []
+        for sk in doc["skills"]:
+            if isinstance(sk, dict) and isinstance(sk.get("photos"), list):
+                sk = dict(sk)
+                photos = sk["photos"][:_MAX_PHOTOS_PER_SKILL] if trim else sk["photos"]
+                out = []
+                for ph in photos:
+                    if isinstance(ph, dict):
+                        ph = {**ph, "uri": await _store_data_uri(ph.get("uri"), f"pros/{uid}/skills", base)}
+                    else:
+                        ph = await _store_data_uri(ph, f"pros/{uid}/skills", base)
+                    out.append(ph)
+                sk["photos"] = out
+            new_skills.append(sk)
+        doc["skills"] = new_skills
+
+
+@api_router.get("/media/{path:path}")
+async def get_media(path: str):
+    if not path.startswith("onofix/") or ".." in path:
+        raise HTTPException(status_code=404, detail="Not found")
+    hit = _media_cache.get(path)
+    if not hit:
+        try:
+            r = await _storage_request("GET", path)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Not found")
+        hit = (r.headers.get("Content-Type") or "image/jpeg", r.content)
+        if sum(len(x[1]) for x in _media_cache.values()) > 150_000_000:
+            _media_cache.clear()
+        _media_cache[path] = hit
+    return Response(content=hit[1], media_type=hit[0], headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+_image_migration_state: Dict[str, Any] = {"running": False}
+
+
+async def _migrate_inline_images():
+    """Idempotent: moves existing base64 pro photos/avatars to storage, one doc at a time."""
+    if _image_migration_state.get("running"):
+        return
+    base = _public_base()
+    if not base:
+        logger.info("image migration: no public base URL yet, will retry")
+        return
+    st = _image_migration_state
+    st.update({"running": True, "profiles": 0, "users": 0, "errors": 0, "started_at": datetime.now(timezone.utc).isoformat()})
+    try:
+        ids = await db.executor_profiles.find(
+            {"$or": [{"portfolio_photos": {"$regex": "^data:"}}, {"skills.photos.uri": {"$regex": "^data:"}}]},
+            {"_id": 0, "user_id": 1}).to_list(5000)
+        for row in ids:
+            uid = row.get("user_id")
+            try:
+                doc = await db.executor_profiles.find_one({"user_id": uid}, {"_id": 0, "portfolio_photos": 1, "skills": 1, "updated_at": 1})
+                if not doc:
+                    continue
+                old_updated = doc.get("updated_at")
+                await _externalize_profile_photos(doc, uid, base, trim=False)
+                res = await db.executor_profiles.update_one(
+                    {"user_id": uid, "updated_at": old_updated},
+                    {"$set": {"portfolio_photos": doc.get("portfolio_photos", []), "skills": doc.get("skills", [])}})
+                st["profiles"] += res.modified_count
+            except Exception as e:
+                st["errors"] += 1
+                logger.warning("image migration profile %s failed: %s", uid, e)
+        users = await db.users.find({"picture": {"$regex": "^data:"}}, {"_id": 0, "user_id": 1}).to_list(10000)
+        for row in users:
+            uid = row.get("user_id")
+            try:
+                u = await db.users.find_one({"user_id": uid}, {"_id": 0, "picture": 1})
+                pic = (u or {}).get("picture")
+                url = await _store_data_uri(pic, f"avatars/{uid}", base)
+                if url != pic:
+                    res = await db.users.update_one({"user_id": uid, "picture": pic}, {"$set": {"picture": url}})
+                    st["users"] += res.modified_count
+            except Exception as e:
+                st["errors"] += 1
+                logger.warning("image migration user %s failed: %s", uid, e)
+        logger.info("image migration done: %s", st)
+    finally:
+        st["running"] = False
+        st["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+
+async def _image_migration_loop():
+    await asyncio.sleep(60)
+    for _ in range(12):
+        try:
+            await _migrate_inline_images()
+            if _image_migration_state.get("finished_at"):
+                return
+        except Exception as e:
+            logger.warning("image migration loop: %s", e)
+        await asyncio.sleep(300)
+
+
+@api_router.post("/admin/migrate-images")
+async def admin_migrate_images(request: Request, current_user: User = Depends(require_admin)):
+    _public_base(request)
+    if not _image_migration_state.get("running"):
+        asyncio.create_task(_migrate_inline_images())
+    return {"started": True}
+
+
+@api_router.get("/admin/migrate-images")
+async def admin_migrate_images_status(current_user: User = Depends(require_admin)):
+    return _image_migration_state
+
+
+
 app.include_router(api_router)
 
 # Test endpoint for connectivity
@@ -17534,6 +17734,7 @@ async def startup_event():
     asyncio.create_task(_soro_rss_loop())
     asyncio.create_task(_unaccepted_task_loop())
     asyncio.create_task(_migrate_client_notifications())
+    asyncio.create_task(_image_migration_loop())
 
 
 async def _migrate_client_notifications():

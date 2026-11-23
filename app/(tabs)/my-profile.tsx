@@ -1259,10 +1259,10 @@ function ProviderProfile() {
     }
   };
 
-  // Add photos (up to 10) to the currently-open skill
+  // Add photos (up to 15) to the currently-open skill
   const pickSkillPhoto = async () => {
-    const remaining = 10 - skillPhotos.length;
-    if (remaining <= 0) { Alert.alert('Limit reached', 'You can add up to 10 photos per service.'); return; }
+    const remaining = 15 - skillPhotos.length;
+    if (remaining <= 0) { Alert.alert('Limit reached', 'You can add up to 15 photos per service.'); return; }
     if (Platform.OS === 'web') {
       const input = document.createElement('input');
       input.type = 'file';
@@ -1286,7 +1286,7 @@ function ProviderProfile() {
               const ctx = canvas.getContext('2d');
               ctx?.drawImage(img, 0, 0, width, height);
               const uri = canvas.toDataURL('image/jpeg', 0.7);
-              setSkillPhotos(prev => (prev.length >= 10 ? prev : [...prev, { uri, caption: '' }]));
+              setSkillPhotos(prev => (prev.length >= 15 ? prev : [...prev, { uri, caption: '' }]));
             };
             img.src = ev.target.result as string;
           };
@@ -1304,7 +1304,7 @@ function ProviderProfile() {
     if (!result.canceled && result.assets[0]) {
       const a = result.assets[0];
       const uri = a.base64 ? `data:image/jpeg;base64,${a.base64}` : a.uri;
-      setSkillPhotos(prev => (prev.length >= 10 ? prev : [...prev, { uri, caption: '' }]));
+      setSkillPhotos(prev => (prev.length >= 15 ? prev : [...prev, { uri, caption: '' }]));
     }
   };
 
@@ -1918,10 +1918,10 @@ function ProviderProfile() {
                 </View>
 
                 <Text style={[pStyles.serviceSectionLabel, { marginTop: 20 }]}>
-                  WORK PHOTOS FOR “{selectedProviderSkill.name.toUpperCase()}” ({skillPhotos.length}/10)
+                  WORK PHOTOS FOR “{selectedProviderSkill.name.toUpperCase()}” ({skillPhotos.length}/15)
                 </Text>
                 <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                  Add up to 10 photos of your work for this specific service. You can caption each one.
+                  Add up to 15 photos of your work for this specific service. You can caption each one.
                 </Text>
                 {skillPhotos.map((ph, i) => (
                   <View key={i} style={pStyles.skillPhotoRow}>
@@ -1945,7 +1945,7 @@ function ProviderProfile() {
                     </TouchableOpacity>
                   </View>
                 ))}
-                {skillPhotos.length < 10 && (
+                {skillPhotos.length < 15 && (
                   <TouchableOpacity style={[pStyles.addPhotoBtn, { marginTop: 10 }]} onPress={pickSkillPhoto} data-testid="skill-add-photo-btn">
                     <Ionicons name="camera-outline" size={20} color="#6b7280" />
                     <Text style={pStyles.addPhotoBtnText}>Add photo</Text>
