@@ -6001,6 +6001,53 @@ async def _log_search_event(*, user_id: Optional[str], service_name: Optional[st
 # Base64 photo fields make profiles multi-MB; search lists never need them.
 _SEARCH_PROFILE_EXCLUDE = {"_id": 0, "portfolio_photos": 0, "skills.photos": 0, "certifications": 0}
 
+# Inline base64 avatars are swapped for a cached URL in list endpoints (DB link is slow).
+_AVATAR_INLINE_MAX = 2048
+_avatar_cache: Dict[str, tuple] = {}
+
+
+def _light_picture_expr():
+    return {"$cond": [
+        {"$gt": [{"$strLenBytes": {"$ifNull": ["$picture", ""]}}, _AVATAR_INLINE_MAX]},
+        {"$concat": ["__AVATAR__", {"$toString": {"$strLenBytes": "$picture"}}]},
+        "$picture",
+    ]}
+
+
+def _avatar_base_url(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    return f"{proto.split(',')[0].strip()}://{host.split(',')[0].strip()}"
+
+
+def _resolve_avatar_urls(items: list, request: Request):
+    base = _avatar_base_url(request)
+    for u in items:
+        pic = u.get("picture")
+        if isinstance(pic, str) and pic.startswith("__AVATAR__"):
+            u["picture"] = f"{base}/api/users/{u.get('user_id')}/avatar?v={pic[10:]}"
+
+
+@api_router.get("/users/{user_id}/avatar")
+async def get_user_avatar(user_id: str):
+    import base64 as _b64
+    hit = _avatar_cache.get(user_id)
+    if not hit:
+        u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "picture": 1}) or {}
+        pic = u.get("picture") or ""
+        if not pic:
+            raise HTTPException(status_code=404, detail="No avatar")
+        if not pic.startswith("data:"):
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(pic)
+        header, _, data = pic.partition(",")
+        mime = header[5:].split(";")[0] or "image/jpeg"
+        hit = (mime, _b64.b64decode(data))
+        if len(_avatar_cache) > 300:
+            _avatar_cache.clear()
+        _avatar_cache[user_id] = hit
+    return Response(content=hit[1], media_type=hit[0], headers={"Cache-Control": "public, max-age=86400"})
+
 
 @api_router.get("/executors/by-service")
 async def get_executors_by_service(
@@ -6011,6 +6058,7 @@ async def get_executors_by_service(
     lng: Optional[float] = None,
     date: Optional[str] = None,
     time: Optional[str] = None,
+    request: Request = None,
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Get executors filtered by service/skill AND location.
@@ -6062,10 +6110,12 @@ async def get_executors_by_service(
     # $lookup/$expr pipelines, which scanned tasks/slots for every provider and
     # made this endpoint time out on production data.
     _t0 = _time.monotonic()
-    result = await db.users.find(
-        {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}, "search_paused": {"$ne": True}},
-        {"_id": 0, "password_hash": 0, "payment_methods": 0},
-    ).to_list(1000)
+    result = await db.users.aggregate([
+        {"$match": {"role": "provider", "is_blocked": False, "hidden_from_clients": {"$ne": True}, "search_paused": {"$ne": True}}},
+        {"$project": {"_id": 0, "password_hash": 0, "payment_methods": 0, "saved_addresses": 0}},
+        {"$addFields": {"picture": _light_picture_expr()}},
+    ]).to_list(1000)
+    _resolve_avatar_urls(result, request)
     _uids = [u["user_id"] for u in result if u.get("user_id")]
     # Heavy base64 portfolio photos are excluded here; the pro profile step loads them lazily.
     _profiles = {p["user_id"]: p for p in await db.executor_profiles.find({"user_id": {"$in": _uids}}, _SEARCH_PROFILE_EXCLUDE).to_list(2000)}
@@ -6565,6 +6615,7 @@ async def get_available_executors(
     day_of_week: Optional[int] = None,
     location: Optional[str] = None,
     min_rating: Optional[float] = None,
+    request: Request = None,
     current_user: User = Depends(get_current_user)
 ):
     """Get available executors with filters (for clients)"""
@@ -6621,11 +6672,14 @@ async def get_available_executors(
             "profile.skills.photos": 0,
             "profile.certifications": 0,
             "payment_methods": 0,
+            "saved_addresses": 0,
             "availability._id": 0
-        }}
+        }},
+        {"$addFields": {"picture": _light_picture_expr()}},
     ]
 
     executors = await db.users.aggregate(pipeline).to_list(1000)
+    _resolve_avatar_urls(executors, request)
 
     # ── Client location for service-area matching ───────────────────────
     # Use the client's own saved coordinates. If the client hasn't set a
