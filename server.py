@@ -3494,6 +3494,10 @@ async def _notify_waitlist_matches(user_id: str):
 @api_router.post("/bookings")
 async def create_booking(booking_data: BookingCreate, current_user: User = Depends(get_current_user)):
     await _assert_not_payment_blocked(current_user)
+    if booking_data.provider_id:
+        _pv = await db.users.find_one({"user_id": booking_data.provider_id}, {"_id": 0, "search_paused": 1})
+        if _pv and _pv.get("search_paused"):
+            raise HTTPException(status_code=409, detail="This pro is not active right now and can't be booked.")
     # Service-area gate: block bookings outside the configured working zone.
     sa = await _get_service_area()
     if not _is_location_allowed(sa, booking_data.state, booking_data.city, booking_data.latitude, booking_data.longitude):
@@ -6602,6 +6606,8 @@ async def get_available_executors(
             "password_hash": 0,
             "reviews": 0,
             "profile._id": 0,
+            "profile.portfolio_photos": 0,
+            "payment_methods": 0,
             "availability._id": 0
         }}
     ]
@@ -6680,11 +6686,12 @@ async def get_available_executors(
         # Round rating
         if executor.get("average_rating"):
             executor["average_rating"] = round(executor["average_rating"], 2)
+        executor["is_inactive"] = bool(executor.get("search_paused"))
 
         filtered.append(executor)
 
-    # Sort by rating descending
-    filtered.sort(key=lambda x: x.get("average_rating", 0), reverse=True)
+    # Active pros first (by rating), inactive (paused) pros at the end.
+    filtered.sort(key=lambda x: (x.get("is_inactive", False), -(x.get("average_rating") or 0)))
 
     return JSONResponse(content=clean_bson({"executors": filtered, "total": len(filtered)}))
 

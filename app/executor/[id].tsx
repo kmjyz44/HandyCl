@@ -37,6 +37,7 @@ interface ExecutorProfile {
     phone?: string;
     picture?: string;
     identity_verified?: boolean;
+    search_paused?: boolean;
   };
   average_rating: number;
   total_reviews: number;
@@ -476,6 +477,11 @@ export default function ExecutorProfile() {
             <Ionicons name="arrow-back" size={20} color="#fff" />
             <Text style={styles.contactButtonText}>Back to my profile</Text>
           </TouchableOpacity>
+        ) : profile?.user?.search_paused ? (
+          <View style={[styles.contactButton, { backgroundColor: '#9ca3af' }]} data-testid="pro-inactive-notice">
+            <Ionicons name="pause-circle-outline" size={20} color="#fff" />
+            <Text style={styles.contactButtonText}>Not active right now — can't be booked</Text>
+          </View>
         ) : (
           <TouchableOpacity style={styles.contactButton} onPress={bookExecutor} data-testid="book-executor-btn">
             <Ionicons name="calendar-outline" size={20} color="#fff" />

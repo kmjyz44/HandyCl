@@ -33,6 +33,7 @@ interface Executor {
   average_rating: number;
   total_reviews: number;
   identity_verified?: boolean;
+  is_inactive?: boolean;
   pricing?: {
     hourly_rate: number;
     original_rate: number;
@@ -265,7 +266,8 @@ export default function Executors() {
           displayList.map((executor) => (
             <TouchableOpacity
               key={executor.user_id}
-              style={styles.executorCard}
+              style={[styles.executorCard, executor.is_inactive && styles.executorCardInactive]}
+              data-testid={`pro-card-${executor.user_id}`}
               onPress={() => router.push(`/executor/${executor.user_id}` as any)}
             >
               <View style={styles.cardHeader}>
@@ -292,6 +294,12 @@ export default function Executors() {
                       </View>
                     )}
                   </View>
+                  {executor.is_inactive && (
+                    <View style={styles.inactiveBadge} data-testid={`inactive-badge-${executor.user_id}`}>
+                      <Ionicons name="pause-circle" size={12} color="#b45309" />
+                      <Text style={styles.inactiveBadgeText}>Not active right now · can't be booked</Text>
+                    </View>
+                  )}
                   <View style={styles.ratingContainer}>
                     {renderStars(executor.average_rating || 0)}
                     <Text style={styles.ratingText}>
@@ -397,6 +405,9 @@ const styles = StyleSheet.create({
   executorName: { fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 },
   verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0', borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 },
+  executorCardInactive: { opacity: 0.6, backgroundColor: '#f3f4f6' },
+  inactiveBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, marginBottom: 4 },
+  inactiveBadgeText: { fontSize: 11, color: '#b45309', fontWeight: '700' },
   verifiedBadgeText: { fontSize: 11, color: '#059669', fontWeight: '700' },
   ratingContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   ratingText: { fontSize: 12, color: '#6b7280', marginLeft: 6 },

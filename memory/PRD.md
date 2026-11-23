@@ -716,3 +716,7 @@ NOTE: split is computed live per request → after deploy, existing live complet
 
 ## 2026-06 Railway start fix
 - Dockerfile CMD -> sh -c with ${PORT:-8000}; railway.json startCommand added; Procfile/nixpacks/start.sh same; feedparser added to root requirements.txt
+
+## 2026-06 Inactive pros
+- Pros tab (/executors/available): paused pros shown last with is_inactive badge "Not active right now"; profile page shows disabled notice instead of Book; POST /bookings rejects paused provider (409). Booking search still hides paused. Provider banner Reactivate already existed.
+- Search payload: portfolio_photos excluded (lazy-loaded on pro profile step); /api/diag/search-timing added for prod profiling.
