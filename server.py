@@ -5478,6 +5478,8 @@ async def update_executor_profile(profile_data: ExecutorProfileUpdate, request: 
     except Exception as e:
         logger.error("photo upload failed: %s", e)
         raise HTTPException(status_code=502, detail="Photo upload failed, please try again")
+    if "portfolio_photos" in update_dict and "skills" in update_dict:
+        update_dict["photos_optimized"] = True
 
     # Upsert: if the user became a provider (e.g. role changed by an admin) but
     # has no executor profile yet, create it on first save instead of erroring.
@@ -17535,15 +17537,42 @@ def _compress_image(data: bytes, mime: str) -> Tuple[bytes, str]:
         return data, mime
 
 
+_photo_storage_cache: Dict[str, Any] = {"at": 0.0, "enabled": False}
+
+
+async def _photo_storage_enabled() -> bool:
+    """Admin switch (default OFF): keep photos in the DB, or upload them to object storage."""
+    if _time.monotonic() - _photo_storage_cache["at"] > 60:
+        doc = await db.app_settings.find_one({"setting_id": "photo_storage"}, {"_id": 0, "enabled": 1}) or {}
+        _photo_storage_cache.update({"at": _time.monotonic(), "enabled": bool(doc.get("enabled"))})
+    return _photo_storage_cache["enabled"]
+
+
+def _needs_compress(raw: bytes, mime: str) -> bool:
+    if mime != "image/jpeg" or len(raw) > 450_000:
+        return True
+    try:
+        from PIL import Image
+        import io
+        return max(Image.open(io.BytesIO(raw)).size) > _MEDIA_MAX_SIDE
+    except Exception:
+        return False
+
+
 async def _store_data_uri(value: Any, folder: str, base: Optional[str]) -> Any:
-    """data:image/... → uploaded, compressed URL. Anything else is returned unchanged."""
-    if not (isinstance(value, str) and value.startswith("data:") and base):
+    """Compress inline data:image photos; upload them only when admin enabled storage."""
+    if not (isinstance(value, str) and value.startswith("data:")):
         return value
     try:
         mime, raw = _data_uri_bytes(value)
     except Exception:
         return value
+    use_storage = bool(base) and await _photo_storage_enabled()
+    if not use_storage and not _needs_compress(raw, mime):
+        return value
     data, mime = await asyncio.to_thread(_compress_image, raw, mime)
+    if not use_storage:
+        return f"data:{mime};base64," + b64mod.b64encode(data).decode() if len(data) < len(raw) else value
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(mime, "jpg")
     path = f"onofix/{folder}/{uuid.uuid4().hex}.{ext}"
     try:
@@ -17604,14 +17633,17 @@ async def _migrate_inline_images():
     if _image_migration_state.get("running"):
         return
     base = _public_base()
-    if not base:
+    storage = await _photo_storage_enabled()
+    if storage and not base:
         logger.info("image migration: no public base URL yet, will retry")
         return
     st = _image_migration_state
-    st.update({"running": True, "profiles": 0, "users": 0, "errors": 0, "started_at": datetime.now(timezone.utc).isoformat()})
+    st.update({"running": True, "mode": "storage" if storage else "compress", "profiles": 0, "users": 0,
+               "errors": 0, "started_at": datetime.now(timezone.utc).isoformat()})
+    _skip = {} if storage else {"photos_optimized": {"$ne": True}}
     try:
         ids = await db.executor_profiles.find(
-            {"$or": [{"portfolio_photos": {"$regex": "^data:"}}, {"skills.photos.uri": {"$regex": "^data:"}}]},
+            {"$or": [{"portfolio_photos": {"$regex": "^data:"}}, {"skills.photos.uri": {"$regex": "^data:"}}], **_skip},
             {"_id": 0, "user_id": 1}).to_list(5000)
         for row in ids:
             uid = row.get("user_id")
@@ -17623,21 +17655,22 @@ async def _migrate_inline_images():
                 await _externalize_profile_photos(doc, uid, base, trim=False)
                 res = await db.executor_profiles.update_one(
                     {"user_id": uid, "updated_at": old_updated},
-                    {"$set": {"portfolio_photos": doc.get("portfolio_photos", []), "skills": doc.get("skills", [])}})
+                    {"$set": {"portfolio_photos": doc.get("portfolio_photos", []), "skills": doc.get("skills", []),
+                              "photos_optimized": True}})
                 st["profiles"] += res.modified_count
             except Exception as e:
                 st["errors"] += 1
                 logger.warning("image migration profile %s failed: %s", uid, e)
-        users = await db.users.find({"picture": {"$regex": "^data:"}}, {"_id": 0, "user_id": 1}).to_list(10000)
+        _uskip = {} if storage else {"picture_optimized": {"$ne": True}}
+        users = await db.users.find({"picture": {"$regex": "^data:"}, **_uskip}, {"_id": 0, "user_id": 1}).to_list(10000)
         for row in users:
             uid = row.get("user_id")
             try:
                 u = await db.users.find_one({"user_id": uid}, {"_id": 0, "picture": 1})
                 pic = (u or {}).get("picture")
                 url = await _store_data_uri(pic, f"avatars/{uid}", base)
-                if url != pic:
-                    res = await db.users.update_one({"user_id": uid, "picture": pic}, {"$set": {"picture": url}})
-                    st["users"] += res.modified_count
+                res = await db.users.update_one({"user_id": uid, "picture": pic}, {"$set": {"picture": url, "picture_optimized": True}})
+                st["users"] += res.modified_count if url != pic else 0
             except Exception as e:
                 st["errors"] += 1
                 logger.warning("image migration user %s failed: %s", uid, e)
@@ -17669,7 +17702,16 @@ async def admin_migrate_images(request: Request, current_user: User = Depends(re
 
 @api_router.get("/admin/migrate-images")
 async def admin_migrate_images_status(current_user: User = Depends(require_admin)):
-    return _image_migration_state
+    return {**_image_migration_state, "storage_enabled": await _photo_storage_enabled()}
+
+
+@api_router.put("/admin/photo-storage")
+async def admin_set_photo_storage(payload: Dict[str, Any] = Body(...), current_user: User = Depends(require_admin)):
+    enabled = bool(payload.get("enabled"))
+    await db.app_settings.update_one({"setting_id": "photo_storage"},
+                                     {"$set": {"enabled": enabled, "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    _photo_storage_cache.update({"at": _time.monotonic(), "enabled": enabled})
+    return {"enabled": enabled}
 
 
 

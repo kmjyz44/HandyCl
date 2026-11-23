@@ -995,6 +995,10 @@ export const api = {
     return res.data;
   },
 
+  getPhotoOptimizeStatus: async () => (await client.get('/admin/migrate-images')).data,
+  runPhotoOptimize: async () => (await client.post('/admin/migrate-images')).data,
+  setPhotoStorage: async (enabled: boolean) => (await client.put('/admin/photo-storage', { enabled })).data,
+
   updateAdminSettings: async (data: any) => {
     const res = await client.put('/admin/settings/features', data);
     return res.data;
