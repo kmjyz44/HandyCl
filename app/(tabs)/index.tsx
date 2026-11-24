@@ -481,6 +481,14 @@ export default function HomeScreen() {
   const [providerAvailableDays, setProviderAvailableDays] = useState<number[]>([]);
   const [providerDates, setProviderDates] = useState<string[]>([]);
   const [providerCats, setProviderCats] = useState<string[]>([]);
+  const [providerSchedule, setProviderSchedule] = useState<any | null>(null);
+  useEffect(() => {
+    setProviderSchedule(null);
+    if (!forcedProvider?.user_id) return;
+    let alive = true;
+    api.getExecutorSchedule(forcedProvider.user_id).then(r => { if (alive) setProviderSchedule(r); }).catch(() => {});
+    return () => { alive = false; };
+  }, [forcedProvider?.user_id]);
   const [stateModalVisible, setStateModalVisible] = useState(false);
   const bookParams = useLocalSearchParams();
   const [booking, setBooking] = useState<BookingState>({
@@ -2202,18 +2210,44 @@ export default function HomeScreen() {
     const GRID_START = 7; // 07:00
     const GRID_END = 22;  // 22:00
     const GRID_HOURS = Array.from({ length: GRID_END - GRID_START + 1 }, (_, i) => i + GRID_START);
-    const CAL_TIMES = Array.from({ length: (GRID_END - GRID_START) * 2 }, (_, i) => {
-      const h = GRID_START + Math.floor(i / 2);
-      const m = i % 2 === 0 ? '00' : '30';
-      return `${String(h).padStart(2, '0')}:${m}`;
-    });
+    const ALL_TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`);
 
     // Selected day index (0=today) — state is declared at top of component (Rules of Hooks)
     const selectedDateObj = dates[calDayIdx];
     const selectedDateVal = selectedDateObj?.value || '';
     const isDateSelected = booking.dates.includes(selectedDateVal);
 
+    // Booking a specific pro: only their working hours, minus already-booked times.
+    const proDay = forcedProvider && providerSchedule?.has_schedule ? providerSchedule.dates?.[selectedDateVal] : null;
+    const proHours: { start: string; end: string }[] = proDay?.hours || [];
+    const proBusy: { start: string; end: string }[] = proDay?.busy || [];
+    const nowHM = (() => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; })();
+    const isToday = selectedDateVal === dates[0]?.value;
+    const startOk = (t: string) => proHours.some(h => h.start <= t && t < h.end)
+      && !proBusy.some(b => b.start <= t && t < b.end) && (!isToday || t > nowHM);
+    const CAL_TIMES = proDay
+      ? ALL_TIMES.filter(startOk)
+      : ALL_TIMES.filter(t => t >= `${String(GRID_START).padStart(2, '0')}:00` && t < `${GRID_END}:00`);
+    // End must stay inside the same working block and before the next booked time.
+    const endOptions = (() => {
+      if (!proDay) return CAL_TIMES.filter(t => !booking.timeFrom || t > booking.timeFrom);
+      const from = booking.timeFrom;
+      if (!from) return [];
+      const block = proHours.find(h => h.start <= from && from < h.end);
+      if (!block) return [];
+      const nextBusy = proBusy.map(b => b.start).filter(st => st > from).sort()[0];
+      const limit = [block.end, nextBusy].filter(Boolean).sort()[0] as string;
+      return ALL_TIMES.filter(t => t > from && t <= limit);
+    })();
+
     const toggleCalDate = (val: string) => {
+      if (forcedProvider) {
+        // One specific pro → one day (their hours differ per day).
+        setBooking(b => (b.dates.includes(val)
+          ? { ...b, dates: [], date: '', timeFrom: '', timeTo: '', time: '' }
+          : { ...b, dates: [val], date: val, timeFrom: '', timeTo: '', time: '' }));
+        return;
+      }
       setBooking(b => {
         const already = b.dates.includes(val);
         const newDates = already ? b.dates.filter(d => d !== val) : [...b.dates, val];
@@ -2222,6 +2256,10 @@ export default function HomeScreen() {
     };
 
     const selectTimeFrom = (t: string) => {
+      if (forcedProvider) {
+        setBooking(b => ({ ...b, dates: [selectedDateVal], date: selectedDateVal, timeFrom: t, time: t, timeTo: '' }));
+        return;
+      }
       // If no date selected yet, auto-select current day
       if (!isDateSelected) toggleCalDate(selectedDateVal);
       setBooking(b => ({ ...b, timeFrom: t, time: t }));
@@ -2360,6 +2398,15 @@ export default function HomeScreen() {
           </View>
           <View style={{ height: 1, backgroundColor: '#e5e7eb', marginHorizontal: 16, marginBottom: 8 }} />
 
+          {proDay ? (
+            <View style={{ marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 10, backgroundColor: CAL_TIMES.length ? '#ecfdf5' : '#fef2f2' }} data-testid="pro-hours-hint">
+              <Text style={{ fontSize: 12, color: CAL_TIMES.length ? '#065f46' : '#991b1b', fontWeight: '600' }}>
+                {CAL_TIMES.length
+                  ? `${forcedProvider?.name || 'Pro'} works: ${proHours.map(h => `${to12h(h.start)} – ${to12h(h.end)}`).join(', ')}${proBusy.length ? ' · booked times are hidden' : ''}`
+                  : `${forcedProvider?.name || 'Pro'} has no free time on this day — pick another date.`}
+              </Text>
+            </View>
+          ) : null}
           {/* Two-column time slots */}
           <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 8 }}>
             {/* FROM column */}
@@ -2385,7 +2432,7 @@ export default function HomeScreen() {
             </View>
             {/* TO column */}
             <View style={{ flex: 1 }}>
-              {CAL_TIMES.filter(t => !booking.timeFrom || t > booking.timeFrom).map((t) => {
+              {endOptions.map((t) => {
                 const isTo = booking.timeTo === t;
                 return (
                   <TouchableOpacity

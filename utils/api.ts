@@ -995,6 +995,7 @@ export const api = {
     return res.data;
   },
 
+  getExecutorSchedule: async (id: string, days = 14) => (await client.get(`/executors/${id}/schedule`, { params: { days } })).data,
   getPhotoOptimizeStatus: async () => (await client.get('/admin/migrate-images')).data,
   runPhotoOptimize: async () => (await client.post('/admin/migrate-images')).data,
   setPhotoStorage: async (enabled: boolean) => (await client.put('/admin/photo-storage', { enabled })).data,

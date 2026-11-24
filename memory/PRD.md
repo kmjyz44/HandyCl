@@ -729,3 +729,4 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - Blog list (/blog/posts) via aggregation without content_html, description cut to 600 chars (350KB->45KB). /executors fallback excludes heavy photo fields.
 - Prod DB link measured ~100KB/s; advise user to use Railway private MONGO_URL.
 - Book this pro flow: executor page passes providerCats (pro categories) + providerDates (next 14 days with slots); home shows only those categories, calendar enables only those dates with week arrows; Message button removed from booking banner.
+- GET /api/executors/{id}/schedule?days=14: per-date working hours + confirmed busy times. Booking a specific pro: time picker shows only working hours minus busy (and past times today); end time limited to block end/next booking; single-day selection.

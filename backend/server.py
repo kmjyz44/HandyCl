@@ -6117,6 +6117,30 @@ async def _serve_profile_photo(key: str, user_id: str, expr):
     return Response(content=hit[1], media_type=hit[0], headers={"Cache-Control": "public, max-age=86400"})
 
 
+@api_router.get("/executors/{user_id}/schedule")
+async def get_executor_schedule(user_id: str, days: int = 14):
+    """Pro's working hours and already-booked times per day (local dates) for the booking picker."""
+    days = max(1, min(days, 31))
+    slots = await db.availability_slots.find(
+        {"user_id": user_id, "is_active": {"$ne": False}},
+        {"_id": 0, "day_of_week": 1, "specific_date": 1, "start_time": 1, "end_time": 1}).to_list(2000)
+    start = datetime.now(timezone.utc) - timedelta(days=1)  # client may be behind UTC
+    keys = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days + 1)]
+    busy_rows = await db.tasks.find(
+        {"provider_id": user_id, "confirmed_date": {"$in": keys}, "schedule_confirmed": True,
+         "status": {"$nin": ["cancelled", "declined", "completed", "paid", "completed_pending_payment"]}},
+        {"_id": 0, "confirmed_date": 1, "confirmed_start_time": 1, "confirmed_end_time": 1}).to_list(500)
+    out: Dict[str, Any] = {}
+    for k in keys:
+        dow = datetime.strptime(k, "%Y-%m-%d").weekday()
+        hours = sorted({(sl.get("start_time") or "00:00", sl.get("end_time") or "23:59") for sl in slots
+                        if (str(sl["specific_date"])[:10] == k if sl.get("specific_date") else sl.get("day_of_week") == dow)})
+        busy = sorted({(b.get("confirmed_start_time") or "00:00", b.get("confirmed_end_time") or "23:59")
+                       for b in busy_rows if b.get("confirmed_date") == k})
+        out[k] = {"hours": [{"start": a, "end": b} for a, b in hours], "busy": [{"start": a, "end": b} for a, b in busy]}
+    return {"has_schedule": bool(slots), "dates": out}
+
+
 @api_router.get("/executors/{user_id}/photo/p/{idx}")
 async def get_portfolio_photo(user_id: str, idx: int, v: str = ""):
     return await _serve_profile_photo(f"{user_id}:p:{idx}:{v}", user_id, {"$arrayElemAt": ["$portfolio_photos", idx]})
