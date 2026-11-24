@@ -728,3 +728,4 @@ NOTE: split is computed live per request → after deploy, existing live complet
 - Photo storage is now an admin switch (default OFF, app_settings.photo_storage). OFF = compress inline base64 (1920px JPEG) in DB; ON = upload to object storage. Admin page /admin-photo-storage (Services admin menu "Photos & Storage"). Profiles marked photos_optimized / users picture_optimized to skip re-processing.
 - Blog list (/blog/posts) via aggregation without content_html, description cut to 600 chars (350KB->45KB). /executors fallback excludes heavy photo fields.
 - Prod DB link measured ~100KB/s; advise user to use Railway private MONGO_URL.
+- Book this pro flow: executor page passes providerCats (pro categories) + providerDates (next 14 days with slots); home shows only those categories, calendar enables only those dates with week arrows; Message button removed from booking banner.

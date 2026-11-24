@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { upcomingAvailability } from '../../components/ProAvailabilityModal';
 import { api } from '../../utils/api';
 
 const { width } = Dimensions.get('window');
@@ -127,7 +128,14 @@ export default function ExecutorProfile() {
     const days = Array.from(new Set(
       (availability || []).filter(s => s.is_active).map(s => (s.day_of_week + 1) % 7)
     )).join(',');
-    router.push(`/(tabs)?bookProvider=${encodeURIComponent(id)}&providerName=${encodeURIComponent(name)}&providerRate=${encodeURIComponent(String(rate))}&providerPicture=${encodeURIComponent(picture)}&providerDays=${encodeURIComponent(days)}&providerMinHours=${encodeURIComponent(String(minHours))}` as any);
+    const freeDates = upcomingAvailability(availability as any, 14).map(d => d.key).join(',');
+    const cats = Array.from(new Set(
+      (profile?.skills || [])
+        .filter((sk: any) => sk && typeof sk === 'object' && sk.category_id && (sk.status || 'active') === 'active')
+        .map((sk: any) => sk.category_id)
+    )).join(',');
+    const pic = picture.startsWith('data:') ? '' : picture;
+    router.push(`/(tabs)?bookProvider=${encodeURIComponent(id)}&providerName=${encodeURIComponent(name)}&providerRate=${encodeURIComponent(String(rate))}&providerPicture=${encodeURIComponent(pic)}&providerDays=${encodeURIComponent(days)}&providerDates=${encodeURIComponent(freeDates)}&providerCats=${encodeURIComponent(cats)}&providerMinHours=${encodeURIComponent(String(minHours))}` as any);
   };
 
   const contactExecutor = () => {

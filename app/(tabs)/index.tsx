@@ -479,6 +479,8 @@ export default function HomeScreen() {
   }, [user?.user_id, user?.role]);
   const [forcedProvider, setForcedProvider] = useState<any | null>(null);
   const [providerAvailableDays, setProviderAvailableDays] = useState<number[]>([]);
+  const [providerDates, setProviderDates] = useState<string[]>([]);
+  const [providerCats, setProviderCats] = useState<string[]>([]);
   const [stateModalVisible, setStateModalVisible] = useState(false);
   const bookParams = useLocalSearchParams();
   const [booking, setBooking] = useState<BookingState>({
@@ -653,12 +655,15 @@ export default function HomeScreen() {
       const daysParam = bookParams?.providerDays as string | undefined;
       const days = daysParam ? daysParam.split(',').filter(x => x !== '').map(Number) : [];
       setProviderAvailableDays(days);
+      const freeDates = String(bookParams?.providerDates || '').split(',').filter(Boolean);
+      setProviderDates(freeDates);
+      setProviderCats(String(bookParams?.providerCats || '').split(',').filter(Boolean));
       // Jump the date strip to the first available day (if constrained)
-      if (days.length > 0) {
-        const list = getDates();
-        const idx = list.findIndex(d => days.includes(new Date(d.value + 'T00:00:00').getDay()));
-        if (idx >= 0) setCalDayIdx(idx);
-      }
+      const list = getDates();
+      const idx = freeDates.length
+        ? list.findIndex(d => freeDates.includes(d.value))
+        : days.length ? list.findIndex(d => days.includes(new Date(d.value + 'T00:00:00').getDay())) : -1;
+      if (idx >= 0) setCalDayIdx(idx);
       setStep('home');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1275,8 +1280,9 @@ export default function HomeScreen() {
   }, [dbCategories]);
 
   const filteredCategories = mergedCategories.filter(c =>
+    (!forcedProvider || providerCats.length === 0 || providerCats.includes(c.id)) && (
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.skills.some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()))
+    c.skills.some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase())))
   );
 
   // Deep link from blog articles: /?category=<id>&skill=<name> opens that category (and sub-service).
@@ -1541,17 +1547,9 @@ export default function HomeScreen() {
               <Ionicons name="person-circle" size={22} color="#2563eb" />
               <View style={{ flex: 1 }}>
                 <Text style={s.bookingProviderText}>Booking <Text style={{ fontWeight: '800' }}>{forcedProvider.name}</Text></Text>
-                <Text style={s.bookingProviderHint}>Step 1: choose what you need below. Then add details, address and pick one of {forcedProvider.name}'s available dates.</Text>
-                <TouchableOpacity
-                  style={s.bookingProviderMsgBtn}
-                  onPress={() => (user ? router.push(`/(tabs)/messages?userId=${forcedProvider.user_id}` as any) : router.push('/login' as any))}
-                  data-testid="forced-provider-message-btn"
-                >
-                  <Ionicons name="chatbubble-ellipses-outline" size={16} color="#2563eb" />
-                  <Text style={s.bookingProviderMsgText}>Message {forcedProvider.name}</Text>
-                </TouchableOpacity>
+                <Text style={s.bookingProviderHint}>Step 1: choose a category. Then pick one of {forcedProvider.name}'s available dates and finish the booking.</Text>
               </View>
-              <TouchableOpacity onPress={() => { setForcedProvider(null); setProviderAvailableDays([]); setBooking(b => ({ ...b, selectedTasker: null })); }} data-testid="cancel-forced-provider">
+              <TouchableOpacity onPress={() => { setForcedProvider(null); setProviderAvailableDays([]); setProviderDates([]); setProviderCats([]); setBooking(b => ({ ...b, selectedTasker: null })); }} data-testid="cancel-forced-provider">
                 <Ionicons name="close-circle" size={20} color="#9ca3af" />
               </TouchableOpacity>
             </View>
@@ -2246,7 +2244,7 @@ export default function HomeScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        {forcedProvider && providerAvailableDays.length > 0 ? (
+        {forcedProvider && (providerAvailableDays.length > 0 || providerDates.length > 0) ? (
           <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#dbeafe' }} data-testid="available-days-hint">
             <Text style={{ fontSize: 12, color: '#1e40af' }}>
               Showing {forcedProvider.name}'s available days only — greyed-out days are off.
@@ -2259,11 +2257,19 @@ export default function HomeScreen() {
           flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 8,
           backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6'
         }}>
-          {dates.slice(0, 7).map((d, i) => {
+          {forcedProvider ? (
+            <TouchableOpacity disabled={calDayIdx < 7} onPress={() => setCalDayIdx(Math.max(0, calDayIdx - 7))} style={{ justifyContent: 'center', paddingHorizontal: 2, opacity: calDayIdx < 7 ? 0.25 : 1 }} data-testid="cal-prev-week">
+              <Ionicons name="chevron-back" size={18} color="#2563eb" />
+            </TouchableOpacity>
+          ) : null}
+          {dates.slice(calDayIdx >= 7 ? 7 : 0, calDayIdx >= 7 ? 14 : 7).map((d, j) => {
+            const i = (calDayIdx >= 7 ? 7 : 0) + j;
             const isSel = i === calDayIdx;
             const hasTime = booking.dates.includes(d.value);
-            const restrictDays = forcedProvider && providerAvailableDays.length > 0;
-            const dayAllowed = !restrictDays || providerAvailableDays.includes(new Date(d.value + 'T00:00:00').getDay());
+            const restrictDays = forcedProvider && (providerAvailableDays.length > 0 || providerDates.length > 0);
+            const dayAllowed = !restrictDays || (providerDates.length > 0
+              ? providerDates.includes(d.value)
+              : providerAvailableDays.includes(new Date(d.value + 'T00:00:00').getDay()));
             return (
               <TouchableOpacity
                 key={d.value}
@@ -2294,6 +2300,14 @@ export default function HomeScreen() {
               </TouchableOpacity>
             );
           })}
+          {forcedProvider ? (
+            <TouchableOpacity disabled={calDayIdx >= 7} onPress={() => {
+              const nxt = dates.findIndex((d, k) => k >= 7 && (providerDates.length ? providerDates.includes(d.value) : true));
+              setCalDayIdx(nxt >= 0 ? nxt : 7);
+            }} style={{ justifyContent: 'center', paddingHorizontal: 2, opacity: calDayIdx >= 7 ? 0.25 : 1 }} data-testid="cal-next-week">
+              <Ionicons name="chevron-forward" size={18} color="#2563eb" />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Day label + date toggle */}
